@@ -1,0 +1,8 @@
+# Dependencies
+/node_modules
+/backend/node_modules
+
+# Environment variables - Do NOT commit this file!
+.env
+backend/.env
+*.env
