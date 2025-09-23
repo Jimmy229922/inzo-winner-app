@@ -138,7 +138,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
             'biweekly': 'كل أسبوعين',
             'monthly': 'شهري'
         };
-        const renewalText = renewalPeriodMap[agent.renewal_period] || 'دوري';
+        const renewalText = renewalPeriodMap[agent.renewal_period] || 'تداولي';
 
         const clicheText = `دمت بخير شريكنا العزيز ${agent.name} ...
 يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع برصيد مسابقات (${renewalText}) قيمته ${agent.remaining_balance || 0}$ و ${agent.deposit_bonus_percentage || 0}% بونص ايداع لـ ${agent.remaining_deposit_bonus || 0} مرات.
