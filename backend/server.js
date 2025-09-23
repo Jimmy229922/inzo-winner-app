@@ -113,7 +113,7 @@ app.post('/update-app', (req, res) => {
         // Restart the server by exiting with a specific code that the .bat file will catch
         setTimeout(() => {
             console.log('[UPDATE] Restarting server to apply updates...');
-            process.exit(1);
+            process.exit(42); // Use a unique exit code for updates
         }, 1500);
     });
 });

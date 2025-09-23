@@ -49,12 +49,13 @@ echo.
 REM Navigate to backend and start the server
 cd backend
 node server.js
-
-REM Check the exit code. If it's 1, it means we need to restart for an update.
-IF %errorlevel% == 1 (
+ 
+REM Check the exit code. If it's 42, it's a specific signal to restart for an update.
+IF %errorlevel% == 42 (
     echo.
     echo [SYSTEM] Server restarting to apply updates...
     echo.
+    cd ..
     timeout /t 2 /nobreak > nul
     goto start
 )
