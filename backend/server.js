@@ -14,23 +14,30 @@ const port = 3000;
 app.use(cors()); // للسماح للـ Frontend بالتواصل مع الـ Backend
 app.use(express.json()); // لتحليل البيانات القادمة بصيغة JSON
 
-// Serve static files from the frontend directory
-app.use(express.static(path.join(__dirname, '../frontend')));
-
 // استخراج بيانات التيليجرام من ملف .env
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-// Handle Chrome DevTools requests gracefully to prevent console noise.
-// This route responds with "204 No Content" for the specific JSON file DevTools requests.
-app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
-    res.status(204).send();
-});
+// --- Supabase Admin Client ---
+// This client uses the SERVICE_ROLE key and bypasses all RLS policies.
+// It should ONLY be used on the server.
+let supabaseAdmin;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY && process.env.SUPABASE_SERVICE_KEY !== 'YOUR_REAL_SERVICE_KEY_HERE') {
+    const { createClient } = require('@supabase/supabase-js');
+    supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    console.log('[INFO] Supabase admin client initialized.');
+} else {
+    console.warn('[WARN] Supabase admin client not initialized. SUPABASE_SERVICE_KEY is missing or is a placeholder. Scheduled tasks will fail. Please run setup.bat again.');
+}
+
+// --- Main API Router ---
+const apiRouter = express.Router();
 
 // Endpoint to provide public config to the frontend
-app.get('/config', (req, res) => {
+// This is now /api/config
+apiRouter.get('/config', (req, res) => {
     // Check for missing variables and build a more informative error message
     const missingVars = [];
     if (!SUPABASE_URL) missingVars.push('SUPABASE_URL');
@@ -50,7 +57,8 @@ app.get('/config', (req, res) => {
 });
 
 // Endpoint لاستقبال طلبات النشر
-app.post('/post-winner', async (req, res) => {
+// This is now /api/post-winner
+apiRouter.post('/post-winner', async (req, res) => {
     const { name } = req.body;
     console.log(`[INFO] Received request to post winner: "${name}"`);
 
@@ -83,7 +91,8 @@ app.post('/post-winner', async (req, res) => {
 });
 
 // Endpoint to update the application via git pull
-app.post('/update-app', (req, res) => {
+// This is now /api/update-app
+apiRouter.post('/update-app', (req, res) => {
     console.log('[UPDATE] Received request to update the application from remote.');
 
     // Execute git pull command in the project's root directory
@@ -104,11 +113,11 @@ app.post('/update-app', (req, res) => {
         // If 'Already up to date.' is in the output, no need to restart.
         if (stdout.includes('Already up to date.')) {
             console.log('[UPDATE] Application is already up to date.');
-            return res.status(200).json({ message: 'التطبيق محدّث بالفعل.', needsRestart: false });
+            return res.status(200).json({ message: 'أنت تستخدم بالفعل آخر إصدار.', needsRestart: false });
         }
 
         // If there were changes, send a response and then restart the server.
-        res.status(200).json({ message: 'تم سحب التحديثات بنجاح. سيتم إعادة تشغيل الخادم تلقائياً.', needsRestart: true });
+        res.status(200).json({ message: 'تم العثور على تحديثات! سيتم إعادة تشغيل التطبيق الآن لتطبيقها.', needsRestart: true });
 
         // Restart the server by exiting with a specific code that the .bat file will catch
         setTimeout(() => {
@@ -116,6 +125,32 @@ app.post('/update-app', (req, res) => {
             process.exit(42); // Use a unique exit code for updates
         }, 1500);
     });
+});
+
+// API 404 Handler - This must be the last route on the API router
+apiRouter.use((req, res) => {
+    res.status(404).json({ message: `API route not found: ${req.method} ${req.originalUrl}` });
+});
+
+// Mount the main API router under the /api path
+app.use('/api', apiRouter);
+
+
+// --- Static File Serving & SPA Fallback ---
+// This should come AFTER all API routes.
+
+// Serve static files from the frontend directory
+app.use(express.static(path.join(__dirname, '../frontend')));
+
+// Handle Chrome DevTools requests gracefully to prevent console noise.
+app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
+    res.status(204).send();
+});
+
+// The SPA fallback. This should be the last route.
+// It sends index.html for any GET request that did not match an API route or a static file.
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend', 'index.html'));
 });
 
 // --- Scheduled Tasks ---
@@ -153,6 +188,33 @@ cron.schedule('0 7 * * 0', async () => {
     timezone: "Africa/Cairo" // Set to your local timezone
 });
 
+// Schedule a task to deactivate expired competitions every hour.
+cron.schedule('0 * * * *', async () => {
+    console.log('[CRON] Running hourly check for expired competitions...');
+    try {
+        const { createClient } = require('@supabase/supabase-js');
+        const supabaseAdmin = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // Find active competitions where the winner selection date is in the past
+        const { data: expiredCompetitions, error: fetchError } = await supabaseAdmin
+            .from('agents')
+            .select('id')
+            .lt('winner_selection_date', todayStr);
+
+        if (fetchError) throw fetchError;
+
+        if (expiredCompetitions.length > 0) {
+            const agentIds = expiredCompetitions.map(a => a.id);
+            const { error: updateError } = await supabaseAdmin.from('competitions').update({ is_active: false }).in('agent_id', agentIds);
+            if (updateError) throw updateError;
+            console.log(`[CRON] Deactivated ${expiredCompetitions.length} expired competitions.`);
+        }
+    } catch (err) {
+        console.error('[CRON] Error deactivating expired competitions:', err.message);
+    }
+});
 
 // تشغيل السيرفر
 app.listen(port, () => {

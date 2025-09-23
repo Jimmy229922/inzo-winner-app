@@ -1,22 +1,4 @@
-const RANKS_DATA = {
-    // الاعتيادية
-    'Beginning': { competition_bonus: 60, deposit_bonus_percentage: null, deposit_bonus_count: null },
-    'Growth': { competition_bonus: 100, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
-    'Pro': { competition_bonus: 150, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
-    'Elite': { competition_bonus: 200, deposit_bonus_percentage: 50, deposit_bonus_count: 4 },
-    // الحصرية
-    'Bronze': { competition_bonus: 150, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
-    'Silver': { competition_bonus: 230, deposit_bonus_percentage: 40, deposit_bonus_count: 3 },
-    'Gold': { competition_bonus: 300, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
-    'Platinum': { competition_bonus: 500, deposit_bonus_percentage: 60, deposit_bonus_count: 4 },
-    'Diamond': { competition_bonus: 800, deposit_bonus_percentage: 75, deposit_bonus_count: 4 },
-    'Sapphire': { competition_bonus: 1100, deposit_bonus_percentage: 85, deposit_bonus_count: 4 },
-    'Emerald': { competition_bonus: 2000, deposit_bonus_percentage: 90, deposit_bonus_count: 4 },
-    'King': { competition_bonus: 2500, deposit_bonus_percentage: 95, deposit_bonus_count: 4 },
-    'Legend': { competition_bonus: Infinity, deposit_bonus_percentage: 100, deposit_bonus_count: Infinity },
-};
-
-async function renderAgentProfilePage(agentId) {
+async function renderAgentProfilePage(agentId, options = {}) {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = '';
 
@@ -27,7 +9,8 @@ async function renderAgentProfilePage(agentId) {
 
     // Check for edit mode in hash, e.g., #profile/123/edit
     const hashParts = window.location.hash.split('/');
-    const startInEditMode = hashParts.length === 3 && hashParts[2] === 'edit';
+    const startInEditMode = hashParts.includes('edit');
+    const defaultTab = options.activeTab || 'action';
 
     const { data: agent, error } = await supabase
         .from('agents')
@@ -69,7 +52,8 @@ async function renderAgentProfilePage(agentId) {
                     ${hasActiveCompetition ? '<span class="status-badge active">مسابقة نشطة</span>' : ''}
                     ${hasInactiveCompetition ? '<span class="status-badge inactive">مسابقة غير نشطة</span>' : ''}
                 </h1>
-                <p>رقم الوكالة: ${agent.agent_id} | التصنيف: ${agent.classification} | قناة التلجرام: ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank">زيارة</a>` : 'غير محدد'}</p>
+                <p>رقم الوكالة: ${agent.agent_id} | التصنيف: ${agent.classification} | المرتبة: ${agent.rank || 'غير محدد'}</p>
+                <p>روابط التلجرام: ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank">القناة</a>` : 'القناة (غير محدد)'} | ${agent.telegram_group_url ? `<a href="${agent.telegram_group_url}" target="_blank">الجروب</a>` : 'الجروب (غير محدد)'}</p>
             </div>
             <div class="profile-header-actions">
                  <button id="edit-profile-btn" class="btn-secondary"><i class="fas fa-user-edit"></i> تعديل</button>
@@ -79,6 +63,7 @@ async function renderAgentProfilePage(agentId) {
         <div class="tabs">
             <button class="tab-link active" data-tab="action">Action</button>
             <button class="tab-link" data-tab="details">تفاصيل</button>
+            <button class="tab-link" data-tab="agent-competitions">المسابقات</button>
             <button class="tab-link" data-tab="log">سجل</button>
         </div>
 
@@ -93,6 +78,10 @@ async function renderAgentProfilePage(agentId) {
             <h2>تفاصيل الوكيل</h2>
             <div id="details-content"></div>
         </div>
+        <div id="tab-agent-competitions" class="tab-content">
+            <h2>مسابقات الوكيل</h2>
+            <div id="agent-competitions-content"></div>
+        </div>
         <div id="tab-log" class="tab-content">
             <h2>سجل النشاط</h2>
             <p>لا توجد سجلات حالياً لهذا الوكيل.</p>
@@ -102,12 +91,6 @@ async function renderAgentProfilePage(agentId) {
     document.getElementById('back-btn').addEventListener('click', () => history.back());
 
     document.getElementById('create-agent-competition').addEventListener('click', () => {
-        if (hasActiveCompetition) {
-            const activeComp = agentCompetitions.find(c => c.is_active);
-            const endDate = agent.winner_selection_date ? new Date(agent.winner_selection_date).toLocaleDateString('ar-EG') : 'غير محدد';
-            showToast(`لا يمكن إضافة مسابقة جديدة، توجد مسابقة نشطة بالفعل ستنتهي يوم ${endDate}.`, 'error');
-            return;
-        }
         window.location.hash = `competitions/new?agentId=${agent.id}`;
     });
 
@@ -138,6 +121,9 @@ async function renderAgentProfilePage(agentId) {
         });
     });
 
+    // Set the default active tab
+    appContent.querySelector(`.tab-link[data-tab="${defaultTab}"]`)?.click();
+
     // Render competitions in the log tab
     const logTabContent = document.getElementById('tab-log');
     if (agentLogs && agentLogs.length > 0) {
@@ -162,6 +148,73 @@ async function renderAgentProfilePage(agentId) {
             </div>
         `;
     }
+
+    // Render competitions in the new "agent-competitions" tab
+    const agentCompetitionsContent = document.getElementById('agent-competitions-content');
+    if (agentCompetitions && agentCompetitions.length > 0) {
+        agentCompetitionsContent.innerHTML = `
+            <div class="competitions-grid">
+                ${agentCompetitions.map(comp => {
+                    const endDate = agent.winner_selection_date ? new Date(agent.winner_selection_date) : null;
+                    let countdownHtml = '';
+                    if (endDate) {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const diffTime = endDate.getTime() - today.getTime();
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        let countdownText = '';
+                        if (diffDays > 0) countdownText = `(متبقي ${diffDays} أيام)`;
+                        else if (diffDays === 0) countdownText = `(تنتهي اليوم)`;
+                        else countdownText = `(منتهية)`;
+                        countdownHtml = `<p><i class="fas fa-calendar-alt"></i><div><strong>تاريخ الانتهاء:</strong> ${endDate.toLocaleDateString('ar-EG')} ${countdownText}</div></p>`;
+                    }
+
+                    return `
+                    <div class="competition-card">
+                        <div class="competition-card-header">
+                            <h3>${comp.name}</h3>
+                            <span class="status-badge ${comp.is_active ? 'active' : 'inactive'}">${comp.is_active ? 'نشطة' : 'غير نشطة'}</span>
+                        </div>
+                        <div class="competition-card-body">
+                            ${countdownHtml}
+                            <p class="description"><i class="fas fa-info-circle"></i><div><strong>الوصف:</strong> ${comp.description || '<em>لا يوجد وصف</em>'}</div></p>
+                        </div>
+                        <div class="competition-card-footer">
+                            <button class="btn-secondary edit-btn" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i> تعديل</button>
+                            <button class="btn-danger delete-competition-btn" data-id="${comp.id}"><i class="fas fa-trash-alt"></i> حذف</button>
+                        </div>
+                    </div>
+                `}).join('')}
+            </div>
+        `;
+    } else {
+        agentCompetitionsContent.innerHTML = '<p>لا توجد مسابقات خاصة بهذا الوكيل بعد.</p>';
+    }
+
+    agentCompetitionsContent.addEventListener('click', async (e) => {
+        const deleteBtn = e.target.closest('.delete-competition-btn');
+        if (deleteBtn) {
+            const id = deleteBtn.dataset.id;
+            if (!id) return;
+    
+            showConfirmationModal(
+                'هل أنت متأكد من حذف هذه المسابقة؟',
+                async () => {
+                    const { error } = await supabase.from('competitions').delete().eq('id', id);
+                    if (error) {
+                        showToast('فشل حذف المسابقة.', 'error');
+                        console.error('Delete competition error:', error);
+                    } else {
+                        showToast('تم حذف المسابقة بنجاح.', 'success');
+                        // Re-render the profile page, staying on the same tab
+                        renderAgentProfilePage(agent.id, { activeTab: 'agent-competitions' });
+                    }
+                }, {
+                    confirmText: 'نعم، قم بالحذف',
+                    confirmClass: 'btn-danger'
+                });
+        }
+    });
 
     // Render the content for the details tab
     renderDetailsView(agent);
@@ -367,7 +420,7 @@ function renderInlineEditor(groupElement, agent) {
             const description = `تم تحديث "${label}" من "${oldValue || 'فارغ'}" إلى "${newValue || 'فارغ'}".`;
             await logAgentActivity(agent.id, 'DETAILS_UPDATE', description, { field: label, from: oldValue, to: newValue });
             showToast('تم حفظ التغيير بنجاح.', 'success');
-            renderAgentProfilePage(agent.id); // Re-render the entire profile page for instant log update
+            renderAgentProfilePage(agent.id, { activeTab: 'details' }); // Re-render and stay on details tab
         }
     });
 }
@@ -390,7 +443,6 @@ function renderEditProfileHeader(agent, parentElement) {
             <div style="flex-grow: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                 <div class="form-group"><label for="edit-agent-name">اسم الوكيل</label><input type="text" id="edit-agent-name" value="${agent.name}" required></div>
                 <div class="form-group"><label for="edit-agent-id">رقم الوكالة</label><input type="text" id="edit-agent-id" value="${agent.agent_id}" required></div>
-                <div class="form-group"><label for="telegram-url">رابط قناة التلجرام</label><input type="text" id="telegram-url" value="${agent.telegram_channel_url || ''}"></div>
                 <div class="form-group">
                     <label for="edit-agent-classification">التصنيف</label>
                     <select id="edit-agent-classification">
@@ -400,6 +452,8 @@ function renderEditProfileHeader(agent, parentElement) {
                         <option value="C" ${agent.classification === 'C' ? 'selected' : ''}>C</option>
                     </select>
                 </div>
+                <div class="form-group"><label for="telegram-channel-url">رابط قناة التلجرام</label><input type="text" id="telegram-channel-url" value="${agent.telegram_channel_url || ''}"></div>
+                <div class="form-group"><label for="telegram-group-url">رابط جروب التلجرام</label><input type="text" id="telegram-group-url" value="${agent.telegram_group_url || ''}"></div>
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label>أيام التدقيق</label>
                     <div class="days-selector">
@@ -444,13 +498,12 @@ function renderEditProfileHeader(agent, parentElement) {
 
         // NEW: Check for agent_id uniqueness on update
         if (newAgentId !== agent.agent_id) {
-            const { data: existingAgent, error: checkError } = await supabase
+            const { data: existingAgents, error: checkError } = await supabase
                 .from('agents')
                 .select('id')
-                .eq('agent_id', newAgentId)
-                .single();
+                .eq('agent_id', newAgentId);
 
-            if (checkError && checkError.code !== 'PGRST116') { // PGRST116: "exact-one" violation, which is fine if no agent is found.
+            if (checkError) {
                 console.error('Error checking for existing agent on update:', checkError);
                 showToast('حدث خطأ أثناء التحقق من رقم الوكالة.', 'error');
                 saveBtn.disabled = false;
@@ -458,7 +511,7 @@ function renderEditProfileHeader(agent, parentElement) {
                 return;
             }
 
-            if (existingAgent) {
+            if (existingAgents && existingAgents.length > 0) {
                 showToast('رقم الوكالة هذا مستخدم بالفعل لوكيل آخر.', 'error');
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ';
@@ -500,7 +553,8 @@ function renderEditProfileHeader(agent, parentElement) {
             agent_id: newAgentId,
             classification: headerV2.querySelector('#edit-agent-classification').value,
             audit_days: selectedDays,
-            telegram_channel_url: headerV2.querySelector('#telegram-url').value || null,
+            telegram_channel_url: headerV2.querySelector('#telegram-channel-url').value || null,
+            telegram_group_url: headerV2.querySelector('#telegram-group-url').value || null,
             avatar_url: newAvatarUrl,
         };
 
@@ -523,7 +577,8 @@ function renderEditProfileHeader(agent, parentElement) {
                     agent_id: 'رقم الوكالة',
                     classification: 'التصنيف',
                     audit_days: 'أيام التدقيق',
-                    telegram_channel_url: 'رابط التلجرام',
+                    telegram_channel_url: 'رابط قناة التلجرام',
+                    telegram_group_url: 'رابط جروب التلجرام',
                     avatar_url: 'الصورة الشخصية'
                 };
                 const changeDescriptions = changedKeys.map(key => {
@@ -541,7 +596,7 @@ function renderEditProfileHeader(agent, parentElement) {
             showToast('تم تحديث بيانات الوكيل بنجاح.', 'success');
             // Manually re-render the page to reflect changes instantly,
             // and clean the URL if it was in edit mode.
-            history.pushState(null, '', `#profile/${agent.id}`);
+            history.replaceState(null, '', `#profile/${agent.id}`);
             renderAgentProfilePage(agent.id);
         }
     });

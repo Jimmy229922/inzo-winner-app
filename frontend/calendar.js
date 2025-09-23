@@ -1,11 +1,116 @@
+const ITEM_HEIGHT = 140; // 130px height + 10px margin-bottom
+const BUFFER_ITEMS = 5; // Render items above and below the viewport for smoother scrolling
+
+class VirtualScroller {
+    constructor(container, allItems, itemRenderer) {
+        this.container = container;
+        this.allItems = allItems;
+        this.itemRenderer = itemRenderer;
+
+        this.viewportHeight = this.container.clientHeight;
+        this.totalHeight = this.allItems.length * ITEM_HEIGHT;
+        this.visibleItemCount = Math.ceil(this.viewportHeight / ITEM_HEIGHT);
+        this.totalVisibleItems = this.visibleItemCount + 2 * BUFFER_ITEMS;
+
+        this.sizer = document.createElement('div');
+        this.sizer.className = 'virtual-scroll-sizer';
+        this.sizer.style.height = `${this.totalHeight}px`;
+
+        this.viewport = document.createElement('div');
+        this.viewport.className = 'virtual-scroll-viewport';
+
+        this.container.innerHTML = '';
+        this.container.appendChild(this.sizer);
+        this.container.appendChild(this.viewport);
+
+        this.onScroll = this.onScroll.bind(this);
+        this.container.addEventListener('scroll', this.onScroll, { passive: true });
+
+        this.render();
+    }
+
+    onScroll() {
+        requestAnimationFrame(() => this.render());
+    }
+
+    render() {
+        const scrollTop = this.container.scrollTop;
+        let startIndex = Math.floor(scrollTop / ITEM_HEIGHT);
+        startIndex = Math.max(0, startIndex - BUFFER_ITEMS);
+        const endIndex = Math.min(this.allItems.length, startIndex + this.totalVisibleItems);
+        this.viewport.style.transform = `translateY(${startIndex * ITEM_HEIGHT}px)`;
+        this.viewport.innerHTML = this.allItems.slice(startIndex, endIndex).map(item => this.itemRenderer(item)).join('');
+    }
+
+    updateItems(newItems) {
+        this.allItems = newItems;
+        this.totalHeight = this.allItems.length * ITEM_HEIGHT;
+        this.sizer.style.height = `${this.totalHeight}px`;
+        this.render();
+    }
+}
+
+function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
+    const taskDate = new Date();
+    const dayDiff = dayIndex - taskDate.getDay();
+    taskDate.setDate(taskDate.getDate() + dayDiff);
+    const taskDateStr = taskDate.toISOString().split('T')[0];
+    const task = tasksMap[`${agent.id}-${taskDateStr}`];
+    const avatarHtml = agent.avatar_url
+        ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar">`
+        : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
+
+    const searchTerm = document.getElementById('calendar-search-input')?.value.toLowerCase().trim() || '';
+    let highlightedName = agent.name;
+    let highlightedId = '#' + agent.agent_id;
+
+    if (searchTerm) {
+        const regex = new RegExp(searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi');
+        highlightedName = agent.name.replace(regex, '<mark>$&</mark>');
+        highlightedId = ('#' + agent.agent_id).replace(regex, '<mark>$&</mark>');
+    }
+
+    return `
+        <div class="calendar-agent-item" data-agent-id="${agent.id}" data-classification="${agent.classification}" data-name="${agent.name.toLowerCase()}" data-agentid-str="${agent.agent_id}">
+            <div class="calendar-agent-main">
+                ${avatarHtml}
+                <div class="calendar-agent-info">
+                    <span class="agent-name">${highlightedName}</span>
+                    <p class="calendar-agent-id" title="نسخ الرقم">${highlightedId}</p>
+                </div>
+            </div>
+            <div class="calendar-agent-actions">
+                <label class="custom-checkbox small"><input type="checkbox" class="audit-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.audited ? 'checked' : ''} ${!isToday ? 'disabled' : ''}><span class="checkmark"></span> تدقيق</label>
+                <label class="custom-checkbox small"><input type="checkbox" class="competition-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.competition_sent ? 'checked' : ''} ${!isToday ? 'disabled' : ''}><span class="checkmark"></span> مسابقة</label>
+            </div>
+        </div>
+    `;
+}
+
 async function renderCalendarPage() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
-        <div class="page-header">
-            <h1>تقويم المهام الأسبوعي</h1>
-            <span class="info-tooltip" title="حالة جميع الوكلاء سيتم إعادة تعيينها (إلغاء التدقيق والإرسال) تلقائياً كل يوم أحد الساعة 7 صباحاً">
-                <i class="fas fa-info-circle"></i>
-            </span>
+        <div class="page-header column-header">
+            <div class="header-top-row">
+                <h1>تقويم المهام الأسبوعي</h1>
+                <span class="info-tooltip" title="حالة جميع الوكلاء سيتم إعادة تعيينها (إلغاء التدقيق والإرسال) تلقائياً كل يوم أحد الساعة 7 صباحاً">
+                    <i class="fas fa-info-circle"></i>
+                </span>
+            </div>
+            <div class="calendar-filters">
+                <div class="filter-search-container">
+                    <input type="search" id="calendar-search-input" placeholder="بحث بالاسم أو الرقم..." autocomplete="off">
+                    <i class="fas fa-search"></i>
+                    <i class="fas fa-times-circle search-clear-btn" id="calendar-search-clear"></i>
+                </div>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">الكل</button>
+                    <button class="filter-btn" data-filter="R">R</button>
+                    <button class="filter-btn" data-filter="A">A</button>
+                    <button class="filter-btn" data-filter="B">B</button>
+                    <button class="filter-btn" data-filter="C">C</button>
+                </div>
+            </div>
         </div>
         <div id="calendar-container" class="calendar-container"></div>
     `;
@@ -19,7 +124,7 @@ async function renderCalendarPage() {
     }
 
     const [agentsResult, tasksResult] = await Promise.all([
-        supabase.from('agents').select('id, name, agent_id, avatar_url, audit_days'),
+        supabase.from('agents').select('id, name, agent_id, avatar_url, audit_days, classification'),
         supabase.from('daily_tasks').select('*')
     ]);
 
@@ -65,7 +170,8 @@ async function renderCalendarPage() {
             taskDate.setDate(taskDate.getDate() + dayDiff);
             const taskDateStr = taskDate.toISOString().split('T')[0];
             const task = tasksMap[`${agent.id}-${taskDateStr}`];
-            if (task && (task.audited || task.competition_sent)) {
+            // A task is considered complete only if BOTH are checked
+            if (task && task.audited && task.competition_sent) {
                 completedTasks++;
             }
         });
@@ -73,48 +179,14 @@ async function renderCalendarPage() {
         const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
         html += `
-            <div class="day-column ${isToday ? 'today' : ''}">
+            <div class="day-column ${isToday ? 'today' : ''}" data-day-index="${index}">
                 <h2>${dayName}</h2>
                 <div class="day-progress">
                     <div class="progress-bar" style="width: ${progressPercent}%"></div>
                     <span class="progress-label">${completedTasks} / ${totalTasks} مكتمل</span>
                 </div>
                 <div class="day-column-content">
-                    ${dailyAgents.length === 0 ? '<p class="no-tasks">لا توجد مهام لهذا اليوم.</p>' : ''}
-                    ${dailyAgents.map(agent => {
-                        const taskDate = new Date();
-                        const dayDiff = index - taskDate.getDay();
-                        taskDate.setDate(taskDate.getDate() + dayDiff);
-                        const taskDateStr = taskDate.toISOString().split('T')[0];
-                        const task = tasksMap[`${agent.id}-${taskDateStr}`];
-                        const avatarHtml = agent.avatar_url
-                            ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar">`
-                            : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
-
-                        return `
-                            <div class="calendar-agent-item" data-agent-id="${agent.id}">
-                                <div class="calendar-agent-main">
-                                    ${avatarHtml}
-                                    <div class="calendar-agent-info">
-                                        <span class="agent-name">${agent.name}</span>
-                                        <p class="calendar-agent-id" title="نسخ الرقم">#${agent.agent_id}</p>
-                                    </div>
-                                </div>
-                                <div class="calendar-agent-actions">
-                                    <label class="custom-checkbox small">
-                                        <input type="checkbox" class="audit-check" data-agent-id="${agent.id}" data-day-index="${index}" ${task?.audited ? 'checked' : ''}>
-                                        <span class="checkmark"></span>
-                                        تدقيق
-                                    </label>
-                                    <label class="custom-checkbox small">
-                                        <input type="checkbox" class="competition-check" data-agent-id="${agent.id}" data-day-index="${index}" ${task?.competition_sent ? 'checked' : ''}>
-                                        <span class="checkmark"></span>
-                                        مسابقة
-                                    </label>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
+                    <!-- This will be populated by VirtualScroller -->
                 </div>
             </div>
         `;
@@ -122,60 +194,144 @@ async function renderCalendarPage() {
 
     document.getElementById('calendar-container').innerHTML = html;
 
-    // Make calendar items clickable
-    document.querySelectorAll('.calendar-agent-item').forEach(item => {
-        item.addEventListener('click', async (e) => {
-            // Prevent navigation if the copyable ID was clicked
-            if (e.target.closest('.calendar-agent-id, .calendar-agent-actions')) {
-                return;
-            }
-            const agentId = item.dataset.agentId;
-            window.location.hash = `profile/${agentId}`;
-        });
+    const scrollers = [];
+    document.querySelectorAll('.day-column').forEach(columnEl => {
+        const dayIndex = parseInt(columnEl.dataset.dayIndex, 10);
+        const agentsForDay = calendarData[dayIndex];
+        const isToday = dayIndex === new Date().getDay();
+        const contentContainer = columnEl.querySelector('.day-column-content');
+
+        if (agentsForDay.length === 0) {
+            contentContainer.innerHTML = '<p class="no-tasks">لا توجد مهام لهذا اليوم.</p>';
+            return;
+        }
+
+        const itemRenderer = (agent) => createAgentItemHtml(agent, dayIndex, isToday, tasksMap);
+        const scroller = new VirtualScroller(contentContainer, agentsForDay, itemRenderer);
+        scrollers.push({ dayIndex: dayIndex, instance: scroller, allAgents: agentsForDay });
     });
 
-    // Add copy functionality to agent IDs
-    document.querySelectorAll('.calendar-agent-id').forEach(idEl => {
-        idEl.addEventListener('click', (e) => {
-            const agentId = e.currentTarget.textContent.replace('#', '');
-            navigator.clipboard.writeText(agentId).then(() => showToast(`تم نسخ الرقم: ${agentId}`, 'info'));
-        });
-    });
+    function updateDayProgressUI(dayIndex) {
+        const column = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
+        if (!column) return;
 
-    // Add event listeners for the new checkboxes
-    document.querySelectorAll('.audit-check, .competition-check').forEach(checkbox => {
-        checkbox.addEventListener('change', async (e) => {
-            const agentId = e.target.dataset.agentId;
-            const dayIndex = parseInt(e.target.dataset.dayIndex, 10);
+        const progressBar = column.querySelector('.progress-bar');
+        const progressLabel = column.querySelector('.progress-label');
+        
+        const agentsForDay = calendarData[dayIndex];
+        const totalTasks = agentsForDay.length;
+        let completedTasks = 0;
 
-            // Calculate the correct date for the task based on the day column
+        agentsForDay.forEach(agent => {
             const taskDate = new Date();
             const dayDiff = dayIndex - taskDate.getDay();
             taskDate.setDate(taskDate.getDate() + dayDiff);
             const taskDateStr = taskDate.toISOString().split('T')[0];
-
-            const isAudited = e.target.classList.contains('audit-check');
-            const isChecked = e.target.checked;
-
-            const updateData = {};
-            const taskIdentifier = { agent_id: agentId, task_date: taskDateStr };
-
-            if (isAudited) {
-                updateData.audited = isChecked;
-            } else {
-                updateData.competition_sent = isChecked;
+            const task = tasksMap[`${agent.id}-${taskDateStr}`];
+            if (task && task.audited && task.competition_sent) {
+                completedTasks++;
             }
+        });
 
-            const { error } = await supabase
-                .from('daily_tasks')
-                .upsert({ ...taskIdentifier, ...updateData }, { onConflict: 'agent_id, task_date' });
+        const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+        progressBar.style.width = `${progressPercent}%`;
+        progressLabel.textContent = `${completedTasks} / ${totalTasks} مكتمل`;
+    }
 
+    const container = document.getElementById('calendar-container');
+    if (!container) return;
+
+    container.addEventListener('click', async (e) => {
+        const agentIdEl = e.target.closest('.calendar-agent-id');
+        const agentItem = e.target.closest('.calendar-agent-item');
+
+        if (agentIdEl) {
+            e.stopPropagation();
+            const agentId = agentIdEl.textContent.replace('#', '');
+            navigator.clipboard.writeText(agentId).then(() => showToast(`تم نسخ الرقم: ${agentId}`, 'info'));
+            return;
+        }
+
+        if (agentItem && !e.target.closest('.calendar-agent-actions')) {
+            const agentId = agentItem.dataset.agentId;
+            window.location.hash = `profile/${agentId}`;
+        }
+    });
+
+    container.addEventListener('change', async (e) => {
+        const checkbox = e.target;
+        if (checkbox.matches('.audit-check, .competition-check')) {
+            const agentId = checkbox.dataset.agentId;
+            const dayIndex = parseInt(checkbox.dataset.dayIndex, 10);
+            const taskDate = new Date();
+            const dayDiff = dayIndex - taskDate.getDay();
+            taskDate.setDate(taskDate.getDate() + dayDiff);
+            const taskDateStr = taskDate.toISOString().split('T')[0];
+            const taskKey = `${agentId}-${taskDateStr}`;
+
+            if (!tasksMap[taskKey]) {
+                tasksMap[taskKey] = { agent_id: agentId, task_date: taskDateStr, audited: false, competition_sent: false };
+            }
+            const isAudited = checkbox.classList.contains('audit-check');
+            tasksMap[taskKey][isAudited ? 'audited' : 'competition_sent'] = checkbox.checked;
+            updateDayProgressUI(dayIndex);
+
+            const { error } = await supabase.from('daily_tasks').upsert(tasksMap[taskKey], { onConflict: 'agent_id, task_date' });
             if (error) {
                 console.error('Error updating task from calendar:', error);
                 showToast('فشل تحديث حالة المهمة.', 'error');
-                e.target.checked = !isChecked; // Revert on error
+                checkbox.checked = !checkbox.checked;
+                tasksMap[taskKey][isAudited ? 'audited' : 'competition_sent'] = checkbox.checked;
+                updateDayProgressUI(dayIndex);
             }
-            // No toast on success to keep the UI clean, the checkmark is enough feedback.
+        }
+    });
+
+    setupCalendarFilters(scrollers, calendarData);
+}
+
+function setupCalendarFilters(scrollers, calendarData) {
+    const searchInput = document.getElementById('calendar-search-input');
+    const clearBtn = document.getElementById('calendar-search-clear');
+    const filterButtons = document.querySelectorAll('.filter-btn');
+
+    const applyFilters = () => {
+        if (clearBtn) {
+            clearBtn.style.display = searchInput.value ? 'block' : 'none';
+        }
+
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        const activeFilter = document.querySelector('.filter-btn.active').dataset.filter;
+
+        scrollers.forEach(scrollerData => {
+            const allAgentsForDay = calendarData[scrollerData.dayIndex];
+            const filteredAgents = allAgentsForDay.filter(agent => {
+                const name = agent.name.toLowerCase();
+                const agentIdStr = agent.agent_id;
+                const classification = agent.classification;
+                const matchesSearch = searchTerm === '' || name.includes(searchTerm) || agentIdStr.includes(searchTerm);
+                const matchesFilter = activeFilter === 'all' || classification === activeFilter;
+                return matchesSearch && matchesFilter;
+            });
+            scrollerData.instance.updateItems(filteredAgents);
+        });
+    };
+
+    searchInput.addEventListener('input', applyFilters);
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            applyFilters();
+            searchInput.focus();
+        });
+    }
+
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            applyFilters();
         });
     });
 }

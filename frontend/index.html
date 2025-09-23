@@ -31,13 +31,14 @@
             <a href="#" id="nav-home" class="nav-link active">الرئيسية</a>
             <a href="#" id="nav-tasks" class="nav-link">المهام اليومية</a>
             <a href="#" id="nav-manage-agents" class="nav-link">إدارة الوكلاء</a>
-            <a href="#" id="nav-competitions" class="nav-link">المسابقات</a>
+            <a href="#" id="nav-competitions" class="nav-link">ادارة المسابقات</a>
             <a href="#" id="nav-calendar" class="nav-link">التقويم</a>
         </div>
         <div class="navbar-center">
             <div class="search-container">
-                <input type="search" placeholder="بحث بالاسم أو رقم الوكالة..." class="search-input">
+                <input type="search" placeholder="بحث بالاسم أو رقم الوكالة..." class="search-input" id="main-search-input" autocomplete="off">
                 <i class="fas fa-search search-icon"></i>
+                <i class="fas fa-times-circle search-clear-btn" id="main-search-clear"></i>
                 <div id="search-results" class="search-results"></div>
             </div>
         </div>

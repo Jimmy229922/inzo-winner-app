@@ -15,7 +15,7 @@ function main() {
     const supabaseUrl = 'https://xfnqbtrnqnjlwpwfoahu.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmbnFidHJucW5qbHdwd2ZvYWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1MzU4NDksImV4cCI6MjA3NDExMTg0OX0.SDGmikg8YVcLULfuiByJCYSaqyWsSU0YXEXwtRreb8o';
     // !! IMPORTANT !! You must add your real service key here for scheduled tasks to work.
-    const supabaseServiceKey = 'YOUR_REAL_SERVICE_KEY_HERE'; 
+    const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmbnFidHJucW5qbHdwd2ZvYWh1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1ODUzNTg0OSwiZXhwIjoyMDc0MTExODQ5fQ.HwWyNma2esRzyr8_l4HggawjqKHJ_3n8lYUipUZU9xE'; 
 
     if (supabaseServiceKey === 'YOUR_REAL_SERVICE_KEY_HERE') {
         console.warn('\n[WARNING] The Supabase Service Key is a placeholder. Scheduled tasks might fail.');

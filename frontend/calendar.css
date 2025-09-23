@@ -1,4 +1,28 @@
 /* Calendar Page Styles */
+
+.page-header.column-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+}
+
+.header-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.calendar-filters {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.filter-search-container {
+    position: relative;
+    flex-grow: 1;
+}
+
 .calendar-container {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -54,10 +78,79 @@
     transition: width 0.5s ease-in-out;
 }
 
+.filter-search-container .fa-search {
+    position: absolute;
+    right: 15px; /* Position icon on the right for RTL */
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary-color);
+    pointer-events: none; /* Make icon non-interactive */
+}
+
+.filter-search-container input[type="search"] {
+    width: 100%;
+    padding: 8px 40px; /* Adjust padding for icons on both sides */
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.filter-search-container input[type="search"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%, transparent);
+}
+
+.search-clear-btn {
+    position: absolute;
+    left: 15px; /* Position clear button on the left for RTL */
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    display: none; /* Hidden by default */
+}
+
+.filter-buttons {
+    display: flex;
+    background-color: var(--bg-color);
+    border-radius: 20px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.filter-btn {
+    background-color: transparent;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 16px;
+    cursor: pointer;
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
 .day-column-content {
     flex-grow: 1;
-    padding: 15px;
     overflow-y: auto; /* Allow content to scroll if it overflows */
+    position: relative; /* For virtual scrolling */
+}
+
+.virtual-scroll-sizer {
+    position: relative;
+    width: 1px; /* Just to take up space */
+}
+
+.virtual-scroll-viewport {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 15px;
+    will-change: transform;
 }
 
 .no-tasks {
@@ -70,17 +163,22 @@
 .calendar-agent-item {
     padding: 12px;
     border-radius: 8px;
-    margin-bottom: 10px;
-    transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
     border: 1px solid var(--border-color);
     background-color: var(--bg-color);
     display: flex;
     flex-direction: column;
     gap: 10px;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    height: 130px; /* Fixed height for virtual scrolling calculation */
+    box-sizing: border-box;
+    margin-bottom: 10px; /* This is important for spacing */
+}
+
+.calendar-agent-item[style*="display: none"] {
+    display: none !important;
 }
 
 .calendar-agent-item:hover {
-    background-color: var(--bg-color);
     transform: translateY(-2px);
     box-shadow: 0 4px 8px var(--shadow-color);
     border-color: var(--primary-color);
@@ -140,7 +238,31 @@
     padding-top: 10px;
 }
 
+.filter-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
 /* Smaller checkboxes for calendar */
 .custom-checkbox.small {
     font-size: 0.9em;
+}
+
+/* Disabled state for checkboxes in calendar */
+.custom-checkbox input[type="checkbox"]:disabled + .checkmark {
+    background-color: var(--bg-color);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* Search Highlighting */
+.calendar-agent-item mark {
+    background-color: #f1c40f; /* Yellow */
+    color: #333;
+    padding: 0 2px;
+    border-radius: 3px;
+}
+body.dark-mode .calendar-agent-item mark {
+    color: #000;
 }

@@ -146,3 +146,43 @@
     transform: translateY(-2px);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
+
+/* Form Modal Styles */
+.form-modal-content {
+    background-color: var(--card-bg-color);
+    padding: 20px 30px 30px 30px;
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.form-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+.form-modal-header h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.5em;
+}
+
+.form-modal-body {
+    overflow-y: auto;
+    padding-right: 10px; /* space for scrollbar */
+    margin-right: -10px;
+}
+
+.form-modal-body textarea {
+    min-height: 120px;
+    resize: vertical;
+}

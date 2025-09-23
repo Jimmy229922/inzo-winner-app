@@ -12,6 +12,18 @@
     margin-bottom: 20px;
 }
 
+.page-header.column-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+}
+
+.header-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 .info-tooltip {
     color: var(--text-secondary-color);
     cursor: help;
@@ -19,67 +31,171 @@
     margin-right: auto; /* Pushes it to the left in RTL */
 }
 
-/* Agent List Styles */
-.agent-category-title {
-    color: var(--text-secondary-color);
-    margin-top: 30px;
-    margin-bottom: 10px;
-    padding-bottom: 5px;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.agent-card {
+/* New Task Page Styles */
+.task-group {
     background-color: var(--card-bg-color);
     border: 1px solid var(--border-color);
-    border-left: 5px solid var(--text-secondary-color); /* Default border color */
+    border-radius: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+.task-group[open] {
+    box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.task-group[open] .task-group-header i {
+    transform: rotate(180deg);
+}
+
+.task-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    cursor: pointer;
+    background-color: var(--bg-color);
+    user-select: none;
+}
+
+.task-group-header-left, .task-group-header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.task-group-bulk-actions {
+    display: flex;
+    gap: 20px;
+    border-left: 1px solid var(--border-color);
+    padding-left: 20px;
+    margin-left: 20px;
+}
+
+.task-group-indicators {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Remove default marker */
+.task-group-header::-webkit-details-marker {
+    display: none;
+}
+.task-group-header {
+    list-style: none;
+}
+
+.task-group-header i {
+    color: var(--text-secondary-color);
+    transition: transform 0.2s ease-in-out;
+}
+
+.task-group-title {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.task-group-title h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.5em;
+}
+
+.task-group-progress {
+    background-color: var(--border-color);
+    color: var(--text-secondary-color);
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.task-group-content {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 15px;
+}
+
+.task-card {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 15px;
-    margin-bottom: 15px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s, border-left-color 0.3s;
+    transition: all 0.3s ease;
+    border-left: 5px solid transparent; /* Start with a transparent border */
 }
 
-.agent-card:hover {
+.task-card:hover {
     transform: translateY(-3px);
     box-shadow: 0 4px 8px var(--shadow-color);
 }
 
-.agent-card.audited {
-    border-left-color: #3498db; /* Blue */
+.task-card.complete {
+    /* Both checked: A more saturated green based on the primary theme color */
+    background-color: color-mix(in srgb, #00d62b 20%, var(--bg-color));
+    border-color: color-mix(in srgb, #00d62b 80%, #000);
 }
 
-.agent-card.competition-sent {
-    border-left-color: #2ecc71; /* Green */
+.task-card.partially-complete {
+    /* Only 'audited' checked: Blue */
+    background-color: color-mix(in srgb, #00aeff 20%, var(--bg-color));
+    border-color: color-mix(in srgb, #00aeff 80%, #000);
+}
+.task-card.competition-sent-only {
+    /* Only 'competition' checked: A lighter green */
+    background-color: color-mix(in srgb, #003366 20%, var(--bg-color));
+    border-color: color-mix(in srgb, #003366 80%, #000);
 }
 
-.agent-info h3 {
-    margin: 0 0 5px 0;
-    color: var(--text-color);
-}
-.agent-info p {
-    margin: 0;
-    color: var(--text-secondary-color);
+.task-card-main {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 15px;
+    flex-grow: 1;
 }
 
-.copy-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary-color);
-    cursor: pointer;
-    padding: 5px;
-}
-
-.agent-actions {
+.task-agent-avatar,
+.task-agent-avatar-placeholder {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+    background-color: var(--border-color);
     display: flex;
-    gap: 20px;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary-color);
 }
 
+.task-agent-info h3 {
+    margin: 0 0 4px 0;
+    font-size: 1.1em;
+    color: var(--text-color);
+}
+.task-agent-info p {
+    margin: 0;
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.task-card-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+/* General Checkbox Styles (already exists but good to have it here for context) */
 .custom-checkbox {
     display: flex;
     align-items: center;
@@ -117,61 +233,217 @@
     display: block;
 }
 
-/* New Agent List Page Styles */
-.agent-list-table {
+.custom-checkbox.small {
+    font-size: 0.9em;
+}
+
+.agent-filters {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.filter-search-container {
+    position: relative;
+    flex-grow: 1;
+}
+
+.filter-search-container i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary-color);
+}
+
+#agent-search-input {
     width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
+    padding: 8px 15px 8px 35px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    box-sizing: border-box;
 }
 
-.agent-list-table th, .agent-list-table td {
-    padding: 12px 15px;
-    text-align: right;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.agent-list-table th {
-    background-color: var(--card-bg-color);
-    font-weight: bold;
-    color: var(--primary-color);
-}
-
-.agent-list-table tbody tr {
-    transition: background-color 0.2s;
-}
-
-.agent-list-table tbody tr.clickable-row {
-    cursor: pointer;
-}
-
-.agent-list-table tbody tr:hover {
+.filter-buttons {
+    display: flex;
     background-color: var(--bg-color);
+    border-radius: 20px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
 }
 
-.agent-list-table .delete-btn {
-    background: none;
+.filter-btn {
+    background-color: transparent;
     border: none;
-    color: #e74c3c; /* Red */
+    padding: 6px 16px;
+    border-radius: 16px;
     cursor: pointer;
-    font-size: 1.2em;
-    padding: 5px;
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    transition: all 0.2s ease;
 }
 
-.agent-list-table .delete-btn:hover {
-    color: #c0392b;
+.filter-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 
-.agent-list-table .edit-btn {
-    background: none;
-    border: none;
-    color: var(--primary-color);
-    cursor: pointer;
-    font-size: 1.2em;
-    padding: 5px;
-    margin-left: 10px;
+.group-completion-indicator {
+    color: #2ecc71; /* A vibrant, consistent green */
+    font-size: 1.4em;
+    display: none; /* Hidden by default */
 }
-.agent-list-table .edit-btn:hover {
-    opacity: 0.8;
+
+.task-group.all-complete .group-completion-indicator {
+    display: inline-block; /* Show when group is complete */
+}
+
+/* New Agent Management Page Styles */
+.manage-agents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.agent-manage-card[style*="display: none"] {
+    display: none !important;
+}
+
+.agent-manage-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.agent-manage-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.agent-manage-card-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    flex-grow: 1;
+}
+
+.agent-manage-avatar,
+.agent-manage-avatar-placeholder {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary-color);
+    font-size: 1.5em;
+}
+
+.agent-manage-info {
+    flex-grow: 1;
+}
+
+.agent-manage-info .agent-name {
+    margin: 0 0 4px 0;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.agent-manage-info .agent-id-text {
+    margin: 0;
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.classification-badge {
+    font-size: 0.8em;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: bold;
+    color: white;
+    align-self: flex-start;
+    margin-right: auto; /* Push to the left in RTL */
+}
+
+.classification-r { background-color: #e74c3c; } /* Red */
+.classification-a { background-color: #3498db; } /* Blue */
+.classification-b { background-color: #f1c40f; color: #333; } /* Yellow */
+.classification-c { background-color: #95a5a6; } /* Gray */
+
+.agent-manage-card-footer {
+    padding: 10px 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background-color: var(--bg-color);
+    cursor: default;
+}
+
+.agent-manage-card-footer .btn-secondary,
+.agent-manage-card-footer .btn-danger {
+    padding: 6px 12px;
+    font-size: 0.85em;
+}
+
+.no-results-message {
+    grid-column: 1 / -1; /* Span all columns */
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary-color);
+    font-style: italic;
+}
+
+/* Pagination Styles */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    margin-top: 30px;
+    padding: 10px;
+    flex-wrap: wrap;
+}
+
+.page-btn {
+    background-color: var(--card-bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.page-btn:hover:not(:disabled) {
+    background-color: var(--bg-color);
+    border-color: var(--primary-color);
+}
+
+.page-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    font-weight: bold;
+}
+
+.page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--bg-color);
 }
 
 /* Day Selector in Forms */
@@ -207,4 +479,41 @@
     color: white;
     border-color: var(--primary-color);
     box-shadow: 0 2px 5px rgba(147, 112, 219, 0.4);
+}
+
+/* Search Highlighting */
+.task-card mark, .agent-manage-card mark { /* Apply to both pages */
+    background-color: #f1c40f; /* Yellow */
+    color: #333;
+    padding: 0 2px;
+    border-radius: 3px;
+}
+
+body.dark-mode .task-card mark, body.dark-mode .agent-manage-card mark {
+    color: #000;
+}
+
+/* Highlight animation for tasks linked from the homepage */
+.task-card.highlighted {
+    animation: highlight-pulse 1.5s ease-out;
+}
+
+@keyframes highlight-pulse {
+    0% {
+        box-shadow: 0 0 0 0px color-mix(in srgb, var(--primary-color) 50%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary-color) 50%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 0px color-mix(in srgb, var(--primary-color) 0%, transparent);
+    }
+}
+
+.form-container h1 {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 1.8em;
+    margin-bottom: 30px;
 }

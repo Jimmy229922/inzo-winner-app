@@ -14,12 +14,22 @@
     display: flex;
     flex-direction: column;
     transition: transform 0.2s, box-shadow 0.2s;
-    overflow: hidden; /* To contain header background */
+    overflow: hidden;
 }
 
 .competition-card:hover {
     transform: translateY(-5px);
     box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.competition-card.selectable {
+    cursor: pointer;
+}
+
+.competition-card.selectable.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 40%, transparent);
+    transform: translateY(-2px);
 }
 
 .competition-card-header {
@@ -101,6 +111,28 @@
     background-color: #e74c3c; /* Red */
 }
 
+/* Countdown styles */
+.countdown {
+    font-size: 0.9em;
+    font-style: italic;
+    margin-right: 5px;
+}
+.countdown-far {
+    color: var(--text-secondary-color);
+}
+.countdown-near {
+    color: #f39c12; /* Orange */
+    font-weight: bold;
+}
+.countdown-today {
+    color: #e74c3c; /* Red */
+    font-weight: bold;
+}
+.countdown-expired {
+    color: var(--text-secondary-color);
+    text-decoration: line-through;
+}
+
 .competition-form-agent-info {
     background-color: var(--bg-color);
     border: 1px solid var(--border-color);
@@ -111,6 +143,21 @@
 .competition-form-agent-info h3 {
     margin-top: 0;
     color: var(--primary-color);
+}
+.competition-form-agent-info .agent-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+.competition-form-agent-info p {
+    margin: 0;
+    color: var(--text-secondary-color);
+}
+
+.form-container {
+    max-width: 600px;
+    margin: 0 auto;
 }
 
 /* Toggle Switch for "Active" checkbox */

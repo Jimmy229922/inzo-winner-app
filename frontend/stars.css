@@ -35,6 +35,7 @@
 
 .twinkling{
     background:transparent url(https://www.script-tutorials.com/demos/360/images/twinkling.png) repeat top center;
+    will-change: background-position;
     animation:move-twink-back 200s linear infinite;
 }
 
@@ -47,6 +48,7 @@
     background: linear-gradient(-45deg, rgba(147, 112, 219, 0.6), rgba(147, 112, 219, 0));
     border-radius: 999px;
     filter: drop-shadow(0 0 4px rgba(147, 112, 219, 0.3));
+    will-change: transform, width;
     animation: tail 3000ms ease-in-out infinite, shooting 3000ms ease-in-out infinite;
 }
 

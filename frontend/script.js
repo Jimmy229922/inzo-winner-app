@@ -92,7 +92,7 @@ async function handleRouting() {
 async function initializeSupabase() {
     try {
         updateStatus('connecting', 'جاري الاتصال بالخادم...');
-        const response = await fetch('/config'); // Fetch from our own server
+        const response = await fetch('/api/config'); // Fetch from our own server
         if (!response.ok) {
             throw new Error(`Server responded with ${response.status}`);
         }
@@ -146,25 +146,38 @@ function showToast(message, type = 'info') {
     }, 5000); // Remove after 5 seconds
 }
 
-function showConfirmationModal(message, onConfirm) {
+function showConfirmationModal(message, onConfirm, options = {}) {
+    const {
+        title = null,
+        confirmText = 'تأكيد',
+        cancelText = 'إلغاء',
+        confirmClass = 'btn-primary',
+        showCancel = true,
+        onRender = null
+    } = options;
+
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
 
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.innerHTML = `
-        <p>${message}</p>
+        ${title ? `<h3 class="modal-title">${title}</h3>` : ''}
+        <div class="modal-message">${message}</div>
         <div class="modal-actions">
-            <button id="confirm-btn" class="btn-danger">تأكيد الحذف</button>
-            <button id="cancel-btn" class="btn-secondary">إلغاء</button>
+            <button id="confirm-btn" class="${confirmClass}">${confirmText}</button>
+            ${showCancel ? `<button id="cancel-btn" class="btn-secondary">${cancelText}</button>` : ''}
         </div>
     `;
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    document.getElementById('confirm-btn').onclick = () => { onConfirm(); overlay.remove(); };
-    document.getElementById('cancel-btn').onclick = () => overlay.remove();
+    document.getElementById('confirm-btn').onclick = () => { if (onConfirm) { onConfirm(); } overlay.remove(); };
+    const cancelBtn = document.getElementById('cancel-btn');
+    if (cancelBtn) cancelBtn.onclick = () => overlay.remove();
+
+    if (onRender) onRender(modal);
 }
 
 // --- New Functions for UI Enhancements ---
@@ -195,13 +208,15 @@ function setupNavbar() {
     // Update App Button Logic
     const updateBtn = document.getElementById('update-app-btn');
     updateBtn.addEventListener('click', () => {
-        showConfirmationModal('هل أنت متأكد من رغبتك في تحديث التطبيق إلى آخر إصدار؟ سيتم إعادة تشغيل الخادم.', async () => {
+        showConfirmationModal(
+            'هل أنت متأكد من رغبتك في تحديث التطبيق إلى آخر إصدار؟ سيتم إعادة تشغيل الخادم.',
+            async () => {
             const icon = updateBtn.querySelector('i');
             icon.classList.add('fa-spin');
             updateBtn.disabled = true;
 
             try {
-                const response = await fetch('/update-app', { method: 'POST' });
+                const response = await fetch('/api/update-app', { method: 'POST' });
                 const result = await response.json();
 
                 if (!response.ok) {
@@ -223,6 +238,10 @@ function setupNavbar() {
                 icon.classList.remove('fa-spin');
                 updateBtn.disabled = false;
             }
+        },
+        {
+            confirmText: 'نعم، قم بالتحديث',
+            confirmClass: 'btn-primary'
         });
     });
 
@@ -234,8 +253,14 @@ function setupNavbar() {
     dateDisplay.textContent = today.toLocaleDateString('ar-EG', options);
 
     // Placeholder for search functionality
-    const searchInput = document.querySelector('.search-input');
+    const searchInput = document.getElementById('main-search-input');
+    const mainSearchClearBtn = document.getElementById('main-search-clear');
+
     searchInput.addEventListener('input', () => {
+        if (mainSearchClearBtn) {
+            mainSearchClearBtn.style.display = searchInput.value ? 'block' : 'none';
+        }
+
         clearTimeout(searchTimeout);
         const searchTerm = searchInput.value.trim();
         const searchResultsContainer = document.getElementById('search-results');
@@ -276,6 +301,7 @@ function setupNavbar() {
                         window.location.hash = `profile/${agentId}`;
                         searchResultsContainer.style.display = 'none';
                         searchInput.value = '';
+                        if (mainSearchClearBtn) mainSearchClearBtn.style.display = 'none';
                     });
                 });
             } else {
@@ -284,6 +310,16 @@ function setupNavbar() {
             }
         }, 300); // 300ms debounce
     });
+
+    if (mainSearchClearBtn) {
+        mainSearchClearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            document.getElementById('search-results').style.display = 'none';
+            mainSearchClearBtn.style.display = 'none';
+            searchInput.focus();
+        });
+    }
+
 
     // Navigation Logic
     const navHome = document.getElementById('nav-home');
