@@ -11,15 +11,12 @@ echo.
 echo      Welcome to the inzo Winner System Setup
 echo.
 echo =================================================================
-echo.
-echo This script is for the system administrator to perform the
-echo initial setup. It will install components and create the
-echo configuration file. If a configuration already exists,
-echo you can run 'reset-config.bat' to remove it first.
-echo.
-pause
 
-echo Installing backend dependencies...
+echo This script will automatically install and configure the system.
+echo Please wait...
+echo.
+
+echo [1/2] Installing backend dependencies...
 echo      (This may take a moment)...
 cd backend
 call npm install
@@ -30,11 +27,11 @@ if %errorlevel% neq 0 (
     exit
 )
 echo.
-echo Backend dependencies installed.
+echo [OK] Backend dependencies installed.
 echo.
 
-REM Run the Node.js setup script to gather user input
-echo Starting interactive configuration...
+REM Run the Node.js setup script to create the .env file automatically
+echo [2/2] Creating configuration file...
 node setup.js
 if %errorlevel% neq 0 (
     echo [ERROR] The configuration script failed to run.

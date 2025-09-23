@@ -15,6 +15,12 @@
     overflow: hidden; /* Ensure content respects border-radius */
 }
 
+.day-column.today {
+    background-color: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg-color));
+    border-color: var(--primary-color);
+}
+
+
 .day-column h2 {
     margin-top: 0;
     font-size: 1.2em;
@@ -23,6 +29,29 @@
     padding-bottom: 10px;
     padding: 15px;
     margin: 0;
+}
+
+.day-column.today h2 {
+    color: var(--primary-hover-color);
+}
+
+.day-progress {
+    width: calc(100% - 20px);
+    margin: 0 10px 10px 10px;
+    background-color: var(--border-color);
+    border-radius: 8px;
+    height: 20px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.day-progress .progress-bar {
+    background: var(--primary-color);
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.5s ease-in-out;
 }
 
 .day-column-content {
@@ -39,13 +68,15 @@
 }
 
 .calendar-agent-item {
-    padding: 10px 12px;
+    padding: 12px;
     border-radius: 8px;
     margin-bottom: 10px;
-    cursor: pointer;
     transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
     border: 1px solid var(--border-color);
     background-color: var(--bg-color);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .calendar-agent-item:hover {
@@ -55,11 +86,37 @@
     border-color: var(--primary-color);
 }
 
+.calendar-agent-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.calendar-agent-avatar,
+.calendar-agent-avatar-placeholder {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+    background-color: var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary-color);
+}
+
+.calendar-agent-info {
+    flex-grow: 1;
+}
+
 .calendar-agent-item .agent-name {
     font-weight: bold;
     color: var(--text-color);
     display: block;
     margin-bottom: 4px;
+    margin-top: 0;
 }
 
 .calendar-agent-id {
@@ -70,30 +127,20 @@
     border-radius: 4px;
     transition: background-color 0.2s;
     display: inline-block;
-    margin-bottom: 8px;
+    margin: 0;
 }
 .calendar-agent-id:hover {
     background-color: var(--border-color);
 }
 
-.calendar-agent-statuses {
+.calendar-agent-actions {
     display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+    justify-content: space-around;
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
 }
 
-.status-tag {
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 0.75em;
-    font-weight: bold;
-    color: #fff;
-}
-
-.status-audited {
-    background-color: #3498db; /* Blue */
-}
-
-.status-competition {
-    background-color: #2ecc71; /* Green */
+/* Smaller checkboxes for calendar */
+.custom-checkbox.small {
+    font-size: 0.9em;
 }
