@@ -80,8 +80,20 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
                 </div>
             </div>
             <div class="calendar-agent-actions">
-                <label class="custom-checkbox small"><input type="checkbox" class="audit-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.audited ? 'checked' : ''} ${!isToday ? 'disabled' : ''}><span class="checkmark"></span> تدقيق</label>
-                <label class="custom-checkbox small"><input type="checkbox" class="competition-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.competition_sent ? 'checked' : ''} ${!isToday ? 'disabled' : ''}><span class="checkmark"></span> مسابقة</label>
+                <div class="action-item ${task?.audited ? 'done' : ''}">
+                    <label>التدقيق</label>
+                    <label class="custom-checkbox toggle-switch">
+                        <input type="checkbox" class="audit-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.audited ? 'checked' : ''} ${!isToday ? 'disabled' : ''}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <div class="action-item ${task?.competition_sent ? 'done' : ''}">
+                    <label>المسابقة</label>
+                    <label class="custom-checkbox toggle-switch">
+                        <input type="checkbox" class="competition-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.competition_sent ? 'checked' : ''} ${!isToday ? 'disabled' : ''}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
             </div>
         </div>
     `;
@@ -274,14 +286,20 @@ async function renderCalendarPage() {
             }
             const isAudited = checkbox.classList.contains('audit-check');
             tasksMap[taskKey][isAudited ? 'audited' : 'competition_sent'] = checkbox.checked;
+
+            // Optimistic UI update
+            const actionItem = checkbox.closest('.action-item');
+            if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
             updateDayProgressUI(dayIndex);
 
             const { error } = await supabase.from('daily_tasks').upsert(tasksMap[taskKey], { onConflict: 'agent_id, task_date' });
             if (error) {
                 console.error('Error updating task from calendar:', error);
                 showToast('فشل تحديث حالة المهمة.', 'error');
+                // Revert UI on error
                 checkbox.checked = !checkbox.checked;
                 tasksMap[taskKey][isAudited ? 'audited' : 'competition_sent'] = checkbox.checked;
+                if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
                 updateDayProgressUI(dayIndex);
             }
         }

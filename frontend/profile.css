@@ -261,9 +261,96 @@
 }
 
 .details-actions {
-    margin-top: 30px;
+    margin-top: 0; /* Removed top margin */
     display: flex;
+    flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
     gap: 15px;
+}
+
+.details-actions button {
+    flex-grow: 1; /* Make all buttons in this container take equal space */
+}
+
+/* Action Tab Redesign */
+.action-tab-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 30px;
+}
+
+.action-section h2 {
+    font-size: 1.3em;
+    margin-top: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.action-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 15px;
+}
+
+.action-info-card {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.action-info-card i {
+    font-size: 1.8em;
+    color: var(--primary-color);
+    width: 40px;
+    text-align: center;
+}
+
+.action-info-card .info label {
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+    font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.action-info-card .info p {
+    margin: 0;
+    font-size: 1.5em;
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.action-info-card .info p .sub-value {
+    font-size: 0.6em;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+    margin: 0 5px;
+}
+
+.action-info-card .value-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.day-tag {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.day-tag-none {
+    color: var(--text-secondary-color);
+    font-style: italic;
+    font-size: 0.9em;
 }
 
 .inline-edit-actions {
@@ -279,4 +366,52 @@
     padding-bottom: 10px;
     margin-top: 20px;
     margin-bottom: 0;
+}
+
+/* Custom button styles for Telegram actions */
+.btn-telegram-bonus, .btn-telegram-winners {
+    /* Base button styles copied from components.css for consistency */
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
+}
+
+.btn-telegram-bonus {
+    background-color: #3498db; /* Blue */
+}
+.btn-telegram-bonus:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+}
+
+.btn-telegram-winners {
+    background-color: #f39c12; /* Orange */
+    color: white;
+}
+.btn-telegram-winners:hover {
+    background-color: #e67e22;
+    transform: translateY(-2px);
+}
+
+/* Styles for confirmation modal with text preview */
+.modal-textarea-preview {
+    width: 100%;
+    min-height: 150px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 0.9em;
+    line-height: 1.6;
+    resize: vertical;
+    margin-top: 10px;
+    text-align: right; /* For RTL text */
 }

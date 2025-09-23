@@ -33,7 +33,7 @@ async function renderTasksPage() {
                 </div>
             </div>
         </div>
-        <div id="task-list-container"></div>
+        <div id="tasks-content-wrapper"></div>
     `;
 
     await renderTaskList();
@@ -170,7 +170,7 @@ function displayAgentsPage(agentsList, page) {
                 ${avatarHtml}
                 <div class="agent-manage-info">
                     <h3 class="agent-name">${highlightedName}</h3>
-                    <p class="agent-id-text">${highlightedId}</p>
+                    <p class="agent-id-text" title="نسخ الرقم">${highlightedId}</p>
                 </div>
                 <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
             </div>
@@ -209,6 +209,15 @@ function attachCardEventListeners(currentList, currentPage) {
         });
     });
 
+    // Click to copy agent ID
+    container.querySelectorAll('.agent-id-text').forEach(idEl => {
+        idEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const agentIdToCopy = idEl.textContent.replace('#', '');
+            navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
+        });
+    });
+
     container.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const card = e.currentTarget.closest('.agent-manage-card');
@@ -223,7 +232,7 @@ function attachCardEventListeners(currentList, currentPage) {
             const agentName = card.querySelector('.agent-name').textContent;
 
             showConfirmationModal(
-                `هل أنت متأكد من رغبتك في حذف الوكيل "${agentName}"؟`,
+                `هل أنت متأكد من حذف الوكيل "<strong>${agentName}</strong>"؟<br><small>سيتم حذف جميع بياناته المرتبطة بشكل دائم.</small>`,
                 async () => {
                     await logAgentActivity(agentId, 'AGENT_DELETED', `تم حذف الوكيل: ${agentName} (ID: ${agentId}).`);
                     const { error } = await supabase.from('agents').delete().eq('id', agentId);
@@ -255,7 +264,8 @@ function attachCardEventListeners(currentList, currentPage) {
                         displayAgentsPage(filteredAgents, pageToDisplay);
                     }
                 }, {
-                    confirmText: 'نعم، قم بالحذف',
+                    title: 'تأكيد حذف الوكيل',
+                    confirmText: 'حذف نهائي',
                     confirmClass: 'btn-danger'
                 });
         });
@@ -267,6 +277,43 @@ function attachCardEventListeners(currentList, currentPage) {
             if (newPage) displayAgentsPage(currentList, newPage);
         });
     });
+}
+
+async function updateOverallProgress() {
+    const overviewContainer = document.getElementById('tasks-overview');
+    if (!overviewContainer) return;
+
+    const today = new Date().getDay();
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const [agentsResult, tasksResult] = await Promise.all([
+        supabase.from('agents').select('id').contains('audit_days', [today]),
+        supabase.from('daily_tasks').select('agent_id, audited, competition_sent').eq('task_date', todayStr)
+    ]);
+
+    const totalAgentsToday = agentsResult.data?.length || 0;
+    const tasksMap = (tasksResult.data || []).reduce((acc, task) => {
+        acc[task.agent_id] = task;
+        return acc;
+    }, {});
+
+    const completedAgentsToday = (agentsResult.data || []).filter(agent => {
+        const task = tasksMap[agent.id];
+        return task && task.audited && task.competition_sent;
+    }).length;
+
+    const overallProgress = totalAgentsToday > 0 ? (completedAgentsToday / totalAgentsToday) * 100 : 0;
+
+    const donutChart = overviewContainer.querySelector('.progress-donut-chart');
+    const totalEl = overviewContainer.querySelector('[data-stat="total"]');
+    const completedEl = overviewContainer.querySelector('[data-stat="completed"]');
+    const pendingEl = overviewContainer.querySelector('[data-stat="pending"]');
+
+    if (donutChart) donutChart.style.setProperty('--p', overallProgress);
+    if (donutChart) donutChart.querySelector('span').textContent = `${Math.round(overallProgress)}%`;
+    if (totalEl) totalEl.textContent = totalAgentsToday;
+    if (completedEl) completedEl.textContent = completedAgentsToday;
+    if (pendingEl) pendingEl.textContent = totalAgentsToday - completedAgentsToday;
 }
 
 function updateTaskGroupState(groupDetailsElement) {
@@ -291,11 +338,11 @@ function updateTaskGroupState(groupDetailsElement) {
 }
 
 async function renderTaskList() {
-    const container = document.getElementById('task-list-container');
-    if (!container) return;
+    const wrapper = document.getElementById('tasks-content-wrapper');
+    if (!wrapper) return;
 
     if (!supabase) {
-        container.innerHTML = `<p class="error">لا يمكن عرض المهام، لم يتم الاتصال بقاعدة البيانات.</p>`;
+        wrapper.innerHTML = `<p class="error">لا يمكن عرض المهام، لم يتم الاتصال بقاعدة البيانات.</p>`;
         return;
     }
 
@@ -316,7 +363,7 @@ async function renderTaskList() {
 
     if (error) {
         console.error("Error fetching agents for tasks:", error);
-        container.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات المهام.</p>`;
+        wrapper.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات المهام.</p>`;
         return;
     }
     if (tasksError) {
@@ -335,9 +382,39 @@ async function renderTaskList() {
         return acc;
     }, {});
 
-    let html = '';
+    // --- Create Overview Section ---
+    const totalAgentsToday = filteredAgents.length;
+    const completedAgentsToday = filteredAgents.filter(agent => {
+        const task = tasksMap[agent.id] || {};
+        return task.audited && task.competition_sent;
+    }).length;
+    const overallProgress = totalAgentsToday > 0 ? (completedAgentsToday / totalAgentsToday) * 100 : 0;
+
+    const overviewHtml = `
+        <div class="tasks-overview" id="tasks-overview">
+            <div class="progress-donut-chart" style="--p:${overallProgress};--b:10px;--c:var(--primary-color);">
+                <span>${Math.round(overallProgress)}%</span>
+            </div>
+            <div class="overview-stats">
+                <div class="overview-stat-item">
+                    <h3 data-stat="total">${totalAgentsToday}</h3>
+                    <p><i class="fas fa-tasks"></i> إجمالي مهام اليوم</p>
+                </div>
+                <div class="overview-stat-item">
+                    <h3 data-stat="completed">${completedAgentsToday}</h3>
+                    <p><i class="fas fa-check-double"></i> مهام مكتملة</p>
+                </div>
+                <div class="overview-stat-item">
+                    <h3 data-stat="pending">${totalAgentsToday - completedAgentsToday}</h3>
+                    <p><i class="fas fa-hourglass-half"></i> مهام متبقية</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    let groupsHtml = '';
     if (filteredAgents.length === 0) {
-        html = '<p class="no-results-message" style="margin-top: 20px;">لا توجد مهام مجدولة لهذا اليوم.</p>';
+        groupsHtml = '<p class="no-results-message" style="margin-top: 20px;">لا توجد مهام مجدولة لهذا اليوم.</p>';
     } else {
         for (const classification of classifications) {
             const group = groupedAgents[classification];
@@ -356,24 +433,20 @@ async function renderTaskList() {
                 const groupContainsHighlight = highlightedAgentId && group.some(agent => agent.id == highlightedAgentId);
                 const isOpen = openGroups.includes(classification) || groupContainsHighlight;
 
-                html += `
+                groupsHtml += `
                 <details class="task-group ${allTasksInGroupComplete ? 'all-complete' : ''}" data-classification="${classification}" ${isOpen ? 'open' : ''}>
                     <summary class="task-group-header">
-                        <div class="task-group-header-left">
-                            <div class="task-group-title">
-                                <h2>${classification}</h2>
-                                <span class="task-group-progress">${completedCount} / ${group.length}</span>
-                            </div>
+                        <div class="task-group-title">
+                            <h2>${classification}</h2>
+                            <span class="task-group-progress">${completedCount} / ${group.length}</span>
                         </div>
-                        <div class="task-group-header-right">
-                            <div class="task-group-bulk-actions">
-                                <label class="custom-checkbox small"><input type="checkbox" class="bulk-audit-check" data-classification="${classification}"><span class="checkmark"></span> تدقيق الكل</label>
-                                <label class="custom-checkbox small"><input type="checkbox" class="bulk-competition-check" data-classification="${classification}"><span class="checkmark"></span> مسابقة الكل</label>
-                            </div>
-                            <div class="task-group-indicators">
-                                <i class="fas fa-check-circle group-completion-indicator" title="اكتملت جميع المهام في هذا القسم"></i>
-                                <i class="fas fa-chevron-down"></i>
-                            </div>
+                        <div class="task-group-bulk-actions">
+                            <label class="custom-checkbox small"><input type="checkbox" class="bulk-audit-check" data-classification="${classification}"><span class="checkmark"></span> تدقيق الكل</label>
+                            <label class="custom-checkbox small"><input type="checkbox" class="bulk-competition-check" data-classification="${classification}"><span class="checkmark"></span> مسابقة الكل</label>
+                        </div>
+                        <div class="task-group-indicators">
+                            <i class="fas fa-check-circle group-completion-indicator" title="اكتملت جميع المهام في هذا القسم"></i>
+                            <i class="fas fa-chevron-down"></i>
                         </div>
                     </summary>
                     <div class="task-group-content">
@@ -382,31 +455,51 @@ async function renderTaskList() {
                             const avatarHtml = agent.avatar_url
                                 ? `<img src="${agent.avatar_url}" alt="Avatar" class="task-agent-avatar">`
                                 : `<div class="task-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
-                            const isComplete = task.audited && task.competition_sent;
-                            const isAuditedOnly = task.audited && !task.competition_sent;
-                            const isCompetitionOnly = !task.audited && task.competition_sent;
+                            const isAudited = task.audited;
+                            const isCompetitionSent = task.competition_sent;
+                            const isComplete = isAudited && isCompetitionSent;
                             const isHighlighted = highlightedAgentId && agent.id == highlightedAgentId;
+                            const depositBonusText = (agent.remaining_deposit_bonus > 0 && agent.deposit_bonus_percentage > 0)
+                                ? `${agent.remaining_deposit_bonus} ${agent.remaining_deposit_bonus === 1 ? 'مرة' : 'مرات'} بنسبة ${agent.deposit_bonus_percentage}%`
+                                : 'لا يوجد';
 
                             return `
-                            <div class="task-card ${isComplete ? 'complete' : ''} ${isAuditedOnly ? 'partially-complete' : ''} ${isCompetitionOnly ? 'competition-sent-only' : ''} ${isHighlighted ? 'highlighted' : ''}" data-agent-id="${agent.id}" data-name="${agent.name.toLowerCase()}" data-original-name="${agent.name}" data-agentid-str="${agent.agent_id}">
-                                <div class="task-card-main">
-                                    ${avatarHtml}
-                                    <div class="task-agent-info">
-                                        <h3>${agent.name}</h3>
-                                        <p>#${agent.agent_id}</p>
+                            <div class="task-card ${isComplete ? 'complete' : ''} ${isHighlighted ? 'highlighted' : ''}" data-agent-id="${agent.id}" data-name="${agent.name.toLowerCase()}" data-original-name="${agent.name}" data-agentid-str="${agent.agent_id}">
+                                <div class="task-card-header">
+                                    <div class="task-card-main">
+                                        ${avatarHtml}
+                                        <div class="task-agent-info">
+                                            <h3>${agent.name}</h3>
+                                            <p class="task-agent-id" title="نسخ الرقم">#${agent.agent_id}</p>
+                                        </div>
+                                    </div>
+                                    <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
+                                </div>
+                                <div class="task-card-body">
+                                    <div class="task-stat">
+                                        <label>الرصيد التداولي:</label>
+                                        <span>$${agent.remaining_balance || 0}</span>
+                                    </div>
+                                    <div class="task-stat">
+                                        <label>بونص الإيداع:</label>
+                                        <span>${depositBonusText}</span>
                                     </div>
                                 </div>
                                 <div class="task-card-actions">
-                                    <label class="custom-checkbox small">
-                                        <input type="checkbox" class="audit-check" data-agent-id="${agent.id}" ${task.audited ? 'checked' : ''}>
-                                        <span class="checkmark"></span>
-                                        تدقيق
-                                    </label>
-                                    <label class="custom-checkbox small">
-                                        <input type="checkbox" class="competition-check" data-agent-id="${agent.id}" ${task.competition_sent ? 'checked' : ''}>
-                                        <span class="checkmark"></span>
-                                        مسابقة
-                                    </label>
+                                    <div class="action-item ${isAudited ? 'done' : ''}">
+                                        <label>التدقيق</label>
+                                        <label class="custom-checkbox toggle-switch">
+                                            <input type="checkbox" class="audit-check" data-agent-id="${agent.id}" ${isAudited ? 'checked' : ''}>
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
+                                    <div class="action-item ${isCompetitionSent ? 'done' : ''}">
+                                        <label>المسابقة</label>
+                                        <label class="custom-checkbox toggle-switch">
+                                            <input type="checkbox" class="competition-check" data-agent-id="${agent.id}" ${isCompetitionSent ? 'checked' : ''}>
+                                            <span class="slider round"></span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         `}).join('')}
@@ -417,11 +510,12 @@ async function renderTaskList() {
         }
     }
 
-    container.innerHTML = html;
+    wrapper.innerHTML = `${overviewHtml}<div id="task-list-container">${groupsHtml}</div>`;
 
     setupTaskPageInteractions();
 
     if (highlightedAgentId) {
+        const container = document.getElementById('task-list-container');
         const highlightedCard = container.querySelector(`.task-card[data-agent-id="${highlightedAgentId}"]`);
         if (highlightedCard) {
             highlightedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -430,12 +524,20 @@ async function renderTaskList() {
         history.replaceState(null, '', '#tasks');
     }
 
+    const container = document.getElementById('task-list-container');
     // Use event delegation for better performance
     container.addEventListener('click', (e) => {
         const card = e.target.closest('.task-card');
         if (card && !e.target.closest('.task-card-actions')) {
             const agentId = card.dataset.agentId;
             window.location.hash = `profile/${agentId}`;
+        }
+
+        const agentIdEl = e.target.closest('.task-agent-id');
+        if (agentIdEl) {
+            e.stopPropagation();
+            const agentIdToCopy = agentIdEl.textContent.replace('#', '');
+            navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
         }
     });
 
@@ -471,23 +573,24 @@ async function renderTaskList() {
                 // Update UI on success
                 const auditCheck = card.querySelector('.audit-check');
                 const competitionCheck = card.querySelector('.competition-check');
+                
+                auditCheck.closest('.action-item').classList.toggle('done', auditCheck.checked);
+                competitionCheck.closest('.action-item').classList.toggle('done', competitionCheck.checked);
+
                 const isComplete = auditCheck.checked && competitionCheck.checked;
-                const isAuditedOnly = auditCheck.checked && !competitionCheck.checked;
-                const isCompetitionOnly = !auditCheck.checked && competitionCheck.checked;
                 card.classList.toggle('complete', isComplete);
-                card.classList.toggle('partially-complete', isAuditedOnly);
-                card.classList.toggle('competition-sent-only', isCompetitionOnly);
                 
                 // Update the progress counter for the group
                 const groupDetails = card.closest('.task-group');
                 updateTaskGroupState(groupDetails);
+                updateOverallProgress();
             }
         }
     });
 }
 
 function setupTaskPageInteractions() {
-    const container = document.getElementById('task-list-container');
+    const container = document.getElementById('tasks-content-wrapper');
     if (!container) return;
 
     // 1. Search functionality
@@ -497,7 +600,7 @@ function setupTaskPageInteractions() {
     if (searchInput) {
         const handleSearch = () => {
             const searchTerm = searchInput.value.toLowerCase().trim();
-            const allGroups = container.querySelectorAll('.task-group');
+            const allGroups = document.querySelectorAll('.task-group');
 
             if (clearBtn) {
                 clearBtn.style.display = searchTerm ? 'block' : 'none';
@@ -548,7 +651,7 @@ function setupTaskPageInteractions() {
     }
 
     // 2. Accordion state persistence
-    const allGroups = container.querySelectorAll('.task-group');
+    const allGroups = document.querySelectorAll('.task-group');
     allGroups.forEach(group => {
         group.addEventListener('toggle', () => {
             const openGroups = Array.from(allGroups).filter(g => g.open).map(g => g.dataset.classification);
@@ -557,7 +660,7 @@ function setupTaskPageInteractions() {
     });
 
     // 3. Bulk actions
-    container.addEventListener('change', async (e) => {
+    document.getElementById('task-list-container').addEventListener('change', async (e) => {
         if (e.target.matches('.bulk-audit-check, .bulk-competition-check')) {
             const bulkCheckbox = e.target;
             const isChecked = bulkCheckbox.checked;
@@ -594,15 +697,16 @@ function setupTaskPageInteractions() {
                 cards.forEach(card => {
                     const individualCheckbox = card.querySelector(isBulkAudit ? '.audit-check' : '.competition-check');
                     if (individualCheckbox) individualCheckbox.checked = isChecked;
-                    
-                    const isComplete = card.querySelector('.audit-check').checked && card.querySelector('.competition-check').checked;
-                    const isAuditedOnly = card.querySelector('.audit-check').checked && !card.querySelector('.competition-check').checked;
-                    const isCompetitionOnly = !card.querySelector('.audit-check').checked && card.querySelector('.competition-check').checked;
+
+                    const auditCheck = card.querySelector('.audit-check');
+                    const competitionCheck = card.querySelector('.competition-check');
+                    auditCheck.closest('.action-item').classList.toggle('done', auditCheck.checked);
+                    competitionCheck.closest('.action-item').classList.toggle('done', competitionCheck.checked);
+                    const isComplete = auditCheck.checked && competitionCheck.checked;
                     card.classList.toggle('complete', isComplete);
-                    card.classList.toggle('partially-complete', isAuditedOnly);
-                    card.classList.toggle('competition-sent-only', isCompetitionOnly);
                 });
                 updateTaskGroupState(group);
+                updateOverallProgress();
                 showToast(`تم ${isChecked ? 'تحديد' : 'إلغاء تحديد'} الكل بنجاح.`, 'success');
             }
             bulkCheckbox.disabled = false;
@@ -684,11 +788,12 @@ function renderAddAgentForm() {
 
         if (nameInput.value.trim() !== '' || idInput.value.trim() !== '') {
             showConfirmationModal(
-                'لديك بيانات غير محفوظة. هل أنت متأكد من الإلغاء؟',
+                'توجد بيانات غير محفوظة. هل تريد المتابعة وإلغاء الإضافة؟',
                 () => {
                     window.location.hash = `#${returnPage}`;
                 }, {
-                    confirmText: 'نعم، قم بالإلغاء',
+                    title: 'تأكيد الإلغاء',
+                    confirmText: 'نعم، إلغاء',
                     confirmClass: 'btn-danger'
                 });
         } else {

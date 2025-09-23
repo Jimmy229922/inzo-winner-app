@@ -1,13 +1,23 @@
 // 1. Global variable for Supabase client
 let supabase = null;
 let searchTimeout;
-let navLinks = []; // Global array for navigation links
 
 // Global function to set the active navigation link
 function setActiveNav(activeLink) {
-    navLinks.forEach(link => {
-        link.classList.toggle('active', link === activeLink);
+    // Deactivate all nav-links and dropdown-toggles
+    document.querySelectorAll('.nav-link, .dropdown-item').forEach(link => {
+        link.classList.remove('active');
     });
+
+    if (activeLink) {
+        activeLink.classList.add('active');
+
+        // If the active link is a dropdown item, also activate the dropdown toggle
+        const dropdown = activeLink.closest('.dropdown');
+        if (dropdown) {
+            dropdown.querySelector('.dropdown-toggle')?.classList.add('active');
+        }
+    }
 }
 
 // Helper function to update the visual status indicator
@@ -53,6 +63,7 @@ async function handleRouting() {
         '#tasks': { func: renderTasksPage, nav: 'nav-tasks' },
         '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents' },
         '#competitions': { func: renderCompetitionsPage, nav: 'nav-competitions' },
+        '#competition-templates': { func: renderCompetitionTemplatesPage, nav: 'nav-competition-templates' },
         '#add-agent': { func: renderAddAgentForm, nav: null },
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
     };
@@ -70,6 +81,8 @@ async function handleRouting() {
             renderFunction = () => renderAgentProfilePage(agentId);
             navElement = null; // No nav item is active on a profile page
         }
+    } else if (hash.startsWith('#competitions')) {
+        mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
         appContent.classList.add('full-height-content');
@@ -153,6 +166,7 @@ function showConfirmationModal(message, onConfirm, options = {}) {
         cancelText = 'إلغاء',
         confirmClass = 'btn-primary',
         showCancel = true,
+        modalClass = '',
         onRender = null
     } = options;
 
@@ -160,7 +174,7 @@ function showConfirmationModal(message, onConfirm, options = {}) {
     overlay.className = 'modal-overlay';
 
     const modal = document.createElement('div');
-    modal.className = 'modal';
+    modal.className = `modal ${modalClass}`;
     modal.innerHTML = `
         ${title ? `<h3 class="modal-title">${title}</h3>` : ''}
         <div class="modal-message">${message}</div>
@@ -240,7 +254,8 @@ function setupNavbar() {
             }
         },
         {
-            confirmText: 'نعم، قم بالتحديث',
+            title: 'تحديث التطبيق',
+            confirmText: 'تحديث الآن',
             confirmClass: 'btn-primary'
         });
     });
@@ -326,14 +341,16 @@ function setupNavbar() {
     const navTasks = document.getElementById('nav-tasks');
     const navManageAgents = document.getElementById('nav-manage-agents');
     const navCompetitions = document.getElementById('nav-competitions');
+    const navCompetitionTemplates = document.getElementById('nav-competition-templates');
     const navCalendar = document.getElementById('nav-calendar');
-    navLinks = [navHome, navTasks, navManageAgents, navCompetitions, navCalendar]; // Assign to global array
+    navLinks = [navHome, navTasks, navManageAgents, navCompetitions, navCompetitionTemplates, navCalendar]; // Assign to global array
     
     // NEW: Navigation listeners update the hash, which triggers the router
     navHome.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'home'; });
     navTasks.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'tasks'; });
     navManageAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'manage-agents'; });
     navCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competitions'; });
+    navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
     navCalendar.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'calendar'; });
 
     // Hide search results when clicking outside

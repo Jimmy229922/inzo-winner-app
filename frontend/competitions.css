@@ -133,26 +133,55 @@
     text-decoration: line-through;
 }
 
-.competition-form-agent-info {
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
+/* Create Competition Page - Redesigned */
+.create-competition-layout {
+    display: grid;
+    grid-template-columns: 1fr 2fr; /* Agent info on the left, form on the right */
+    gap: 30px;
+    align-items: flex-start;
 }
-.competition-form-agent-info h3 {
+
+.competition-form-agent-info.card-style-container {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    margin-bottom: 0; /* remove old margin */
+}
+
+.competition-form-agent-info.card-style-container h3 {
     margin-top: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     color: var(--primary-color);
 }
-.competition-form-agent-info .agent-info-grid {
+
+.agent-info-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 10px;
-    margin-top: 10px;
+    grid-template-columns: 1fr; /* Stack cards vertically */
+    gap: 15px;
 }
-.competition-form-agent-info p {
-    margin: 0;
-    color: var(--text-secondary-color);
+
+#competition-form.card-style-container {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    margin-top: 0; /* remove old margin */
+}
+
+#competition-form.card-style-container h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: none;
+    padding-bottom: 0;
 }
 
 .form-container {
@@ -210,4 +239,478 @@
 .toggle-switch .label-text {
     margin-right: 70px; /* Position text to the right of the switch */
     font-weight: bold;
+}
+
+/* Competition Templates Page - Professional Redesign */
+.templates-layout {
+    display: grid;
+    grid-template-columns: 400px 1fr; /* Fixed width for form, flexible for list */
+    gap: 30px;
+}
+
+.template-form-container {
+    background-color: var(--card-bg-color); /* Use card color for a contained look */
+    padding: 25px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    align-self: flex-start; /* Stick to top */
+    box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.template-form-container h2,
+.templates-list-container h2 {
+    margin-top: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.4em;
+    color: var(--text-color);
+}
+
+.templates-list-container h2 {
+    color: var(--text-color);
+    padding-left: 5px;
+}
+
+#templates-list.templates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.template-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s, box-shadow 0.2s;
+    overflow: hidden; /* To contain the footer */
+}
+
+.template-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.template-card-header {
+    background-color: var(--bg-color);
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.template-card h4 {
+    margin: 0;
+    color: var(--primary-color);
+    font-size: 1.1em;
+}
+
+.template-card-body {
+    padding: 20px;
+    flex-grow: 1; /* Pushes footer to the bottom */
+}
+.template-card p {
+    margin: 0;
+    color: var(--text-secondary-color);
+    font-size: 0.9em;
+    line-height: 1.6;
+}
+
+.template-card-footer {
+    padding: 10px 15px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background-color: var(--bg-color);
+}
+
+.template-card-footer .btn-secondary,
+.template-card-footer .btn-danger {
+    padding: 6px 12px;
+    font-size: 0.85em;
+}
+
+/* Remove old absolute positioning styles */
+.template-card-actions {
+   display: none; /* Replaced by footer */
+}
+
+/* The base .classification-badge is in agents.css */
+.classification-badge.classification-all {
+    background-color: var(--text-secondary-color);
+}
+
+@media (max-width: 900px) {
+    .templates-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 1200px) {
+    .create-competition-layout-v3 {
+        grid-template-columns: 1fr 1.5fr;
+        grid-template-areas: 
+            "agent variables"
+            "preview preview";
+    }
+    .agent-info-v3 { grid-area: agent; }
+    .variables-v3 { grid-area: variables; }
+    .preview-v3 { grid-area: preview; }
+}
+
+@media (max-width: 768px) {
+    .create-competition-layout-v3 {
+        grid-template-columns: 1fr;
+        grid-template-areas: 
+            "agent"
+            "variables"
+            "preview";
+    }
+}
+
+/* New Create Competition Page V3 */
+.create-competition-layout-v3 {
+    display: grid;
+    grid-template-columns: 300px 1fr 1.5fr; /* Agent Info | Variables | Preview */
+    gap: 25px;
+    align-items: flex-start;
+}
+
+.create-competition-layout-v3 .card-style-container {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    height: 100%; /* Make cards in a row same height */
+}
+
+.preview-v3.card-style-container {
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+}
+
+.create-competition-layout-v3 h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--primary-color);
+    font-size: 1.2em;
+}
+
+.agent-info-v3 .agent-info-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+}
+
+.variables-v3 .override-fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.validation-messages {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.validation-error {
+    background-color: color-mix(in srgb, #e74c3c 15%, transparent);
+    color: #e74c3c;
+    border: 1px solid color-mix(in srgb, #e74c3c 40%, transparent);
+    border-right: 5px solid #e74c3c;
+    padding: 10px 15px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.preview-v3 #competition-form {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.preview-v3 .form-group {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* New Create Competition Page V2 */
+.page-subtitle {
+    text-align: center;
+    font-size: 1.1em;
+    color: var(--text-secondary-color);
+    margin: -10px 0 30px 0;
+}
+
+.btn-send-telegram {
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+    font-size: 1.1em;
+}
+
+.telegram-preview-wrapper {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-color);
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 20px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.telegram-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 15px;
+    background-color: var(--border-color);
+    color: var(--text-secondary-color);
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.telegram-preview-header .header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.telegram-preview-header .fa-telegram {
+    color: #2AABEE;
+    font-size: 1.2em;
+}
+
+.telegram-preview-body {
+    padding: 15px;
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.preview-v3 #competition-description {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    resize: none;
+    line-height: 1.7;
+    font-size: 1em;
+    outline: none;
+    padding: 0;
+    min-height: 250px; /* Ensure a good minimum height */
+}
+
+/* Navbar Dropdown - Added here as navbar.css is not in context */
+.nav-item.dropdown {
+    position: relative;
+}
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0; /* Align to the right for RTL */
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 8px 16px var(--shadow-color);
+    min-width: 200px;
+    z-index: 1000;
+    padding: 5px 0;
+    margin-top: 5px;
+}
+
+.nav-item.dropdown:hover .dropdown-menu {
+    display: block;
+}
+
+.dropdown-item {
+    display: block;
+    padding: 10px 20px;
+    color: var(--text-color);
+    text-decoration: none;
+    transition: background-color 0.2s;
+    white-space: nowrap; /* Prevent wrapping */
+}
+
+.dropdown-item:hover, .dropdown-item.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.dropdown-toggle::after {
+    content: ' \f078'; /* Font Awesome down arrow */
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    font-size: 0.8em;
+    margin-right: 5px;
+}
+
+.filter-separator {
+    width: 1px;
+    background-color: var(--border-color);
+    margin: 0 10px;
+    align-self: stretch;
+}
+
+/* New Table Styles for Competitions Management */
+.table-responsive-container {
+    overflow-x: auto;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 10px;
+}
+
+.modern-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95em;
+}
+
+.modern-table thead tr {
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.modern-table th {
+    padding: 15px;
+    text-align: right;
+    font-weight: bold;
+    color: var(--text-color);
+    white-space: nowrap;
+}
+
+.modern-table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s;
+}
+
+.modern-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.modern-table tbody tr:hover {
+    background-color: var(--bg-color);
+}
+
+.modern-table td {
+    padding: 15px;
+    vertical-align: middle;
+}
+
+.competition-name-cell strong {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 1.05em;
+}
+
+.competition-name-cell small {
+    color: var(--text-secondary-color);
+}
+
+.table-agent-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--text-color);
+}
+
+.table-agent-cell:hover span {
+    color: var(--primary-color);
+}
+
+.table-agent-cell .avatar-small,
+.table-agent-cell .avatar-placeholder-small {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.table-agent-cell .avatar-placeholder-small {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+}
+
+.actions-cell {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.actions-column {
+    text-align: left !important;
+}
+
+.btn-small {
+    padding: 6px 12px !important;
+    font-size: 0.9em !important;
+}
+
+/* Responsive Table */
+@media (max-width: 768px) {
+    .modern-table thead {
+        display: none;
+    }
+    .modern-table, .modern-table tbody, .modern-table tr, .modern-table td {
+        display: block;
+        width: 100%;
+    }
+    .modern-table tr {
+        margin-bottom: 15px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .modern-table td {
+        text-align: left;
+        padding-left: 50%;
+        position: relative;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .modern-table td:last-child {
+        border-bottom: none;
+    }
+    .modern-table td::before {
+        content: attr(data-label);
+        position: absolute;
+        right: 15px;
+        width: 45%;
+        padding-left: 10px;
+        font-weight: bold;
+        text-align: right;
+        color: var(--text-secondary-color);
+    }
+    .actions-cell {
+        justify-content: flex-start;
+    }
 }

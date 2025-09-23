@@ -94,6 +94,15 @@
     max-width: 400px;
 }
 
+.modal.modal-wide {
+    max-width: 600px;
+    text-align: right;
+}
+
+.modal.modal-wide .modal-message {
+    text-align: right;
+}
+
 .modal p {
     margin-bottom: 20px;
     font-size: 1.1em;
@@ -103,6 +112,10 @@
     display: flex;
     justify-content: center;
     gap: 15px;
+}
+
+.modal-actions button:hover {
+    transform: translateY(-2px);
 }
 
 .btn-primary, .btn-secondary, .btn-danger {

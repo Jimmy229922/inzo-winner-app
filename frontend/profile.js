@@ -39,6 +39,12 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const hasActiveCompetition = agentCompetitions.some(c => c.is_active);
     const hasInactiveCompetition = !hasActiveCompetition && agentCompetitions.length > 0;
 
+    // Helper for audit days in Action Tab
+    const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const auditDaysHtml = (agent.audit_days && agent.audit_days.length > 0)
+        ? agent.audit_days.sort().map(dayIndex => `<span class="day-tag">${dayNames[dayIndex]}</span>`).join('')
+        : '<span class="day-tag-none">لا توجد أيام محددة</span>';
+
     appContent.innerHTML = `
         <button id="back-btn" class="btn-secondary" style="margin-bottom: 20px;">&larr; عودة</button>
         
@@ -68,10 +74,41 @@ async function renderAgentProfilePage(agentId, options = {}) {
         </div>
 
         <div id="tab-action" class="tab-content active">
-            <h2>إجراءات سريعة</h2>
-            <p>إرسال رسائل أو إنشاء مسابقات خاصة بهذا الوكيل.</p>
-            <div class="details-actions">
-                <button id="create-agent-competition" class="btn-primary"><i class="fas fa-plus-circle"></i> إنشاء مسابقة جديدة</button>
+            <div class="action-tab-grid">
+                <div class="action-section">
+                    <h2><i class="fas fa-info-circle"></i> بيانات تلقائية</h2>
+                    <div class="action-info-grid">
+                        <div class="action-info-card">
+                            <i class="fas fa-calendar-check"></i>
+                            <div class="info">
+                                <label>أيام التدقيق</label>
+                                <div class="value-group">${auditDaysHtml}</div>
+                            </div>
+                        </div>
+                        <div class="action-info-card">
+                            <i class="fas fa-wallet"></i>
+                            <div class="info">
+                                <label>الرصيد المتبقي</label>
+                                <p>$${agent.remaining_balance || 0}</p>
+                            </div>
+                        </div>
+                        <div class="action-info-card">
+                            <i class="fas fa-gift"></i>
+                            <div class="info">
+                                <label>بونص الإيداع</label>
+                                <p>${agent.remaining_deposit_bonus || 0} <span class="sub-value">مرات بنسبة</span> ${agent.deposit_bonus_percentage || 0}%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="action-section">
+                    <h2><i class="fas fa-rocket"></i> إجراءات سريعة</h2>
+                    <div class="details-actions">
+                        <button id="create-agent-competition" class="btn-primary"><i class="fas fa-plus-circle"></i> إنشاء مسابقة</button>
+                        <button id="send-bonus-cliche-btn" class="btn-telegram-bonus"><i class="fas fa-paper-plane"></i> إرسال كليشة البونص</button>
+                        <button id="send-winners-cliche-btn" class="btn-telegram-winners"><i class="fas fa-trophy"></i> إرسال كليشة الفائزين</button>
+                    </div>
+                </div>
             </div>
         </div>
         <div id="tab-details" class="tab-content">
@@ -92,6 +129,87 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     document.getElementById('create-agent-competition').addEventListener('click', () => {
         window.location.hash = `competitions/new?agentId=${agent.id}`;
+    });
+
+    document.getElementById('send-bonus-cliche-btn').addEventListener('click', async () => {
+        // 1. Construct the message
+        const renewalPeriodMap = {
+            'weekly': 'أسبوعي',
+            'biweekly': 'كل أسبوعين',
+            'monthly': 'شهري'
+        };
+        const renewalText = renewalPeriodMap[agent.renewal_period] || 'دوري';
+
+        const clicheText = `دمت بخير شريكنا العزيز ${agent.name} ...
+يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع برصيد مسابقات (${renewalText}) قيمته ${agent.remaining_balance || 0}$ و ${agent.deposit_bonus_percentage || 0}% بونص ايداع لـ ${agent.remaining_deposit_bonus || 0} مرات.
+بامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة. هل ترغب بارسال مسابقة لحضرتك؟`;
+
+        // 2. Show confirmation modal before sending
+        showConfirmationModal(
+            `<p>هل أنت متأكد من إرسال رسالة تذكير البونص إلى قناة التلجرام؟</p>
+             <textarea class="modal-textarea-preview" readonly>${clicheText}</textarea>`,
+            async () => {
+                // 3. Send to backend on confirmation
+                try {
+                    const response = await fetch('/api/post-announcement', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: clicheText })
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.message || 'فشل الاتصال بالخادم.');
+
+                    showToast('تم إرسال كليشة البونص إلى تلجرام بنجاح.', 'success');
+                    await logAgentActivity(agent.id, 'BONUS_CLICHE_SENT', 'تم إرسال كليشة تذكير البونص إلى تلجرام.');
+                } catch (error) {
+                    showToast(`فشل إرسال الكليشة: ${error.message}`, 'error');
+                }
+            },
+            {
+                title: 'إرسال رسالة البونص',
+                confirmText: 'إرسال',
+                confirmClass: 'btn-telegram-bonus',
+                modalClass: 'modal-wide'
+            }
+        );
+    });
+
+    document.getElementById('send-winners-cliche-btn').addEventListener('click', () => {
+        const clicheText = `دمت بخير شريكنا العزيز ${agent.name}،
+
+يرجى اختيار الفائزين بالمسابقة الاخيرة التي تم انتهاء مدة المشاركة بها 
+وتزويدنا بفيديو الروليت والاسم الثلاثي و معلومات الحساب لكل فائز قبل الاعلان عنهم في قناتكم كي يتم التحقق منهم من قبل القسم المختص
+
+كما يجب اختيار الفائزين بالقرعة لشفافية الاختيار.`;
+
+        // Show confirmation modal before sending
+        showConfirmationModal(
+            `<p>هل أنت متأكد من إرسال طلب اختيار الفائزين إلى قناة التلجرام؟</p>
+             <textarea class="modal-textarea-preview" readonly>${clicheText}</textarea>`,
+            async () => {
+                // Send to backend on confirmation
+                try {
+                    const response = await fetch('/api/post-announcement', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: clicheText })
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.message || 'فشل الاتصال بالخادم.');
+
+                    showToast('تم إرسال طلب اختيار الفائزين إلى تلجرام بنجاح.', 'success');
+                    await logAgentActivity(agent.id, 'WINNERS_SELECTION_REQUESTED', `تم إرسال طلب اختيار الفائزين لمسابقة الوكيل ${agent.name}.`);
+                } catch (error) {
+                    showToast(`فشل إرسال الطلب: ${error.message}`, 'error');
+                }
+            },
+            {
+                title: 'طلب اختيار الفائزين',
+                confirmText: 'إرسال',
+                confirmClass: 'btn-telegram-winners',
+                modalClass: 'modal-wide'
+            }
+        );
     });
 
     const editBtn = document.getElementById('edit-profile-btn');
@@ -198,7 +316,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
             if (!id) return;
     
             showConfirmationModal(
-                'هل أنت متأكد من حذف هذه المسابقة؟',
+                'هل أنت متأكد من حذف هذه المسابقة؟<br><small>لا يمكن التراجع عن هذا الإجراء.</small>',
                 async () => {
                     const { error } = await supabase.from('competitions').delete().eq('id', id);
                     if (error) {
@@ -210,7 +328,8 @@ async function renderAgentProfilePage(agentId, options = {}) {
                         renderAgentProfilePage(agent.id, { activeTab: 'agent-competitions' });
                     }
                 }, {
-                    confirmText: 'نعم، قم بالحذف',
+                    title: 'تأكيد الحذف',
+                    confirmText: 'حذف',
                     confirmClass: 'btn-danger'
                 });
         }

@@ -90,6 +90,38 @@ apiRouter.post('/post-winner', async (req, res) => {
     }
 });
 
+// NEW: Endpoint to post a generic announcement
+apiRouter.post('/post-announcement', async (req, res) => {
+    const { message } = req.body;
+    console.log(`[INFO] Received request to post announcement.`);
+
+    if (!message) {
+        console.warn('[WARN] Post announcement request received with no message.');
+        return res.status(400).json({ message: 'Message content is required' });
+    }
+
+    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+        const errorMsg = '[ERROR] Telegram Bot Token or Chat ID is not configured on the server.';
+        console.error(errorMsg);
+        return res.status(500).json({ message: 'Telegram integration is not configured on the server.' });
+    }
+
+    const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+    try {
+        await axios.post(telegramApiUrl, {
+            chat_id: TELEGRAM_CHAT_ID,
+            text: message,
+        });
+        console.log(`[SUCCESS] Announcement sent to Telegram.`);
+        res.status(200).json({ message: 'Successfully posted announcement to Telegram' });
+    } catch (error) {
+        const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
+        console.error(`[ERROR] Failed to send announcement to Telegram: ${errorDetails}`);
+        res.status(500).json({ message: `Failed to post to Telegram. Reason: ${error.response ? error.response.data.description : 'Unknown error'}` });
+    }
+});
+
 // Endpoint to update the application via git pull
 // This is now /api/update-app
 apiRouter.post('/update-app', (req, res) => {

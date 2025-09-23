@@ -1,159 +1,266 @@
-/* Main content area on agents page */
-#app-content h1 {
-    color: var(--text-color);
+/* Manage Agents Page */
+.manage-agents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
 }
 
-/* Page Header */
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    margin-bottom: 20px;
-}
-
-.page-header.column-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 15px;
-}
-
-.header-top-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.info-tooltip {
-    color: var(--text-secondary-color);
-    cursor: help;
-    font-size: 1.2em;
-    margin-right: auto; /* Pushes it to the left in RTL */
-}
-
-/* New Task Page Styles */
-.task-group {
+.agent-manage-card {
     background-color: var(--card-bg-color);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    margin-bottom: 20px;
     overflow: hidden;
-    transition: all 0.3s ease-in-out;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
 }
 
-.task-group[open] {
+.agent-manage-card:hover {
+    transform: translateY(-5px);
     box-shadow: 0 5px 15px var(--shadow-color);
 }
 
-.task-group[open] .task-group-header i {
-    transform: rotate(180deg);
-}
-
-.task-group-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 20px;
-    cursor: pointer;
-    background-color: var(--bg-color);
-    user-select: none;
-}
-
-.task-group-header-left, .task-group-header-right {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.task-group-bulk-actions {
-    display: flex;
-    gap: 20px;
-    border-left: 1px solid var(--border-color);
-    padding-left: 20px;
-    margin-left: 20px;
-}
-
-.task-group-indicators {
+.agent-manage-card-header {
+    padding: 15px;
     display: flex;
     align-items: center;
     gap: 15px;
+    position: relative;
 }
 
-/* Remove default marker */
-.task-group-header::-webkit-details-marker {
-    display: none;
-}
-.task-group-header {
-    list-style: none;
+.agent-manage-avatar, .agent-manage-avatar-placeholder {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
 }
 
-.task-group-header i {
+.agent-manage-avatar-placeholder {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
     color: var(--text-secondary-color);
-    transition: transform 0.2s ease-in-out;
 }
 
+.agent-manage-info h3 {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.agent-manage-info p {
+    margin: 0;
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.agent-id-text {
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.agent-id-text:hover {
+    color: var(--primary-color);
+}
+
+.classification-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 0.7em;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: bold;
+    color: white;
+}
+
+.classification-badge.classification-r { background-color: #9b59b6; } /* Purple */
+.classification-badge.classification-a { background-color: #e74c3c; } /* Red */
+.classification-badge.classification-b { background-color: #3498db; } /* Blue */
+.classification-badge.classification-c { background-color: #2ecc71; } /* Green */
+
+.agent-manage-card-footer {
+    background-color: var(--bg-color);
+    padding: 10px 15px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* --- Task Group Header Redesign --- */
+.task-group-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 20px;
+    cursor: pointer;
+    background-color: var(--bg-color);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: background-color 0.2s;
+}
+.task-group-header:hover {
+    background-color: var(--card-bg-color);
+}
 .task-group-title {
     display: flex;
     align-items: center;
     gap: 15px;
+    flex-grow: 1; /* Pushes other items to the right */
 }
-
 .task-group-title h2 {
     margin: 0;
     padding: 0;
     border: none;
     font-size: 1.5em;
 }
-
 .task-group-progress {
     background-color: var(--border-color);
     color: var(--text-secondary-color);
-    padding: 4px 12px;
+    padding: 4px 10px;
     border-radius: 15px;
-    font-weight: bold;
     font-size: 0.9em;
+    font-weight: bold;
+}
+.task-group-bulk-actions {
+    display: flex;
+    gap: 20px;
+}
+.task-group-indicators {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    color: var(--text-secondary-color);
+}
+.task-group-indicators .group-completion-indicator {
+    color: #27ae60; /* Green */
+    display: none; /* Hide by default */
+}
+.task-group.all-complete .group-completion-indicator {
+    display: block; /* Show when all tasks are complete */
+}
+
+/* --- Daily Tasks Page - V2 Redesign --- */
+
+.tasks-overview {
+    display: flex;
+    gap: 30px;
+    align-items: center;
+    background-color: var(--card-bg-color);
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+
+@property --p{
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+.progress-donut-chart {
+    --p: 0; /* progress percentage */
+    --b: 12px; /* border thickness */
+    --c: var(--primary-color); /* color */
+    width: 120px;
+    height: 120px;
+    aspect-ratio: 1;
+    position: relative;
+    display: inline-grid;
+    place-content: center;
+    font-size: 1.8em;
+    font-weight: bold;
+    transition: --p 0.5s;
+}
+.progress-donut-chart:before,
+.progress-donut-chart:after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+}
+.progress-donut-chart:before {
+    inset: 0;
+    background:
+        radial-gradient(farthest-side, var(--c) 98%, #0000) top/var(--b) var(--b) no-repeat,
+        conic-gradient(var(--c) calc(var(--p) * 1%), #0000 0);
+    -webkit-mask: radial-gradient(farthest-side, #0000 calc(99% - var(--b)), #000 calc(100% - var(--b)));
+    mask: radial-gradient(farthest-side, #0000 calc(99% - var(--b)), #000 calc(100% - var(--b)));
+}
+.progress-donut-chart:after {
+    inset: calc(50% - var(--b)/2);
+    background: var(--c);
+    transform: rotate(calc(var(--p) * 3.6deg)) translateY(calc(50% - 120px/2));
+}
+
+.overview-stats {
+    display: flex;
+    gap: 40px;
+    flex-grow: 1;
+    justify-content: space-around;
+}
+
+.overview-stat-item {
+    text-align: center;
+}
+
+.overview-stat-item h3 {
+    font-size: 2.5em;
+    margin: 0;
+    color: var(--text-color);
+}
+
+.overview-stat-item p {
+    margin: 0;
+    color: var(--text-secondary-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .task-group-content {
-    padding: 20px;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 15px;
+    padding: 0 20px 20px 20px;
 }
 
 .task-card {
-    background-color: var(--bg-color);
+    background-color: var(--card-bg-color);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 15px;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.2s;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    border-left: 5px solid transparent; /* Start with a transparent border */
+    flex-direction: column;
+    position: relative;
 }
 
 .task-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 4px 8px var(--shadow-color);
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
 }
 
 .task-card.complete {
-    /* Both checked: A more saturated green based on the primary theme color */
-    background-color: color-mix(in srgb, #00d62b 20%, var(--bg-color));
-    border-color: color-mix(in srgb, #00d62b 80%, #000);
+    background-color: color-mix(in srgb, #27ae60 8%, var(--card-bg-color));
+    border-color: #27ae60;
+}
+.task-card.complete:after {
+    content: none; /* Remove the checkmark icon */
 }
 
-.task-card.partially-complete {
-    /* Only 'audited' checked: Blue */
-    background-color: color-mix(in srgb, #00aeff 20%, var(--bg-color));
-    border-color: color-mix(in srgb, #00aeff 80%, #000);
+.task-card.highlighted {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent);
+    transform: scale(1.02);
 }
-.task-card.competition-sent-only {
-    /* Only 'competition' checked: A lighter green */
-    background-color: color-mix(in srgb, #003366 20%, var(--bg-color));
-    border-color: color-mix(in srgb, #003366 80%, #000);
+
+.task-card-header {
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    cursor: pointer;
 }
 
 .task-card-main {
@@ -163,357 +270,126 @@
     flex-grow: 1;
 }
 
-.task-agent-avatar,
-.task-agent-avatar-placeholder {
+.task-agent-avatar, .task-agent-avatar-placeholder {
     width: 45px;
     height: 45px;
     border-radius: 50%;
-    flex-shrink: 0;
     object-fit: cover;
-    background-color: var(--border-color);
+    flex-shrink: 0;
+}
+
+.task-agent-avatar-placeholder {
+    background-color: var(--bg-color);
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 1.5em;
     color: var(--text-secondary-color);
 }
 
 .task-agent-info h3 {
-    margin: 0 0 4px 0;
+    margin: 0;
     font-size: 1.1em;
-    color: var(--text-color);
 }
+
 .task-agent-info p {
     margin: 0;
     font-size: 0.9em;
     color: var(--text-secondary-color);
 }
 
-.task-card-actions {
+.task-card-body {
+    padding: 15px;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    align-items: flex-start;
-}
-
-/* General Checkbox Styles (already exists but good to have it here for context) */
-.custom-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-}
-.custom-checkbox input {
-    display: none;
-}
-.custom-checkbox .checkmark {
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--border-color);
-    border-radius: 4px;
-    display: inline-block;
-    position: relative;
-}
-.custom-checkbox input:checked + .checkmark {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-}
-.custom-checkbox .checkmark:after {
-    content: "";
-    position: absolute;
-    display: none;
-    left: 6px;
-    top: 2px;
-    width: 5px;
-    height: 10px;
-    border: solid white;
-    border-width: 0 3px 3px 0;
-    transform: rotate(45deg);
-}
-.custom-checkbox input:checked + .checkmark:after {
-    display: block;
-}
-
-.custom-checkbox.small {
-    font-size: 0.9em;
-}
-
-.agent-filters {
-    display: flex;
-    gap: 20px;
-    align-items: center;
-}
-
-.filter-search-container {
-    position: relative;
-    flex-grow: 1;
-}
-
-.filter-search-container i {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--text-secondary-color);
-}
-
-#agent-search-input {
-    width: 100%;
-    padding: 8px 15px 8px 35px;
-    border-radius: 20px;
-    border: 1px solid var(--border-color);
-    background-color: var(--input-bg-color);
-    color: var(--text-color);
-    box-sizing: border-box;
-}
-
-.filter-buttons {
-    display: flex;
     background-color: var(--bg-color);
-    border-radius: 20px;
-    padding: 4px;
-    border: 1px solid var(--border-color);
-}
-
-.filter-btn {
-    background-color: transparent;
-    border: none;
-    padding: 6px 16px;
-    border-radius: 16px;
-    cursor: pointer;
-    color: var(--text-secondary-color);
-    font-weight: 500;
-    transition: all 0.2s ease;
-}
-
-.filter-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-}
-
-.group-completion-indicator {
-    color: #2ecc71; /* A vibrant, consistent green */
-    font-size: 1.4em;
-    display: none; /* Hidden by default */
-}
-
-.task-group.all-complete .group-completion-indicator {
-    display: inline-block; /* Show when group is complete */
-}
-
-/* New Agent Management Page Styles */
-.manage-agents-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-}
-
-.agent-manage-card[style*="display: none"] {
-    display: none !important;
-}
-
-.agent-manage-card {
-    background-color: var(--card-bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.agent-manage-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 5px 15px var(--shadow-color);
-}
-
-.agent-manage-card-header {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    padding: 20px;
-    flex-grow: 1;
-}
-
-.agent-manage-avatar,
-.agent-manage-avatar-placeholder {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    object-fit: cover;
-    background-color: var(--bg-color);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-secondary-color);
-    font-size: 1.5em;
-}
-
-.agent-manage-info {
-    flex-grow: 1;
-}
-
-.agent-manage-info .agent-name {
-    margin: 0 0 4px 0;
-    font-size: 1.1em;
-    font-weight: bold;
-    color: var(--text-color);
-}
-
-.agent-manage-info .agent-id-text {
-    margin: 0;
-    font-size: 0.9em;
-    color: var(--text-secondary-color);
-}
-
-.classification-badge {
-    font-size: 0.8em;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-weight: bold;
-    color: white;
-    align-self: flex-start;
-    margin-right: auto; /* Push to the left in RTL */
-}
-
-.classification-r { background-color: #e74c3c; } /* Red */
-.classification-a { background-color: #3498db; } /* Blue */
-.classification-b { background-color: #f1c40f; color: #333; } /* Yellow */
-.classification-c { background-color: #95a5a6; } /* Gray */
-
-.agent-manage-card-footer {
-    padding: 10px 20px;
     border-top: 1px solid var(--border-color);
+}
+
+.task-stat {
     display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    background-color: var(--bg-color);
-    cursor: default;
-}
-
-.agent-manage-card-footer .btn-secondary,
-.agent-manage-card-footer .btn-danger {
-    padding: 6px 12px;
-    font-size: 0.85em;
-}
-
-.no-results-message {
-    grid-column: 1 / -1; /* Span all columns */
-    text-align: center;
-    padding: 40px;
-    color: var(--text-secondary-color);
-    font-style: italic;
-}
-
-/* Pagination Styles */
-.pagination-container {
-    display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
-    gap: 5px;
-    margin-top: 30px;
-    padding: 10px;
-    flex-wrap: wrap;
+    font-size: 0.9em;
 }
 
-.page-btn {
-    background-color: var(--card-bg-color);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-    padding: 8px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-weight: 500;
+.task-stat label {
+    color: var(--text-secondary-color);
 }
 
-.page-btn:hover:not(:disabled) {
-    background-color: var(--bg-color);
-    border-color: var(--primary-color);
-}
-
-.page-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
+.task-stat span {
     font-weight: bold;
+    color: var(--text-color);
+    text-align: left;
 }
 
-.page-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    background-color: var(--bg-color);
+.task-card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--border-color);
 }
 
-/* Day Selector in Forms */
-.days-selector {
+.action-item {
+    padding: 15px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding-top: 5px;
-}
-.day-checkbox {
-    display: inline-block;
-    position: relative;
-}
-.day-checkbox input[type="checkbox"] {
-    opacity: 0;
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    cursor: pointer;
-}
-.day-checkbox span {
-    display: block;
-    padding: 8px 16px;
-    border-radius: 20px;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary-color);
-    transition: all 0.2s ease;
-    font-weight: 500;
-}
-.day-checkbox input[type="checkbox"]:checked + span {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-    box-shadow: 0 2px 5px rgba(147, 112, 219, 0.4);
-}
-
-/* Search Highlighting */
-.task-card mark, .agent-manage-card mark { /* Apply to both pages */
-    background-color: #f1c40f; /* Yellow */
-    color: #333;
-    padding: 0 2px;
-    border-radius: 3px;
-}
-
-body.dark-mode .task-card mark, body.dark-mode .agent-manage-card mark {
-    color: #000;
-}
-
-/* Highlight animation for tasks linked from the homepage */
-.task-card.highlighted {
-    animation: highlight-pulse 1.5s ease-out;
-}
-
-@keyframes highlight-pulse {
-    0% {
-        box-shadow: 0 0 0 0px color-mix(in srgb, var(--primary-color) 50%, transparent);
-    }
-    50% {
-        box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary-color) 50%, transparent);
-    }
-    100% {
-        box-shadow: 0 0 0 0px color-mix(in srgb, var(--primary-color) 0%, transparent);
-    }
-}
-
-.form-container h1 {
-    display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 15px;
-    font-size: 1.8em;
-    margin-bottom: 30px;
+    transition: background-color 0.3s;
 }
+
+.action-item:first-child {
+    border-left: 1px solid var(--border-color);
+}
+
+.action-item label {
+    font-weight: bold;
+    color: var(--text-secondary-color);
+}
+
+.action-item.done {
+    background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+.action-item.done label {
+    color: var(--primary-color);
+}
+
+.task-agent-id {
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.task-agent-id:hover {
+    color: var(--primary-color);
+}
+
+/* Re-add toggle switch styles here for self-containment */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--border-color);
+    transition: .4s;
+}
+.slider:before {
+    position: absolute; content: "";
+    height: 20px; width: 20px;
+    left: 4px; bottom: 4px;
+    background-color: white;
+    transition: .4s;
+}
+.toggle-switch input:checked + .slider { background-color: var(--primary-color); }
+.toggle-switch input:checked + .slider:before { transform: translateX(22px); }
+.slider.round { border-radius: 34px; }
+.slider.round:before { border-radius: 50%; }
