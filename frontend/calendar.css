@@ -1,0 +1,99 @@
+/* Calendar Page Styles */
+.calendar-container {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 15px;
+    flex-grow: 1; /* Fill available vertical space */
+}
+
+.day-column {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Ensure content respects border-radius */
+}
+
+.day-column h2 {
+    margin-top: 0;
+    font-size: 1.2em;
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 10px;
+    padding: 15px;
+    margin: 0;
+}
+
+.day-column-content {
+    flex-grow: 1;
+    padding: 15px;
+    overflow-y: auto; /* Allow content to scroll if it overflows */
+}
+
+.no-tasks {
+    color: var(--text-secondary-color);
+    text-align: center;
+    padding-top: 20px;
+    font-style: italic;
+}
+
+.calendar-agent-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+}
+
+.calendar-agent-item:hover {
+    background-color: var(--bg-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px var(--shadow-color);
+    border-color: var(--primary-color);
+}
+
+.calendar-agent-item .agent-name {
+    font-weight: bold;
+    color: var(--text-color);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.calendar-agent-id {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    cursor: copy;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    display: inline-block;
+    margin-bottom: 8px;
+}
+.calendar-agent-id:hover {
+    background-color: var(--border-color);
+}
+
+.calendar-agent-statuses {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.status-tag {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: bold;
+    color: #fff;
+}
+
+.status-audited {
+    background-color: #3498db; /* Blue */
+}
+
+.status-competition {
+    background-color: #2ecc71; /* Green */
+}

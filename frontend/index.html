@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الإدارة - inzo</title>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="base.css">
+    <link rel="stylesheet" href="navbar.css">
+    <link rel="stylesheet" href="agents.css">
+    <link rel="stylesheet" href="profile.css">
+    <link rel="stylesheet" href="home.css">
+    <link rel="stylesheet" href="calendar.css">
+    <link rel="stylesheet" href="components.css">
+    <link rel="stylesheet" href="stars.css">
+    <link rel="stylesheet" href="competitions.css">
+</head>
+<body>
+    <!-- Animated Background Elements -->
+    <div id="animated-bg">
+        <div class="stars"></div>
+        <div class="twinkling"></div>
+        <!-- Shooting stars will be added here by JavaScript -->
+    </div>
+
+    <!-- New Top Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-left">
+            <a href="#" class="brand"><strong>inzo</strong> System</a>
+            <a href="#" id="nav-home" class="nav-link active">الرئيسية</a>
+            <a href="#" id="nav-tasks" class="nav-link">المهام اليومية</a>
+            <a href="#" id="nav-manage-agents" class="nav-link">إدارة الوكلاء</a>
+            <a href="#" id="nav-competitions" class="nav-link">المسابقات</a>
+            <a href="#" id="nav-calendar" class="nav-link">التقويم</a>
+        </div>
+        <div class="navbar-center">
+            <div class="search-container">
+                <input type="search" placeholder="بحث بالاسم أو رقم الوكالة..." class="search-input">
+                <i class="fas fa-search search-icon"></i>
+                <div id="search-results" class="search-results"></div>
+            </div>
+        </div>
+        <div class="navbar-right">
+            <div id="date-display" class="date-display"></div>
+            <button id="theme-toggle-btn" class="theme-toggle-btn">
+                <i class="fas fa-sun"></i>
+                <i class="fas fa-moon"></i>
+            </button>
+        </div>
+    </nav>
+
+    <div class="content-wrapper">
+        <main>
+            <!-- سيتم عرض محتوى الصفحات هنا ديناميكياً -->
+            <div id="app-content">
+            </div>
+        </main>
+        <footer>
+            <!-- Footer content can be added here later -->
+        </footer>
+    </div>
+
+    <div id="connection-status" class="status-connecting">الحالة: جاري الاتصال...</div>
+
+    <!-- New UI Components -->
+    <div id="toast-container"></div>
+
+    <div id="page-loader" class="page-loader">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="home.js"></script>
+    <script src="agents.js"></script>
+    <script src="calendar.js"></script>
+    <script src="profile.js"></script>
+    <script src="competitions.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
