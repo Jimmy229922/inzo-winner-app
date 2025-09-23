@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const axios = require('axios');
+const { exec } = require('child_process');
 const cron = require('node-cron');
 
 const app = express();
@@ -79,6 +80,42 @@ app.post('/post-winner', async (req, res) => {
         console.error(`[ERROR] Failed to send message to Telegram: ${errorDetails}`);
         res.status(500).json({ message: `Failed to post to Telegram. Reason: ${error.response ? error.response.data.description : 'Unknown error'}` });
     }
+});
+
+// Endpoint to update the application via git pull
+app.post('/update-app', (req, res) => {
+    console.log('[UPDATE] Received request to update the application from remote.');
+
+    // Execute git pull command in the project's root directory
+    exec('git pull origin main', { cwd: path.join(__dirname, '..') }, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`[UPDATE-ERROR] exec error: ${error}`);
+            if (stderr.includes('not a git repository')) {
+                return res.status(500).json({ message: 'فشل التحديث: المجلد الحالي ليس مستودع Git صالح.' });
+            }
+            return res.status(500).json({ message: 'فشل تحديث التطبيق.', details: stderr });
+        }
+
+        console.log(`[UPDATE-LOG] git pull stdout: ${stdout}`);
+        if (stderr && !stderr.toLowerCase().includes('fast-forward')) {
+            console.warn(`[UPDATE-LOG] git pull stderr: ${stderr}`);
+        }
+
+        // If 'Already up to date.' is in the output, no need to restart.
+        if (stdout.includes('Already up to date.')) {
+            console.log('[UPDATE] Application is already up to date.');
+            return res.status(200).json({ message: 'التطبيق محدّث بالفعل.', needsRestart: false });
+        }
+
+        // If there were changes, send a response and then restart the server.
+        res.status(200).json({ message: 'تم سحب التحديثات بنجاح. سيتم إعادة تشغيل الخادم تلقائياً.', needsRestart: true });
+
+        // Restart the server by exiting with a specific code that the .bat file will catch
+        setTimeout(() => {
+            console.log('[UPDATE] Restarting server to apply updates...');
+            process.exit(1);
+        }, 1500);
+    });
 });
 
 // --- Scheduled Tasks ---

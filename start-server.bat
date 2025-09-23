@@ -44,10 +44,28 @@ echo  Starting Server... This window will now become the server log.
 echo  It must remain open for the application to work.
 echo =================================================
 echo.
-
+ 
+:start
 REM Navigate to backend and start the server
 cd backend
 node server.js
+
+REM Check the exit code. If it's 1, it means we need to restart for an update.
+IF %errorlevel% == 1 (
+    echo.
+    echo [SYSTEM] Server restarting to apply updates...
+    echo.
+    timeout /t 2 /nobreak > nul
+    goto start
+)
+
+REM Check for other errors. A non-zero exit code other than 1 indicates a crash.
+IF %errorlevel% NEQ 0 (
+    echo.
+    echo [ERROR] The server has crashed unexpectedly.
+    echo Please check the logs above for any error messages.
+    echo.
+)
 
 echo.
 echo Server has stopped. You can close this window now.

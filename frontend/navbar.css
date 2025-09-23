@@ -158,3 +158,9 @@
 
 body.dark-mode .theme-toggle-btn .fa-sun { display: block; }
 body.dark-mode .theme-toggle-btn .fa-moon { display: none; }
+
+/* Add rotation for update button icon on hover */
+#update-app-btn:hover i {
+    transform: rotate(90deg);
+    transition: transform 0.3s ease-in-out;
+}

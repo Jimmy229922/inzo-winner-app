@@ -192,6 +192,40 @@ function setupNavbar() {
         }
     });
 
+    // Update App Button Logic
+    const updateBtn = document.getElementById('update-app-btn');
+    updateBtn.addEventListener('click', () => {
+        showConfirmationModal('هل أنت متأكد من رغبتك في تحديث التطبيق إلى آخر إصدار؟ سيتم إعادة تشغيل الخادم.', async () => {
+            const icon = updateBtn.querySelector('i');
+            icon.classList.add('fa-spin');
+            updateBtn.disabled = true;
+
+            try {
+                const response = await fetch('/update-app', { method: 'POST' });
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.details || result.message || 'فشل الاتصال بالخادم.');
+                }
+
+                showToast(result.message, 'info');
+
+                if (result.needsRestart) {
+                    showToast('سيتم إعادة تحميل الصفحة خلال لحظات...', 'info');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 5000); // Reload after 5s to give the server time to restart
+                }
+            } catch (error) {
+                console.error('Update error:', error);
+                showToast(`فشل التحديث: ${error.message}`, 'error');
+            } finally {
+                icon.classList.remove('fa-spin');
+                updateBtn.disabled = false;
+            }
+        });
+    });
+
     // Date Display
     const dateDisplay = document.getElementById('date-display');
     const today = new Date();
