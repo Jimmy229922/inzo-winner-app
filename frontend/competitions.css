@@ -1,20 +1,103 @@
 /* Competitions Page Styles */
-.status-cell {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+
+/* Competitions Grid */
+.competitions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
 }
 
-.status-indicator {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
+.competition-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s, box-shadow 0.2s;
+    overflow: hidden; /* To contain header background */
 }
-.status-indicator.active {
+
+.competition-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.competition-card-header {
+    background-color: var(--bg-color);
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.competition-card-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    color: var(--text-color);
+}
+
+.competition-card-body {
+    padding: 20px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.competition-card-body p {
+    margin: 0;
+    color: var(--text-secondary-color);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.competition-card-body p i {
+    margin-top: 4px;
+    color: var(--primary-color);
+}
+
+.competition-card-body p.description {
+    font-style: italic;
+}
+
+.competition-card-body p strong {
+    color: var(--text-color);
+    margin-left: 4px;
+}
+
+.competition-card-footer {
+    padding: 15px 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background-color: var(--bg-color);
+}
+
+.competition-card-footer .btn-secondary,
+.competition-card-footer .btn-danger {
+    padding: 8px 16px;
+    font-size: 0.9em;
+}
+
+/* Status Badge for Active/Inactive state */
+.status-badge {
+    font-size: 0.7em;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: bold;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-badge.active {
     background-color: #2ecc71; /* Green */
 }
-.status-indicator.inactive {
+
+.status-badge.inactive {
     background-color: #e74c3c; /* Red */
 }
 

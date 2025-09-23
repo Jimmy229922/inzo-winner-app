@@ -59,32 +59,30 @@ async function renderCompetitionsList() {
             <h2>المسابقات الحالية</h2>
             <button id="add-competition-btn" class="btn-primary"><i class="fas fa-plus"></i> إضافة مسابقة عامة</button>
         </div>
-        <table class="agent-list-table">
-            <thead>
-                <tr>
-                    <th>اسم المسابقة</th>
-                    <th>الوكيل</th>
-                    <th>نشطة</th>
-                    <th>إجراءات</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${competitions.map(comp => `
-                    <tr>
-                        <td>${comp.name}</td>
-                        <td>${comp.agents ? comp.agents.name : '<em>(عامة)</em>'}</td>
-                        <td class="status-cell">
-                            <span class="status-indicator ${comp.is_active ? 'active' : 'inactive'}"></span>
-                            ${comp.is_active ? 'نعم' : 'لا'}
-                        </td>
-                        <td>
-                            <button class="edit-btn" data-id="${comp.id}" title="تعديل"><i class="fas fa-edit"></i></button>
-                            <button class="delete-btn" data-id="${comp.id}" title="حذف"><i class="fas fa-trash-alt"></i></button>
-                        </td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
+        <div class="competitions-grid">
+            ${competitions.length > 0 ? competitions.map(comp => `
+                <div class="competition-card">
+                    <div class="competition-card-header">
+                        <h3>${comp.name}</h3>
+                        <span class="status-badge ${comp.is_active ? 'active' : 'inactive'}">${comp.is_active ? 'نشطة' : 'غير نشطة'}</span>
+                    </div>
+                    <div class="competition-card-body">
+                        <p>
+                            <i class="fas fa-user"></i>
+                            <div><strong>الوكيل:</strong> ${comp.agents ? comp.agents.name : '<em>(عامة)</em>'}</div>
+                        </p>
+                        <p class="description">
+                            <i class="fas fa-info-circle"></i>
+                            <div><strong>الوصف:</strong> ${comp.description || '<em>لا يوجد وصف</em>'}</div>
+                        </p>
+                    </div>
+                    <div class="competition-card-footer">
+                        <button class="btn-secondary edit-btn" data-id="${comp.id}" title="تعديل"><i class="fas fa-edit"></i> تعديل</button>
+                        <button class="btn-danger delete-btn" data-id="${comp.id}" title="حذف"><i class="fas fa-trash-alt"></i> حذف</button>
+                    </div>
+                </div>
+            `).join('') : '<p>لا توجد مسابقات حالياً.</p>'}
+        </div>
     `;
 
     document.getElementById('add-competition-btn').addEventListener('click', () => window.location.hash = 'competitions/new');
@@ -97,7 +95,7 @@ async function renderCompetitionsList() {
 
     container.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
-            const row = btn.closest('tr');
+            const card = btn.closest('.competition-card');
             const id = btn.dataset.id;
             showConfirmationModal('هل أنت متأكد من حذف هذه المسابقة؟', async () => {
                 const { error } = await supabase.from('competitions').delete().eq('id', id);
@@ -105,9 +103,10 @@ async function renderCompetitionsList() {
                     showToast('فشل حذف المسابقة.', 'error');
                 } else {
                     showToast('تم حذف المسابقة بنجاح.', 'success');
-                    row.style.transition = 'opacity 0.4s ease-out';
-                    row.style.opacity = '0';
-                    setTimeout(() => row.remove(), 400);
+                    card.style.transition = 'opacity 0.4s ease-out, transform 0.4s ease-out';
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.95)';
+                    setTimeout(() => card.remove(), 400);
                 }
             });
         });
