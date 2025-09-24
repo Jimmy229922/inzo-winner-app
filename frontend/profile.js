@@ -39,6 +39,16 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const hasActiveCompetition = agentCompetitions.some(c => c.is_active);
     const hasInactiveCompetition = !hasActiveCompetition && agentCompetitions.length > 0;
 
+    let birthdayIndicator = '';
+    if (agent.birth_date) {
+        const today = new Date();
+        const birthDate = new Date(agent.birth_date);
+        // Compare month and day, ignoring year and timezone differences
+        if (today.getMonth() === birthDate.getMonth() && today.getDate() === birthDate.getDate()) {
+            birthdayIndicator = `<button id="send-birthday-greeting-btn" class="birthday-badge"><i class="fas fa-birthday-cake"></i> عيد ميلاد سعيد!</button>`;
+        }
+    }
+
     // Helper for audit days in Action Tab
     const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     const auditDaysHtml = (agent.audit_days && agent.audit_days.length > 0)
@@ -59,6 +69,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 <h1>
                     ${agent.name} 
                     ${hasActiveCompetition ? '<span class="status-badge active">مسابقة نشطة</span>' : ''}
+                    ${birthdayIndicator}
                     ${hasInactiveCompetition ? '<span class="status-badge inactive">مسابقة غير نشطة</span>' : ''}
                 </h1>
                 <p>رقم الوكالة: <strong class="agent-id-text" title="نسخ الرقم">${agent.agent_id}</strong> | التصنيف: ${agent.classification} | المرتبة: ${agent.rank || 'غير محدد'}</p>
@@ -140,6 +151,42 @@ async function renderAgentProfilePage(agentId, options = {}) {
         agentIdEl.addEventListener('click', (e) => {
             e.stopPropagation();
             navigator.clipboard.writeText(agent.agent_id).then(() => showToast(`تم نسخ الرقم: ${agent.agent_id}`, 'info'));
+        });
+    }
+
+    // Birthday Greeting Button
+    const birthdayBtn = document.getElementById('send-birthday-greeting-btn');
+    if (birthdayBtn) {
+        birthdayBtn.addEventListener('click', () => {
+            const clicheText = `🎉 عيد ميلاد سعيد لشريكنا المميز ${agent.name}! 🎉
+
+تتمنى لك أسرة inzo يوماً رائعاً وعاماً مليئاً بالنجاح والتألق. 🎂`;
+
+            showConfirmationModal(
+                `<p>هل أنت متأكد من إرسال تهنئة عيد الميلاد إلى قناة التلجرام؟</p>
+                 <textarea class="modal-textarea-preview" readonly>${clicheText}</textarea>`,
+                async () => {
+                    try {
+                        const response = await fetch('/api/post-announcement', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ message: clicheText })
+                        });
+                        const result = await response.json();
+                        if (!response.ok) throw new Error(result.message || 'فشل الاتصال بالخادم.');
+
+                        showToast('تم إرسال تهنئة عيد الميلاد بنجاح.', 'success');
+                        await logAgentActivity(agent.id, 'BIRTHDAY_GREETING_SENT', 'تم إرسال تهنئة عيد الميلاد إلى تلجرام.');
+                    } catch (error) {
+                        showToast(`فشل إرسال التهنئة: ${error.message}`, 'error');
+                    }
+                },
+                {
+                    title: 'تهنئة عيد ميلاد',
+                    confirmText: 'إرسال التهنئة',
+                    confirmClass: 'btn-primary'
+                }
+            );
         });
     }
 
@@ -344,6 +391,7 @@ function generateActivityLogHTML(logs) {
         if (actionType.includes('DETAILS_UPDATE')) return { icon: 'fa-cogs', colorClass: 'log-icon-details' };
         if (actionType.includes('COMPETITION_CREATED')) return { icon: 'fa-trophy', colorClass: 'log-icon-competition' };
         if (actionType.includes('BONUS_CLICHE_SENT')) return { icon: 'fa-paper-plane', colorClass: 'log-icon-telegram' };
+        if (actionType.includes('BIRTHDAY_GREETING_SENT')) return { icon: 'fa-birthday-cake', colorClass: 'log-icon-birthday' };
         if (actionType.includes('WINNERS_SELECTION_REQUESTED')) return { icon: 'fa-question-circle', colorClass: 'log-icon-telegram' };
         return { icon: 'fa-history', colorClass: 'log-icon-generic' };
     };
@@ -506,7 +554,7 @@ function renderInlineEditor(groupElement, agent) {
             </select>`;
             break;
         case 'renewal_period':
-            editorHtml = `<select id="inline-edit-input"><option value="weekly" ${currentValue === 'weekly' ? 'selected' : ''}>أسبوع</option><option value="biweekly" ${currentValue === 'biweekly' ? 'selected' : ''}>أسبوعين</option><option value="monthly" ${currentValue === 'monthly' ? 'selected' : ''}>شهر</option><option value="test_10s" ${currentValue === 'test_10s' ? 'selected' : ''}>كل 10 ثوان (للتجربة)</option></select>`;
+            editorHtml = `<select id="inline-edit-input"><option value="weekly" ${currentValue === 'weekly' ? 'selected' : ''}>أسبوع</option><option value="biweekly" ${currentValue === 'biweekly' ? 'selected' : ''}>أسبوعين</option><option value="monthly" ${currentValue === 'monthly' ? 'selected' : ''}>شهر</option></select>`;
             break;
         case 'competitions_per_week':
             editorHtml = `<select id="inline-edit-input"><option value="1" ${currentValue == 1 ? 'selected' : ''}>1</option><option value="2" ${currentValue == 2 ? 'selected' : ''}>2</option><option value="3" ${currentValue == 3 ? 'selected' : ''}>3</option></select>`;
@@ -633,14 +681,12 @@ function startRenewalCountdown(agent) {
 
     // If last_renewal_date is null, it means it has never been renewed.
     // We should treat the "start" of the countdown from now, or from the last renewal date if it exists.
-        // For the 'test_10s' case, we ALWAYS start the countdown from 'now' to make testing intuitive.
-    const lastRenewal = (agent.renewal_period === 'test_10s' || !agent.last_renewal_date) ? new Date() : new Date(agent.last_renewal_date);
+    const lastRenewal = !agent.last_renewal_date ? new Date() : new Date(agent.last_renewal_date);
     let nextRenewalDate = new Date(lastRenewal);
 
     if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
     else if (agent.renewal_period === 'biweekly') nextRenewalDate.setDate(lastRenewal.getDate() + 14);
     else if (agent.renewal_period === 'monthly') nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
-    else if (agent.renewal_period === 'test_10s') nextRenewalDate.setSeconds(lastRenewal.getSeconds() + 10);
     else {
         countdownElement.style.display = 'none';
         return;
@@ -698,6 +744,7 @@ function renderEditProfileHeader(agent, parentElement) {
                     </select>
                 </div>
                 <div class="form-group"><label for="telegram-channel-url">رابط قناة التلجرام</label><input type="text" id="telegram-channel-url" value="${agent.telegram_channel_url || ''}"></div>
+                <div class="form-group"><label for="edit-agent-birth-date">تاريخ الميلاد</label><input type="date" id="edit-agent-birth-date" value="${agent.birth_date || ''}"></div>
                 <div class="form-group"><label for="telegram-group-url">رابط جروب التلجرام</label><input type="text" id="telegram-group-url" value="${agent.telegram_group_url || ''}"></div>
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label>أيام التدقيق</label>
@@ -800,6 +847,7 @@ function renderEditProfileHeader(agent, parentElement) {
             audit_days: selectedDays,
             telegram_channel_url: headerV2.querySelector('#telegram-channel-url').value || null,
             telegram_group_url: headerV2.querySelector('#telegram-group-url').value || null,
+            birth_date: headerV2.querySelector('#edit-agent-birth-date').value || null,
             avatar_url: newAvatarUrl,
         };
 
@@ -824,6 +872,7 @@ function renderEditProfileHeader(agent, parentElement) {
                     audit_days: 'أيام التدقيق',
                     telegram_channel_url: 'رابط قناة التلجرام',
                     telegram_group_url: 'رابط جروب التلجرام',
+                    birth_date: 'تاريخ الميلاد',
                     avatar_url: 'الصورة الشخصية'
                 };
                 const changeDescriptions = changedKeys.map(key => {

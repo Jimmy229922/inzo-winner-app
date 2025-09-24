@@ -116,6 +116,27 @@
     background-color: #f39c12; /* Orange */
 }
 
+.birthday-badge {
+    font-size: 0.6em;
+    padding: 5px 12px;
+    border-radius: 15px;
+    font-weight: bold;
+    color: #fff;
+    background: linear-gradient(45deg, #ff6b6b, #feca57);
+    animation: birthday-glow 1.5s infinite alternate;
+    display: inline-flex;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+    align-items: center;
+    gap: 6px;
+}
+
+@keyframes birthday-glow {
+    from { box-shadow: 0 0 5px #ff6b6b, 0 0 10px #feca57; }
+    to { box-shadow: 0 0 15px #ff6b6b, 0 0 25px #feca57; }
+}
+
 .tabs {
     display: flex;
     margin-bottom: 20px;
@@ -254,6 +275,7 @@
 .log-icon-details { background-color: #9b59b6; } /* Purple */
 .log-icon-competition { background-color: #f39c12; } /* Orange */
 .log-icon-telegram { background-color: #3498db; } /* Blue */
+.log-icon-birthday { background-color: #ff6b6b; } /* Pinkish-Red */
 .log-icon-generic { background-color: var(--text-secondary-color); } /* Gray */
 
 .log-item-content-v2 {
