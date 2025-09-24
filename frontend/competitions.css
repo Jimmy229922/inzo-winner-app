@@ -1,5 +1,246 @@
 /* Competitions Page Styles */
 
+/* --- تحسينات مقترحة لصفحة إدارة المسابقات --- */
+
+/* 1. تحسين تصميم شريط الفلاتر والبحث */
+.filters-container {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.filters-container .filter-search-container {
+    flex-grow: 1;
+}
+
+.filters-container .filter-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 15px;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-label {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    font-weight: 500;
+}
+
+.filters-container .filter-buttons {
+    background-color: var(--bg-color);
+    border-radius: 20px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.filters-container .sort-container {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 15px;
+}
+
+/* 2. تصميم القائمة الجديد */
+.competitions-list-view {
+    display: flex;
+    flex-direction: column;
+    gap: 0; /* No gap for table-like view */
+}
+
+.competitions-list-view .competition-card {
+    display: grid;
+    grid-template-columns: auto 2fr auto 1.5fr auto; /* Checkbox | Name | Status | Agent | Actions */
+    grid-template-areas: "checkbox name status agent footer";
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
+    background-color: var(--card-bg-color);
+    border: none; /* Remove individual card border */
+    border-bottom: 1px solid var(--border-color); /* Use bottom border for separation */
+    border-radius: 0; /* No radius for table rows */
+    transition: background-color 0.2s;
+}
+
+.competitions-list-view .competition-card:first-of-type {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.competitions-list-view .competition-card:last-of-type {
+    border-bottom: none;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.competitions-list-view .competition-card:hover {
+    background-color: var(--bg-color);
+}
+
+.competitions-list-view .competition-card.selected {
+    background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+
+.competitions-list-view .row-checkbox {
+    grid-area: checkbox;
+}
+
+.competitions-list-view .competition-card-name {
+    grid-area: name;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+
+.competitions-list-view .competition-card-name h3 {
+    margin: 0;
+    font-size: 1.05em;
+}
+
+.competitions-list-view .competition-card-status {
+    grid-area: status;
+    text-align: center;
+}
+
+.competitions-list-view .competition-card-footer {
+    grid-area: footer;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+/* جعل أزرار الإجراءات أيقونات فقط */
+.competitions-list-view .competition-card-footer .btn-secondary,
+.competitions-list-view .competition-card-footer .btn-danger {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 1em;
+    justify-content: center;
+}
+
+/* تنسيق زر تبديل الحالة */
+.small-toggle {
+    width: 40px;
+    height: 22px;
+}
+.small-toggle .slider:before {
+    height: 16px;
+    width: 16px;
+}
+.small-toggle input:checked + .slider:before {
+    transform: translateX(18px);
+}
+
+/* 3. تنسيق خلية الوكيل */
+.table-agent-cell {
+    grid-area: agent;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* تعديل: توسيط محتوى خلية الوكيل */
+    gap: 10px;
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+    text-decoration: none;
+    color: var(--text-color);
+    min-width: 0; /* Prevents overflow */
+}
+
+.table-agent-cell:hover .agent-details span {
+    color: var(--primary-color);
+}
+
+.table-agent-cell .avatar-small,
+.table-agent-cell .avatar-placeholder-small {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.table-agent-cell .avatar-placeholder-small {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+}
+
+/* 4. شريط الإجراءات الجماعية */
+.bulk-action-bar {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(-20px);
+    visibility: hidden;
+    transition: opacity 0.3s, transform 0.3s, visibility 0.3s;
+}
+
+.bulk-action-bar.visible {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+}
+
+#bulk-action-count {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* 5. رأس القائمة */
+.list-view-header {
+    display: grid;
+    grid-template-columns: auto 2fr auto 1.5fr auto; /* مطابقة لأعمدة البطاقة */
+    gap: 1.5rem;
+    padding: 0 1.5rem;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: var(--text-secondary-color);
+    align-items: center;
+}
+
+.list-view-header .header-name {
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+
+.list-view-header .header-status {
+    text-align: center;
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+
+/* تعديل: توسيط عنوان عمود الوكيل */
+.list-view-header .header-agent {
+    text-align: center;
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+
 /* Competitions Grid */
 .competitions-grid {
     display: grid;

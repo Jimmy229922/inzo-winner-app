@@ -28,24 +28,38 @@ async function renderAllCompetitionsListPage() {
             <div class="header-top-row">
                 <h1>إدارة المسابقات</h1>
             </div>
-            <div class="agent-filters">
+            <div class="filters-container">
                 <div class="filter-search-container">
                     <input type="search" id="competition-search-input" placeholder="بحث باسم المسابقة أو الوكيل..." autocomplete="off">
                     <i class="fas fa-search"></i>
                     <i class="fas fa-times-circle search-clear-btn" id="competition-search-clear"></i>
                 </div>
-                <div class="filter-buttons">
-                    <button class="filter-btn active" data-filter="all">الكل</button>
-                    <button class="filter-btn" data-filter="active">نشطة</button>
-                    <button class="filter-btn" data-filter="inactive">غير نشطة</button>
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label class="filter-label">فلترة حسب الحالة</label>
+                        <div class="filter-buttons" data-filter-group="status">
+                            <button class="filter-btn active" data-filter="all">الكل</button>
+                            <button class="filter-btn" data-filter="active">نشطة</button>
+                            <button class="filter-btn" data-filter="inactive">غير نشطة</button>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">فلترة حسب التصنيف</label>
+                        <div class="filter-buttons" data-filter-group="classification">
+                            <button class="filter-btn active" data-filter="all">كل التصنيفات</button>
+                            <button class="filter-btn" data-filter="R">R</button>
+                            <button class="filter-btn" data-filter="A">A</button>
+                            <button class="filter-btn" data-filter="B">B</button>
+                            <button class="filter-btn" data-filter="C">C</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="sort-container">
                     <label for="competition-sort-select">ترتيب حسب:</label>
                     <select id="competition-sort-select">
                         <option value="newest">الأحدث أولاً</option>
-                        <option value="oldest">الأقدم أولاً</option>
-                        <option value="name_asc">اسم المسابقة (أ-ي)</option>
-                        <option value="agent_asc">اسم الوكيل (أ-ي)</option>
+                        <option value="name_asc">اسم المسابقة (أ - ي)</option>
+                        <option value="agent_asc">اسم الوكيل (أ - ي)</option>
                     </select>
                 </div>
             </div>
@@ -121,6 +135,34 @@ async function renderAllCompetitionsListPage() {
                 }
             );
         }
+
+        // New: Handle competition status toggle
+        const statusToggle = e.target.closest('.competition-status-toggle');
+        if (statusToggle) {
+            const id = parseInt(statusToggle.dataset.id, 10);
+            const isActive = statusToggle.checked;
+
+            // 1. Update Supabase
+            const { error } = await supabase
+                .from('competitions')
+                .update({ is_active: isActive })
+                .eq('id', id);
+
+            if (error) {
+                showToast('فشل تحديث حالة المسابقة.', 'error');
+                console.error('Competition status update error:', error);
+                statusToggle.checked = !isActive; // Revert UI on error
+            } else {
+                showToast(`تم تحديث حالة المسابقة إلى "${isActive ? 'نشطة' : 'غير نشطة'}".`, 'success');
+                // 2. Update local cache
+                const competitionInCache = allCompetitionsData.find(c => c.id === id);
+                if (competitionInCache) {
+                    competitionInCache.is_active = isActive;
+                }
+                // 3. Re-apply filters to reflect the change instantly
+                setupCompetitionFilters(allCompetitionsData);
+            }
+        }
     });
 
     // Caching: If we already have the data, don't fetch it again.
@@ -177,7 +219,9 @@ function displayCompetitionsPage(competitionsList, page) {
                     <input type="checkbox" id="select-all-competitions" ${selectAllChecked ? 'checked' : ''}>
                     <span class="checkmark"></span>
                 </label>
-                <span>المسابقة / الوكيل</span>
+                <span class="header-name">المسابقة</span>
+                <span class="header-status">الحالة</span>
+                <span class="header-agent">الوكيل</span>
                 <span class="header-actions">الإجراءات</span>
             </div>
         `;
@@ -201,8 +245,8 @@ function generateCompetitionGridHtml(competitions) {
         const isSelected = selectedCompetitionIds.includes(comp.id);
         const agent = comp.agents;
         const agentInfoHtml = agent
-            ? `<a href="#profile/${agent.id}" class="competition-card-agent-info">
-                    ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">` : `<div class="avatar-placeholder-small" style="width: 32px; height: 32px; border-radius: 50%; font-size: 16px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-user"></i></div>`}
+            ? `<a href="#profile/${agent.id}" class="table-agent-cell">
+                    ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy">` : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`}
                     <div class="agent-details">
                         <span>${agent.name}</span>
                         ${agent.classification ? `<span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>` : ''}
@@ -216,20 +260,19 @@ function generateCompetitionGridHtml(competitions) {
                 <input type="checkbox" class="competition-select-checkbox" data-id="${comp.id}" ${isSelected ? 'checked' : ''}>
                 <span class="checkmark"></span>
             </label>
-            <div class="competition-card-content">
-                <div class="competition-card-header">
-                    <h3>${comp.name}</h3>
-                    <span class="status-badge ${comp.is_active ? 'active' : 'inactive'}">${comp.is_active ? 'نشطة' : 'غير نشطة'}</span>
-                </div>
-                ${agentInfoHtml}
-                <div class="competition-card-body">
-                    <p class="description"><i class="fas fa-info-circle"></i><div><strong>الوصف:</strong> ${comp.description ? comp.description.substring(0, 80) + '...' : '<em>لا يوجد وصف</em>'}</div></p>
-                    <p class="creation-date"><i class="fas fa-calendar-plus"></i><div><strong>تاريخ الإنشاء:</strong> ${new Date(comp.created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' })}</div></p>
-                </div>
+            <div class="competition-card-name">
+                <h3>${comp.name}</h3>
             </div>
+            <div class="competition-card-status">
+                <label class="custom-checkbox toggle-switch small-toggle" title="${comp.is_active ? 'تعطيل' : 'تفعيل'}">
+                    <input type="checkbox" class="competition-status-toggle" data-id="${comp.id}" ${comp.is_active ? 'checked' : ''}>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            ${agentInfoHtml}
             <div class="competition-card-footer">
-                <button class="btn-secondary edit-btn" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i> تعديل</button>
-                <button class="btn-danger delete-competition-btn" data-id="${comp.id}"><i class="fas fa-trash-alt"></i> حذف</button>
+                <button class="btn-secondary edit-btn" title="تعديل" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i></button>
+                <button class="btn-danger delete-competition-btn" title="حذف" data-id="${comp.id}"><i class="fas fa-trash-alt"></i></button>
             </div>
         </div>
         `;
@@ -244,36 +287,39 @@ function setupCompetitionFilters(allCompetitions) {
 
     const applyFilters = () => {
         if (!searchInput) return;
-        if (clearBtn) clearBtn.style.display = searchInput.value ? 'block' : 'none';
+        if (clearBtn) {
+            clearBtn.style.display = searchInput.value ? 'block' : 'none';
+        }
         
         const searchTerm = searchInput.value.toLowerCase().trim();
-        const activeFilter = document.querySelector('.agent-filters .filter-btn.active').dataset.filter;
+        const statusFilter = document.querySelector('.filter-buttons[data-filter-group="status"] .filter-btn.active').dataset.filter;
+        const classificationFilter = document.querySelector('.filter-buttons[data-filter-group="classification"] .filter-btn.active').dataset.filter;
         const sortValue = sortSelect.value; // New
 
         let filteredCompetitions = allCompetitions.filter(comp => {
             const name = comp.name.toLowerCase();
             const agentName = comp.agents ? comp.agents.name.toLowerCase() : '';
             const status = comp.is_active ? 'active' : 'inactive';
+            const classification = comp.agents?.classification;
 
             const matchesSearch = searchTerm === '' || name.includes(searchTerm) || agentName.includes(searchTerm);
-            const matchesFilter = activeFilter === 'all' || status === activeFilter;
-            return matchesSearch && matchesFilter;
+            const matchesStatus = statusFilter === 'all' || status === statusFilter;
+            const matchesClassification = classificationFilter === 'all' || classification === classificationFilter;
+            return matchesSearch && matchesStatus && matchesClassification;
         });
         
         // New Sorting Logic
         filteredCompetitions.sort((a, b) => {
             const nameA = a.name.toLowerCase();
             const nameB = b.name.toLowerCase();
-            const agentA = a.agents?.name.toLowerCase() || '';
-            const agentB = b.agents?.name.toLowerCase() || '';
+            const agentNameA = a.agents?.name.toLowerCase() || '';
+            const agentNameB = b.agents?.name.toLowerCase() || '';
 
             switch (sortValue) {
-                case 'oldest':
-                    return new Date(a.created_at) - new Date(b.created_at);
                 case 'name_asc':
                     return nameA.localeCompare(nameB);
                 case 'agent_asc':
-                    return agentA.localeCompare(agentB);
+                    return agentNameA.localeCompare(agentNameB);
                 case 'newest':
                 default:
                     return new Date(b.created_at) - new Date(a.created_at);
@@ -298,11 +344,13 @@ function setupCompetitionFilters(allCompetitions) {
         sortSelect.addEventListener('change', applyFilters);
     }
 
-    filterButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            filterButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            applyFilters();
+    document.querySelectorAll('.filter-buttons').forEach(group => {
+        group.addEventListener('click', (e) => {
+            if (e.target.classList.contains('filter-btn')) {
+                group.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                applyFilters();
+            }
         });
     });
 }

@@ -428,11 +428,11 @@
 .competitions-list-view .competition-card {
     display: grid;
     /* New grid layout with checkbox */
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 1fr auto; /* تعديل لضمان تناسق الأعمدة */
     grid-template-areas: "checkbox content actions";
     align-items: center;
-    gap: 0.5rem 1.5rem;
-    padding: 1rem 1.5rem;
+    gap: 1rem;
+    padding: 0.75rem 1.5rem;
     background-color: var(--card-bg-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -460,19 +460,26 @@
 .competitions-list-view .competition-card-content {
     grid-area: content;
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 2fr 1fr; /* إعطاء مساحة أكبر للمسابقة */
     grid-template-areas: 
-        "header agent actions"
-        "body   agent actions";
+        "header agent";
     align-items: center;
-    gap: 0.5rem 1.5rem;
+    gap: 1.5rem;
 }
 
 .competitions-list-view .competition-card-header {
     grid-area: header;
     align-self: end;
-    /* Remove background and padding from original card style */
+    display: flex; /* لجعل العنوان والزر متجاورين */
+    justify-content: space-between;
+    align-items: center;
     background: none;
+    padding: 0;
+    border: none;
+}
+
+.competitions-list-view .competition-card-name h3 {
+    margin: 0;
     padding: 0;
     border: none;
 }
@@ -484,18 +491,74 @@
 .competitions-list-view .competition-card-body {
     grid-area: body;
     align-self: start;
-    padding: 0; /* Remove padding from original card style */
+    display: none; /* إخفاء الوصف والتاريخ لزيادة الكثافة */
 }
 
 .competitions-list-view .competition-card-footer {
     grid-area: actions;
-    flex-direction: column;
+    display: flex;
     gap: 0.5rem;
-    align-self: stretch;
-    justify-content: center;
+    justify-content: flex-end;
     background: none; /* Remove background from original card style */
     border: none;
     padding: 0;
+}
+
+/* جعل أزرار الإجراءات أيقونات فقط */
+.competitions-list-view .competition-card-footer .btn-secondary,
+.competitions-list-view .competition-card-footer .btn-danger {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 1em;
+    justify-content: center;
+}
+
+/* تنسيق زر تبديل الحالة الجديد */
+.small-toggle {
+    width: 40px;
+    height: 22px;
+}
+.small-toggle .slider:before {
+    height: 16px;
+    width: 16px;
+}
+.small-toggle input:checked + .slider:before {
+    transform: translateX(18px);
+}
+
+/* 2. إعادة تصميم معلومات الوكيل في القائمة */
+.table-agent-cell {
+    grid-area: agent;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--text-color);
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+    min-width: 0; /* Prevents overflow */
+}
+
+.table-agent-cell:hover .agent-details span {
+    color: var(--primary-color);
+}
+
+.table-agent-cell .avatar-small,
+.table-agent-cell .avatar-placeholder-small {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.table-agent-cell .avatar-placeholder-small {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
 }
 
 /* New Sort Container in header */
@@ -515,6 +578,8 @@
     border-radius: 6px;
     border: 1px solid var(--border-color);
     background-color: var(--input-bg-color);
+    height: auto; /* تعديل الارتفاع */
+    height: 100%;
     color: var(--text-color);
 }
 
@@ -553,8 +618,8 @@
 /* New List Header for Select All */
 .list-view-header {
     display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 0.5rem 1.5rem;
+    grid-template-columns: auto 2fr 1fr auto; /* مطابقة لأعمدة البطاقة */
+    gap: 1.5rem;
     padding: 0 1.5rem;
     margin-bottom: 10px;
     font-weight: bold;
@@ -562,11 +627,12 @@
     align-items: center;
 }
 
-.list-view-header .custom-checkbox {
-    padding-right: 10px;
+.list-view-header .header-agent {
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
 }
 
 .list-view-header .header-actions {
-    text-align: center;
-    padding-right: 20px; /* Align with actions column */
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
 }
