@@ -2,8 +2,8 @@
 chcp 65001 > nul
 title inzo Winner System - Daily Launcher
 
-REM Set the current directory to the script's location for reliable paths
 cd /d "%~dp0"
+color 0B
 
 echo.
 echo =================================================
@@ -11,34 +11,37 @@ echo  Starting inzo Winner System...
 echo =================================================
 echo.
 
-REM --- Step 1: Check for required files ---
-echo [1/2] Verifying system setup...
+echo [1/3] Verifying system setup...
 IF NOT EXIST "backend\.env" (
+    color 0C
     echo [ERROR] Configuration file is missing.
     echo.
     echo Please run 'setup.bat' first to configure the system.
     echo.
     pause
-    exit
+    exit /b 1
 )
 
 IF NOT EXIST "backend\node_modules" (
+    color 0C
     echo [ERROR] Required components are missing.
     echo.
     echo Please run 'setup.bat' first to install dependencies.
     echo.
     pause
-    exit
+    exit /b 1
 )
+color 0A
 echo [OK] System is configured correctly.
+color 0B
 echo.
 
-REM --- Step 2: Start the application ---
-echo [2/2] Starting application...
+echo [2/3] Starting application in browser...
 echo      Opening frontend in your browser...
 start "" "http://localhost:3000"
-
 echo.
+
+echo [3/3] Starting server...
 echo =================================================
 echo  Starting Server... This window will now become the server log.
 echo  It must remain open for the application to work.
@@ -46,28 +49,29 @@ echo =================================================
 echo.
  
 :start
-REM Navigate to backend and start the server
 cd backend
 node server.js
  
-REM Check the exit code. If it's 42, it's a specific signal to restart for an update.
 IF %errorlevel% == 42 (
+    color 0E
     echo.
     echo [SYSTEM] Server restarting to apply updates...
     echo.
-    cd ..
     timeout /t 2 /nobreak > nul
     goto start
 )
-
-REM Check for other errors. A non-zero exit code other than 1 indicates a crash.
+ 
 IF %errorlevel% NEQ 0 (
+    color 0C
     echo.
-    echo [ERROR] The server has crashed unexpectedly.
-    echo Please check the logs above for any error messages.
+    echo =================================================================
+    echo  [CRITICAL ERROR] The server has crashed unexpectedly.
+    echo =================================================================
+    echo.
+    echo  Please copy ALL the text in this window (Ctrl+A, Ctrl+C)
+    echo  and send it to the administrator for troubleshooting.
     echo.
 )
 
-echo.
-echo Server has stopped. You can close this window now.
+color 07
 pause

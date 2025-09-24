@@ -58,11 +58,12 @@ async function renderAgentProfilePage(agentId, options = {}) {
                     ${hasActiveCompetition ? '<span class="status-badge active">مسابقة نشطة</span>' : ''}
                     ${hasInactiveCompetition ? '<span class="status-badge inactive">مسابقة غير نشطة</span>' : ''}
                 </h1>
-                <p>رقم الوكالة: ${agent.agent_id} | التصنيف: ${agent.classification} | المرتبة: ${agent.rank || 'غير محدد'}</p>
+                <p>رقم الوكالة: <strong class="agent-id-text" title="نسخ الرقم">${agent.agent_id}</strong> | التصنيف: ${agent.classification} | المرتبة: ${agent.rank || 'غير محدد'}</p>
                 <p>روابط التلجرام: ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank">القناة</a>` : 'القناة (غير محدد)'} | ${agent.telegram_group_url ? `<a href="${agent.telegram_group_url}" target="_blank">الجروب</a>` : 'الجروب (غير محدد)'}</p>
             </div>
             <div class="profile-header-actions">
                  <button id="edit-profile-btn" class="btn-secondary"><i class="fas fa-user-edit"></i> تعديل</button>
+                 <button id="recalculate-balance-btn" class="btn-secondary" title="إعادة حساب الأرصدة بناءً على المسابقات الفعلية"><i class="fas fa-calculator"></i></button>
             </div>
         </div>
 
@@ -126,6 +127,34 @@ async function renderAgentProfilePage(agentId, options = {}) {
     `;
  
     document.getElementById('back-btn').addEventListener('click', () => history.back());
+
+    // Click to copy agent ID from header
+    const agentIdEl = appContent.querySelector('.profile-main-info .agent-id-text');
+    if (agentIdEl) {
+        agentIdEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(agent.agent_id).then(() => showToast(`تم نسخ الرقم: ${agent.agent_id}`, 'info'));
+        });
+    }
+
+    // NEW: Moved recalculate button listener here, as the button is in the main profile scope
+    const recalculateBtn = document.getElementById('recalculate-balance-btn');
+    recalculateBtn.addEventListener('click', async () => {
+        recalculateBtn.disabled = true;
+        recalculateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        const { error } = await supabase.rpc('recalculate_agent_balance', { p_agent_id: agent.id });
+
+        if (error) {
+            showToast('فشل إعادة حساب الرصيد.', 'error');
+            console.error('Recalculate error:', error);
+        } else {
+            showToast('تم تحديث الأرصدة بنجاح.', 'success');
+            renderAgentProfilePage(agent.id, { activeTab: 'details' }); // Refresh the view
+        }
+        recalculateBtn.disabled = false;
+        recalculateBtn.innerHTML = '<i class="fas fa-calculator"></i>';
+    });
 
     document.getElementById('create-agent-competition').addEventListener('click', () => {
         window.location.hash = `competitions/new?agentId=${agent.id}`;
@@ -382,9 +411,9 @@ function renderDetailsView(agent) {
             ${createFieldHTML('نسبة بونص الإيداع', agent.deposit_bonus_percentage, 'deposit_bonus_percentage', false)}
             
             <h3 class="details-section-title">الأرصدة</h3>
-            ${createFieldHTML('رصيد مستهلك', agent.consumed_balance, 'consumed_balance', true)}
-            ${createFieldHTML('رصيد متبقي', agent.remaining_balance, 'remaining_balance', false)}
-            ${createFieldHTML('بونص إيداع مستخدم', agent.used_deposit_bonus, 'used_deposit_bonus', true)}
+            ${createFieldHTML('رصيد مستهلك', agent.consumed_balance, 'consumed_balance', false)}
+            ${createFieldHTML('رصيد متبقي', agent.remaining_balance, 'remaining_balance', false)}            
+            ${createFieldHTML('بونص إيداع مستخدم', agent.used_deposit_bonus, 'used_deposit_bonus', false)}
             ${createFieldHTML('بونص إيداع متبقي', agent.remaining_deposit_bonus, 'remaining_deposit_bonus', false)}
 
             <h3 class="details-section-title">إعدادات المسابقة الواحدة</h3>
@@ -412,6 +441,7 @@ function renderDetailsView(agent) {
             renderInlineEditor(group, agent);
         }
     });
+
 }
 
 
@@ -425,7 +455,7 @@ function renderInlineEditor(groupElement, agent) {
     let editorHtml = '';
 
     // Special cases for read-only fields
-    if (['competition_bonus', 'deposit_bonus_percentage', 'deposit_bonus_count', 'remaining_balance', 'remaining_deposit_bonus', 'winner_selection_date', 'prize_per_winner', 'competition_duration'].includes(fieldName)) {
+    if (['competition_bonus', 'deposit_bonus_percentage', 'deposit_bonus_count', 'remaining_balance', 'remaining_deposit_bonus', 'winner_selection_date', 'prize_per_winner', 'competition_duration', 'consumed_balance', 'used_deposit_bonus'].includes(fieldName)) {
         showToast('يتم حساب هذا الحقل تلقائياً.', 'info');
         return;
     }

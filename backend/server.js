@@ -269,6 +269,31 @@ cron.schedule('0 * * * *', async () => {
     }
 });
 
+// Schedule a task to reset agent balances on the 1st of every month at 00:01 AM.
+cron.schedule('1 0 1 * *', async () => {
+    console.log('[CRON] Running monthly reset for agent balances...');
+    if (!supabaseAdmin) {
+        console.error('[CRON] Aborting monthly reset: Supabase admin client is not initialized.');
+        return;
+    }
+    try {
+        // This RPC function updates all agents at once in the database.
+        const { error } = await supabaseAdmin.rpc('reset_all_agent_monthly_balances');
+
+        if (error) {
+            console.error('[CRON] Failed to reset monthly agent balances:', error.message);
+        } else {
+            console.log('[CRON] Successfully reset all agent monthly balances.');
+        }
+
+    } catch (err) {
+        console.error('[CRON] Error calling reset_all_agent_monthly_balances:', err.message);
+    }
+}, {
+    scheduled: true,
+    timezone: "Africa/Cairo" // Set to your local timezone
+});
+
 // تشغيل السيرفر
 app.listen(port, () => {
     // قم بتحميل الإعدادات الآمنة أولاً

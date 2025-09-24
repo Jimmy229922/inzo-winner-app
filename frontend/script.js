@@ -81,10 +81,9 @@ async function handleRouting() {
         if (agentId) {
             renderFunction = () => renderAgentProfilePage(agentId);
             navElement = null; // No nav item is active on a profile page
-        }
-    } else if (hash.startsWith('#competitions/new')) {
+        }    } else if (hash.startsWith('#competitions/new') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents') {
         mainElement.classList.add('full-width');
-    } else if (hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions') {        mainElement.classList.add('full-width');    } else if (hash === '#calendar') {
+    } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
         appContent.classList.add('full-height-content');
     }

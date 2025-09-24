@@ -155,38 +155,53 @@ function displayAgentsPage(agentsList, page) {
     const endIndex = startIndex + AGENTS_PER_PAGE;
     const paginatedAgents = agentsList.slice(startIndex, endIndex);
     const searchTerm = document.getElementById('agent-search-input')?.value.toLowerCase().trim() || '';
-
-    const gridHtml = paginatedAgents.length > 0 ? paginatedAgents.map(agent => {
-        const avatarHtml = agent.avatar_url
-            ? `<img src="${agent.avatar_url}" alt="Avatar" class="agent-manage-avatar" loading="lazy">`
-            : `<div class="agent-manage-avatar-placeholder"><i class="fas fa-user"></i></div>`;
-        
-        let highlightedName = agent.name;
-        let highlightedId = '#' + agent.agent_id;
-
-        if (searchTerm) {
-            const regex = new RegExp(searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi');
-            highlightedName = agent.name.replace(regex, '<mark>$&</mark>');
-            highlightedId = ('#' + agent.agent_id).replace(regex, '<mark>$&</mark>');
-        }
-
-        return `
-        <div class="agent-manage-card" data-agent-id="${agent.id}">
-            <div class="agent-manage-card-header">
-                ${avatarHtml}
-                <div class="agent-manage-info">
-                    <h3 class="agent-name">${highlightedName}</h3>
-                    <p class="agent-id-text" title="نسخ الرقم">${highlightedId}</p>
-                </div>
-                <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
-            </div>
-            <div class="agent-manage-card-footer">
-                <button class="btn-secondary edit-btn"><i class="fas fa-edit"></i> تعديل</button>
-                <button class="btn-danger delete-btn"><i class="fas fa-trash-alt"></i> حذف</button>
-            </div>
-        </div>
-        `;
-    }).join('') : '<p class="no-results-message">لا توجد نتائج تطابق بحثك.</p>';
+    
+    const tableHtml = paginatedAgents.length > 0 ? `
+        <table class="modern-table">
+            <thead>
+                <tr>
+                    <th>الوكيل</th>
+                    <th>رقم الوكالة</th>
+                    <th>التصنيف</th>
+                    <th>المرتبة</th>
+                    <th>روابط التلجرام</th>
+                    <th class="actions-column">الإجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${paginatedAgents.map(agent => {
+                    const avatarHtml = agent.avatar_url
+                        ? `<img src="${agent.avatar_url}" alt="Avatar" class="avatar-small" loading="lazy">`
+                        : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`;
+                    
+                    return `
+                        <tr data-agent-id="${agent.id}">
+                            <td data-label="الوكيل">
+                                <div class="table-agent-cell">
+                                    ${avatarHtml}
+                                    <div class="agent-details">
+                                        <a href="#profile/${agent.id}" class="agent-name-link" onclick="event.stopPropagation()">${agent.name}</a>
+                                    </div>
+                                </div>
+                            </td>
+                            <td data-label="رقم الوكالة" class="agent-id-text" title="نسخ الرقم">${agent.agent_id}</td>
+                            <td data-label="التصنيف"><span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span></td>
+                            <td data-label="المرتبة">${agent.rank || 'غير محدد'}</td>
+                            <td data-label="روابط التلجرام">
+                                ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank" onclick="event.stopPropagation()">القناة</a>` : ''}
+                                ${agent.telegram_channel_url && agent.telegram_group_url ? ' | ' : ''}
+                                ${agent.telegram_group_url ? `<a href="${agent.telegram_group_url}" target="_blank" onclick="event.stopPropagation()">الجروب</a>` : ''}
+                            </td>
+                            <td class="actions-cell">
+                                <button class="btn-secondary edit-btn btn-small"><i class="fas fa-edit"></i> تعديل</button>
+                                <button class="btn-danger delete-btn btn-small"><i class="fas fa-trash-alt"></i> حذف</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    ` : '<p class="no-results-message">لا توجد نتائج تطابق بحثك.</p>';
 
     let paginationHtml = '';
     if (totalPages > 1) {
@@ -199,7 +214,7 @@ function displayAgentsPage(agentsList, page) {
         paginationHtml += '</div>';
     }
 
-    container.innerHTML = `<div class="manage-agents-grid">${gridHtml}</div>${paginationHtml}`;
+    container.innerHTML = `<div class="table-responsive-container">${tableHtml}</div>${paginationHtml}`;
 
     attachCardEventListeners(agentsList, page);
 }
@@ -208,10 +223,10 @@ function attachCardEventListeners(currentList, currentPage) {
     const container = document.getElementById('agent-table-container');
     if (!container) return;
 
-    container.querySelectorAll('.agent-manage-card').forEach(card => {
-        card.addEventListener('click', e => {
-            if (e.target.closest('.agent-manage-card-footer')) return;
-            window.location.hash = `profile/${card.dataset.agentId}`;
+    container.querySelectorAll('tbody tr').forEach(row => {
+        row.addEventListener('click', e => {
+            if (e.target.closest('.actions-cell, a')) return; // Do not navigate if clicking on actions or a link
+            window.location.hash = `profile/${row.dataset.agentId}`;
         });
     });
 
@@ -219,21 +234,21 @@ function attachCardEventListeners(currentList, currentPage) {
     container.querySelectorAll('.agent-id-text').forEach(idEl => {
         idEl.addEventListener('click', (e) => {
             e.stopPropagation();
-            const agentIdToCopy = idEl.textContent.replace('#', '');
+            const agentIdToCopy = idEl.textContent;
             navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
         });
     });
 
     container.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const card = e.currentTarget.closest('.agent-manage-card');
+            const card = e.currentTarget.closest('tr');
             window.location.hash = `profile/${card.dataset.agentId}/edit`;
         });
     });
 
     container.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const card = e.currentTarget.closest('.agent-manage-card');
+            const card = e.currentTarget.closest('tr');
             const agentId = card.dataset.agentId;
             const agentName = card.querySelector('.agent-name').textContent;
 
@@ -476,7 +491,7 @@ async function renderTaskList() {
                                         ${avatarHtml}
                                         <div class="task-agent-info">
                                             <h3>${agent.name} ${isComplete ? '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : ''}</h3>
-                                            <p class="task-agent-id" title="نسخ الرقم">#${agent.agent_id}</p>
+                                            <p class="task-agent-id" title="نسخ الرقم">${agent.agent_id}</p>
                                         </div>
                                     </div>
                                     <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
@@ -542,7 +557,7 @@ async function renderTaskList() {
         const agentIdEl = e.target.closest('.task-agent-id');
         if (agentIdEl) {
             e.stopPropagation();
-            const agentIdToCopy = agentIdEl.textContent.replace('#', '');
+            const agentIdToCopy = agentIdEl.textContent;
             navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
         }
     });

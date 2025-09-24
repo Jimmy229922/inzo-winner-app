@@ -453,9 +453,9 @@ async function renderCompetitionCreatePage(agentId) {
     }
 
     const agentClassification = agent.classification || 'R'; // Default to R if not set
-    const { data: templates, error: templatesError } = await supabase.rpc('get_available_templates_for_agent', {
-        p_classification: agentClassification
-    });
+    const { data: templates, error: templatesError } = await supabase
+        .from('competition_templates')
+        .select('*');
 
     if (templatesError) {
         appContent.innerHTML = `<p class="error">حدث خطأ أثناء جلب قوالب المسابقات.</p>`;
@@ -541,7 +541,6 @@ async function renderCompetitionCreatePage(agentId) {
     const templateSelect = document.getElementById('competition-template-select');
     const descInput = document.getElementById('competition-description');
     const tradingWinnersInput = document.getElementById('override-trading-winners');
-    const templateUsageInfo = document.getElementById('template-usage-info');
     const prizeInput = document.getElementById('override-prize');
     const depositWinnersInput = document.getElementById('override-deposit-winners');
     const durationInput = document.getElementById('override-duration');
@@ -554,24 +553,29 @@ async function renderCompetitionCreatePage(agentId) {
     }
 
     function updateDescriptionAndPreview() {
+        console.log('[Debug] updateDescriptionAndPreview called.');
         const selectedId = templateSelect.value;
         const selectedTemplate = templates.find(t => t.id == selectedId);
 
         if (!selectedTemplate) {
+            console.log('[Debug] No template selected or found.');
             descInput.value = ''; // Clear preview if no template is selected
-            templateUsageInfo.style.display = 'none';
             return;
         }
 
+        console.log('[Debug] Selected Template:', selectedTemplate);
+
         // NEW: Show usage limit info
         if (selectedTemplate.usage_limit !== null) {
-            const remaining = selectedTemplate.usage_limit - (selectedTemplate.usage_count || 0);
-            templateUsageInfo.textContent = `مرات الاستخدام المتبقية لهذا القالب: ${remaining}`;
-            templateUsageInfo.style.display = 'block';
-        } else {
-            templateUsageInfo.textContent = 'هذا القالب متاح للاستخدام غير المحدود.';
-            templateUsageInfo.style.display = 'block';
-            return;
+            const remaining = Math.max(0, selectedTemplate.usage_limit - (selectedTemplate.usage_count || 0));
+            console.log(`[Debug] Usage Limit: ${selectedTemplate.usage_limit}, Usage Count: ${selectedTemplate.usage_count}, Remaining: ${remaining}`);
+            const message = `مرات الاستخدام المتبقية لهذا القالب: ${remaining}`;
+            if (remaining <= 3) {
+                console.log('[Debug] Remaining uses <= 3, adding warning class.');
+                showToast(message, 'warning');
+            } else {
+                showToast(message, 'info');
+            }
         }
 
         const originalTemplateContent = selectedTemplate.content;
@@ -641,8 +645,7 @@ async function renderCompetitionCreatePage(agentId) {
     }
 
     [templateSelect, tradingWinnersInput, prizeInput, depositWinnersInput, durationInput].forEach(input => {
-        input.addEventListener('input', updateDescriptionAndPreview);
-        input.addEventListener('change', updateDescriptionAndPreview); // Also for select
+        input.addEventListener('change', updateDescriptionAndPreview);
     });
 
     document.getElementById('cancel-competition-form').addEventListener('click', () => {
@@ -686,6 +689,8 @@ async function renderCompetitionCreatePage(agentId) {
                     description: finalDescription,
                     is_active: true,
                     agent_id: agent.id,
+                    total_cost: totalCost,
+                    deposit_winners_count: depositWinnersCount
                 })
                 .select()
                 .single();

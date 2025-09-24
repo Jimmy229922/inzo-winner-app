@@ -869,7 +869,7 @@
 .modern-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.95em;
+    font-size: 1.05em; /* زيادة حجم الخط الأساسي للجدول */
 }
 
 .modern-table thead tr {
@@ -877,8 +877,8 @@
 }
 
 .modern-table th {
-    padding: 15px;
-    text-align: right;
+    padding: 18px; /* زيادة الحشوة لرأس الجدول */
+    text-align: center; /* توسيط جميع العناوين */
     font-weight: bold;
     color: var(--text-color);
     white-space: nowrap;
@@ -898,8 +898,9 @@
 }
 
 .modern-table td {
-    padding: 15px;
+    padding: 20px 18px; /* زيادة الحشوة لخلايا الجدول */
     vertical-align: middle;
+    text-align: center; /* توسيط محتوى جميع الخلايا */
 }
 
 .competition-name-cell strong {
@@ -915,14 +916,26 @@
 .table-agent-cell {
     display: flex;
     align-items: center;
+    justify-content: center; /* توسيط محتوى خلية الوكيل */
     gap: 10px;
     text-decoration: none;
     color: var(--text-color);
 }
 
-.table-agent-cell:hover span {
-    color: var(--primary-color);
+.agent-details {
+    display: flex;
+    flex-direction: column;
+    text-align: right;
 }
+
+.agent-name-link {
+    font-size: 1.2em; /* زيادة تكبير حجم اسم الوكيل */
+    font-weight: bold;
+    color: var(--text-color);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
 
 .table-agent-cell .avatar-small,
 .table-agent-cell .avatar-placeholder-small {
@@ -944,11 +957,16 @@
 .actions-cell {
     display: flex;
     gap: 10px;
-    justify-content: flex-end;
+    justify-content: center; /* توسيط أزرار الإجراءات */
 }
 
+.list-view-header .header-agent {
+    text-align: center;
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
 .actions-column {
-    text-align: left !important;
+    text-align: center !important; /* توسيط عنوان عمود الإجراءات */
 }
 
 .btn-small {
@@ -1063,6 +1081,36 @@
     background-color: var(--bg-color);
     padding: 5px 10px;
     border-radius: 4px;
+}
+.page-notification {
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    border-width: 1px;
+    border-style: solid;
+}
+.page-notification.info {
+    background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    color: var(--primary-color);
+    border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
+}
+.page-notification.warning {
+    background-color: color-mix(in srgb, #f39c12 15%, transparent);
+    color: #f39c12;
+    border-color: color-mix(in srgb, #f39c12 40%, transparent);
+}
+.page-notification strong {
+    font-size: 1.1em;
+    margin: 0 5px;
+}
+.form-hint.warning {
+    background-color: color-mix(in srgb, #f39c12 20%, transparent);
+    color: #f39c12;
+    font-weight: bold;
 }
 .actions-cell .btn-danger {
     background-color: transparent;

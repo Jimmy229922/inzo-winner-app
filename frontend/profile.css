@@ -66,6 +66,15 @@
     text-decoration: none;
     font-weight: bold;
 }
+.profile-main-info .agent-id-text {
+    cursor: pointer;
+    transition: color 0.2s;
+    display: inline-block;
+    padding: 2px 4px;
+}
+.profile-main-info .agent-id-text:hover {
+    color: var(--primary-color);
+}
 .status-badge {
     font-size: 0.5em;
     padding: 4px 10px;
