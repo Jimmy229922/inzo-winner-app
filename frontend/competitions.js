@@ -508,9 +508,9 @@ async function renderCompetitionCreatePage(agentId) {
             <div class="variables-v3 card-style-container">
                 <h3><i class="fas fa-cogs"></i> 1. تعديل المتغيرات</h3>
                 <div class="form-group">
-                    <label for="competition-template-select">اختر القالب</label>
+                    <label for="competition-template-select">المسابقات المقترحة</label>
                     <select id="competition-template-select" required>
-                        <option value="" disabled selected>-- اختر قالبًا --</option>
+                        <option value="" disabled selected>-- اختار مسابقة --</option>
                         ${templates.map(t => `<option value="${t.id}">${t.question}</option>`).join('')}
                     </select>
                 </div>
@@ -673,8 +673,9 @@ async function renderCompetitionCreatePage(agentId) {
         }
 
         const finalDescription = descInput.value;
-        const winnersCount = parseInt(winnersInput.value) || 0;
+        const winnersCount = parseInt(tradingWinnersInput.value) || 0;
         const prizePerWinner = parseFloat(prizeInput.value) || 0;
+        const depositWinnersCount = parseInt(depositWinnersInput.value) || 0;
         const totalCost = winnersCount * prizePerWinner;
 
         if (totalCost > agent.remaining_balance) {

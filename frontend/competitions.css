@@ -241,6 +241,15 @@
     padding-right: 1.5rem;
 }
 
+/* Chart Container on Home Page */
+.chart-container {
+    position: relative;
+    height: 300px; /* Adjust height as needed */
+    background-color: var(--bg-color);
+    padding: 15px;
+    border-radius: 8px;
+}
+
 /* Competitions Grid */
 .competitions-grid {
     display: grid;
