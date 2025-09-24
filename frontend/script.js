@@ -83,7 +83,15 @@ async function handleRouting() {
         if (agentId) {
             renderFunction = () => renderAgentProfilePage(agentId);
             navElement = null; // No nav item is active on a profile page
-        }    } else if (hash.startsWith('#competitions/new') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#top-agents') {
+        }
+    } else {
+        // If we are navigating away from a profile page, stop its countdown timer.
+        if (typeof stopRenewalCountdown === 'function') {
+            stopRenewalCountdown();
+        }
+    }
+    
+    if (hash.startsWith('#competitions/new') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#top-agents') {
         mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
@@ -291,7 +299,7 @@ function setupNavbar() {
 
             const { data: agents, error } = await supabase
                 .from('agents')
-                .select('id, name, agent_id')
+                .select('id, name, agent_id, avatar_url, classification')
                 .or(`name.ilike.%${searchTerm}%,agent_id.ilike.%${searchTerm}%`)
                 .limit(5);
 
@@ -301,12 +309,20 @@ function setupNavbar() {
             }
 
             if (agents.length > 0) {
-                searchResultsContainer.innerHTML = agents.map(agent => `
+                searchResultsContainer.innerHTML = agents.map(agent => {
+                    const avatarHtml = agent.avatar_url
+                        ? `<img src="${agent.avatar_url}" alt="Avatar" class="search-result-avatar">`
+                        : `<div class="search-result-avatar-placeholder"><i class="fas fa-user"></i></div>`;
+                    return `
                     <div class="search-result-item" data-agent-id="${agent.id}">
-                        <p class="agent-name">${agent.name}</p>
-                        <p class="agent-id">#${agent.agent_id}</p>
+                        ${avatarHtml}
+                        <div class="search-result-info">
+                            <p class="agent-name">${agent.name}</p>
+                            <p class="agent-id">#${agent.agent_id}</p>
+                        </div>
+                        <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
                     </div>
-                `).join('');
+                `}).join('');
                 searchResultsContainer.style.display = 'block';
 
                 // Add click listeners to new items

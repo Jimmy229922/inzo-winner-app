@@ -21,6 +21,11 @@ async function renderHomePage() {
                 <div id="pending-tasks-list" class="pending-tasks-list">
                     <p class="no-pending-tasks">جاري تحميل المهام...</p>
                 </div>
+
+                <h2 style="margin-top: 30px;">نظرة سريعة على الوكلاء</h2>
+                <div id="agent-quick-stats" class="agent-quick-stats">
+                    <!-- Stats will be rendered here -->
+                </div>
             </div>
         </div>
 
@@ -36,18 +41,23 @@ async function renderHomePage() {
         const todayDayIndex = today.getDay();
         const todayStr = today.toISOString().split('T')[0];
         const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
         const tomorrowStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
 
         const [
             { count: totalAgents, error: agentsError },
             { count: activeCompetitions, error: activeCompError },
             { data: agentsForToday, error: agentsTodayError }, // Agents with tasks today
-            { data: competitionsToday, error: compTodayError } // Competitions created today
+            { data: competitionsToday, error: compTodayError }, // Competitions created today
+            { count: newAgentsThisMonth, error: newAgentsError },
+            { data: agentsByClassification, error: classificationError }
         ] = await Promise.all([
             supabase.from('agents').select('*', { count: 'exact', head: true }),
             supabase.from('competitions').select('*', { count: 'exact', head: true }).eq('is_active', true),
             supabase.from('agents').select('id, name, avatar_url').contains('audit_days', [todayDayIndex]),
-            supabase.from('competitions').select('created_at').gte('created_at', todayStart).lt('created_at', tomorrowStart)
+            supabase.from('competitions').select('created_at').gte('created_at', todayStart).lt('created_at', tomorrowStart),
+            supabase.from('agents').select('*', { count: 'exact', head: true }).gte('created_at', monthStart),
+            supabase.from('agents').select('classification')
         ]);
 
         // Update Stat Cards
@@ -148,6 +158,29 @@ async function renderHomePage() {
 
         // Render Chart
         renderCompetitionsChart(competitionsToday || []);
+
+        // NEW: Render Agent Quick Stats
+        const agentStatsContainer = document.getElementById('agent-quick-stats');
+        if (agentStatsContainer) {
+            const classificationCounts = (agentsByClassification || []).reduce((acc, agent) => {
+                const classification = agent.classification || 'N/A';
+                acc[classification] = (acc[classification] || 0) + 1;
+                return acc;
+            }, {});
+
+            agentStatsContainer.innerHTML = `
+                <div class="quick-stat-item">
+                    <i class="fas fa-user-clock"></i>
+                    <div class="quick-stat-info">
+                        <h4>${newAgentsThisMonth || 0}</h4>
+                        <p>وكلاء جدد هذا الشهر</p>
+                    </div>
+                </div>
+                <div class="quick-stat-item classification-breakdown">
+                    ${['R', 'A', 'B', 'C'].map(c => `<span class="classification-badge classification-${c.toLowerCase()}" title="تصنيف ${c}">${c}: ${classificationCounts[c] || 0}</span>`).join('')}
+                </div>
+            `;
+        }
     }
 }
 

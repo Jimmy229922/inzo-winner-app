@@ -109,6 +109,9 @@
 
 .search-result-item {
     padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
     cursor: pointer;
     border-bottom: 1px solid var(--border-color);
 }
@@ -117,8 +120,34 @@
     border-bottom: none;
 }
 
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
 .search-result-item:hover {
     background-color: var(--bg-color);
+}
+
+.search-result-avatar,
+.search-result-avatar-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.search-result-avatar-placeholder {
+    background-color: var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+    color: var(--text-secondary-color);
+}
+
+.search-result-info {
+    flex-grow: 1;
 }
 
 .search-result-item .agent-name {

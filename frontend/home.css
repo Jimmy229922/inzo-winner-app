@@ -284,3 +284,41 @@
     color: var(--text-secondary-color);
     font-size: 0.9em;
 }
+
+/* Agent Quick Stats */
+.agent-quick-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.quick-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background-color: var(--bg-color);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.quick-stat-item i {
+    font-size: 1.8em;
+    color: var(--primary-color);
+}
+
+.quick-stat-info h4 {
+    margin: 0;
+    font-size: 1.8em;
+}
+
+.quick-stat-info p {
+    margin: 0;
+    color: var(--text-secondary-color);
+}
+
+.classification-breakdown {
+    flex-wrap: wrap;
+    justify-content: center;
+}

@@ -612,38 +612,39 @@ function renderInlineEditor(groupElement, agent) {
     });
 }
 
+function stopRenewalCountdown() {
+    if (renewalCountdownInterval) {
+        clearInterval(renewalCountdownInterval);
+        renewalCountdownInterval = null;
+        console.log('[Debug] Profile countdown timer cleared.');
+    }
+}
+
 let renewalCountdownInterval;
 function startRenewalCountdown(agent) {
     const countdownElement = document.getElementById('renewal-countdown-timer');
     if (!countdownElement || !agent.renewal_period || agent.renewal_period === 'none') {
         if(countdownElement) countdownElement.style.display = 'none';
         return;
-    console.log(`[Countdown Debug] Agent ID: ${agent.id}, Renewal Period: ${agent.renewal_period}, Last Renewal Date: ${agent.last_renewal_date}`);
     }
 
     // Clear any existing interval
-    if (renewalCountdownInterval) {
-        clearInterval(renewalCountdownInterval);
-    }
+    stopRenewalCountdown();
 
     // If last_renewal_date is null, it means it has never been renewed.
     // We should treat the "start" of the countdown from now, or from the last renewal date if it exists.
         // For the 'test_10s' case, we ALWAYS start the countdown from 'now' to make testing intuitive.
     const lastRenewal = (agent.renewal_period === 'test_10s' || !agent.last_renewal_date) ? new Date() : new Date(agent.last_renewal_date);
     let nextRenewalDate = new Date(lastRenewal);
-    console.log(`[Countdown Debug] Initial Last Renewal: ${lastRenewal.toISOString()}, Next Renewal (before calc): ${nextRenewalDate.toISOString()}`);
 
     if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
     else if (agent.renewal_period === 'biweekly') nextRenewalDate.setDate(lastRenewal.getDate() + 14);
     else if (agent.renewal_period === 'monthly') nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
     else if (agent.renewal_period === 'test_10s') nextRenewalDate.setSeconds(lastRenewal.getSeconds() + 10);
     else {
-        console.log(`[Countdown Debug] Invalid or 'none' renewal period: ${agent.renewal_period}. Hiding countdown.`);
         countdownElement.style.display = 'none';
         return;
     }
-
-    console.log(`[Countdown Debug] Calculated Next Renewal Date: ${nextRenewalDate.toISOString()}`);
 
     countdownElement.style.display = 'flex';
 
@@ -652,7 +653,6 @@ function startRenewalCountdown(agent) {
         const distance = nextRenewalDate - now;
 
         if (distance < 0) {
-            console.log('[Countdown Debug] Countdown finished. Displaying "انتهت مدة التجديد".');
             countdownElement.innerHTML = `<i class="fas fa-hourglass-end"></i> <span>انتهت مدة التجديد</span>`;
             clearInterval(renewalCountdownInterval);
             return;
@@ -663,7 +663,6 @@ function startRenewalCountdown(agent) {
         const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-        console.log(`[Countdown Debug] Remaining: ${days}d ${hours}h ${minutes}m ${seconds}s`);
         countdownElement.innerHTML = `<i class="fas fa-clock"></i> <span>التجديد خلال: ${days}ي ${hours}س ${minutes}د ${seconds}ث</span>`;
     }
 
