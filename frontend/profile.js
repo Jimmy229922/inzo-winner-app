@@ -66,7 +66,6 @@ async function renderAgentProfilePage(agentId, options = {}) {
             </div>
             <div class="profile-header-actions">
                  <button id="edit-profile-btn" class="btn-secondary"><i class="fas fa-user-edit"></i> تعديل</button>
-                 <button id="recalculate-balance-btn" class="btn-secondary" title="إعادة حساب الأرصدة بناءً على المسابقات الفعلية"><i class="fas fa-calculator"></i></button>
             </div>
         </div>
 
@@ -133,34 +132,6 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     document.getElementById('back-btn').addEventListener('click', () => {
         window.location.hash = '#manage-agents';
-    });
-
-    // Click to copy agent ID from header
-    const agentIdEl = appContent.querySelector('.profile-main-info .agent-id-text');
-    if (agentIdEl) {
-        agentIdEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(agent.agent_id).then(() => showToast(`تم نسخ الرقم: ${agent.agent_id}`, 'info'));
-        });
-    }
-
-    // NEW: Moved recalculate button listener here, as the button is in the main profile scope
-    const recalculateBtn = document.getElementById('recalculate-balance-btn');
-    recalculateBtn.addEventListener('click', async () => {
-        recalculateBtn.disabled = true;
-        recalculateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-        const { error } = await supabase.rpc('recalculate_agent_balance', { p_agent_id: agent.id });
-
-        if (error) {
-            showToast('فشل إعادة حساب الرصيد.', 'error');
-            console.error('Recalculate error:', error);
-        } else {
-            showToast('تم تحديث الأرصدة بنجاح.', 'success');
-            renderAgentProfilePage(agent.id, { activeTab: 'details' }); // Refresh the view
-        }
-        recalculateBtn.disabled = false;
-        recalculateBtn.innerHTML = '<i class="fas fa-calculator"></i>';
     });
 
     document.getElementById('create-agent-competition').addEventListener('click', () => {
@@ -462,7 +433,7 @@ function renderInlineEditor(groupElement, agent) {
     let editorHtml = '';
 
     // Special cases for read-only fields
-    if (['competition_bonus', 'deposit_bonus_percentage', 'deposit_bonus_count', 'remaining_balance', 'remaining_deposit_bonus', 'winner_selection_date', 'prize_per_winner', 'competition_duration', 'consumed_balance', 'used_deposit_bonus'].includes(fieldName)) {
+    if (['competition_bonus', 'deposit_bonus_percentage', 'deposit_bonus_count', 'remaining_balance', 'remaining_deposit_bonus', 'winner_selection_date', 'prize_per_winner', 'competition_duration', 'consumed_balance', 'used_deposit_bonus', 'last_competition_date'].includes(fieldName)) {
         showToast('يتم حساب هذا الحقل تلقائياً.', 'info');
         return;
     }
@@ -599,7 +570,7 @@ function startRenewalCountdown(agent) {
 
     // If last_renewal_date is null, it means it has never been renewed.
     // We should treat the "start" of the countdown from now, or from the last renewal date if it exists.
-        // For the 'test_10s' case, we ALWAYS start the countdown from 'now' to make testing intuitive.
+    // For the 'test_10s' case, we ALWAYS start the countdown from 'now' to make testing intuitive.
     const lastRenewal = (agent.renewal_period === 'test_10s' || !agent.last_renewal_date) ? new Date() : new Date(agent.last_renewal_date);
     let nextRenewalDate = new Date(lastRenewal);
     console.log(`[Countdown Debug] Initial Last Renewal: ${lastRenewal.toISOString()}, Next Renewal (before calc): ${nextRenewalDate.toISOString()}`);

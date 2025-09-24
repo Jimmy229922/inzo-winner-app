@@ -104,6 +104,10 @@
     text-align: right;
 }
 
+.modal.modal-no-actions .modal-actions {
+    display: none;
+}
+
 .modal p {
     margin-bottom: 20px;
     font-size: 1.1em;
@@ -199,4 +203,44 @@
 .form-modal-body textarea {
     min-height: 120px;
     resize: vertical;
+}
+
+/* Update Progress Modal Styles */
+.update-progress-container {
+    padding: 20px;
+    text-align: center;
+}
+
+.update-icon {
+    font-size: 3em;
+    color: var(--primary-color);
+    margin-bottom: 20px;
+    animation: rocket-fly 2s ease-in-out infinite;
+}
+
+@keyframes rocket-fly {
+    0% { transform: translateY(0) rotate(-5deg); }
+    50% { transform: translateY(-10px) rotate(5deg); }
+    100% { transform: translateY(0) rotate(-5deg); }
+}
+
+.update-progress-container h3 {
+    margin-bottom: 25px;
+    font-size: 1.2em;
+}
+
+.progress-bar-outer {
+    width: 100%;
+    height: 10px;
+    background-color: var(--border-color);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.progress-bar-inner {
+    height: 100%;
+    width: 0%;
+    background-color: var(--primary-color);
+    border-radius: 5px;
+    transition: width 0.5s ease-in-out;
 }

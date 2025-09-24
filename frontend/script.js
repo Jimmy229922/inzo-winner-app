@@ -249,36 +249,11 @@ function setupNavbar() {
     updateBtn.addEventListener('click', () => {
         showConfirmationModal(
             'هل أنت متأكد من رغبتك في تحديث التطبيق إلى آخر إصدار؟ سيتم إعادة تشغيل الخادم.',
-            async () => {
-            const icon = updateBtn.querySelector('i');
-            icon.classList.add('fa-spin');
-            updateBtn.disabled = true;
-
-            try {
-                const response = await fetch('/api/update-app', { method: 'POST' });
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.details || result.message || 'فشل الاتصال بالخادم.');
-                }
-
-                showToast(result.message, 'info');
-
-                if (result.needsRestart) {
-                    showToast('سيتم إعادة تحميل الصفحة خلال لحظات...', 'info');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 5000); // Reload after 5s to give the server time to restart
-                }
-            } catch (error) {
-                console.error('Update error:', error);
-                showToast(`فشل التحديث: ${error.message}`, 'error');
-            } finally {
-                icon.classList.remove('fa-spin');
-                updateBtn.disabled = false;
-            }
-        },
-        {
+            () => {
+                // This function is called when the user confirms.
+                // We will now show a new, more detailed modal for the update process.
+                showUpdateProgressModal();
+            }, {
             title: 'تحديث التطبيق',
             confirmText: 'تحديث الآن',
             confirmClass: 'btn-primary'
@@ -386,6 +361,65 @@ function setupNavbar() {
             document.getElementById('search-results').style.display = 'none';
         }
     });
+}
+
+function showUpdateProgressModal() {
+    let currentStep = 0;
+    const steps = [
+        { text: 'جاري الاتصال بالخادم...', duration: 1000 },
+        { text: 'جاري سحب آخر التحديثات من Git...', duration: 3000 },
+        { text: 'جاري تطبيق التغييرات...', duration: 2000 },
+        { text: 'سيتم إعادة تشغيل الخادم الآن...', duration: 1500 }
+    ];
+
+    const modalContent = `
+        <div class="update-progress-container">
+            <i class="fas fa-rocket update-icon"></i>
+            <h3 id="update-status-text">جاري التهيئة...</h3>
+            <div class="progress-bar-outer">
+                <div id="update-progress-bar-inner" class="progress-bar-inner"></div>
+            </div>
+        </div>
+    `;
+
+    showConfirmationModal(modalContent, null, {
+        title: 'جاري تحديث النظام',
+        showCancel: false, // Hide cancel button
+        showConfirm: false, // Hide confirm button
+        modalClass: 'modal-no-actions'
+    });
+
+    const statusText = document.getElementById('update-status-text');
+    const progressBar = document.getElementById('update-progress-bar-inner');
+
+    function nextStep() {
+        if (currentStep >= steps.length) {
+            // This is where the actual API call happens, after the visual steps.
+            fetch('/api/update-app', { method: 'POST' })
+                .then(response => response.json())
+                .then(result => {
+                    if (!result.needsRestart) {
+                        showToast(result.message || 'أنت تستخدم بالفعل آخر إصدار.', 'success');
+                        document.querySelector('.modal-overlay')?.remove();
+                    } else {
+                        statusText.textContent = 'اكتمل التحديث! سيتم إعادة تحميل الصفحة.';
+                        progressBar.style.width = '100%';
+                        setTimeout(() => window.location.reload(), 2000);
+                    }
+                }).catch(err => {
+                    showToast(`فشل التحديث: ${err.message}`, 'error');
+                    document.querySelector('.modal-overlay')?.remove();
+                });
+            return;
+        }
+        const step = steps[currentStep];
+        statusText.textContent = step.text;
+        progressBar.style.width = `${((currentStep + 1) / steps.length) * 100}%`;
+        currentStep++;
+        setTimeout(nextStep, step.duration);
+    }
+
+    nextStep(); // Start the process
 }
 
 // Function to create shooting stars dynamically
