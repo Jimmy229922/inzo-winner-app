@@ -161,17 +161,16 @@
 }
 
 .calendar-agent-item {
-    padding: 12px;
+    padding: 15px; /* زيادة الحشوة الداخلية */
     border-radius: 8px;
     border: 1px solid var(--border-color);
-    background-color: var(--bg-color);
+    background-color: var(--card-bg-color);
     display: flex;
     flex-direction: column;
     gap: 10px;
     transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
-    height: 130px; /* Fixed height for virtual scrolling calculation */
     box-sizing: border-box;
-    margin-bottom: 10px; /* This is important for spacing */
+    margin-bottom: 15px; /* زيادة المسافة بين بطاقات الوكلاء */
 }
 
 .calendar-agent-item[style*="display: none"] {
@@ -233,9 +232,20 @@
 
 .calendar-agent-actions {
     display: flex;
-    justify-content: space-around;
-    border-top: 1px solid var(--border-color);
-    padding-top: 10px;
+    flex-direction: column; /* تعديل: جعل العناصر تترتب عمودياً */
+    gap: 8px; /* المسافة بين مربعي التدقيق والمسابقة */
+}
+
+/* تعديل: وضع كل إجراء في مربع منفصل */
+.calendar-agent-actions .action-item {
+    flex: 1; /* جعل كل مربع يأخذ نصف المساحة */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--bg-color);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
 }
 
 .filter-btn.active {
@@ -265,4 +275,21 @@
 }
 body.dark-mode .calendar-agent-item mark {
     color: #000;
+}
+
+/* تصغير حجم أزرار الاختيار في صفحة التقويم */
+.calendar-agent-actions .toggle-switch {
+    width: 36px;
+    height: 20px;
+}
+
+.calendar-agent-actions .toggle-switch .slider:before {
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+}
+
+.calendar-agent-actions .toggle-switch input:checked + .slider:before {
+    transform: translateX(16px);
 }

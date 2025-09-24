@@ -1,4 +1,8 @@
 // --- Main Router for Competitions/Templates Section ---
+let allCompetitionsData = [];
+const COMPETITIONS_PER_PAGE = 9;
+let selectedCompetitionIds = []; // For bulk actions
+
 async function renderCompetitionsPage() {
     const appContent = document.getElementById('app-content');
     const hash = window.location.hash;
@@ -17,6 +21,7 @@ async function renderCompetitionsPage() {
 
 // --- 0. All Competitions List Page (New Default) ---
 async function renderAllCompetitionsListPage() {
+    selectedCompetitionIds = []; // Reset selection on page render
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
         <div class="page-header column-header">
@@ -29,47 +34,40 @@ async function renderAllCompetitionsListPage() {
                     <i class="fas fa-search"></i>
                     <i class="fas fa-times-circle search-clear-btn" id="competition-search-clear"></i>
                 </div>
-                <div class="filter-buttons" id="status-filter-buttons">
+                <div class="filter-buttons">
                     <button class="filter-btn active" data-filter="all">الكل</button>
                     <button class="filter-btn" data-filter="active">نشطة</button>
                     <button class="filter-btn" data-filter="inactive">غير نشطة</button>
                 </div>
-                <div class="filter-separator"></div>
-                <div class="filter-buttons" id="classification-filter-buttons">
-                    <button class="filter-btn active" data-filter="all">الكل</button>
-                    <button class="filter-btn" data-filter="R">R</button>
-                    <button class="filter-btn" data-filter="A">A</button>
-                    <button class="filter-btn" data-filter="B">B</button>
-                    <button class="filter-btn" data-filter="C">C</button>
+                <div class="sort-container">
+                    <label for="competition-sort-select">ترتيب حسب:</label>
+                    <select id="competition-sort-select">
+                        <option value="newest">الأحدث أولاً</option>
+                        <option value="oldest">الأقدم أولاً</option>
+                        <option value="name_asc">اسم المسابقة (أ-ي)</option>
+                        <option value="agent_asc">اسم الوكيل (أ-ي)</option>
+                    </select>
                 </div>
             </div>
         </div>
-        <div class="table-responsive-container">
-            <table class="modern-table" id="competitions-table">
-                <thead>
-                    <tr>
-                        <th>اسم المسابقة</th>
-                        <th>الوكيل المرتبط</th>
-                        <th>الحالة</th>
-                        <th>تاريخ الإنشاء</th>
-                        <th class="actions-column">إجراءات</th>
-                    </tr>
-                </thead>
-                <tbody id="competitions-table-body">
-                    <!-- Data will be loaded here -->
-                </tbody>
-            </table>
+        <div id="bulk-action-bar" class="bulk-action-bar">
+            <span id="bulk-action-count">0 عنصر محدد</span>
+            <div class="bulk-actions">
+                <button id="bulk-deactivate-btn" class="btn-secondary"><i class="fas fa-power-off"></i> تعطيل المحدد</button>
+                <button id="bulk-delete-btn" class="btn-danger"><i class="fas fa-trash-alt"></i> حذف المحدد</button>
+            </div>
         </div>
-        <div id="competitions-list-placeholder"></div>
+        <div id="competitions-list-container"></div>
     `;
 
-    const tableBody = document.getElementById('competitions-table-body');
+    const container = document.getElementById('competitions-list-container');
 
     // Use event delegation for delete buttons
-    tableBody.addEventListener('click', async (e) => {
+    appContent.addEventListener('click', async (e) => { // Listen on a parent that persists
         const deleteBtn = e.target.closest('.delete-competition-btn');
         if (deleteBtn) {
             const id = deleteBtn.dataset.id;
+            if (!id) return;
             showConfirmationModal(
                 'هل أنت متأكد من حذف هذه المسابقة؟<br><small>هذا الإجراء لا يمكن التراجع عنه.</small>',
                 async () => {
@@ -79,7 +77,7 @@ async function renderAllCompetitionsListPage() {
                         console.error('Delete competition error:', error);
                     } else {
                         showToast('تم حذف المسابقة بنجاح.', 'success');
-                        renderAllCompetitionsListPage(); // Re-render the page
+                        await refreshCompetitionsList(true);
                     }
                 }, {
                     title: 'تأكيد حذف المسابقة',
@@ -87,68 +85,153 @@ async function renderAllCompetitionsListPage() {
                     confirmClass: 'btn-danger'
                 });
         }
+
+        // Bulk Deactivate
+        if (e.target.closest('#bulk-deactivate-btn')) {
+            showConfirmationModal(
+                `هل أنت متأكد من تعطيل ${selectedCompetitionIds.length} مسابقة؟`,
+                async () => {
+                    const { error } = await supabase.from('competitions').update({ is_active: false }).in('id', selectedCompetitionIds);
+                    if (error) {
+                        showToast('فشل تعطيل المسابقات المحددة.', 'error');
+                    } else {
+                        showToast('تم تعطيل المسابقات المحددة بنجاح.', 'success');
+                        await refreshCompetitionsList();
+                    }
+                }, { title: 'تأكيد التعطيل' }
+            );
+        }
+
+        // Bulk Delete
+        if (e.target.closest('#bulk-delete-btn')) {
+            showConfirmationModal(
+                `هل أنت متأكد من حذف ${selectedCompetitionIds.length} مسابقة بشكل نهائي؟`,
+                async () => {
+                    const { error } = await supabase.from('competitions').delete().in('id', selectedCompetitionIds);
+                    if (error) {
+                        showToast('فشل حذف المسابقات المحددة.', 'error');
+                    } else {
+                        showToast('تم حذف المسابقات المحددة بنجاح.', 'success');
+                        await refreshCompetitionsList(true); // Pass true to refetch from DB
+                    }
+                }, {
+                    title: 'تأكيد الحذف',
+                    confirmText: 'حذف',
+                    confirmClass: 'btn-danger'
+                }
+            );
+        }
     });
 
-    const { data: competitions, error } = await supabase
-        .from('competitions')
-        .select('*, agents(id, name, classification, avatar_url)')
-        .order('created_at', { ascending: false });
-
-    if (error) {
-        console.error("Error fetching competitions:", error);
-        document.getElementById('competitions-list-placeholder').innerHTML = `<p class="error">حدث خطأ أثناء جلب المسابقات.</p>`;
-        return;
-    }
-
-    if (competitions.length === 0) {
-        document.getElementById('competitions-table').style.display = 'none';
-        document.getElementById('competitions-list-placeholder').innerHTML = '<p class="no-results-message">لا توجد مسابقات حالياً. يمكنك إنشاء واحدة من صفحة الوكيل.</p>';
+    // Caching: If we already have the data, don't fetch it again.
+    if (allCompetitionsData.length > 0) {
+        displayCompetitionsPage(allCompetitionsData, 1);
+        setupCompetitionFilters(allCompetitionsData);
     } else {
-        renderCompetitionTableBody(competitions);
+        const { data: competitions, error } = await supabase
+            .from('competitions')
+            .select('*, agents(id, name, classification, avatar_url)')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Error fetching competitions:", error);
+            container.innerHTML = `<p class="error">حدث خطأ أثناء جلب المسابقات.</p>`;
+            return;
+        }
+        allCompetitionsData = competitions;
+        displayCompetitionsPage(allCompetitionsData, 1);
+        setupCompetitionFilters(allCompetitionsData);
     }
-    
-    setupCompetitionFilters(competitions);
 }
 
-function renderCompetitionTableBody(competitions) {
-    const tableBody = document.getElementById('competitions-table-body');
-    const placeholder = document.getElementById('competitions-list-placeholder');
-    if (!tableBody || !placeholder) return;
+function displayCompetitionsPage(competitionsList, page) {
+    const container = document.getElementById('competitions-list-container');
+    if (!container) return;
 
-    if (competitions.length === 0) {
-        tableBody.innerHTML = '';
-        placeholder.innerHTML = '<p class="no-results-message">لا توجد نتائج تطابق بحثك.</p>';
-        return;
+    page = parseInt(page);
+    const totalPages = Math.ceil(competitionsList.length / COMPETITIONS_PER_PAGE);
+    const startIndex = (page - 1) * COMPETITIONS_PER_PAGE;
+    const endIndex = startIndex + COMPETITIONS_PER_PAGE;
+    const paginatedCompetitions = competitionsList.slice(startIndex, endIndex);
+
+    const gridHtml = generateCompetitionGridHtml(paginatedCompetitions);
+
+    let paginationHtml = '';
+    if (totalPages > 1) {
+        paginationHtml += '<div class="pagination-container">';
+        paginationHtml += `<button class="page-btn" data-page="${page - 1}" ${page === 1 ? 'disabled' : ''}>السابق</button>`;
+        for (let i = 1; i <= totalPages; i++) {
+            paginationHtml += `<button class="page-btn ${i === page ? 'active' : ''}" data-page="${i}">${i}</button>`;
+        }
+        paginationHtml += `<button class="page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>التالي</button>`;
+        paginationHtml += '</div>';
     }
 
-    placeholder.innerHTML = '';
-    tableBody.innerHTML = competitions.map(comp => {
+    // Improved empty state
+    let finalHtml;
+    if (competitionsList.length > 0) {
+        const selectAllChecked = selectedCompetitionIds.length > 0 && paginatedCompetitions.every(c => selectedCompetitionIds.includes(c.id));
+        const listHeader = `
+            <div class="list-view-header">
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="select-all-competitions" ${selectAllChecked ? 'checked' : ''}>
+                    <span class="checkmark"></span>
+                </label>
+                <span>المسابقة / الوكيل</span>
+                <span class="header-actions">الإجراءات</span>
+            </div>
+        `;
+        finalHtml = `${listHeader}<div class="competitions-list-view">${gridHtml}</div>${paginationHtml}`;
+    } else {
+        if (allCompetitionsData.length === 0) {
+            finalHtml = '<p class="no-results-message">لا توجد مسابقات حالياً. يمكنك إنشاء واحدة من صفحة الوكيل.</p>';
+        } else {
+            finalHtml = '<p class="no-results-message">لا توجد نتائج تطابق بحثك أو الفلتر الحالي.</p>';
+        }
+    }
+    container.innerHTML = finalHtml;
+
+    // Attach event listeners for checkboxes and pagination
+    attachCompetitionListListeners(competitionsList, paginatedCompetitions);
+}
+
+function generateCompetitionGridHtml(competitions) {
+    if (competitions.length === 0) return ''; // Let displayCompetitionsPage handle the empty message
+    return competitions.map(comp => {
+        const isSelected = selectedCompetitionIds.includes(comp.id);
         const agent = comp.agents;
         const agentInfoHtml = agent
-            ? `<a href="#profile/${agent.id}" class="table-agent-cell">
-                    ${agent.avatar_url
-                        ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small">`
-                        : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`}
-                    <span>${agent.name}</span>
+            ? `<a href="#profile/${agent.id}" class="competition-card-agent-info">
+                    ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">` : `<div class="avatar-placeholder-small" style="width: 32px; height: 32px; border-radius: 50%; font-size: 16px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-user"></i></div>`}
+                    <div class="agent-details">
+                        <span>${agent.name}</span>
+                        ${agent.classification ? `<span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>` : ''}
+                    </div>
                </a>`
-            : `<div class="table-agent-cell"><span>(وكيل محذوف)</span></div>`;
+            : `<div class="competition-card-agent-info"><span>(وكيل محذوف أو غير مرتبط)</span></div>`;
 
         return `
-        <tr data-id="${comp.id}">
-            <td data-label="اسم المسابقة">
-                <div class="competition-name-cell">
-                    <strong>${comp.name}</strong>
-                    <small>${comp.description ? comp.description.substring(0, 60) + '...' : ''}</small>
+        <div class="competition-card ${isSelected ? 'selected' : ''}" data-id="${comp.id}">
+            <label class="custom-checkbox row-checkbox">
+                <input type="checkbox" class="competition-select-checkbox" data-id="${comp.id}" ${isSelected ? 'checked' : ''}>
+                <span class="checkmark"></span>
+            </label>
+            <div class="competition-card-content">
+                <div class="competition-card-header">
+                    <h3>${comp.name}</h3>
+                    <span class="status-badge ${comp.is_active ? 'active' : 'inactive'}">${comp.is_active ? 'نشطة' : 'غير نشطة'}</span>
                 </div>
-            </td>
-            <td data-label="الوكيل المرتبط">${agentInfoHtml}</td>
-            <td data-label="الحالة"><span class="status-badge ${comp.is_active ? 'active' : 'inactive'}">${comp.is_active ? 'نشطة' : 'غير نشطة'}</span></td>
-            <td data-label="تاريخ الإنشاء">${new Date(comp.created_at).toLocaleDateString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
-            <td class="actions-cell">
-                <button class="btn-secondary btn-small" onclick="window.location.hash='#competitions/edit/${comp.id}'" title="تعديل"><i class="fas fa-edit"></i></button>
-                <button class="btn-danger btn-small delete-competition-btn" data-id="${comp.id}" title="حذف"><i class="fas fa-trash-alt"></i></button>
-            </td>
-        </tr>
+                ${agentInfoHtml}
+                <div class="competition-card-body">
+                    <p class="description"><i class="fas fa-info-circle"></i><div><strong>الوصف:</strong> ${comp.description ? comp.description.substring(0, 80) + '...' : '<em>لا يوجد وصف</em>'}</div></p>
+                    <p class="creation-date"><i class="fas fa-calendar-plus"></i><div><strong>تاريخ الإنشاء:</strong> ${new Date(comp.created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' })}</div></p>
+                </div>
+            </div>
+            <div class="competition-card-footer">
+                <button class="btn-secondary edit-btn" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i> تعديل</button>
+                <button class="btn-danger delete-competition-btn" data-id="${comp.id}"><i class="fas fa-trash-alt"></i> حذف</button>
+            </div>
+        </div>
         `;
     }).join('');
 }
@@ -156,31 +239,48 @@ function renderCompetitionTableBody(competitions) {
 function setupCompetitionFilters(allCompetitions) {
     const searchInput = document.getElementById('competition-search-input');
     const clearBtn = document.getElementById('competition-search-clear');
-    const statusFilterButtons = document.querySelectorAll('#status-filter-buttons .filter-btn');
-    const classificationFilterButtons = document.querySelectorAll('#classification-filter-buttons .filter-btn');
+    const filterButtons = document.querySelectorAll('.agent-filters .filter-btn');
+    const sortSelect = document.getElementById('competition-sort-select'); // New
 
     const applyFilters = () => {
         if (!searchInput) return;
         if (clearBtn) clearBtn.style.display = searchInput.value ? 'block' : 'none';
         
         const searchTerm = searchInput.value.toLowerCase().trim();
-        const activeStatusFilter = document.querySelector('#status-filter-buttons .filter-btn.active').dataset.filter;
-        const activeClassificationFilter = document.querySelector('#classification-filter-buttons .filter-btn.active').dataset.filter;
+        const activeFilter = document.querySelector('.agent-filters .filter-btn.active').dataset.filter;
+        const sortValue = sortSelect.value; // New
 
-        const filteredCompetitions = allCompetitions.filter(comp => {
+        let filteredCompetitions = allCompetitions.filter(comp => {
             const name = comp.name.toLowerCase();
             const agentName = comp.agents ? comp.agents.name.toLowerCase() : '';
-            const agentClassification = comp.agents ? comp.agents.classification : null;
             const status = comp.is_active ? 'active' : 'inactive';
 
             const matchesSearch = searchTerm === '' || name.includes(searchTerm) || agentName.includes(searchTerm);
-            const matchesStatusFilter = activeStatusFilter === 'all' || status === activeStatusFilter;
-            const matchesClassificationFilter = activeClassificationFilter === 'all' || agentClassification === activeClassificationFilter;
-            
-            return matchesSearch && matchesStatusFilter && matchesClassificationFilter;
+            const matchesFilter = activeFilter === 'all' || status === activeFilter;
+            return matchesSearch && matchesFilter;
         });
         
-        renderCompetitionTableBody(filteredCompetitions);
+        // New Sorting Logic
+        filteredCompetitions.sort((a, b) => {
+            const nameA = a.name.toLowerCase();
+            const nameB = b.name.toLowerCase();
+            const agentA = a.agents?.name.toLowerCase() || '';
+            const agentB = b.agents?.name.toLowerCase() || '';
+
+            switch (sortValue) {
+                case 'oldest':
+                    return new Date(a.created_at) - new Date(b.created_at);
+                case 'name_asc':
+                    return nameA.localeCompare(nameB);
+                case 'agent_asc':
+                    return agentA.localeCompare(agentB);
+                case 'newest':
+                default:
+                    return new Date(b.created_at) - new Date(a.created_at);
+            }
+        });
+
+        displayCompetitionsPage(filteredCompetitions, 1);
     };
 
     if (searchInput) {
@@ -194,21 +294,98 @@ function setupCompetitionFilters(allCompetitions) {
         });
     }
 
-    statusFilterButtons.forEach(button => {
+    if (sortSelect) {
+        sortSelect.addEventListener('change', applyFilters);
+    }
+
+    filterButtons.forEach(button => {
         button.addEventListener('click', () => {
-            statusFilterButtons.forEach(btn => btn.classList.remove('active'));
+            filterButtons.forEach(btn => btn.classList.remove('active'));
             button.classList.add('active');
             applyFilters();
+        });
+    });
+}
+
+// New helper functions for bulk actions
+function attachCompetitionListListeners(fullList, paginatedList) {
+    const container = document.getElementById('competitions-list-container');
+    if (!container) return;
+
+    // Pagination
+    container.querySelectorAll('.page-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const newPage = e.currentTarget.dataset.page;
+            if (newPage) displayCompetitionsPage(fullList, newPage);
         });
     });
 
-    classificationFilterButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            classificationFilterButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            applyFilters();
+    // Individual checkboxes
+    container.querySelectorAll('.competition-select-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            if (e.target.checked) {
+                if (!selectedCompetitionIds.includes(id)) {
+                    selectedCompetitionIds.push(id);
+                }
+            } else {
+                selectedCompetitionIds = selectedCompetitionIds.filter(selectedId => selectedId !== id);
+            }
+            updateBulkActionBar(paginatedList.length);
+            // Also update the row's selected class
+            e.target.closest('.competition-card').classList.toggle('selected', e.target.checked);
         });
     });
+
+    // Select All checkbox
+    const selectAllCheckbox = document.getElementById('select-all-competitions');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', (e) => {
+            const paginatedIds = paginatedList.map(c => c.id);
+            if (e.target.checked) {
+                // Add only the ones not already selected
+                paginatedIds.forEach(id => {
+                    if (!selectedCompetitionIds.includes(id)) {
+                        selectedCompetitionIds.push(id);
+                    }
+                });
+            } else {
+                // Remove all from the current page
+                selectedCompetitionIds = selectedCompetitionIds.filter(id => !paginatedIds.includes(id));
+            }
+            // Re-render the current page to update checkbox states
+            displayCompetitionsPage(fullList, document.querySelector('.pagination-container .page-btn.active')?.dataset.page || 1);
+            updateBulkActionBar(paginatedList.length);
+        });
+    }
+}
+
+function updateBulkActionBar(currentPageItemCount) {
+    const bar = document.getElementById('bulk-action-bar');
+    const countSpan = document.getElementById('bulk-action-count');
+    const selectAllCheckbox = document.getElementById('select-all-competitions');
+
+    if (selectedCompetitionIds.length > 0) {
+        bar.classList.add('visible');
+        countSpan.textContent = `${selectedCompetitionIds.length} عنصر محدد`;
+    } else {
+        bar.classList.remove('visible');
+    }
+
+    if (selectAllCheckbox) {
+        const paginatedIds = Array.from(document.querySelectorAll('.competition-select-checkbox')).map(cb => parseInt(cb.dataset.id));
+        const allOnPageSelected = currentPageItemCount > 0 && paginatedIds.every(id => selectedCompetitionIds.includes(id));
+        selectAllCheckbox.checked = allOnPageSelected;
+    }
+}
+
+async function refreshCompetitionsList(forceRefetch = false) {
+    if (forceRefetch) {
+        allCompetitionsData = []; // Clear cache to force refetch
+    }
+    selectedCompetitionIds = []; // Clear selection
+    updateBulkActionBar(0);
+    await renderAllCompetitionsListPage();
 }
 
 async function renderCompetitionCreatePage(agentId) {
@@ -228,7 +405,7 @@ async function renderCompetitionCreatePage(agentId) {
             <div class="agent-selection-list">
                 ${agents.map(a => `
                     <a href="#competitions/new?agentId=${a.id}" class="agent-selection-card">
-                        ${a.avatar_url ? `<img src="${a.avatar_url}" alt="Avatar" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">` : `<div class="avatar-placeholder" style="width: 40px; height: 40px; font-size: 20px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-user"></i></div>`}
+                        ${a.avatar_url ? `<img src="${a.avatar_url}" alt="Avatar" loading="lazy" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">` : `<div class="avatar-placeholder" style="width: 40px; height: 40px; font-size: 20px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-user"></i></div>`}
                         <div class="agent-info">
                             <h3>${a.name}</h3>
                             <p>#${a.agent_id} | ${a.classification}</p>
@@ -307,7 +484,6 @@ async function renderCompetitionCreatePage(agentId) {
                         <input type="text" id="override-duration" value="${agent.competition_duration || 'غير محدد'}">
                     </div>
                 </div>
-                <div id="competition-validation-messages" class="validation-messages"></div>
             </div>
 
             <!-- Preview Column -->
@@ -341,8 +517,6 @@ async function renderCompetitionCreatePage(agentId) {
     const prizeInput = document.getElementById('override-prize');
     const depositWinnersInput = document.getElementById('override-deposit-winners');
     const durationInput = document.getElementById('override-duration');
-    const validationContainer = document.getElementById('competition-validation-messages');
-    const sendBtn = form.querySelector('.btn-send-telegram');
 
     function numberToArPlural(num) {
         const words = {
@@ -424,24 +598,6 @@ async function renderCompetitionCreatePage(agentId) {
         content = content.replace(/{{prize_per_winner}}/g, prize);
         
         descInput.value = content;
-
-        // --- Real-time Validation ---
-        let validationMessages = [];
-        let isInvalid = false;
-
-        const totalCost = tradingWinners * prize;
-        if (totalCost > 0 && totalCost > agent.remaining_balance) {
-            validationMessages.push(`<div class="validation-error"><i class="fas fa-exclamation-triangle"></i> الرصيد التداولي (${agent.remaining_balance}$) غير كافٍ لتغطية تكلفة المسابقة (${totalCost.toFixed(2)}$).</div>`);
-            isInvalid = true;
-        }
-
-        if (depositWinners > 0 && depositWinners > agent.remaining_deposit_bonus) {
-            validationMessages.push(`<div class="validation-error"><i class="fas fa-exclamation-triangle"></i> عدد مرات بونص الإيداع المتبقية (${agent.remaining_deposit_bonus}) غير كافٍ لـ ${depositWinners} فائزين.</div>`);
-            isInvalid = true;
-        }
-
-        validationContainer.innerHTML = validationMessages.join('');
-        sendBtn.disabled = isInvalid;
     }
 
     [templateSelect, tradingWinnersInput, prizeInput, depositWinnersInput, durationInput].forEach(input => {
@@ -469,21 +625,12 @@ async function renderCompetitionCreatePage(agentId) {
         }
 
         const finalDescription = descInput.value;
-        const tradingWinnersCount = parseInt(tradingWinnersInput.value) || 0;
-        const depositWinnersCount = parseInt(depositWinnersInput.value) || 0;
+        const winnersCount = parseInt(winnersInput.value) || 0;
         const prizePerWinner = parseFloat(prizeInput.value) || 0;
-        const totalCost = tradingWinnersCount * prizePerWinner;
+        const totalCost = winnersCount * prizePerWinner;
 
-        // Re-validate on submit, just in case.
-        if (totalCost > 0 && totalCost > agent.remaining_balance) {
-            showToast(`الرصيد التداولي للوكيل (${agent.remaining_balance}$) غير كافٍ لتغطية تكلفة المسابقة (${totalCost.toFixed(2)}$).`, 'error');
-            sendBtn.disabled = false;
-            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال إلى تلجرام الآن';
-            return;
-        }
-
-        if (depositWinnersCount > 0 && depositWinnersCount > agent.remaining_deposit_bonus) {
-            showToast(`عدد مرات بونص الإيداع المتبقية (${agent.remaining_deposit_bonus}) غير كافٍ لـ ${depositWinnersCount} فائزين.`, 'error');
+        if (totalCost > agent.remaining_balance) {
+            showToast(`رصيد الوكيل المتبقي (${agent.remaining_balance}$) غير كافٍ لتغطية تكلفة المسابقة (${totalCost.toFixed(2)}$).`, 'error');
             sendBtn.disabled = false;
             sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال إلى تلجرام الآن';
             return;

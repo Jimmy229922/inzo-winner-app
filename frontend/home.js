@@ -76,7 +76,7 @@ async function renderHomePage() {
                 <div class="pending-tasks-list">
                     ${pendingAgents.length > 0 ? pendingAgents.map(agent => `
                         <a href="#tasks?highlight=${agent.id}" class="pending-agent-card">
-                            ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
+                            ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
                             <span>${agent.name}</span>
                         </a>
                     `).join('') : '<p class="no-pending-tasks">لا توجد مهام متبقية لهذا اليوم. عمل رائع!</p>'}

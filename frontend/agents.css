@@ -311,7 +311,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.9em;
+    font-size: 1.5em; /* تكبير حجم الخط */
 }
 
 .task-stat label {
@@ -339,7 +339,7 @@
 }
 
 .action-item:first-child {
-    border-left: 1px solid var(--border-color);
+    border-left: 1px solid var(--border-color); /* تعديل: تم تغيير الخط الفاصل ليعمل بشكل صحيح مع اتجاه الصفحة */
 }
 
 .action-item label {

@@ -6,26 +6,28 @@
 .profile-header-v2 {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 30px;
     background-color: var(--card-bg-color);
-    padding: 20px;
+    padding: 25px;
     border-radius: 12px;
     margin-bottom: 20px;
     border: 1px solid var(--border-color);
 }
 
 .profile-avatar {
-    font-size: 3em;
+    font-size: 4em;
     color: var(--primary-color);
     background-color: var(--bg-color);
-    width: 80px;
-    height: 80px;
+    width: 120px;
+    height: 120px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid var(--border-color);
+    border: 3px solid var(--primary-color);
     overflow: hidden; /* To contain the image */
+    flex-shrink: 0; /* Prevent shrinking if info text is long */
+    box-shadow: 0 5px 15px var(--shadow-color);
 }
 
 .profile-avatar img {
@@ -152,8 +154,8 @@
 }
 
 .profile-avatar-edit img {
-    width: 80px;
-    height: 80px;
+    width: 120px;
+    height: 120px;
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid var(--border-color);
@@ -415,4 +417,156 @@
     resize: vertical;
     margin-top: 10px;
     text-align: right; /* For RTL text */
+}
+
+.competitions-list-view {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.competitions-list-view .competition-card {
+    display: grid;
+    /* New grid layout with checkbox */
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: "checkbox content actions";
+    align-items: center;
+    gap: 0.5rem 1.5rem;
+    padding: 1rem 1.5rem;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.competitions-list-view .competition-card.selected {
+    background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    border-color: var(--primary-color);
+}
+
+.competitions-list-view .competition-card > * {
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+/* New Checkbox area */
+.competitions-list-view .row-checkbox {
+    grid-area: checkbox;
+    padding-right: 10px;
+}
+
+/* New Content wrapper */
+.competitions-list-view .competition-card-content {
+    grid-area: content;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: 
+        "header agent actions"
+        "body   agent actions";
+    align-items: center;
+    gap: 0.5rem 1.5rem;
+}
+
+.competitions-list-view .competition-card-header {
+    grid-area: header;
+    align-self: end;
+    /* Remove background and padding from original card style */
+    background: none;
+    padding: 0;
+    border: none;
+}
+
+.competitions-list-view .competition-card-agent-info {
+    grid-area: agent;
+}
+
+.competitions-list-view .competition-card-body {
+    grid-area: body;
+    align-self: start;
+    padding: 0; /* Remove padding from original card style */
+}
+
+.competitions-list-view .competition-card-footer {
+    grid-area: actions;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-self: stretch;
+    justify-content: center;
+    background: none; /* Remove background from original card style */
+    border: none;
+    padding: 0;
+}
+
+/* New Sort Container in header */
+.sort-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sort-container label {
+    color: var(--text-secondary-color);
+    font-weight: 500;
+}
+
+.sort-container select {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+}
+
+/* New Bulk Action Bar */
+.bulk-action-bar {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(-20px);
+    visibility: hidden;
+    transition: opacity 0.3s, transform 0.3s, visibility 0.3s;
+}
+
+.bulk-action-bar.visible {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+}
+
+#bulk-action-count {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* New List Header for Select All */
+.list-view-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.5rem 1.5rem;
+    padding: 0 1.5rem;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: var(--text-secondary-color);
+    align-items: center;
+}
+
+.list-view-header .custom-checkbox {
+    padding-right: 10px;
+}
+
+.list-view-header .header-actions {
+    text-align: center;
+    padding-right: 20px; /* Align with actions column */
 }

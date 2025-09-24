@@ -70,25 +70,31 @@ async function renderManageAgentsPage() {
         window.location.hash = 'add-agent?returnTo=manage-agents';
     });
 
-    if (!supabase) {
-        appContent.innerHTML = `<p class="error">لا يمكن عرض الوكلاء، لم يتم الاتصال بقاعدة البيانات.</p>`;
-        return;
+    // Caching: If we already have the data, don't fetch it again.
+    if (allAgentsData.length > 0) {
+        displayAgentsPage(allAgentsData, 1);
+        setupAgentFilters();
+    } else {
+        if (!supabase) {
+            appContent.innerHTML = `<p class="error">لا يمكن عرض الوكلاء، لم يتم الاتصال بقاعدة البيانات.</p>`;
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from('agents')
+            .select('*')
+            .order('name', { ascending: true });
+
+        if (error) {
+            console.error("Error fetching agents:", error);
+            document.getElementById('agent-table-container').innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات الوكلاء.</p>`;
+            return;
+        }
+
+        allAgentsData = data;
+        displayAgentsPage(allAgentsData, 1);
+        setupAgentFilters();
     }
-
-    const { data, error } = await supabase
-        .from('agents')
-        .select('*')
-        .order('name', { ascending: true });
-
-    if (error) {
-        console.error("Error fetching agents:", error);
-        document.getElementById('agent-table-container').innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات الوكلاء.</p>`;
-        return;
-    }
-
-    allAgentsData = data;
-    displayAgentsPage(allAgentsData, 1);
-    setupAgentFilters();
 }
 
 function setupAgentFilters() {
@@ -152,7 +158,7 @@ function displayAgentsPage(agentsList, page) {
 
     const gridHtml = paginatedAgents.length > 0 ? paginatedAgents.map(agent => {
         const avatarHtml = agent.avatar_url
-            ? `<img src="${agent.avatar_url}" alt="Avatar" class="agent-manage-avatar">`
+            ? `<img src="${agent.avatar_url}" alt="Avatar" class="agent-manage-avatar" loading="lazy">`
             : `<div class="agent-manage-avatar-placeholder"><i class="fas fa-user"></i></div>`;
         
         let highlightedName = agent.name;
@@ -453,7 +459,7 @@ async function renderTaskList() {
                         ${group.map(agent => {
                             const task = tasksMap[agent.id] || {};
                             const avatarHtml = agent.avatar_url
-                                ? `<img src="${agent.avatar_url}" alt="Avatar" class="task-agent-avatar">`
+                                ? `<img src="${agent.avatar_url}" alt="Avatar" class="task-agent-avatar" loading="lazy">`
                                 : `<div class="task-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
                             const isAudited = task.audited;
                             const isCompetitionSent = task.competition_sent;

@@ -56,8 +56,9 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
     taskDate.setDate(taskDate.getDate() + dayDiff);
     const taskDateStr = taskDate.toISOString().split('T')[0];
     const task = tasksMap[`${agent.id}-${taskDateStr}`];
+    const isComplete = task?.audited && task?.competition_sent;
     const avatarHtml = agent.avatar_url
-        ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar">`
+        ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar" loading="lazy">`
         : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
 
     const searchTerm = document.getElementById('calendar-search-input')?.value.toLowerCase().trim() || '';
@@ -71,7 +72,7 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
     }
 
     return `
-        <div class="calendar-agent-item" data-agent-id="${agent.id}" data-classification="${agent.classification}" data-name="${agent.name.toLowerCase()}" data-agentid-str="${agent.agent_id}">
+        <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent.id}" data-classification="${agent.classification}" data-name="${agent.name.toLowerCase()}" data-agentid-str="${agent.agent_id}">
             <div class="calendar-agent-main">
                 ${avatarHtml}
                 <div class="calendar-agent-info">
@@ -83,14 +84,14 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
                 <div class="action-item ${task?.audited ? 'done' : ''}">
                     <label>التدقيق</label>
                     <label class="custom-checkbox toggle-switch">
-                        <input type="checkbox" class="audit-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.audited ? 'checked' : ''} ${!isToday ? 'disabled' : ''}>
+                        <input type="checkbox" class="audit-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.audited ? 'checked' : ''}>
                         <span class="slider round"></span>
                     </label>
                 </div>
                 <div class="action-item ${task?.competition_sent ? 'done' : ''}">
                     <label>المسابقة</label>
                     <label class="custom-checkbox toggle-switch">
-                        <input type="checkbox" class="competition-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.competition_sent ? 'checked' : ''} ${!isToday ? 'disabled' : ''}>
+                        <input type="checkbox" class="competition-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.competition_sent ? 'checked' : ''}>
                         <span class="slider round"></span>
                     </label>
                 </div>
@@ -288,8 +289,15 @@ async function renderCalendarPage() {
             tasksMap[taskKey][isAudited ? 'audited' : 'competition_sent'] = checkbox.checked;
 
             // Optimistic UI update
+            const agentItem = checkbox.closest('.calendar-agent-item');
             const actionItem = checkbox.closest('.action-item');
             if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
+            
+            const auditCheck = agentItem.querySelector('.audit-check');
+            const competitionCheck = agentItem.querySelector('.competition-check');
+            const isComplete = auditCheck.checked && competitionCheck.checked;
+            agentItem.classList.toggle('complete', isComplete);
+
             updateDayProgressUI(dayIndex);
 
             const { error } = await supabase.from('daily_tasks').upsert(tasksMap[taskKey], { onConflict: 'agent_id, task_date' });
@@ -300,6 +308,7 @@ async function renderCalendarPage() {
                 checkbox.checked = !checkbox.checked;
                 tasksMap[taskKey][isAudited ? 'audited' : 'competition_sent'] = checkbox.checked;
                 if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
+                agentItem.classList.toggle('complete', !isComplete);
                 updateDayProgressUI(dayIndex);
             }
         }
