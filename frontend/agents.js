@@ -1010,8 +1010,15 @@ async function renderActivityLogPage() {
 async function renderTopAgentsPage() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
-        <div class="page-header"><h1><i class="fas fa-crown"></i> أبرز الوكلاء</h1></div>
-        <p class="page-subtitle">قائمة بأفضل الوكلاء أداءً هذا الشهر بناءً على استهلاك الرصيد وعدد المسابقات.</p>
+        <div class="page-header">
+            <h1>
+                <i class="fas fa-crown"></i> أبرز الوكلاء
+                <span class="info-tooltip" title="قائمة بأفضل الوكلاء أداءً هذا الشهر بناءً على خورزميات دقيقة."><i class="fas fa-info-circle"></i></span>
+            </h1>
+        </div>
+        <div id="overall-top-agents" class="podium-container">
+            <!-- Top 3 overall will be rendered here -->
+        </div>
         <div class="top-agents-grid">
             <div class="top-agents-list">
                 <h2><i class="fas fa-gem"></i> الوكلاء الحصريون</h2>
@@ -1029,54 +1036,74 @@ async function renderTopAgentsPage() {
     `;
 
     // --- Logic to fetch and calculate top agents ---
-    const exclusiveRanks = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'];
-    const standardRanks = ['Beginning', 'Growth', 'Pro', 'Elite'];
+    // Fetch more than 3 to have fallbacks for the lists below
+    const { data: topExclusive, error: exclusiveError } = await supabase.rpc('get_top_agents_with_scores', { p_rank_type: 'exclusive', p_limit: 5 });
+    const { data: topStandard, error: standardError } = await supabase.rpc('get_top_agents_with_scores', { p_rank_type: 'standard', p_limit: 5 });
 
-    const { data: allAgents, error: agentsError } = await supabase
-        .from('agents')
-        .select('id, name, avatar_url, rank, consumed_balance');
-
-    const { data: competitions, error: compsError } = await supabase
-        .from('competitions')
-        .select('agent_id');
-
-    if (agentsError || compsError) {
-        document.getElementById('top-exclusive-agents').innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء.</p>';
-        document.getElementById('top-standard-agents').innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء.</p>';
+    if (exclusiveError || standardError) {
+        document.getElementById('top-exclusive-agents').innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء الحصريين.</p>';
+        document.getElementById('top-standard-agents').innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء الاعتياديين.</p>';
+        console.error("Error fetching top agents:", exclusiveError || standardError);
         return;
     }
 
-    // Count competitions per agent
-    const competitionCounts = competitions.reduce((acc, comp) => {
-        acc[comp.agent_id] = (acc[comp.agent_id] || 0) + 1;
-        return acc;
-    }, {});
+    // --- NEW: Determine Overall Top 3 ---
+    const allRankedAgents = [...(topExclusive || []), ...(topStandard || [])];
+    const uniqueAgents = Array.from(new Map(allRankedAgents.map(item => [item['id'], item])).values());
+    const overallTop3 = uniqueAgents.sort((a, b) => b.combined_score - a.combined_score).slice(0, 3);
+    const overallTop3Ids = overallTop3.map(a => a.id);
 
-    // Calculate performance score for each agent
-    const agentsWithScores = allAgents.map(agent => {
-        const compsCount = competitionCounts[agent.id] || 0;
-        const consumed = agent.consumed_balance || 0;
-        // Performance Score = (consumed_balance * 0.6) + (competition_count * 0.4)
-        const score = (consumed * 0.6) + (compsCount * 0.4);
-        return { ...agent, score, compsCount };
-    });
+    // --- NEW: Filter the original lists to remove the overall top 3 ---
+    const filteredExclusive = (topExclusive || []).filter(a => !overallTop3Ids.includes(a.id));
+    const filteredStandard = (topStandard || []).filter(a => !overallTop3Ids.includes(a.id));
 
-    // Separate and sort agents
-    const topExclusive = agentsWithScores
-        .filter(a => exclusiveRanks.includes(a.rank))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5);
+    // --- Render the Podium ---
+    const renderPodium = (containerId, agentsList) => {
+        const container = document.getElementById(containerId);
+        if (agentsList.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        container.innerHTML = agentsList.map((agent, index) => {
+            const avatarHtml = agent.avatar_url
+                ? `<img src="${agent.avatar_url}" alt="Avatar" class="podium-avatar" loading="lazy">`
+                : `<div class="podium-avatar-placeholder"><i class="fas fa-user"></i></div>`;
+            
+            const rankClass = `rank-${index + 1}`;
+            const rankIcon = `<div class="podium-rank-number">${index + 1}</div><i class="fas fa-medal"></i>`;
 
-    const topStandard = agentsWithScores
-        .filter(a => standardRanks.includes(a.rank))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5);
+            const scoreDetailsHtml = `
+                <div class="score-details">
+                    <small title="الرصيد المستهلك"><i class="fas fa-wallet"></i> ${Math.round(agent.consumed_balance || 0)}$</small>
+                    <small title="المسابقات المنشأة"><i class="fas fa-trophy"></i> ${agent.total_competitions_this_month || 0}</small>
+                    <small title="كفاءة استهلاك الرصيد"><i class="fas fa-percent"></i> ${Math.round(agent.efficiency_score || 0)}%</small>
+                    <small title="الالتزام بالمهام"><i class="fas fa-clipboard-check"></i> ${Math.round(agent.consistency_score || 0)}%</small>
+                </div>
+            `;
+
+            return `
+                <a href="#profile/${agent.id}" class="podium-item ${rankClass}">
+                    <div class="podium-rank">${rankIcon}</div>
+                    ${avatarHtml}
+                    <h3 class="podium-name">${agent.name}</h3>
+                    <p class="podium-rank-name">${agent.rank || 'غير محدد'}</p>
+                    <div class="podium-score">
+                        <span>${Math.round(agent.combined_score)}</span>
+                        <small>نقطة أداء</small>
+                    </div>
+                    ${scoreDetailsHtml}
+                </a>
+            `;
+        }).join('');
+    };
+    
+    renderPodium('overall-top-agents', overallTop3);
 
     // --- Render the lists ---
     const renderLeaderboard = (containerId, agentsList) => {
         const container = document.getElementById(containerId);
         if (agentsList.length === 0) {
-            container.innerHTML = '<p class="no-results-message">لا يوجد وكلاء في هذه الفئة بعد.</p>';
+            container.innerHTML = '<p class="no-results-message">لا يوجد وكلاء آخرون في هذه الفئة.</p>';
             return;
         }
         container.innerHTML = agentsList.map((agent, index) => {
@@ -1084,8 +1111,16 @@ async function renderTopAgentsPage() {
                 ? `<img src="${agent.avatar_url}" alt="Avatar" class="leaderboard-avatar" loading="lazy">`
                 : `<div class="leaderboard-avatar-placeholder"><i class="fas fa-user"></i></div>`;
             
-            const rankColors = ['gold', 'silver', '#cd7f32']; // Gold, Silver, Bronze
-            const rankIcon = index < 3 ? `<i class="fas fa-medal" style="color: ${rankColors[index]};"></i>` : `<span>#${index + 1}</span>`;
+            const rankIcon = `<span>#${index + 1}</span>`;
+
+            const scoreDetailsHtml = `
+                <div class="score-details">
+                    <small title="الرصيد المستهلك"><i class="fas fa-wallet"></i> ${Math.round(agent.consumed_balance || 0)}$</small>
+                    <small title="المسابقات المنشأة"><i class="fas fa-trophy"></i> ${agent.total_competitions_this_month || 0}</small>
+                    <small title="كفاءة استهلاك الرصيد"><i class="fas fa-percent"></i> ${Math.round(agent.efficiency_score || 0)}%</small>
+                    <small title="الالتزام بالمهام"><i class="fas fa-clipboard-check"></i> ${Math.round(agent.consistency_score || 0)}%</small>
+                </div>
+            `;
 
             return `
                 <a href="#profile/${agent.id}" class="leaderboard-item">
@@ -1096,14 +1131,15 @@ async function renderTopAgentsPage() {
                         <p class="leaderboard-rank-name">${agent.rank || 'غير محدد'}</p>
                     </div>
                     <div class="leaderboard-score">
-                        <span>${Math.round(agent.score)}</span>
-                        <small>نقطة</small>
+                        <span>${Math.round(agent.combined_score)}</span>
+                        <small>نقطة أداء</small>
+                        ${scoreDetailsHtml}
                     </div>
                 </a>
             `;
         }).join('');
     };
 
-    renderLeaderboard('top-exclusive-agents', topExclusive);
-    renderLeaderboard('top-standard-agents', topStandard);
+    renderLeaderboard('top-exclusive-agents', filteredExclusive);
+    renderLeaderboard('top-standard-agents', filteredStandard);
 }

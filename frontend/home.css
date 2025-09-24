@@ -12,6 +12,7 @@
     position: relative;
     overflow: hidden;
     color: white;
+    text-decoration: none;
     transition: transform 0.2s, box-shadow 0.2s;
 }
 

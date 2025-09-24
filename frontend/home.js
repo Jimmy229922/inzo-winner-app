@@ -54,21 +54,21 @@ async function renderHomePage() {
         const statsContainer = document.getElementById('home-stats-container');
         statsContainer.innerHTML = ` 
             <div class="dashboard-grid-v2">
-                <div class="stat-card-v2 color-1">
+                <a href="#manage-agents" class="stat-card-v2 color-1">
                     <div class="stat-card-v2-icon-bg"><i class="fas fa-users"></i></div>
                     <p class="stat-card-v2-value">${totalAgents || 0}</p>
                     <h3 class="stat-card-v2-title">إجمالي الوكلاء</h3>
-                </div>
-                <div class="stat-card-v2 color-2">
+                </a>
+                <a href="#competitions" class="stat-card-v2 color-2">
                     <div class="stat-card-v2-icon-bg"><i class="fas fa-trophy"></i></div>
                     <p class="stat-card-v2-value">${activeCompetitions || 0}</p>
                     <h3 class="stat-card-v2-title">مسابقات نشطة</h3>
-                </div>
-                <div class="stat-card-v2 color-3">
+                </a>
+                <a href="#competitions" class="stat-card-v2 color-3">
                     <div class="stat-card-v2-icon-bg"><i class="fas fa-paper-plane"></i></div>
                     <p class="stat-card-v2-value">${competitionsToday?.length || 0}</p>
                     <h3 class="stat-card-v2-title">المسابقات المرسلة اليوم</h3>
-                </div>
+                </a>
             </div>
         `;
 
