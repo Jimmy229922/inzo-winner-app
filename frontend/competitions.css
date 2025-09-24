@@ -1051,4 +1051,22 @@
     font-size: 0.9em;
     color: var(--text-secondary-color);
 }
+
+.actions-column {
+    text-align: left !important;
+}
+
+.form-hint {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    margin-top: 8px;
+    background-color: var(--bg-color);
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+.actions-cell .btn-danger {
+    background-color: transparent;
+    color: #e74c3c;
+    border: 1px solid #e74c3c;
+}
 }

@@ -300,6 +300,12 @@ async function renderCalendarPage() {
             const isComplete = auditCheck.checked && competitionCheck.checked; 
             agentItem.classList.toggle('complete', isComplete);
 
+            // NEW: Update the checkmark icon next to the name instantly
+            const nameEl = agentItem.querySelector('.agent-name');
+            const originalName = agentItem.dataset.name; // We stored the original name in the dataset
+            const iconHtml = isComplete ? ' <i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
+            nameEl.innerHTML = `${originalName}${iconHtml}`;
+
             updateDayProgressUI(dayIndex);
 
             const { error } = await supabase.from('daily_tasks').upsert(tasksMap[taskKey], { onConflict: 'agent_id, task_date' });

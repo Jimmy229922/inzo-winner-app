@@ -355,10 +355,19 @@
 }
 
 .task-complete-icon {
-    color: #27ae60; /* Green */
+    color: #fff;
+    background-color: #27ae60;
+    border-radius: 50%;
     font-size: 0.8em;
-    margin-right: 5px;
+    margin-right: 6px;
     vertical-align: middle;
+    width: 1.5em;
+    height: 1.5em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .task-agent-id {

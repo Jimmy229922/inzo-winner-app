@@ -104,6 +104,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 <div class="action-section">
                     <h2><i class="fas fa-rocket"></i> إجراءات سريعة</h2>
                     <div class="details-actions">
+                        <button id="create-agent-competition" class="btn-primary"><i class="fas fa-magic"></i> إنشاء مسابقة</button>
                         <button id="send-bonus-cliche-btn" class="btn-telegram-bonus"><i class="fas fa-paper-plane"></i> إرسال كليشة البونص</button>
                         <button id="send-winners-cliche-btn" class="btn-telegram-winners"><i class="fas fa-trophy"></i> إرسال كليشة الفائزين</button>
                     </div>
@@ -125,6 +126,10 @@ async function renderAgentProfilePage(agentId, options = {}) {
     `;
  
     document.getElementById('back-btn').addEventListener('click', () => history.back());
+
+    document.getElementById('create-agent-competition').addEventListener('click', () => {
+        window.location.hash = `competitions/new?agentId=${agent.id}`;
+    });
 
     document.getElementById('send-bonus-cliche-btn').addEventListener('click', async () => {
         // 1. Construct the message

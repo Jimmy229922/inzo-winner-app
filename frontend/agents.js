@@ -586,6 +586,13 @@ async function renderTaskList() {
                 // Visual completion requires both
                 const isComplete = auditCheck.checked && competitionCheck.checked; 
                 card.classList.toggle('complete', isComplete);
+
+                // NEW: Update the checkmark icon next to the name instantly
+                const nameEl = card.querySelector('.task-agent-info h3');
+                const originalName = card.dataset.originalName;
+                const iconHtml = isComplete ? ' <i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
+                nameEl.innerHTML = `${originalName}${iconHtml}`;
+
                 
                 // Update the progress counter for the group
                 const groupDetails = card.closest('.task-group');

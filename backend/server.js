@@ -215,15 +215,11 @@ app.get('*', (req, res) => {
 // Cron format: 'Minute Hour DayOfMonth Month DayOfWeek'
 cron.schedule('0 7 * * 0', async () => {
     console.log('[CRON] Running weekly task cleanup...');
+    if (!supabaseAdmin) {
+        console.error('[CRON] Aborting task cleanup: Supabase admin client is not initialized.');
+        return;
+    }
     try {
-        // This requires a Supabase client instance on the server
-        // For simplicity, we'll just log it. A proper implementation
-        // would use the service_role key to perform this action.
-        // The logic is now: delete all entries from daily_tasks.
-        // This is a placeholder for a more secure server-side implementation.
-        // To make this work, we need to create a Supabase client here.
-        const { createClient } = require('@supabase/supabase-js');
-        const supabaseAdmin = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY); // Assumes SERVICE_KEY is in .env
 
         // We delete all tasks. New tasks will be created as needed.
         const { error } = await supabaseAdmin
@@ -247,10 +243,11 @@ cron.schedule('0 7 * * 0', async () => {
 // Schedule a task to deactivate expired competitions every hour.
 cron.schedule('0 * * * *', async () => {
     console.log('[CRON] Running hourly check for expired competitions...');
+    if (!supabaseAdmin) {
+        console.error('[CRON] Aborting expired competition check: Supabase admin client is not initialized.');
+        return;
+    }
     try {
-        const { createClient } = require('@supabase/supabase-js');
-        const supabaseAdmin = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-
         const todayStr = new Date().toISOString().split('T')[0];
 
         // Find active competitions where the winner selection date is in the past

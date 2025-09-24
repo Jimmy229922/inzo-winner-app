@@ -64,6 +64,7 @@ async function handleRouting() {
         '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents' },
         '#competitions': { func: renderCompetitionsPage, nav: 'nav-competitions' },
         '#competition-templates': { func: renderCompetitionTemplatesPage, nav: 'nav-competition-templates' },
+        '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
         '#add-agent': { func: renderAddAgentForm, nav: null },
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
     };
@@ -81,11 +82,9 @@ async function handleRouting() {
             renderFunction = () => renderAgentProfilePage(agentId);
             navElement = null; // No nav item is active on a profile page
         }
-    } else if (hash === '#home') {
+    } else if (hash.startsWith('#competitions/new')) {
         mainElement.classList.add('full-width');
-    } else if (hash.startsWith('#competitions')) {
-        mainElement.classList.add('full-width');
-    } else if (hash === '#calendar') {
+    } else if (hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions') {        mainElement.classList.add('full-width');    } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
         appContent.classList.add('full-height-content');
     }
@@ -344,6 +343,7 @@ function setupNavbar() {
     const navManageAgents = document.getElementById('nav-manage-agents');
     const navCompetitions = document.getElementById('nav-competitions');
     const navCompetitionTemplates = document.getElementById('nav-competition-templates');
+    const navArchivedTemplates = document.getElementById('nav-archived-templates');
     const navCalendar = document.getElementById('nav-calendar');
     navLinks = [navHome, navTasks, navManageAgents, navCompetitions, navCompetitionTemplates, navCalendar]; // Assign to global array
     
@@ -352,6 +352,7 @@ function setupNavbar() {
     navTasks.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'tasks'; });
     navManageAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'manage-agents'; });
     navCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competitions'; });
+    navArchivedTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-templates'; });
     navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
     navCalendar.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'calendar'; });
 

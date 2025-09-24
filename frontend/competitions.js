@@ -453,11 +453,9 @@ async function renderCompetitionCreatePage(agentId) {
     }
 
     const agentClassification = agent.classification || 'R'; // Default to R if not set
-    const { data: templates, error: templatesError } = await supabase
-        .from('competition_templates')
-        .select('id, question, content')
-        .or(`classification.eq.${agentClassification},classification.eq.All`)
-        .order('question');
+    const { data: templates, error: templatesError } = await supabase.rpc('get_available_templates_for_agent', {
+        p_classification: agentClassification
+    });
 
     if (templatesError) {
         appContent.innerHTML = `<p class="error">حدث خطأ أثناء جلب قوالب المسابقات.</p>`;
@@ -491,6 +489,9 @@ async function renderCompetitionCreatePage(agentId) {
                         <option value="" disabled selected>-- اختار مسابقة --</option>
                         ${templates.map(t => `<option value="${t.id}">${t.question}</option>`).join('')}
                     </select>
+                    <div id="template-usage-info" class="form-hint" style="display: none;">
+                        <!-- Usage info will be displayed here -->
+                    </div>
                 </div>
                 <div class="override-fields-grid">
                     <div class="form-group">
@@ -540,6 +541,7 @@ async function renderCompetitionCreatePage(agentId) {
     const templateSelect = document.getElementById('competition-template-select');
     const descInput = document.getElementById('competition-description');
     const tradingWinnersInput = document.getElementById('override-trading-winners');
+    const templateUsageInfo = document.getElementById('template-usage-info');
     const prizeInput = document.getElementById('override-prize');
     const depositWinnersInput = document.getElementById('override-deposit-winners');
     const durationInput = document.getElementById('override-duration');
@@ -557,6 +559,18 @@ async function renderCompetitionCreatePage(agentId) {
 
         if (!selectedTemplate) {
             descInput.value = ''; // Clear preview if no template is selected
+            templateUsageInfo.style.display = 'none';
+            return;
+        }
+
+        // NEW: Show usage limit info
+        if (selectedTemplate.usage_limit !== null) {
+            const remaining = selectedTemplate.usage_limit - (selectedTemplate.usage_count || 0);
+            templateUsageInfo.textContent = `مرات الاستخدام المتبقية لهذا القالب: ${remaining}`;
+            templateUsageInfo.style.display = 'block';
+        } else {
+            templateUsageInfo.textContent = 'هذا القالب متاح للاستخدام غير المحدود.';
+            templateUsageInfo.style.display = 'block';
             return;
         }
 
@@ -677,6 +691,18 @@ async function renderCompetitionCreatePage(agentId) {
                 .single();
 
             if (competitionError) throw new Error(`فشل حفظ المسابقة: ${competitionError.message}`);
+
+            // 2. Deduct balance
+            // NEW: Increment template usage count
+            if (selectedTemplate.id) {
+                const { error: incrementError } = await supabase.rpc('increment_usage_count', {
+                    template_id: selectedTemplate.id
+                });
+                if (incrementError) {
+                    // This is not a critical error, so we just log it and continue
+                    console.warn('Could not increment template usage count:', incrementError.message);
+                }
+            }
 
             // 2. Deduct balance
             const newConsumed = (agent.consumed_balance || 0) + totalCost;
@@ -840,8 +866,7 @@ async function renderCompetitionTemplatesPage() {
 
     async function loadTemplates() {
         const { data: templates, error } = await supabase
-            .from('competition_templates')
-            .select('*');
+            .rpc('get_active_templates');
 
         if (error) {
             console.error('Error fetching templates:', error);
@@ -953,6 +978,10 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
     overlay.className = 'modal-overlay';
     
     const modal = document.createElement('div');
+    // I need to add a function to create the modal for archived templates
+    // Let's add the archive page first.
+    // The user wants a new page for the archive.
+
     modal.className = 'form-modal-content modal-wide'; // Use existing style from components.css
     
     modal.innerHTML = `
@@ -980,6 +1009,10 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
                     <label for="create-template-content">محتوى المسابقة (الوصف)</label>
                     <textarea id="create-template-content" rows="10" required>${defaultContent}</textarea>
                 </div>
+                <div class="form-group">
+                    <label for="create-template-usage-limit">عدد مرات الاستخدام (اتركه فارغاً للاستخدام غير المحدود)</label>
+                    <input type="number" id="create-template-usage-limit" min="1" placeholder="مثال: 5">
+                </div>
                 <div class="form-actions">
                     <button type="submit" class="btn-primary"><i class="fas fa-save"></i> حفظ القالب</button>
                     <button type="button" id="cancel-create-modal" class="btn-secondary">إلغاء</button>
@@ -1003,6 +1036,7 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
             question: document.getElementById('create-template-question').value.trim(),
             classification: document.getElementById('create-template-classification').value,
             content: document.getElementById('create-template-content').value.trim(),
+            usage_limit: document.getElementById('create-template-usage-limit').value ? parseInt(document.getElementById('create-template-usage-limit').value, 10) : null,
         };
 
         const { error } = await supabase.from('competition_templates').insert(formData);
@@ -1078,13 +1112,153 @@ function setupTemplateFilters() {
     });
 }
 
+async function renderArchivedTemplatesPage() {
+    const appContent = document.getElementById('app-content');
+    document.querySelector('main').classList.add('full-width');
+
+    appContent.innerHTML = `
+        <div class="page-header">
+            <div class="header-top-row">
+                <h1><i class="fas fa-archive"></i> أرشيف قوالب المسابقات</h1>
+            </div>
+            <div class="template-filters">
+                <div class="filter-search-container">
+                    <input type="search" id="archive-search-input" placeholder="بحث باسم القالب..." autocomplete="off">
+                    <i class="fas fa-search"></i>
+                    <i class="fas fa-times-circle search-clear-btn" id="archive-search-clear"></i>
+                </div>
+                <div class="filter-buttons" data-filter-group="classification">
+                    <button class="filter-btn active" data-filter="all">الكل</button>
+                    <button class="filter-btn" data-filter="R">R</button>
+                    <button class="filter-btn" data-filter="A">A</button>
+                    <button class="filter-btn" data-filter="B">B</button>
+                    <button class="filter-btn" data-filter="C">C</button>
+                    <button class="filter-btn" data-filter="All">عام</button>
+                </div>
+            </div>
+        </div>
+        <p class="page-subtitle" style="text-align: right; margin-top: 0;">القوالب التي وصلت إلى الحد الأقصى من الاستخدام. يمكنك إعادة تفعيلها من هنا.</p>
+        <div id="archived-templates-list" class="table-responsive-container">
+            <p>جاري تحميل الأرشيف...</p>
+        </div>
+    `;
+
+    const listDiv = document.getElementById('archived-templates-list');
+    let allArchivedTemplates = [];
+
+    function displayArchived(templatesToDisplay) {
+        if (templatesToDisplay.length === 0) {
+            listDiv.innerHTML = '<p class="no-results-message">لا توجد قوالب في الأرشيف تطابق بحثك.</p>';
+        } else {
+            listDiv.innerHTML = `
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th>اسم القالب (السؤال)</th>
+                            <th>التصنيف</th>
+                            <th>مرات الاستخدام</th>
+                            <th class="actions-column">الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${templatesToDisplay.map(template => `
+                            <tr data-question="${template.question.toLowerCase()}" data-classification="${template.classification || 'All'}">
+                                <td data-label="اسم القالب">${template.question}</td>
+                                <td data-label="التصنيف"><span class="classification-badge classification-${(template.classification || 'all').toLowerCase()}">${template.classification || 'الكل'}</span></td>
+                                <td data-label="مرات الاستخدام">${template.usage_count} / ${template.usage_limit}</td>
+                                <td class="actions-cell">
+                                    <button class="btn-primary reactivate-template-btn btn-small" data-id="${template.id}"><i class="fas fa-undo"></i> إعادة تفعيل</button>
+                                    <button class="btn-danger delete-template-btn btn-small" data-id="${template.id}"><i class="fas fa-trash-alt"></i> حذف نهائي</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+    }
+
+    function setupArchiveFilters() {
+        const searchInput = document.getElementById('archive-search-input');
+        const clearBtn = document.getElementById('archive-search-clear');
+        const filterButtons = document.querySelectorAll('.template-filters .filter-btn');
+
+        const applyFilters = () => {
+            if (clearBtn) clearBtn.style.display = searchInput.value ? 'block' : 'none';
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            const activeFilter = document.querySelector('.template-filters .filter-btn.active').dataset.filter;
+
+            const filtered = allArchivedTemplates.filter(template => {
+                const matchesSearch = searchTerm === '' || template.question.toLowerCase().includes(searchTerm);
+                const matchesFilter = activeFilter === 'all' || (template.classification || 'All') === activeFilter;
+                return matchesSearch && matchesFilter;
+            });
+            displayArchived(filtered);
+        };
+
+        searchInput.addEventListener('input', applyFilters);
+        clearBtn.addEventListener('click', () => { searchInput.value = ''; applyFilters(); });
+        filterButtons.forEach(btn => btn.addEventListener('click', () => {
+            filterButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            applyFilters();
+        }));
+    }
+
+    async function loadAndDisplayArchived() {
+        const { data, error } = await supabase.rpc('get_archived_templates');
+
+        if (error) {
+            listDiv.innerHTML = `<p class="error">فشل تحميل الأرشيف.</p>`;
+            console.error('Archive fetch error:', error);
+            return;
+        }
+        allArchivedTemplates = data;
+        displayArchived(allArchivedTemplates);
+        setupArchiveFilters();
+    }
+
+    listDiv.addEventListener('click', async (e) => {
+        const reactivateBtn = e.target.closest('.reactivate-template-btn');
+        const deleteBtn = e.target.closest('.delete-template-btn');
+
+        if (reactivateBtn) {
+            const id = reactivateBtn.dataset.id;
+            showConfirmationModal('هل أنت متأكد من إعادة تفعيل هذا القالب؟<br><small>سيتم إعادة تعيين عداد استخدامه إلى الصفر.</small>', async () => {
+                const { error } = await supabase.from('competition_templates').update({ usage_count: 0 }).eq('id', id);
+                if (error) {
+                    showToast('فشل إعادة تفعيل القالب.', 'error');
+                } else {
+                    showToast('تم إعادة تفعيل القالب بنجاح.', 'success');
+                    await loadAndDisplayArchived();
+                }
+            }, { title: 'تأكيد إعادة التفعيل' });
+        }
+
+        if (deleteBtn) {
+            const id = deleteBtn.dataset.id;
+            showConfirmationModal('هل أنت متأكد من الحذف النهائي لهذا القالب؟<br><small>هذا الإجراء لا يمكن التراجع عنه.</small>', async () => {
+                const { error } = await supabase.from('competition_templates').delete().eq('id', id);
+                if (error) {
+                    showToast('فشل حذف القالب.', 'error');
+                } else {
+                    showToast('تم حذف القالب نهائياً.', 'success');
+                    await loadAndDisplayArchived();
+                }
+            }, { title: 'تأكيد الحذف النهائي', confirmText: 'حذف نهائي', confirmClass: 'btn-danger' });
+        }
+    });
+
+    await loadAndDisplayArchived();
+}
+
 function renderEditTemplateModal(template, onSaveCallback) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     
     const modal = document.createElement('div');
-    modal.className = 'form-modal-content'; // Use existing style from components.css
-    
+    modal.className = 'form-modal-content modal-wide'; // Use existing style from components.css
+
     modal.innerHTML = `
         <div class="form-modal-header">
             <h2>تعديل قالب مسابقة</h2>
@@ -1110,6 +1284,10 @@ function renderEditTemplateModal(template, onSaveCallback) {
                     <label for="edit-template-content">محتوى المسابقة</label>
                     <textarea id="edit-template-content" rows="8" required>${template.content}</textarea>
                 </div>
+                <div class="form-group">
+                    <label for="edit-template-usage-limit">عدد مرات الاستخدام (اتركه فارغاً للاستخدام غير المحدود)</label>
+                    <input type="number" id="edit-template-usage-limit" min="1" placeholder="مثال: 5" value="${template.usage_limit || ''}">
+                </div>
                 <div class="form-actions">
                     <button type="submit" class="btn-primary"><i class="fas fa-save"></i> حفظ التعديلات</button>
                     <button type="button" id="cancel-edit-modal" class="btn-secondary">إلغاء</button>
@@ -1133,6 +1311,7 @@ function renderEditTemplateModal(template, onSaveCallback) {
             question: document.getElementById('edit-template-question').value.trim(),
             classification: document.getElementById('edit-template-classification').value,
             content: document.getElementById('edit-template-content').value.trim(),
+            usage_limit: document.getElementById('edit-template-usage-limit').value ? parseInt(document.getElementById('edit-template-usage-limit').value, 10) : null,
         };
 
         const { error } = await supabase.from('competition_templates').update(updatedData).eq('id', template.id);
