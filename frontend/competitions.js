@@ -465,17 +465,16 @@ async function renderCompetitionCreatePage(agentId) {
     // New V2 Layout
     appContent.innerHTML = `
         <div class="page-header"><h1><i class="fas fa-magic"></i> إنشاء وإرسال مسابقة</h1></div>
-        <p class="page-subtitle">للعميل: <strong>${agent.name}</strong>. قم بتعديل تفاصيل المسابقة أدناه وسيتم تحديث الكليشة تلقائياً.</p>
+        <p class="page-subtitle">للعميل: <a href="#profile/${agent.id}" class="agent-name-link-subtitle"><strong>${agent.name}</strong></a>. قم بتعديل تفاصيل المسابقة أدناه وسيتم تحديث الكليشة تلقائياً.</p>
         
         <div class="create-competition-layout-v3">
             <!-- Agent Info Column -->
             <div class="agent-info-v3 card-style-container">
                 <h3><i class="fas fa-user-circle"></i> بيانات الوكيل</h3>
                 <div class="agent-info-grid">
-                    <div class="action-info-card"><i class="fas fa-star"></i><div class="info"><label>المرتبة</label><p>${agent.rank || 'غير محدد'}</p></div></div>
-                    <div class="action-info-card"><i class="fas fa-tag"></i><div class="info"><label>التصنيف</label><p>${agent.classification}</p></div></div>
-                    <div class="action-info-card"><i class="fas fa-wallet"></i><div class="info"><label>الرصيد المتبقي</label><p>$${agent.remaining_balance || 0}</p></div></div>
-                    <div class="action-info-card"><i class="fas fa-gift"></i><div class="info"><label>بونص إيداع متبقي</label><p>${agent.remaining_deposit_bonus || 0} مرات</p></div></div>
+                    <div class="action-info-card"><i class="fas fa-star"></i><div class="info"><label>المرتبة</label><p>${agent.rank || 'غير محدد'}</p></div></div>                    <div class="action-info-card"><i class="fas fa-tag"></i><div class="info"><label>التصنيف</label><p>${agent.classification}</p></div></div>
+                    <div class="action-info-card" id="balance-card"><i class="fas fa-wallet"></i><div class="info"><label>الرصيد المتبقي</label><p id="agent-remaining-balance">$${agent.remaining_balance || 0}</p></div></div>
+                    <div class="action-info-card" id="bonus-card"><i class="fas fa-gift"></i><div class="info"><label>بونص إيداع متبقي</label><p id="agent-remaining-deposit-bonus">${agent.remaining_deposit_bonus || 0} مرات</p></div></div>
                     <div class="action-info-card"><i class="fas fa-percent"></i><div class="info"><label>نسبة بونص الإيداع</label><p>${agent.deposit_bonus_percentage || 0}%</p></div></div>
                 </div>
             </div>
@@ -516,6 +515,7 @@ async function renderCompetitionCreatePage(agentId) {
                         </select>
                     </div>
                 </div>
+                <div id="validation-messages" class="validation-messages"></div>
             </div>
 
             <!-- Preview Column -->
@@ -550,14 +550,12 @@ async function renderCompetitionCreatePage(agentId) {
     const depositWinnersInput = document.getElementById('override-deposit-winners');
     const durationInput = document.getElementById('override-duration');
 
-    function numberToArPlural(num) {
-        const words = {
-            3: 'ثلاث', 4: 'أربع', 5: 'خمس', 6: 'ست', 7: 'سبع', 8: 'ثماني', 9: 'تسع', 10: 'عشر'
-        };
-        return words[num] || num.toString();
-    }
+    // NEW: Add listener to the variables card to update on blur/click away
+    document.querySelector('.variables-v3').addEventListener('focusout', (e) => {
+        updateDescriptionAndPreview();
+    });
 
-    function updateDescriptionAndPreview() {
+    function updateDescriptionAndPreview(event = {}) {
         console.log('[Debug] updateDescriptionAndPreview called.');
         const selectedId = templateSelect.value;
         const selectedTemplate = templates.find(t => t.id == selectedId);
@@ -570,16 +568,18 @@ async function renderCompetitionCreatePage(agentId) {
 
         console.log('[Debug] Selected Template:', selectedTemplate);
 
-        // NEW: Show usage limit info
-        if (selectedTemplate.usage_limit !== null) {
-            const remaining = Math.max(0, selectedTemplate.usage_limit - (selectedTemplate.usage_count || 0));
-            console.log(`[Debug] Usage Limit: ${selectedTemplate.usage_limit}, Usage Count: ${selectedTemplate.usage_count}, Remaining: ${remaining}`);
-            const message = `مرات الاستخدام المتبقية لهذا القالب: ${remaining}`;
-            if (remaining <= 3) {
-                console.log('[Debug] Remaining uses <= 3, adding warning class.');
-                showToast(message, 'warning');
-            } else {
-                showToast(message, 'info');
+        // Show usage limit info only when the template is first selected
+        if (event.target && event.target.id === 'competition-template-select') {
+            if (selectedTemplate.usage_limit !== null) {
+                const remaining = Math.max(0, selectedTemplate.usage_limit - (selectedTemplate.usage_count || 0));
+                const message = `مرات الاستخدام المتبقية لهذا القالب: ${remaining}`;
+                if (remaining === 1) {
+                    showToast(message, 'error'); // Red for last one
+                } else if (remaining <= 3) {
+                    showToast(message, 'warning'); // Orange for 2 or 3
+                } else {
+                    showToast(message, 'info'); // Blue for more
+                }
             }
         }
 
@@ -591,6 +591,13 @@ async function renderCompetitionCreatePage(agentId) {
         const prize = parseFloat(prizeInput.value || 0).toFixed(2);
         const duration = durationInput.value;
         const depositBonusPerc = agent.deposit_bonus_percentage || 0;
+        
+        function numberToArPlural(num) {
+            const words = {
+                3: 'ثلاث', 4: 'أربع', 5: 'خمس', 6: 'ست', 7: 'سبع', 8: 'ثماني', 9: 'تسع', 10: 'عشر'
+            };
+            return words[num] || num.toString();
+        }
         
         // Create a formatted prize string
         let prizeDetailsText = '';
@@ -650,10 +657,40 @@ async function renderCompetitionCreatePage(agentId) {
         content = content.replace(/{{prize_per_winner}}/g, prize);
         
         descInput.value = content;
+
+        // --- NEW: Live Balance & Bonus Validation ---
+        const totalCost = tradingWinners * prize;
+        const newRemainingBalance = (agent.remaining_balance || 0) - totalCost;
+        const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) - depositWinners;
+
+        const balanceEl = document.getElementById('agent-remaining-balance');
+        const bonusEl = document.getElementById('agent-remaining-deposit-bonus');
+        const validationContainer = document.getElementById('validation-messages');
+        const sendBtn = document.querySelector('.btn-send-telegram');
+
+        balanceEl.textContent = `$${newRemainingBalance.toFixed(2)}`;
+        bonusEl.textContent = `${newRemainingDepositBonus} مرات`;
+
+        let validationMessages = '';
+        let isInvalid = false;
+
+        if (newRemainingBalance < 0) {
+            validationMessages += `<div class="validation-error"><i class="fas fa-exclamation-triangle"></i> الرصيد غير كافٍ. التكلفة (${totalCost.toFixed(2)}$) تتجاوز الرصيد المتاح (${(agent.remaining_balance || 0).toFixed(2)}$).</div>`;
+            isInvalid = true;
+        }
+        if (newRemainingDepositBonus < 0) {
+            validationMessages += `<div class="validation-error"><i class="fas fa-exclamation-triangle"></i> عدد مرات بونص الإيداع غير كافٍ (المتاح: ${agent.remaining_deposit_bonus || 0}).</div>`;
+            isInvalid = true;
+        }
+
+        validationContainer.innerHTML = validationMessages;
+        document.getElementById('balance-card').classList.toggle('invalid', newRemainingBalance < 0);
+        document.getElementById('bonus-card').classList.toggle('invalid', newRemainingDepositBonus < 0);
+        sendBtn.disabled = isInvalid;
     }
 
     [templateSelect, tradingWinnersInput, prizeInput, depositWinnersInput, durationInput].forEach(input => {
-        input.addEventListener('change', updateDescriptionAndPreview); // Use 'change' for all inputs for consistency
+        input.addEventListener('change', updateDescriptionAndPreview);
     });
 
     document.getElementById('cancel-competition-form').addEventListener('click', () => {

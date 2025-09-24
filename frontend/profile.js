@@ -261,26 +261,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
     // Render competitions in the log tab
     const logTabContent = document.getElementById('tab-log');
     if (agentLogs && agentLogs.length > 0) {
-        logTabContent.innerHTML = `
-            <h2>سجل النشاط</h2>
-            <div class="log-timeline">
-                ${agentLogs.map(log => {
-                    let icon = 'fa-history';
-                    if (log.action_type.includes('PROFILE')) icon = 'fa-user-edit';
-                    if (log.action_type.includes('DETAILS')) icon = 'fa-cogs';
-                    if (log.action_type.includes('COMPETITION')) icon = 'fa-trophy';
-                    return `
-                        <div class="log-item">
-                            <div class="log-item-icon"><i class="fas ${icon}"></i></div>
-                            <div class="log-item-content">
-                                <p>${log.description}</p>
-                                <small>${new Date(log.created_at).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</small>
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        `;
+        logTabContent.innerHTML = generateActivityLogHTML(agentLogs);
     }
 
     // Render competitions in the new "agent-competitions" tab
@@ -353,6 +334,71 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     // Render the content for the details tab
     renderDetailsView(agent);
+}
+
+function generateActivityLogHTML(logs) {
+    const getLogIconDetails = (actionType) => {
+        if (actionType.includes('CREATED')) return { icon: 'fa-user-plus', colorClass: 'log-icon-create' };
+        if (actionType.includes('DELETED')) return { icon: 'fa-user-slash', colorClass: 'log-icon-delete' };
+        if (actionType.includes('PROFILE_UPDATE')) return { icon: 'fa-user-edit', colorClass: 'log-icon-profile' };
+        if (actionType.includes('DETAILS_UPDATE')) return { icon: 'fa-cogs', colorClass: 'log-icon-details' };
+        if (actionType.includes('COMPETITION_CREATED')) return { icon: 'fa-trophy', colorClass: 'log-icon-competition' };
+        if (actionType.includes('BONUS_CLICHE_SENT')) return { icon: 'fa-paper-plane', colorClass: 'log-icon-telegram' };
+        if (actionType.includes('WINNERS_SELECTION_REQUESTED')) return { icon: 'fa-question-circle', colorClass: 'log-icon-telegram' };
+        return { icon: 'fa-history', colorClass: 'log-icon-generic' };
+    };
+
+    const groupLogsByDate = (logs) => {
+        const groups = {};
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const todayStr = today.toISOString().split('T')[0];
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+        logs.forEach(log => {
+            const logDate = new Date(log.created_at);
+            const logDateStr = logDate.toISOString().split('T')[0];
+            let dateKey;
+
+            if (logDateStr === todayStr) dateKey = 'اليوم';
+            else if (logDateStr === yesterdayStr) dateKey = 'الأمس';
+            else dateKey = logDate.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+
+            if (!groups[dateKey]) {
+                groups[dateKey] = [];
+            }
+            groups[dateKey].push(log);
+        });
+        return groups;
+    };
+
+    const groupedLogs = groupLogsByDate(logs);
+    let html = '<h2>سجل النشاط</h2><div class="log-timeline-v2">';
+
+    for (const date in groupedLogs) {
+        html += `
+            <div class="log-date-group">
+                <div class="log-date-header">${date}</div>
+                ${groupedLogs[date].map(log => {
+                    const { icon, colorClass } = getLogIconDetails(log.action_type);
+                    return `
+                        <div class="log-item-v2">
+                            <div class="log-item-icon-v2 ${colorClass}"><i class="fas ${icon}"></i></div>
+                            <div class="log-item-content-v2">
+                                <p class="log-description">${log.description}</p>
+                                <p class="log-timestamp">${new Date(log.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    return html;
 }
 
 function renderDetailsView(agent) {

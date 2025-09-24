@@ -66,6 +66,7 @@ async function handleRouting() {
         '#competition-templates': { func: renderCompetitionTemplatesPage, nav: 'nav-competition-templates' },
         '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
         '#add-agent': { func: renderAddAgentForm, nav: null },
+        '#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' },
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
     };
 
@@ -81,7 +82,7 @@ async function handleRouting() {
         if (agentId) {
             renderFunction = () => renderAgentProfilePage(agentId);
             navElement = null; // No nav item is active on a profile page
-        }    } else if (hash.startsWith('#competitions/new') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents') {
+        }    } else if (hash.startsWith('#competitions/new') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log') {
         mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
@@ -246,18 +247,17 @@ function setupNavbar() {
 
     // Update App Button Logic
     const updateBtn = document.getElementById('update-app-btn');
-    updateBtn.addEventListener('click', () => {
+    updateBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         showConfirmationModal(
             'هل أنت متأكد من رغبتك في تحديث التطبيق إلى آخر إصدار؟ سيتم إعادة تشغيل الخادم.',
             () => {
                 // This function is called when the user confirms.
                 // We will now show a new, more detailed modal for the update process.
                 showUpdateProgressModal();
-            }, {
-            title: 'تحديث التطبيق',
-            confirmText: 'تحديث الآن',
-            confirmClass: 'btn-primary'
-        });
+            }, 
+            { title: 'تحديث التطبيق', confirmText: 'تحديث الآن', confirmClass: 'btn-primary' }
+        );
     });
 
     // Date Display
@@ -344,7 +344,8 @@ function setupNavbar() {
     const navCompetitionTemplates = document.getElementById('nav-competition-templates');
     const navArchivedTemplates = document.getElementById('nav-archived-templates');
     const navCalendar = document.getElementById('nav-calendar');
-    navLinks = [navHome, navTasks, navManageAgents, navCompetitions, navCompetitionTemplates, navCalendar]; // Assign to global array
+    const navActivityLog = document.getElementById('nav-activity-log'); // Now in dropdown
+    navLinks = [navHome, navTasks, navManageAgents, navCompetitions, navCompetitionTemplates, navCalendar, navActivityLog];
     
     // NEW: Navigation listeners update the hash, which triggers the router
     navHome.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'home'; });
@@ -353,6 +354,7 @@ function setupNavbar() {
     navCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competitions'; });
     navArchivedTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-templates'; });
     navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
+    navActivityLog.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'activity-log'; });
     navCalendar.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'calendar'; });
 
     // Hide search results when clicking outside

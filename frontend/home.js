@@ -1,7 +1,7 @@
 async function renderHomePage() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
-        <h1>لوحة التحكم الرئيسية</h1>
+        <div class="page-header"><h1><i class="fas fa-tachometer-alt"></i> لوحة التحكم الرئيسية</h1></div>
         <div id="home-stats-container"></div>
         <div class="home-grid">
             <div class="home-main-column">
@@ -41,8 +41,8 @@ async function renderHomePage() {
         const [
             { count: totalAgents, error: agentsError },
             { count: activeCompetitions, error: activeCompError },
-            { data: agentsForToday, error: agentsTodayError },
-            { data: competitionsToday, error: compTodayError }
+            { data: agentsForToday, error: agentsTodayError }, // Agents with tasks today
+            { data: competitionsToday, error: compTodayError } // Competitions created today
         ] = await Promise.all([
             supabase.from('agents').select('*', { count: 'exact', head: true }),
             supabase.from('competitions').select('*', { count: 'exact', head: true }).eq('is_active', true),
@@ -89,8 +89,8 @@ async function renderHomePage() {
                 }, {});
 
                 const completedToday = agentsForToday.filter(agent => {
-                    const task = tasksMap[agent.id];
-                    return task && task.audited; // Progress is based on audit only
+                    const task = tasksMap[agent.id] || {};
+                    return task.audited && task.competition_sent; // Progress is based on both tasks
                 }).length;
 
                 const pendingAgents = agentsForToday.filter(agent => {
@@ -106,7 +106,7 @@ async function renderHomePage() {
                 document.getElementById('pending-count').textContent = pendingAgents.length;
                 
                 const pendingList = document.getElementById('pending-tasks-list');
-                const MAX_PENDING_TO_SHOW = 12;
+                const MAX_PENDING_TO_SHOW = 5;
                 let pendingHtml = '';
 
                 if (pendingAgents.length > 0) {
@@ -115,23 +115,34 @@ async function renderHomePage() {
                         const needsAudit = !task.audited;
                         const needsCompetition = !task.competition_sent;
                         return `
-                            <a href="#tasks?highlight=${agent.id}" class="pending-agent-card">
-                                ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
-                                <span>${agent.name}</span>
-                                <div class="pending-status-icons">
-                                    ${needsAudit ? '<i class="fas fa-clipboard-check" title="التدقيق مطلوب"></i>' : ''}
-                                    ${needsCompetition ? '<i class="fas fa-trophy" title="إرسال المسابقة مطلوب"></i>' : ''}
+                            <div class="pending-agent-card-v2">
+                                <div class="pending-agent-info">
+                                    ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
+                                    <a href="#profile/${agent.id}" class="agent-name-link">${agent.name}</a>
                                 </div>
-                            </a>`;
+                                <div class="pending-agent-actions">
+                                    ${needsCompetition ? `<button class="btn-secondary btn-small create-comp-btn" data-agent-id="${agent.id}" title="إنشاء مسابقة"><i class="fas fa-magic"></i></button>` : ''}
+                                    <a href="#tasks?highlight=${agent.id}" class="btn-secondary btn-small" title="الذهاب للمهمة"><i class="fas fa-tasks"></i></a>
+                                </div>
+                            </div>
+                        `;
                     }).join('');
 
                     if (pendingAgents.length > MAX_PENDING_TO_SHOW) {
-                        pendingHtml += `<a href="#tasks" class="pending-agent-card show-all-btn"><i class="fas fa-arrow-left"></i> عرض كل المهام</a>`;
+                        pendingHtml += `<div class="view-all-container"><a href="#tasks" class="btn-secondary btn-small"><i class="fas fa-arrow-left"></i> عرض كل المهام (${pendingAgents.length})</a></div>`;
                     }
                 } else {
                     pendingHtml = '<p class="no-pending-tasks">لا توجد مهام متبقية لهذا اليوم. عمل رائع!</p>';
                 }
                 pendingList.innerHTML = pendingHtml;
+
+                // Add event listeners for the new create competition buttons
+                pendingList.querySelectorAll('.create-comp-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const agentId = e.currentTarget.dataset.agentId;
+                        window.location.hash = `competitions/new?agentId=${agentId}`;
+                    });
+                });
             }
         }
 

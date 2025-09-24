@@ -114,71 +114,130 @@
 
 .pending-tasks-list {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-direction: column;
+    gap: 15px;
 }
 
-.pending-agent-card {
-    display: inline-flex;
+.pending-agent-card-v2 {
+    display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: space-between;
     background-color: var(--bg-color);
     padding: 8px 12px;
-    border-radius: 20px;
+    border-radius: 8px;
     border: 1px solid var(--border-color);
     text-decoration: none;
     color: var(--text-color);
     transition: all 0.2s;
 }
 
-.pending-status-icons {
-    display: flex;
-    gap: 8px;
-    margin-right: auto; /* Push icons to the left */
-    padding-right: 10px;
-    color: var(--text-secondary-color);
-}
-
-.pending-status-icons .fa-clipboard-check {
-    color: #e67e22; /* Orange */
-}
-.pending-status-icons .fa-trophy {
-    color: #3498db; /* Blue */
-}
-
-.pending-agent-card:hover {
-    background-color: var(--primary-color);
-    color: white;
+.pending-agent-card-v2:hover {
     border-color: var(--primary-color);
-    transform: translateY(-2px);
+    background-color: var(--card-bg-color);
 }
 
-.pending-agent-card.show-all-btn {
-    background-color: var(--primary-color);
-    color: white;
-    font-weight: bold;
+.pending-agent-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
-.pending-agent-card img, .pending-agent-card .avatar-placeholder {
-    width: 25px;
-    height: 25px;
+.pending-agent-info img, .pending-agent-info .avatar-placeholder {
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     object-fit: cover;
 }
 
-.pending-agent-card .avatar-placeholder {
+.pending-agent-info .avatar-placeholder {
     background-color: var(--border-color);
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 0.9em;
+}
+
+.pending-agent-info .agent-name-link {
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--text-color);
+}
+
+.pending-agent-info .agent-name-link:hover {
+    color: var(--primary-color);
+}
+
+.pending-agent-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.pending-agent-actions .btn-small {
+    padding: 5px 10px;
     font-size: 0.8em;
 }
 
 .no-pending-tasks {
     color: var(--text-secondary-color);
     font-style: italic;
+    text-align: center;
+    padding: 20px;
 }
 
+/* Recent Activity List */
+.recent-activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.activity-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.activity-icon {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+}
+
+.activity-description {
+    margin: 0;
+    font-size: 0.95em;
+}
+
+.activity-description strong {
+    color: var(--primary-color);
+}
+
+.activity-timestamp {
+    margin: 0;
+    font-size: 0.8em;
+    color: var(--text-secondary-color);
+}
+
+.activity-description .agent-name-link {
+    font-weight: bold;
+}
+
+.view-all-container {
+    text-align: center;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.view-all-container .btn-small {
+    width: 100%;
+    justify-content: center;
+}
 /* Responsive adjustments for home grid */
 @media (max-width: 900px) {
     .home-grid {

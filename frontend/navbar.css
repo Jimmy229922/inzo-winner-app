@@ -52,7 +52,7 @@
 /* Search Container */
 .search-container {
     position: relative;
-    width: 100%;
+    width: 80%; /* تصغير عرض شريط البحث */
     max-width: 400px;
 }
 

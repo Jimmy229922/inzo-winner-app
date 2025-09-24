@@ -701,8 +701,13 @@
     margin-top: 20px;
 }
 
+.agent-info-v3 .action-info-card.invalid p {
+    color: #e74c3c;
+    animation: pulse-red 0.5s;
+}
+
 .validation-messages {
-    margin-top: 20px;
+    margin-top: 15px; /* Adjusted margin for new position */
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -722,6 +727,11 @@
     gap: 10px;
 }
 
+@keyframes pulse-red {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
 .preview-v3 #competition-form {
     display: flex;
     flex-direction: column;
@@ -740,6 +750,16 @@
     font-size: 1.1em;
     color: var(--text-secondary-color);
     margin: -10px 0 30px 0;
+}
+
+.agent-name-link-subtitle {
+    text-decoration: none;
+    color: var(--text-color);
+    transition: color 0.2s;
+}
+
+.agent-name-link-subtitle:hover {
+    color: var(--primary-color);
 }
 
 .btn-send-telegram {
@@ -812,8 +832,7 @@
 .dropdown-menu {
     display: none;
     position: absolute;
-    top: 100%;
-    right: 0; /* Align to the right for RTL */
+    left: 0; /* Position the dropdown to the left edge of the button */
     background-color: var(--card-bg-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
