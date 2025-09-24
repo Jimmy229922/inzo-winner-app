@@ -33,7 +33,7 @@ echo.
 
 REM Run the Node.js setup script to create the .env file automatically
 echo [2/2] Creating configuration file...
-node setup.js
+node backend/setup.js
 if %errorlevel% neq 0 (
     echo [ERROR] The configuration script failed to run.
     cd ..

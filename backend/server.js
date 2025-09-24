@@ -14,9 +14,9 @@ const port = 3000;
 app.use(cors()); // للسماح للـ Frontend بالتواصل مع الـ Backend
 app.use(express.json()); // لتحليل البيانات القادمة بصيغة JSON
 
-// استخراج بيانات التيليجرام من ملف .env
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+// --- متغيرات سيتم تحميلها من قاعدة البيانات ---
+let TELEGRAM_BOT_TOKEN = null;
+let TELEGRAM_CHAT_ID = null;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
@@ -30,6 +30,30 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY && process.env.
     console.log('[INFO] Supabase admin client initialized.');
 } else {
     console.warn('[WARN] Supabase admin client not initialized. SUPABASE_SERVICE_KEY is missing or is a placeholder. Scheduled tasks will fail. Please run setup.bat again.');
+}
+
+// --- تحميل الإعدادات الآمنة من قاعدة البيانات عند بدء التشغيل ---
+async function loadSecureConfig() {
+    if (!supabaseAdmin) {
+        console.error('[CRITICAL] Cannot load secure config because Supabase admin client is not available.');
+        return;
+    }
+    console.log('[INFO] Loading secure configuration from database...');
+    const { data, error } = await supabaseAdmin.from('app_config').select('key, value');
+
+    if (error) {
+        console.error('[CRITICAL] Failed to fetch secure configuration from database:', error.message);
+        return;
+    }
+
+    const config = data.reduce((acc, item) => {
+        acc[item.key] = item.value;
+        return acc;
+    }, {});
+
+    TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
+    TELEGRAM_CHAT_ID = config.TELEGRAM_CHAT_ID;
+    console.log('[INFO] Secure configuration loaded successfully.');
 }
 
 // --- Main API Router ---
@@ -250,5 +274,7 @@ cron.schedule('0 * * * *', async () => {
 
 // تشغيل السيرفر
 app.listen(port, () => {
+    // قم بتحميل الإعدادات الآمنة أولاً
+    loadSecureConfig();
     console.log(`Backend server is running at http://localhost:${port}`);
 });
