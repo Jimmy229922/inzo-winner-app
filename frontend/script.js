@@ -123,6 +123,31 @@ async function initializeSupabase() {
         // NEW: Setup routing
         window.addEventListener('hashchange', handleRouting);
         handleRouting(); // Initial route handling on page load
+
+        // NEW: Listen for realtime notifications
+        supabase.channel('public:realtime_notifications')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'realtime_notifications' }, payload => {
+                console.log('Realtime notification received:', payload.new);
+                const { message, type, notification_type, agent_id } = payload.new;
+                
+                // Show the toast notification
+                if (message) {
+                    showToast(message, type || 'info');
+                }
+
+                // If it's a balance renewal and we are on the correct profile page, refresh the page content.
+                if (notification_type === 'BALANCE_RENEWAL' && agent_id) {
+                    const currentHash = window.location.hash;
+                    if (currentHash === `#profile/${agent_id}` || currentHash.startsWith(`#profile/${agent_id}/`)) { //This check is important to avoid re-rendering wrong profiles
+                        console.log(`Refreshing profile for agent ${agent_id} due to balance renewal.`);
+                        renderAgentProfilePage(agent_id); // Re-render the profile page
+                    }
+                }
+            })
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') console.log('Subscribed to realtime notifications channel.');
+                else console.warn('Failed to subscribe to realtime notifications:', status);
+            });
     } catch (error) {
         console.error('Failed to initialize Supabase:', error);
         updateStatus('error', 'فشل الاتصال بالخادم');

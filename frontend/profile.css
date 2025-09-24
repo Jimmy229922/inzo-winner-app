@@ -1,4 +1,27 @@
 /* Agent Profile Page Styles */
+.profile-page-top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.countdown-timer {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 15px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+}
+
+.countdown-timer i {
+    color: var(--primary-color);
+}
+
 .profile-header {
     display: none; /* Hide old header, we use v2 */
 }

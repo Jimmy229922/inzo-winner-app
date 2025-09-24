@@ -453,9 +453,9 @@ async function renderCompetitionCreatePage(agentId) {
     }
 
     const agentClassification = agent.classification || 'R'; // Default to R if not set
-    const { data: templates, error: templatesError } = await supabase
-        .from('competition_templates')
-        .select('*');
+    const { data: templates, error: templatesError } = await supabase.rpc('get_available_templates_for_agent', {
+        p_classification: agentClassification
+    });
 
     if (templatesError) {
         appContent.innerHTML = `<p class="error">حدث خطأ أثناء جلب قوالب المسابقات.</p>`;
@@ -508,7 +508,12 @@ async function renderCompetitionCreatePage(agentId) {
                     </div>
                     <div class="form-group">
                         <label for="override-duration">مدة المسابقة</label>
-                        <input type="text" id="override-duration" value="${agent.competition_duration || 'غير محدد'}">
+                        <select id="override-duration">
+                            <option value="" disabled selected>-- اختر مدة --</option>
+                            <option value="1d" ${agent.competition_duration === '1d' ? 'selected' : ''}>يوم</option>
+                            <option value="2d" ${agent.competition_duration === '2d' ? 'selected' : ''}>يومين</option>
+                            <option value="1w" ${agent.competition_duration === '1w' ? 'selected' : ''}>أسبوع</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -589,14 +594,11 @@ async function renderCompetitionCreatePage(agentId) {
         
         // Create a formatted prize string
         let prizeDetailsText = '';
-        if (tradingWinners === 1) {
-            prizeDetailsText = `${prize}$ لفائز واحد فقط.`;
-        } else if (tradingWinners === 2) {
-            prizeDetailsText = `${prize}$ لفائزين اثنين فقط.`;
-        } else if (tradingWinners >= 3 && tradingWinners <= 10) {
-            const numberInArabic = numberToArPlural(tradingWinners);
-            prizeDetailsText = `${prize}$ لـ ${numberInArabic} فائزين فقط.`;
-        } else if (tradingWinners > 10) {
+        if (tradingWinners === 1) prizeDetailsText = `${prize}$ لفائز واحد فقط.`;
+        else if (tradingWinners === 2) prizeDetailsText = `${prize}$ لفائزين اثنين فقط.`;
+        else if (tradingWinners >= 3 && tradingWinners <= 10) prizeDetailsText = `${prize}$ لـ ${numberToArPlural(tradingWinners)} فائزين فقط.`;
+        else if (tradingWinners > 10) prizeDetailsText = `${prize}$ لـ ${tradingWinners} فائزاً فقط.`;
+        else if (tradingWinners > 0) { // Fallback for any other positive number
             prizeDetailsText = `${prize}$ لـ ${tradingWinners} فائزاً فقط.`;
         }
 
@@ -604,18 +606,16 @@ async function renderCompetitionCreatePage(agentId) {
         let depositBonusPrizeText = '';
         if (depositWinners > 0 && depositBonusPerc > 0) {
             if (depositWinners === 1) {
-                depositBonusPrizeText = `${depositBonusPerc}% لفائز واحد.`;
-            } else if (depositWinners === 2) {
-                depositBonusPrizeText = `${depositBonusPerc}% لفائزين اثنين.`;
-            } else if (depositWinners >= 3 && depositWinners <= 10) {
-                depositBonusPrizeText = `${depositBonusPerc}% لـ ${numberToArPlural(depositWinners)} فائزين.`;
-            } else if (depositWinners > 10) {
+                depositBonusPrizeText = `${depositBonusPerc}% لفائز واحد.`; // Changed to match tradingWinners logic
+            } else if (depositWinners === 2) depositBonusPrizeText = `${depositBonusPerc}% لفائزين اثنين.`;
+            else if (depositWinners >= 3 && depositWinners <= 10) depositBonusPrizeText = `${depositBonusPerc}% لـ ${numberToArPlural(depositWinners)} فائزين.`;
+            else if (depositWinners > 10) {
                 depositBonusPrizeText = `${depositBonusPerc}% لـ ${depositWinners} فائزاً.`;
             }
         }
 
         let content = originalTemplateContent;
-        content = content.replace(/{{agent_name}}/g, agent.name || '');
+        content = content.replace(/{{agent_name}}/g, agent.name || 'الوكيل');
         
         if (prizeDetailsText) {
             content = content.replace(/{{prize_details}}/g, prizeDetailsText);
@@ -629,11 +629,19 @@ async function renderCompetitionCreatePage(agentId) {
             content = content.replace(/^.*{{deposit_bonus_prize_details}}.*\n?/gm, '');
         }
 
-        if (duration && duration.trim() !== '' && duration.trim() !== 'غير محدد') {
-            content = content.replace(/{{competition_duration}}/g, duration);
-        } else {
-            content = content.replace(/^.*{{competition_duration}}.*\n?/gm, '');
+        // NEW: Map duration codes to Arabic text for display
+        let displayDuration = '';
+        switch (duration) {
+            case '1d': displayDuration = 'يوم'; break;
+            case '2d': displayDuration = 'يومين'; break;
+            case '1w': displayDuration = 'أسبوع'; break;
+            default: displayDuration = 'غير محدد'; break; // Should not happen with new select options
         }
+
+        // Replace duration placeholder with the selected display text
+        if (displayDuration && displayDuration !== 'غير محدد') content = content.replace(/{{competition_duration}}/g, displayDuration);
+        else content = content.replace(/^.*{{competition_duration}}.*\n?/gm, '');
+        
 
         content = content.replace(/{{question}}/g, selectedTemplateQuestion || '');
         content = content.replace(/{{remaining_deposit_bonus}}/g, agent.remaining_deposit_bonus || 0);
@@ -645,7 +653,7 @@ async function renderCompetitionCreatePage(agentId) {
     }
 
     [templateSelect, tradingWinnersInput, prizeInput, depositWinnersInput, durationInput].forEach(input => {
-        input.addEventListener('change', updateDescriptionAndPreview);
+        input.addEventListener('change', updateDescriptionAndPreview); // Use 'change' for all inputs for consistency
     });
 
     document.getElementById('cancel-competition-form').addEventListener('click', () => {
@@ -714,10 +722,36 @@ async function renderCompetitionCreatePage(agentId) {
             const newRemaining = (agent.competition_bonus || 0) - newConsumed;
             const newUsedDepositBonus = (agent.used_deposit_bonus || 0) + depositWinnersCount;
             const newRemainingDepositBonus = (agent.deposit_bonus_count || 0) - newUsedDepositBonus;
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+
+            // Automatically calculate the new winner selection date
+            const selectedDuration = durationInput.value;
+            let newWinnerSelectionDate = null;
+            if (selectedDuration && today) {
+                const newDate = new Date(today);
+                switch (selectedDuration) { // Updated to match new options
+                    case '1d': newDate.setDate(newDate.getDate() + 1); break;
+                    case '2d': newDate.setDate(newDate.getDate() + 2); break;
+                    case '1w': newDate.setDate(newDate.getDate() + 7); break;
+                    // Removed 2w and 1m as they are no longer options
+                    default:
+                        // No change or handle as error
+                        break;
+                }
+                newWinnerSelectionDate = newDate.toISOString().split('T')[0];
+            }
 
             const { error: agentError } = await supabase
                 .from('agents')
-                .update({ consumed_balance: newConsumed, remaining_balance: newRemaining, used_deposit_bonus: newUsedDepositBonus, remaining_deposit_bonus: newRemainingDepositBonus })
+                .update({
+                    consumed_balance: newConsumed,
+                    remaining_balance: newRemaining,
+                    used_deposit_bonus: newUsedDepositBonus,
+                    remaining_deposit_bonus: newRemainingDepositBonus,
+                    last_competition_date: todayStr,
+                    winner_selection_date: newWinnerSelectionDate
+                })
                 .eq('id', agent.id);
             
             if (agentError) throw new Error(`فشل تحديث رصيد الوكيل: ${agentError.message}`);
