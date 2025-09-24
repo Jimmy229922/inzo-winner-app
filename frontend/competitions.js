@@ -439,30 +439,8 @@ async function refreshCompetitionsList(forceRefetch = false) {
 async function renderCompetitionCreatePage(agentId) {
     const appContent = document.getElementById('app-content');
 
-    if (!agentId) {
-        // This part remains the same, for selecting an agent first.
-        const { data: agents, error } = await supabase.from('agents').select('id, name, agent_id, classification, avatar_url').order('name');
-        if (error) {
-            appContent.innerHTML = `<p class="error">حدث خطأ أثناء جلب الوكلاء.</p>`;
-            return;
-        }
-        appContent.innerHTML = `
-            <div class="page-header"><h1>إنشاء مسابقة جديدة</h1></div>
-            <h2>الخطوة 1: اختر وكيلاً</h2>
-            <p>يجب ربط كل مسابقة بوكيل. اختر وكيلاً من القائمة أدناه للمتابعة.</p>
-            <div class="agent-selection-list">
-                ${agents.map(a => `
-                    <a href="#competitions/new?agentId=${a.id}" class="agent-selection-card">
-                        ${a.avatar_url ? `<img src="${a.avatar_url}" alt="Avatar" loading="lazy" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">` : `<div class="avatar-placeholder" style="width: 40px; height: 40px; font-size: 20px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-user"></i></div>`}
-                        <div class="agent-info">
-                            <h3>${a.name}</h3>
-                            <p>#${a.agent_id} | ${a.classification}</p>
-                        </div>
-                        <i class="fas fa-chevron-left"></i>
-                    </a>
-                `).join('')}
-            </div>
-        `;
+    if (!agentId) { // If no agent is selected, do not render the form.
+        appContent.innerHTML = `<p class="error">تم إلغاء هذه الصفحة. لا يمكن إنشاء مسابقة بدون تحديد وكيل أولاً.</p>`;
         return;
     }
 
@@ -797,6 +775,7 @@ async function renderCompetitionEditForm(compId) {
 
 async function renderCompetitionTemplatesPage() {
     const appContent = document.getElementById('app-content');
+    document.querySelector('main').classList.add('full-width');
 
     const defaultTemplateContent = `مسابقة جديدة من شركة إنزو للتداول 🏆
 
@@ -827,53 +806,42 @@ async function renderCompetitionTemplatesPage() {
 
     appContent.innerHTML = `
         <div class="page-header">
-            <h1><i class="fas fa-file-alt"></i> إدارة قوالب المسابقات</h1>
+            <div class="header-top-row">
+                <h1><i class="fas fa-file-alt"></i> إدارة قوالب المسابقات</h1>
+                <button id="show-template-form-btn" class="btn-primary"><i class="fas fa-plus-circle"></i> إنشاء قالب جديد</button>
+            </div>
+            <div class="template-filters">
+                <div class="filter-search-container">
+                    <input type="search" id="template-search-input" placeholder="بحث باسم القالب..." autocomplete="off">
+                    <i class="fas fa-search"></i>
+                    <i class="fas fa-times-circle search-clear-btn" id="template-search-clear"></i>
+                </div>
+                <div class="filter-buttons" data-filter-group="classification">
+                    <button class="filter-btn active" data-filter="all">الكل</button>
+                    <button class="filter-btn" data-filter="R">R</button>
+                    <button class="filter-btn" data-filter="A">A</button>
+                    <button class="filter-btn" data-filter="B">B</button>
+                    <button class="filter-btn" data-filter="C">C</button>
+                    <button class="filter-btn" data-filter="All">عام</button>
+                </div>
+            </div>
         </div>
-        <div class="templates-layout">
-            <div class="template-form-container card-style-container">
-                <h2><i class="fas fa-plus-circle"></i> إنشاء قالب جديد</h2>
-                <form id="template-form" class="form-layout">
-                    <div class="form-group">
-                        <label for="template-question">السؤال (سيكون اسم المسابقة)</label>
-                        <input type="text" id="template-question" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="template-classification">التصنيف (لمن سيظهر هذا القالب)</label>
-                        <select id="template-classification" required>
-                            <option value="All" selected>الكل (يظهر لجميع التصنيفات)</option>
-                            <option value="R">R</option>
-                            <option value="A">A</option>
-                            <option value="B">B</option>
-                            <option value="C">C</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="template-content">محتوى المسابقة (الوصف)</label>
-                        <textarea id="template-content" rows="15" required>${defaultTemplateContent}</textarea>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn-primary"><i class="fas fa-save"></i> حفظ القالب</button>
-                        <button type="button" id="cancel-template-form" class="btn-secondary">إلغاء</button>
-                    </div>
-                </form>
-            </div>
-            <div class="templates-list-container">
-                <h2><i class="fas fa-archive"></i> القوالب المحفوظة</h2>
-                <div id="templates-list" class="templates-grid"></div>
-            </div>
+        <div class="templates-list-container">
+            <div id="templates-list" class="templates-list-grouped"></div>
         </div>
     `;
 
     const templatesListDiv = document.getElementById('templates-list');
-    const form = document.getElementById('template-form');
-    const questionInput = document.getElementById('template-question');
-    const contentInput = document.getElementById('template-content');
+    const showFormBtn = document.getElementById('show-template-form-btn');
+
+    showFormBtn.addEventListener('click', () => {
+        renderCreateTemplateModal(defaultTemplateContent, loadTemplates);
+    });
 
     async function loadTemplates() {
         const { data: templates, error } = await supabase
             .from('competition_templates')
-            .select('*')
-            .order('created_at', { ascending: false });
+            .select('*');
 
         if (error) {
             console.error('Error fetching templates:', error);
@@ -881,55 +849,63 @@ async function renderCompetitionTemplatesPage() {
             return;
         }
 
+        // Sort templates by classification R, A, B, C, then All
+        const classificationOrder = { 'R': 1, 'A': 2, 'B': 3, 'C': 4, 'All': 5 };
+        templates.sort((a, b) => {
+            const orderA = classificationOrder[a.classification] || 99;
+            const orderB = classificationOrder[b.classification] || 99;
+            if (orderA !== orderB) {
+                return orderA - orderB;
+            }
+            // Secondary sort by question name alphabetically
+            return a.question.localeCompare(b.question);
+        });
+
         if (templates.length === 0) {
             templatesListDiv.innerHTML = '<p class="no-results-message">لا توجد قوالب محفوظة بعد.</p>';
         } else {
-            templatesListDiv.innerHTML = templates.map(template => `
-                <div class="template-card" data-id="${template.id}">
-                    <div class="template-card-header">
-                        <h4>${template.question}</h4>
-                        <span class="classification-badge classification-${(template.classification || 'all').toLowerCase()}">${template.classification || 'الكل'}</span>
-                    </div>
-                    <div class="template-card-body">
-                        <p>${template.content.substring(0, 120)}...</p>
-                    </div>
-                    <div class="template-card-footer">
-                        <button class="btn-secondary edit-template-btn" data-id="${template.id}"><i class="fas fa-edit"></i> تعديل</button>
-                        <button class="btn-danger delete-template-btn" data-id="${template.id}"><i class="fas fa-trash-alt"></i> حذف</button>
-                    </div>
-                </div>
-            `).join('');
+            const groupedTemplates = templates.reduce((acc, template) => {
+                const key = template.classification || 'All';
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(template);
+                return acc;
+            }, {});
+
+            const classificationOrder = ['R', 'A', 'B', 'C', 'All'];
+            let groupsHtml = '';
+
+            for (const classification of classificationOrder) {
+                if (groupedTemplates[classification]) {
+                    const group = groupedTemplates[classification];
+                    groupsHtml += `
+                        <details class="template-group" data-classification-group="${classification}" open>
+                            <summary class="template-group-header">
+                                <h2>تصنيف ${classification === 'All' ? 'عام' : classification}</h2>
+                                <span class="template-count">${group.length} قوالب</span>
+                            </summary>
+                            <div class="template-group-content">
+                                ${group.map(template => `
+                                    <div class="template-card" data-id="${template.id}" data-question="${template.question.toLowerCase()}" data-classification="${template.classification || 'All'}">
+                                        <div class="template-card-header">
+                                            <h4>${template.question}</h4>
+                                        </div>
+                                        <div class="template-card-body">
+                                            <p>${template.content.substring(0, 120)}...</p>
+                                        </div>
+                                        <div class="template-card-footer">
+                                            <button class="btn-secondary edit-template-btn" data-id="${template.id}"><i class="fas fa-edit"></i> تعديل</button>
+                                            <button class="btn-danger delete-template-btn" data-id="${template.id}"><i class="fas fa-trash-alt"></i> حذف</button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </details>
+                    `;
+                }
+            }
+            templatesListDiv.innerHTML = groupsHtml;
         }
     }
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = {
-            question: questionInput.value.trim(),
-            content: contentInput.value.trim(),
-            classification: document.getElementById('template-classification').value,
-        };
-
-        if (!formData.question || !formData.content) {
-            showToast('يرجى ملء حقلي السؤال والمحتوى.', 'error');
-            return;
-        }
-
-        const { error } = await supabase.from('competition_templates').insert(formData);
-
-        if (error) {
-            showToast('فشل حفظ القالب.', 'error');
-            console.error('Template insert error:', error);
-        } else {
-            showToast('تم حفظ القالب بنجاح.', 'success');
-            form.reset();
-            await loadTemplates();
-        }
-    });
-
-    document.getElementById('cancel-template-form').addEventListener('click', () => {
-        form.reset();
-    });
 
     templatesListDiv.addEventListener('click', async (e) => {
         const editBtn = e.target.closest('.edit-template-btn');
@@ -969,6 +945,137 @@ async function renderCompetitionTemplatesPage() {
     });
 
     await loadTemplates();
+    setupTemplateFilters();
+}
+
+function renderCreateTemplateModal(defaultContent, onSaveCallback) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    
+    const modal = document.createElement('div');
+    modal.className = 'form-modal-content modal-wide'; // Use existing style from components.css
+    
+    modal.innerHTML = `
+        <div class="form-modal-header">
+            <h2><i class="fas fa-plus-circle"></i> إنشاء قالب مسابقة جديد</h2>
+            <button id="close-modal-btn" class="btn-secondary" style="min-width: 40px; padding: 5px 10px;">&times;</button>
+        </div>
+        <div class="form-modal-body">
+            <form id="create-template-form" class="form-layout">
+                <div class="form-group">
+                    <label for="create-template-question">السؤال (سيكون اسم المسابقة)</label>
+                    <input type="text" id="create-template-question" required>
+                </div>
+                <div class="form-group">
+                    <label for="create-template-classification">التصنيف (لمن سيظهر هذا القالب)</label>
+                    <select id="create-template-classification" required>
+                        <option value="All" selected>الكل (يظهر لجميع التصنيفات)</option>
+                        <option value="R">R</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="create-template-content">محتوى المسابقة (الوصف)</label>
+                    <textarea id="create-template-content" rows="10" required>${defaultContent}</textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary"><i class="fas fa-save"></i> حفظ القالب</button>
+                    <button type="button" id="cancel-create-modal" class="btn-secondary">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const closeModal = () => overlay.remove();
+
+    document.getElementById('close-modal-btn').addEventListener('click', closeModal);
+    document.getElementById('cancel-create-modal').addEventListener('click', closeModal);
+    
+    document.getElementById('create-template-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = {
+            question: document.getElementById('create-template-question').value.trim(),
+            classification: document.getElementById('create-template-classification').value,
+            content: document.getElementById('create-template-content').value.trim(),
+        };
+
+        const { error } = await supabase.from('competition_templates').insert(formData);
+        if (error) {
+            showToast('فشل حفظ القالب.', 'error');
+        } else {
+            showToast('تم حفظ القالب بنجاح.', 'success');
+            closeModal();
+            if (onSaveCallback) onSaveCallback();
+        }
+    });
+}
+
+function setupTemplateFilters() {
+    const searchInput = document.getElementById('template-search-input');
+    const clearBtn = document.getElementById('template-search-clear');
+    const filterButtons = document.querySelectorAll('.template-filters .filter-btn');
+
+    if (!searchInput) return;
+
+    const applyFilters = () => {
+        if (clearBtn) {
+            clearBtn.style.display = searchInput.value ? 'block' : 'none';
+        }
+
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        const activeFilter = document.querySelector('.template-filters .filter-btn.active').dataset.filter;
+
+        const allGroups = document.querySelectorAll('.template-group');
+        let hasResults = false;
+
+        allGroups.forEach(group => {
+            const cards = group.querySelectorAll('.template-card');
+            let visibleCardsInGroup = 0;
+
+            cards.forEach(card => {
+                const question = card.dataset.question;
+                const classification = card.dataset.classification;
+
+                const matchesSearch = searchTerm === '' || question.includes(searchTerm);
+                const matchesFilter = activeFilter === 'all' || classification === activeFilter;
+
+                const isVisible = matchesSearch && matchesFilter;
+                card.style.display = isVisible ? '' : 'none';
+                if (isVisible) {
+                    visibleCardsInGroup++;
+                }
+            });
+
+            // Hide the entire group if no cards are visible
+            group.style.display = visibleCardsInGroup > 0 ? '' : 'none';
+            if (visibleCardsInGroup > 0) {
+                hasResults = true;
+            }
+        });
+    };
+
+    searchInput.addEventListener('input', applyFilters);
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            applyFilters();
+            searchInput.focus();
+        });
+    }
+
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            applyFilters();
+        });
+    });
 }
 
 function renderEditTemplateModal(template, onSaveCallback) {

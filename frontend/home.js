@@ -11,23 +11,23 @@ async function renderHomePage() {
                     <span id="progress-label" class="progress-label">0 / 0</span>
                 </div>
 
-                <h2 style="margin-top: 30px;">المهام المتبقية لليوم (<span id="pending-count">0</span>)</h2>
-                <div id="pending-tasks-list" class="pending-tasks-list">
-                    <p class="no-pending-tasks">جاري تحميل المهام...</p>
+                <h2 style="margin-top: 30px;">المسابقات المرسلة خلال اليوم</h2>
+                <div class="chart-container">
+                    <canvas id="competitions-chart"></canvas>
                 </div>
             </div>
             <div class="home-side-column">
-                <h2>المسابقات المرسلة اليوم</h2>
-                <div class="chart-container">
-                    <canvas id="competitions-chart"></canvas>
+                <h2 style="margin-top: 30px;">المهام المتبقية لليوم (<span id="pending-count">0</span>)</h2>
+                <div id="pending-tasks-list" class="pending-tasks-list">
+                    <p class="no-pending-tasks">جاري تحميل المهام...</p>
                 </div>
             </div>
         </div>
 
         <h2 style="margin-top: 40px;">إجراءات سريعة</h2>
         <div class="quick-actions">
-            <button id="quick-add-agent" class="btn-primary"><i class="fas fa-user-plus"></i> إضافة وكيل جديد</button>
-            <button id="quick-create-comp" class="btn-primary"><i class="fas fa-plus-circle"></i> إنشاء مسابقة جديدة</button>
+            <a href="#add-agent?returnTo=home" class="quick-action-card"><h3><i class="fas fa-user-plus"></i> إضافة وكيل جديد</h3><p>إضافة وكيل جديد إلى النظام وتعيين بياناته.</p></a>            
+            <a href="#competition-templates" class="quick-action-card"><h3><i class="fas fa-file-alt"></i> إنشاء قالب مسابقة</h3><p>إضافة أو تعديل قوالب المسابقات الجاهزة.</p></a>
         </div>
     `;
 
@@ -90,11 +90,12 @@ async function renderHomePage() {
 
                 const completedToday = agentsForToday.filter(agent => {
                     const task = tasksMap[agent.id];
-                    return task && task.audited && task.competition_sent;
+                    return task && task.audited; // Progress is based on audit only
                 }).length;
 
                 const pendingAgents = agentsForToday.filter(agent => {
                     const task = tasksMap[agent.id];
+                    // Show agents who are missing either task
                     return !task || !task.audited || !task.competition_sent;
                 });
 
@@ -103,27 +104,40 @@ async function renderHomePage() {
                 document.getElementById('tasks-progress-bar').style.width = `${progressPercent}%`;
                 document.getElementById('progress-label').textContent = `${completedToday} / ${totalTodayTasks}`;
                 document.getElementById('pending-count').textContent = pendingAgents.length;
+                
                 const pendingList = document.getElementById('pending-tasks-list');
-                pendingList.innerHTML = pendingAgents.length > 0 ? pendingAgents.map(agent => `
-                    <a href="#tasks?highlight=${agent.id}" class="pending-agent-card">
-                        ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
-                        <span>${agent.name}</span>
-                    </a>
-                `).join('') : '<p class="no-pending-tasks">لا توجد مهام متبقية لهذا اليوم. عمل رائع!</p>';
+                const MAX_PENDING_TO_SHOW = 12;
+                let pendingHtml = '';
+
+                if (pendingAgents.length > 0) {
+                    pendingHtml = pendingAgents.slice(0, MAX_PENDING_TO_SHOW).map(agent => {
+                        const task = tasksMap[agent.id] || {};
+                        const needsAudit = !task.audited;
+                        const needsCompetition = !task.competition_sent;
+                        return `
+                            <a href="#tasks?highlight=${agent.id}" class="pending-agent-card">
+                                ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
+                                <span>${agent.name}</span>
+                                <div class="pending-status-icons">
+                                    ${needsAudit ? '<i class="fas fa-clipboard-check" title="التدقيق مطلوب"></i>' : ''}
+                                    ${needsCompetition ? '<i class="fas fa-trophy" title="إرسال المسابقة مطلوب"></i>' : ''}
+                                </div>
+                            </a>`;
+                    }).join('');
+
+                    if (pendingAgents.length > MAX_PENDING_TO_SHOW) {
+                        pendingHtml += `<a href="#tasks" class="pending-agent-card show-all-btn"><i class="fas fa-arrow-left"></i> عرض كل المهام</a>`;
+                    }
+                } else {
+                    pendingHtml = '<p class="no-pending-tasks">لا توجد مهام متبقية لهذا اليوم. عمل رائع!</p>';
+                }
+                pendingList.innerHTML = pendingHtml;
             }
         }
 
         // Render Chart
         renderCompetitionsChart(competitionsToday || []);
     }
-
-    document.getElementById('quick-add-agent').addEventListener('click', () => {
-        setActiveNav(null);
-        window.location.hash = 'add-agent?returnTo=home';
-    });
-    document.getElementById('quick-create-comp').addEventListener('click', () => {
-        window.location.hash = 'competitions/new';
-    });
 }
 
 function renderCompetitionsChart(competitions) {
@@ -144,25 +158,45 @@ function renderCompetitionsChart(competitions) {
     });
 
     new Chart(ctx, {
-        type: 'bar',
+        type: 'line',
         data: {
             labels: chartLabels,
             datasets: [{
                 label: 'عدد المسابقات',
                 data: hourlyData,
-                backgroundColor: 'rgba(138, 43, 226, 0.6)', // var(--primary-color) with opacity
-                borderColor: 'rgba(138, 43, 226, 1)',
-                borderWidth: 1,
-                borderRadius: 4,
+                fill: true,
+                backgroundColor: (context) => {
+                    const chart = context.chart;
+                    const {ctx, chartArea} = chart;
+                    if (!chartArea) return null;
+                    const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+                    gradient.addColorStop(0, 'rgba(138, 43, 226, 0)');
+                    gradient.addColorStop(1, 'rgba(138, 43, 226, 0.4)');
+                    return gradient;
+                },
+                borderColor: 'rgba(138, 43, 226, 1)', // var(--primary-color)
+                borderWidth: 2,
+                pointBackgroundColor: 'rgba(138, 43, 226, 1)',
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                tension: 0.4 // Makes the line smooth
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
+                x: {
+                    grid: {
+                        display: false // Hide vertical grid lines
+                    }
+                },
                 y: {
                     beginAtZero: true,
-                    ticks: { stepSize: 1 } // Ensure y-axis shows whole numbers
+                    ticks: { stepSize: 1 }, // Ensure y-axis shows whole numbers
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)' // Lighter grid lines for dark mode
+                    }
                 }
             },
             plugins: { legend: { display: false } }

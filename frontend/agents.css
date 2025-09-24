@@ -242,7 +242,7 @@
 }
 
 .task-card.complete {
-    background-color: color-mix(in srgb, #27ae60 8%, var(--card-bg-color));
+    background-color: color-mix(in srgb, #27ae60 15%, var(--card-bg-color)); /* تعديل: زيادة وضوح اللون */
     border-color: #27ae60;
 }
 .task-card.complete:after {
@@ -352,6 +352,13 @@
 }
 .action-item.done label {
     color: var(--primary-color);
+}
+
+.task-complete-icon {
+    color: #27ae60; /* Green */
+    font-size: 0.8em;
+    margin-right: 5px;
+    vertical-align: middle;
 }
 
 .task-agent-id {

@@ -183,6 +183,11 @@
     border-color: var(--primary-color);
 }
 
+.calendar-agent-item.complete {
+    background-color: color-mix(in srgb, #27ae60 15%, var(--card-bg-color)); /* إضافة: لون للمهام المكتملة */
+    border-color: #27ae60;
+}
+
 .calendar-agent-main {
     display: flex;
     align-items: center;
@@ -292,4 +297,11 @@ body.dark-mode .calendar-agent-item mark {
 
 .calendar-agent-actions .toggle-switch input:checked + .slider:before {
     transform: translateX(16px);
+}
+
+.task-complete-icon {
+    color: #27ae60; /* Green */
+    font-size: 0.8em;
+    margin-right: 5px;
+    vertical-align: middle;
 }

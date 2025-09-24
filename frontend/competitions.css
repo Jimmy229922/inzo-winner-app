@@ -493,13 +493,6 @@
 
 /* Competition Templates Page - Professional Redesign */
 .templates-layout {
-    display: grid;
-    grid-template-columns: 400px 1fr; /* Fixed width for form, flexible for list */
-    gap: 30px;
-}
-
-.template-form-container {
-    background-color: var(--card-bg-color); /* Use card color for a contained look */
     padding: 25px;
     border-radius: 12px;
     border: 1px solid var(--border-color);
@@ -507,28 +500,65 @@
     box-shadow: 0 4px 12px var(--shadow-color);
 }
 
-.template-form-container h2,
-.templates-list-container h2 {
-    margin-top: 0;
-    border-bottom: none;
-    padding-bottom: 0;
-    margin-bottom: 25px;
+.templates-list-grouped {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 1.4em;
-    color: var(--text-color);
-}
-
-.templates-list-container h2 {
-    color: var(--text-color);
-    padding-left: 5px;
-}
-
-#templates-list.templates-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    flex-direction: column;
     gap: 20px;
+}
+
+.template-group {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+
+.template-group[open] {
+    box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.template-group[open] > .template-group-header {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.template-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    list-style: none; /* Hide default marker */
+}
+.template-group-header::-webkit-details-marker {
+    display: none; /* Hide default marker for Chrome/Safari */
+}
+
+.template-group-header:hover {
+    background-color: var(--bg-color);
+}
+
+.template-group-header h2 {
+    margin: 0;
+    font-size: 1.3em;
+    color: var(--primary-color);
+}
+
+.template-count {
+    background-color: var(--border-color);
+    color: var(--text-secondary-color);
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.template-group-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
 }
 
 .template-card {
@@ -963,4 +993,62 @@
     .actions-cell {
         justify-content: flex-start;
     }
+
+/* --- New Styles for Agent Selection on Create Competition Page --- */
+
+.agent-selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.agent-selection-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--text-color);
+    transition: all 0.2s ease-in-out;
+    position: relative;
+}
+
+.agent-selection-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
+    border-color: var(--primary-color);
+}
+
+.agent-selection-card img,
+.agent-selection-card .avatar-placeholder {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.agent-selection-card .avatar-placeholder {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    color: var(--text-secondary-color);
+}
+
+.agent-selection-card .agent-info h3 {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.agent-selection-card .agent-info p {
+    margin: 0;
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
 }

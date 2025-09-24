@@ -55,8 +55,9 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
     const dayDiff = dayIndex - taskDate.getDay();
     taskDate.setDate(taskDate.getDate() + dayDiff);
     const taskDateStr = taskDate.toISOString().split('T')[0];
-    const task = tasksMap[`${agent.id}-${taskDateStr}`];
-    const isComplete = task?.audited && task?.competition_sent;
+    const task = tasksMap[`${agent.id}-${taskDateStr}`] || {};
+    // Visual completion requires both
+    const isComplete = task.audited && task.competition_sent; 
     const avatarHtml = agent.avatar_url
         ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar" loading="lazy">`
         : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
@@ -76,22 +77,22 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
             <div class="calendar-agent-main">
                 ${avatarHtml}
                 <div class="calendar-agent-info">
-                    <span class="agent-name">${highlightedName}</span>
+                    <span class="agent-name">${highlightedName} ${isComplete ? '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : ''}</span>
                     <p class="calendar-agent-id" title="نسخ الرقم">${highlightedId}</p>
                 </div>
             </div>
             <div class="calendar-agent-actions">
-                <div class="action-item ${task?.audited ? 'done' : ''}">
+                <div class="action-item ${task.audited ? 'done' : ''}">
                     <label>التدقيق</label>
                     <label class="custom-checkbox toggle-switch">
-                        <input type="checkbox" class="audit-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.audited ? 'checked' : ''}>
+                        <input type="checkbox" class="audit-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task.audited ? 'checked' : ''}>
                         <span class="slider round"></span>
                     </label>
                 </div>
-                <div class="action-item ${task?.competition_sent ? 'done' : ''}">
+                <div class="action-item ${task.competition_sent ? 'done' : ''}">
                     <label>المسابقة</label>
                     <label class="custom-checkbox toggle-switch">
-                        <input type="checkbox" class="competition-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task?.competition_sent ? 'checked' : ''}>
+                        <input type="checkbox" class="competition-check" data-agent-id="${agent.id}" data-day-index="${dayIndex}" ${task.competition_sent ? 'checked' : ''}>
                         <span class="slider round"></span>
                     </label>
                 </div>
@@ -182,9 +183,9 @@ async function renderCalendarPage() {
             const dayDiff = index - taskDate.getDay();
             taskDate.setDate(taskDate.getDate() + dayDiff);
             const taskDateStr = taskDate.toISOString().split('T')[0];
-            const task = tasksMap[`${agent.id}-${taskDateStr}`];
-            // A task is considered complete only if BOTH are checked
-            if (task && task.audited && task.competition_sent) {
+            const task = tasksMap[`${agent.id}-${taskDateStr}`] || {};
+            // Progress is based on audit only
+            if (task.audited) {
                 completedTasks++;
             }
         });
@@ -240,8 +241,8 @@ async function renderCalendarPage() {
             const dayDiff = dayIndex - taskDate.getDay();
             taskDate.setDate(taskDate.getDate() + dayDiff);
             const taskDateStr = taskDate.toISOString().split('T')[0];
-            const task = tasksMap[`${agent.id}-${taskDateStr}`];
-            if (task && task.audited && task.competition_sent) {
+            const task = tasksMap[`${agent.id}-${taskDateStr}`] || {}; 
+            if (task.audited) { // Progress is based on audit only
                 completedTasks++;
             }
         });
@@ -295,7 +296,8 @@ async function renderCalendarPage() {
             
             const auditCheck = agentItem.querySelector('.audit-check');
             const competitionCheck = agentItem.querySelector('.competition-check');
-            const isComplete = auditCheck.checked && competitionCheck.checked;
+            // Visual completion requires both
+            const isComplete = auditCheck.checked && competitionCheck.checked; 
             agentItem.classList.toggle('complete', isComplete);
 
             updateDayProgressUI(dayIndex);
@@ -307,7 +309,7 @@ async function renderCalendarPage() {
                 // Revert UI on error
                 checkbox.checked = !checkbox.checked;
                 tasksMap[taskKey][isAudited ? 'audited' : 'competition_sent'] = checkbox.checked;
-                if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
+                if (actionItem) actionItem.classList.toggle('done', checkbox.checked); // Revert individual item
                 agentItem.classList.toggle('complete', !isComplete);
                 updateDayProgressUI(dayIndex);
             }

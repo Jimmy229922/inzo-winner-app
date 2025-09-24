@@ -106,6 +106,11 @@
     gap: 30px;
     margin-top: 30px;
 }
+.home-main-column, .home-side-column {
+    background-color: var(--card-bg-color);
+    padding: 25px;
+    border-radius: 12px;
+}
 
 .pending-tasks-list {
     display: flex;
@@ -126,11 +131,32 @@
     transition: all 0.2s;
 }
 
+.pending-status-icons {
+    display: flex;
+    gap: 8px;
+    margin-right: auto; /* Push icons to the left */
+    padding-right: 10px;
+    color: var(--text-secondary-color);
+}
+
+.pending-status-icons .fa-clipboard-check {
+    color: #e67e22; /* Orange */
+}
+.pending-status-icons .fa-trophy {
+    color: #3498db; /* Blue */
+}
+
 .pending-agent-card:hover {
     background-color: var(--primary-color);
     color: white;
     border-color: var(--primary-color);
     transform: translateY(-2px);
+}
+
+.pending-agent-card.show-all-btn {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
 }
 
 .pending-agent-card img, .pending-agent-card .avatar-placeholder {
@@ -163,5 +189,38 @@
 .quick-actions {
     display: flex;
     gap: 15px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.quick-action-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    text-decoration: none;
+    color: var(--text-color);
+    transition: all 0.2s ease-in-out;
+}
+
+.quick-action-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
+    border-color: var(--primary-color);
+}
+
+.quick-action-card h3 {
+    margin: 0 0 10px 0;
+    padding: 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--primary-color);
+}
+
+.quick-action-card p {
+    margin: 0;
+    color: var(--text-secondary-color);
+    font-size: 0.9em;
 }

@@ -81,6 +81,8 @@ async function handleRouting() {
             renderFunction = () => renderAgentProfilePage(agentId);
             navElement = null; // No nav item is active on a profile page
         }
+    } else if (hash === '#home') {
+        mainElement.classList.add('full-width');
     } else if (hash.startsWith('#competitions')) {
         mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {

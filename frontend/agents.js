@@ -305,7 +305,7 @@ async function updateOverallProgress() {
 
     const completedAgentsToday = (agentsResult.data || []).filter(agent => {
         const task = tasksMap[agent.id];
-        return task && task.audited && task.competition_sent;
+        return task && task.audited; // Progress is based on audit only
     }).length;
 
     const overallProgress = totalAgentsToday > 0 ? (completedAgentsToday / totalAgentsToday) * 100 : 0;
@@ -329,10 +329,9 @@ function updateTaskGroupState(groupDetailsElement) {
     const total = cards.length;
     let completed = 0;
     cards.forEach(card => {
-        // A task is only complete for the progress bar if both are checked
         const auditCheck = card.querySelector('.audit-check');
-        const competitionCheck = card.querySelector('.competition-check');
-        if (auditCheck?.checked && competitionCheck?.checked) {
+        // Progress is based on audit only
+        if (auditCheck?.checked) {
             completed++;
         }
     });
@@ -429,7 +428,7 @@ async function renderTaskList() {
                 let allTasksInGroupComplete = group.length > 0;
                 group.forEach(agent => {
                     const task = tasksMap[agent.id] || {};
-                    if (task.audited && task.competition_sent) {
+                    if (task.audited) { // Progress is based on audit only
                         completedCount++;
                     } else {
                         allTasksInGroupComplete = false;
@@ -463,7 +462,8 @@ async function renderTaskList() {
                                 : `<div class="task-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
                             const isAudited = task.audited;
                             const isCompetitionSent = task.competition_sent;
-                            const isComplete = isAudited && isCompetitionSent;
+                            // Visual completion requires both
+                            const isComplete = isAudited && isCompetitionSent; 
                             const isHighlighted = highlightedAgentId && agent.id == highlightedAgentId;
                             const depositBonusText = (agent.remaining_deposit_bonus > 0 && agent.deposit_bonus_percentage > 0)
                                 ? `${agent.remaining_deposit_bonus} ${agent.remaining_deposit_bonus === 1 ? 'مرة' : 'مرات'} بنسبة ${agent.deposit_bonus_percentage}%`
@@ -475,7 +475,7 @@ async function renderTaskList() {
                                     <div class="task-card-main">
                                         ${avatarHtml}
                                         <div class="task-agent-info">
-                                            <h3>${agent.name}</h3>
+                                            <h3>${agent.name} ${isComplete ? '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : ''}</h3>
                                             <p class="task-agent-id" title="نسخ الرقم">#${agent.agent_id}</p>
                                         </div>
                                     </div>
@@ -583,7 +583,8 @@ async function renderTaskList() {
                 auditCheck.closest('.action-item').classList.toggle('done', auditCheck.checked);
                 competitionCheck.closest('.action-item').classList.toggle('done', competitionCheck.checked);
 
-                const isComplete = auditCheck.checked && competitionCheck.checked;
+                // Visual completion requires both
+                const isComplete = auditCheck.checked && competitionCheck.checked; 
                 card.classList.toggle('complete', isComplete);
                 
                 // Update the progress counter for the group
