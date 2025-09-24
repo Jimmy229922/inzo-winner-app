@@ -515,6 +515,10 @@ async function renderCompetitionCreatePage(agentId) {
                         </select>
                     </div>
                 </div>
+                <div class="form-group" style="margin-top: 15px; background-color: var(--bg-color); padding: 10px; border-radius: 6px;">
+                    <label for="winner-selection-date-preview" style="color: var(--primary-color);"><i class="fas fa-calendar-alt"></i> تاريخ اختيار الفائز المتوقع</label>
+                    <input type="text" id="winner-selection-date-preview" readonly style="background: transparent; border: none; font-weight: bold; padding: 0;">
+                </div>
                 <div id="validation-messages" class="validation-messages"></div>
             </div>
 
@@ -549,6 +553,7 @@ async function renderCompetitionCreatePage(agentId) {
     const prizeInput = document.getElementById('override-prize');
     const depositWinnersInput = document.getElementById('override-deposit-winners');
     const durationInput = document.getElementById('override-duration');
+    const winnerDatePreview = document.getElementById('winner-selection-date-preview');
 
     // NEW: Add listener to the variables card to update on blur/click away
     document.querySelector('.variables-v3').addEventListener('focusout', (e) => {
@@ -687,6 +692,25 @@ async function renderCompetitionCreatePage(agentId) {
         document.getElementById('balance-card').classList.toggle('invalid', newRemainingBalance < 0);
         document.getElementById('bonus-card').classList.toggle('invalid', newRemainingDepositBonus < 0);
         sendBtn.disabled = isInvalid;
+
+        // --- NEW: Update Winner Selection Date Preview ---
+        if (duration) {
+            const today = new Date();
+            const newDate = new Date(today);
+            switch (duration) {
+                case '1d': newDate.setDate(newDate.getDate() + 1); break;
+                case '2d': newDate.setDate(newDate.getDate() + 2); break;
+                case '1w': newDate.setDate(newDate.getDate() + 7); break;
+            }
+            winnerDatePreview.value = newDate.toLocaleDateString('ar-EG', {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+            });
+            winnerDatePreview.parentElement.style.display = 'block';
+        } else {
+            winnerDatePreview.value = 'يرجى تحديد مدة المسابقة';
+            winnerDatePreview.parentElement.style.display = 'none';
+        }
+
     }
 
     [templateSelect, tradingWinnersInput, prizeInput, depositWinnersInput, durationInput].forEach(input => {
@@ -718,8 +742,15 @@ async function renderCompetitionCreatePage(agentId) {
         const depositWinnersCount = parseInt(depositWinnersInput.value) || 0;
         const totalCost = winnersCount * prizePerWinner;
 
-        if (totalCost > agent.remaining_balance) {
-            showToast(`رصيد الوكيل المتبقي (${agent.remaining_balance}$) غير كافٍ لتغطية تكلفة المسابقة (${totalCost.toFixed(2)}$).`, 'error');
+        if (totalCost > (agent.remaining_balance || 0)) {
+            showToast(`رصيد الوكيل غير كافٍ. التكلفة المطلوبة ${totalCost.toFixed(2)}$ بينما المتاح ${(agent.remaining_balance || 0).toFixed(2)}$ فقط.`, 'error');
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال إلى تلجرام الآن';
+            return;
+        }
+
+        if (depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
+            showToast(`عدد مرات بونص الإيداع غير كافٍ. المطلوب ${depositWinnersCount} بينما المتاح ${agent.remaining_deposit_bonus || 0} فقط.`, 'error');
             sendBtn.disabled = false;
             sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال إلى تلجرام الآن';
             return;

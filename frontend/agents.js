@@ -1006,3 +1006,104 @@ async function renderActivityLogPage() {
 
     await loadAndDisplayLogs(currentPage);
 }
+
+async function renderTopAgentsPage() {
+    const appContent = document.getElementById('app-content');
+    appContent.innerHTML = `
+        <div class="page-header"><h1><i class="fas fa-crown"></i> أبرز الوكلاء</h1></div>
+        <p class="page-subtitle">قائمة بأفضل الوكلاء أداءً هذا الشهر بناءً على استهلاك الرصيد وعدد المسابقات.</p>
+        <div class="top-agents-grid">
+            <div class="top-agents-list">
+                <h2><i class="fas fa-gem"></i> الوكلاء الحصريون</h2>
+                <div id="top-exclusive-agents" class="leaderboard">
+                    <p>جاري تحميل القائمة...</p>
+                </div>
+            </div>
+            <div class="top-agents-list">
+                <h2><i class="fas fa-star"></i> الوكلاء الاعتياديون</h2>
+                <div id="top-standard-agents" class="leaderboard">
+                    <p>جاري تحميل القائمة...</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // --- Logic to fetch and calculate top agents ---
+    const exclusiveRanks = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'];
+    const standardRanks = ['Beginning', 'Growth', 'Pro', 'Elite'];
+
+    const { data: allAgents, error: agentsError } = await supabase
+        .from('agents')
+        .select('id, name, avatar_url, rank, consumed_balance');
+
+    const { data: competitions, error: compsError } = await supabase
+        .from('competitions')
+        .select('agent_id');
+
+    if (agentsError || compsError) {
+        document.getElementById('top-exclusive-agents').innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء.</p>';
+        document.getElementById('top-standard-agents').innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء.</p>';
+        return;
+    }
+
+    // Count competitions per agent
+    const competitionCounts = competitions.reduce((acc, comp) => {
+        acc[comp.agent_id] = (acc[comp.agent_id] || 0) + 1;
+        return acc;
+    }, {});
+
+    // Calculate performance score for each agent
+    const agentsWithScores = allAgents.map(agent => {
+        const compsCount = competitionCounts[agent.id] || 0;
+        const consumed = agent.consumed_balance || 0;
+        // Performance Score = (consumed_balance * 0.6) + (competition_count * 0.4)
+        const score = (consumed * 0.6) + (compsCount * 0.4);
+        return { ...agent, score, compsCount };
+    });
+
+    // Separate and sort agents
+    const topExclusive = agentsWithScores
+        .filter(a => exclusiveRanks.includes(a.rank))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
+
+    const topStandard = agentsWithScores
+        .filter(a => standardRanks.includes(a.rank))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
+
+    // --- Render the lists ---
+    const renderLeaderboard = (containerId, agentsList) => {
+        const container = document.getElementById(containerId);
+        if (agentsList.length === 0) {
+            container.innerHTML = '<p class="no-results-message">لا يوجد وكلاء في هذه الفئة بعد.</p>';
+            return;
+        }
+        container.innerHTML = agentsList.map((agent, index) => {
+            const avatarHtml = agent.avatar_url
+                ? `<img src="${agent.avatar_url}" alt="Avatar" class="leaderboard-avatar" loading="lazy">`
+                : `<div class="leaderboard-avatar-placeholder"><i class="fas fa-user"></i></div>`;
+            
+            const rankColors = ['gold', 'silver', '#cd7f32']; // Gold, Silver, Bronze
+            const rankIcon = index < 3 ? `<i class="fas fa-medal" style="color: ${rankColors[index]};"></i>` : `<span>#${index + 1}</span>`;
+
+            return `
+                <a href="#profile/${agent.id}" class="leaderboard-item">
+                    <div class="leaderboard-rank">${rankIcon}</div>
+                    ${avatarHtml}
+                    <div class="leaderboard-info">
+                        <h4 class="leaderboard-name">${agent.name}</h4>
+                        <p class="leaderboard-rank-name">${agent.rank || 'غير محدد'}</p>
+                    </div>
+                    <div class="leaderboard-score">
+                        <span>${Math.round(agent.score)}</span>
+                        <small>نقطة</small>
+                    </div>
+                </a>
+            `;
+        }).join('');
+    };
+
+    renderLeaderboard('top-exclusive-agents', topExclusive);
+    renderLeaderboard('top-standard-agents', topStandard);
+}

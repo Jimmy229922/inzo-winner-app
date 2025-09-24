@@ -423,4 +423,109 @@
     font-weight: bold;
     color: var(--primary-color);
 }
+
+/* Top Agents Page Styles */
+.top-agents-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.top-agents-list h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--primary-color);
+    margin-bottom: 20px;
+}
+
+.leaderboard {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.leaderboard-item {
+    display: grid;
+    grid-template-columns: 50px 60px 1fr auto;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--text-color);
+    transition: all 0.2s ease-in-out;
+}
+
+.leaderboard-item:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 8px 20px var(--shadow-color);
+    border-color: var(--primary-color);
+}
+
+.leaderboard-rank {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: var(--text-secondary-color);
+    text-align: center;
+}
+
+.leaderboard-rank .fa-medal {
+    font-size: 1.2em;
+}
+
+.leaderboard-avatar,
+.leaderboard-avatar-placeholder {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.leaderboard-avatar-placeholder {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+}
+
+.leaderboard-name {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.leaderboard-rank-name {
+    margin: 0;
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.leaderboard-score {
+    text-align: center;
+    background-color: var(--bg-color);
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.leaderboard-score span {
+    display: block;
+    font-size: 1.4em;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.leaderboard-score small {
+    font-size: 0.8em;
+    color: var(--text-secondary-color);
+}
+
+@media (max-width: 900px) {
+    .top-agents-grid {
+        grid-template-columns: 1fr;
+    }
+}
+}
 .slider.round:before { border-radius: 50%; }
