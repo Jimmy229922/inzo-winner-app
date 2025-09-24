@@ -269,6 +269,50 @@ cron.schedule('0 * * * *', async () => {
     }
 });
 
+// Schedule a task to reset agent balances based on their renewal period. Runs every 10 seconds for testing.
+cron.schedule('*/10 * * * * *', async () => {
+    console.log('[CRON_TEST] Running 10-second check for agent balance renewal...');
+    if (!supabaseAdmin) {
+        console.error('[CRON_TEST] Aborting balance renewal: Supabase admin client is not initialized.');
+        return;
+    }
+    try {
+        const { data: agents, error } = await supabaseAdmin
+            .from('agents')
+            .select('id, name, renewal_period, last_renewal_date')
+            .eq('renewal_period', 'test_10s');
+
+        if (error) throw error;
+
+        const now = new Date();
+        const agentsToReset = agents.filter(agent => {
+            if (!agent.last_renewal_date) return true; // Renew if it has never been renewed
+            const lastRenewal = new Date(agent.last_renewal_date);
+            const secondsSinceLastRenewal = (now.getTime() - lastRenewal.getTime()) / 1000;
+            return secondsSinceLastRenewal >= 10;
+        });
+
+        if (agentsToReset.length > 0) {
+            const agentIdsToReset = agentsToReset.map(a => a.id);
+            console.log(`[CRON_TEST] Renewing balances for ${agentsToReset.length} agents (test_10s).`);
+            
+            // Reset balances for the specific agents
+            const { error: rpcError } = await supabaseAdmin.rpc('reset_agent_balances_by_ids', { p_agent_ids: agentIdsToReset });
+            if (rpcError) throw rpcError;
+            
+            // Update renewal date for the specific agents
+            await supabaseAdmin.from('agents').update({ last_renewal_date: now.toISOString() }).in('id', agentIdsToReset);
+
+            // Send a realtime notification for each renewed agent
+            for (const agent of agentsToReset) {
+                await supabaseAdmin.from('realtime_notifications').insert({ message: `تم تجديد رصيد الوكيل (تجريبي): ${agent.name}`, type: 'success' });
+            }
+        }
+    } catch (err) {
+        console.error('[CRON_TEST] Error during 10s agent balance renewal check:', err.message);
+    }
+});
+
 // Schedule a task to reset agent balances based on their renewal period. Runs daily at 00:05 AM.
 cron.schedule('5 0 * * *', async () => {
     console.log('[CRON] Running daily check for agent balance renewal...');
@@ -331,7 +375,7 @@ cron.schedule('5 0 * * *', async () => {
                 // Send notifications for daily renewals
                 for (const agent of agentsToReset) {
                     await supabaseAdmin.from('realtime_notifications').insert({ 
-                        message: `تم تجديد الرصيد اليومي للوكيل: ${agent.name}`,
+                        message: `تم تجديد الرصيد اليومي للوكيل: ${agent.name}`, 
                         type: 'success',
                         notification_type: 'BALANCE_RENEWAL',
                         agent_id: agent.id
@@ -353,8 +397,8 @@ cron.schedule('5 0 * * *', async () => {
                 await supabaseAdmin.from('agents').update({ last_renewal_date: new Date().toISOString() }).in('id', agentIds);
                 // Send notifications for test renewals
                 for (const agent of testAgentsToReset) {
-                    await supabaseAdmin.from('realtime_notifications').insert({
-                        message: `تم تجديد رصيد الوكيل (تجريبي): ${agent.name}`,
+                    await supabaseAdmin.from('realtime_notifications').insert({ 
+                        message: `تم تجديد رصيد الوكيل (تجريبي): ${agent.name}`, 
                         type: 'success',
                         notification_type: 'BALANCE_RENEWAL',
                         agent_id: agent.id

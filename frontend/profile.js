@@ -134,6 +134,15 @@ async function renderAgentProfilePage(agentId, options = {}) {
         window.location.hash = '#manage-agents';
     });
 
+    // Click to copy agent ID from header
+    const agentIdEl = appContent.querySelector('.profile-main-info .agent-id-text');
+    if (agentIdEl) {
+        agentIdEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(agent.agent_id).then(() => showToast(`تم نسخ الرقم: ${agent.agent_id}`, 'info'));
+        });
+    }
+
     document.getElementById('create-agent-competition').addEventListener('click', () => {
         window.location.hash = `competitions/new?agentId=${agent.id}`;
     });
@@ -570,7 +579,7 @@ function startRenewalCountdown(agent) {
 
     // If last_renewal_date is null, it means it has never been renewed.
     // We should treat the "start" of the countdown from now, or from the last renewal date if it exists.
-    // For the 'test_10s' case, we ALWAYS start the countdown from 'now' to make testing intuitive.
+        // For the 'test_10s' case, we ALWAYS start the countdown from 'now' to make testing intuitive.
     const lastRenewal = (agent.renewal_period === 'test_10s' || !agent.last_renewal_date) ? new Date() : new Date(agent.last_renewal_date);
     let nextRenewalDate = new Date(lastRenewal);
     console.log(`[Countdown Debug] Initial Last Renewal: ${lastRenewal.toISOString()}, Next Renewal (before calc): ${nextRenewalDate.toISOString()}`);
