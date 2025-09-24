@@ -556,9 +556,12 @@ function renderInlineEditor(groupElement, agent) {
             const description = `تم تحديث "${label}" من "${oldValue || 'فارغ'}" إلى "${newValue || 'فارغ'}".`;
             await logAgentActivity(agent.id, 'DETAILS_UPDATE', description, { field: label, from: oldValue, to: newValue });
             showToast('تم حفظ التغيير بنجاح.', 'success');
-            // Always re-render the profile page to ensure all dependent fields and countdown are updated
-            // This is safer as many fields can affect others (e.g., renewal_period affects countdown)
-            renderAgentProfilePage(agent.id, { activeTab: 'details' });
+            // If rank was changed, a full re-render is needed to update all dependent fields (bonuses, balances, etc.)
+            if (fieldName === 'rank') {
+                renderAgentProfilePage(agent.id, { activeTab: 'details' });
+            } else {
+                renderDetailsView(updatedAgent); // For other fields, just re-render the details view to avoid page jump
+            }
         }
     });
 }

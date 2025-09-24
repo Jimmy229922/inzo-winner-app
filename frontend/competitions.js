@@ -750,7 +750,8 @@ async function renderCompetitionCreatePage(agentId) {
                     used_deposit_bonus: newUsedDepositBonus,
                     remaining_deposit_bonus: newRemainingDepositBonus,
                     last_competition_date: todayStr,
-                    winner_selection_date: newWinnerSelectionDate
+                    winner_selection_date: newWinnerSelectionDate,
+                    competition_duration: selectedDuration // حفظ المدة المختارة للوكيل
                 })
                 .eq('id', agent.id);
             
