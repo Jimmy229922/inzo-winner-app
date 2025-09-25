@@ -34,26 +34,38 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY && process.env.
 
 // --- تحميل الإعدادات الآمنة من قاعدة البيانات عند بدء التشغيل ---
 async function loadSecureConfig() {
-    if (!supabaseAdmin) {
-        console.error('[CRITICAL] Cannot load secure config because Supabase admin client is not available.');
-        return;
+    const MAX_RETRIES = 5;
+    const RETRY_DELAY = 5000; // 5 seconds
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            if (!supabaseAdmin) {
+                throw new Error('Supabase admin client is not available.');
+            }
+            console.log(`[INFO] Loading secure configuration... (Attempt ${attempt}/${MAX_RETRIES})`);
+            const { data, error } = await supabaseAdmin.from('app_config').select('key, value');
+
+            if (error) throw error; // Throw to be caught by the catch block
+
+            const config = data.reduce((acc, item) => {
+                acc[item.key] = item.value;
+                return acc;
+            }, {});
+
+            TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
+            TELEGRAM_CHAT_ID = config.TELEGRAM_CHAT_ID;
+            console.log('[INFO] Secure configuration loaded successfully.');
+            return; // Exit the function on success
+        } catch (error) {
+            console.error(`[CRITICAL] Failed to fetch secure configuration on attempt ${attempt}:`, error.message);
+            if (error.cause) console.error('[CRITICAL] Underlying cause:', error.cause);
+            if (attempt === MAX_RETRIES) {
+                console.error('[CRITICAL] All attempts to load configuration failed. Server might not function correctly.');
+            } else {
+                await new Promise(res => setTimeout(res, RETRY_DELAY));
+            }
+        }
     }
-    console.log('[INFO] Loading secure configuration from database...');
-    const { data, error } = await supabaseAdmin.from('app_config').select('key, value');
-
-    if (error) {
-        console.error('[CRITICAL] Failed to fetch secure configuration from database:', error.message);
-        return;
-    }
-
-    const config = data.reduce((acc, item) => {
-        acc[item.key] = item.value;
-        return acc;
-    }, {});
-
-    TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
-    TELEGRAM_CHAT_ID = config.TELEGRAM_CHAT_ID;
-    console.log('[INFO] Secure configuration loaded successfully.');
 }
 
 // --- Main API Router ---
@@ -281,9 +293,15 @@ cron.schedule('*/10 * * * * *', async () => {
     }
 });
 
-// تشغيل السيرفر
-app.listen(port, () => {
-    // قم بتحميل الإعدادات الآمنة أولاً
-    loadSecureConfig();
-    console.log(`Backend server is running at http://localhost:${port}`);
-});
+// --- بدء تشغيل السيرفر ---
+async function startServer() {
+    // 1. قم بتحميل الإعدادات الآمنة أولاً وانتظر اكتمالها
+    await loadSecureConfig();
+
+    // 2. بعد اكتمال التحميل، ابدأ تشغيل السيرفر
+    app.listen(port, () => {
+        console.log(`Backend server is running at http://localhost:${port}`);
+    });
+}
+
+startServer();
