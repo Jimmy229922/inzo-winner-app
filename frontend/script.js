@@ -4,15 +4,15 @@ let searchTimeout;
 
 // Global function to set the active navigation link
 function setActiveNav(activeLink) {
-    // Deactivate all nav-links and dropdown-toggles
-    document.querySelectorAll('.nav-link, .dropdown-item').forEach(link => {
+    // Deactivate all nav-links, dropdown-toggles, and dropdown-items
+    document.querySelectorAll('.nav-link, .dropdown-toggle, .dropdown-item').forEach(link => {
         link.classList.remove('active');
     });
 
     if (activeLink) {
         activeLink.classList.add('active');
 
-        // If the active link is a dropdown item, also activate the dropdown toggle
+        // تعديل: إذا كان الرابط النشط داخل قائمة منسدلة، قم بتنشيط القائمة الرئيسية أيضاً
         const dropdown = activeLink.closest('.dropdown');
         if (dropdown) {
             dropdown.querySelector('.dropdown-toggle')?.classList.add('active');
@@ -46,9 +46,13 @@ async function logAgentActivity(agentId, actionType, description, metadata = {})
 // NEW: Router function to handle page navigation based on URL hash
 async function handleRouting() {
     showLoader();
+    // Scroll to the top of the page on every navigation
+    window.scrollTo(0, 0);
+
     const hash = window.location.hash || '#home'; // Default to home
     const mainElement = document.querySelector('main');
     const appContent = document.getElementById('app-content');
+    mainElement.classList.add('page-loading');
 
     // Reset layout classes
     mainElement.classList.remove('full-width');
@@ -107,6 +111,7 @@ async function handleRouting() {
     try {
         if (renderFunction) {
             await renderFunction();
+            mainElement.classList.remove('page-loading');
         }
     } catch (err) {
         console.error("Routing error:", err);
@@ -233,6 +238,26 @@ function showConfirmationModal(message, onConfirm, options = {}) {
     if (onRender) onRender(modal);
 }
 
+function setupAutoHidingNavbar() {
+    let lastScrollTop = 0;
+    const navbar = document.querySelector('.navbar');
+    if (!navbar) return;
+
+    window.addEventListener('scroll', () => {
+        // We use pageYOffset for broader browser support
+        let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+        // Add a small threshold (e.g., 10px) to prevent hiding on minor scrolls
+        if (scrollTop > lastScrollTop && scrollTop > navbar.offsetHeight) {
+            // Scrolling Down
+            navbar.classList.add('navbar-hidden');
+        } else {
+            // Scrolling Up
+            navbar.classList.remove('navbar-hidden');
+        }
+        lastScrollTop = scrollTop <= 0 ? 0 : scrollTop; // For Mobile or negative scrolling
+    }, { passive: true }); // Use passive listener for better scroll performance
+}
 // --- New Functions for UI Enhancements ---
 
 // Apply theme from localStorage on page load
@@ -294,7 +319,7 @@ function setupNavbar() {
         const searchResultsContainer = document.getElementById('search-results');
 
         if (searchTerm.length < 2) { // Don't search for less than 2 characters
-            searchResultsContainer.style.display = 'none';
+            searchResultsContainer.classList.remove('visible');
             return;
         }
 
@@ -327,7 +352,7 @@ function setupNavbar() {
                         <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
                     </div>
                 `}).join('');
-                searchResultsContainer.style.display = 'block';
+                searchResultsContainer.classList.add('visible');
 
                 // Add click listeners to new items
                 searchResultsContainer.querySelectorAll('.search-result-item').forEach(item => {
@@ -335,14 +360,14 @@ function setupNavbar() {
                         const agentId = item.dataset.agentId;
                         // Use the router for navigation
                         window.location.hash = `profile/${agentId}`;
-                        searchResultsContainer.style.display = 'none';
+                        searchResultsContainer.classList.remove('visible');
                         searchInput.value = '';
                         if (mainSearchClearBtn) mainSearchClearBtn.style.display = 'none';
                     });
                 });
             } else {
                 searchResultsContainer.innerHTML = '<div class="search-result-item" style="cursor: default;">لا توجد نتائج</div>';
-                searchResultsContainer.style.display = 'block';
+                searchResultsContainer.classList.add('visible');
             }
         }, 300); // 300ms debounce
     });
@@ -350,7 +375,7 @@ function setupNavbar() {
     if (mainSearchClearBtn) {
         mainSearchClearBtn.addEventListener('click', () => {
             searchInput.value = '';
-            document.getElementById('search-results').style.display = 'none';
+            document.getElementById('search-results').classList.remove('visible');
             mainSearchClearBtn.style.display = 'none';
             searchInput.focus();
         });
@@ -385,7 +410,7 @@ function setupNavbar() {
     // Hide search results when clicking outside
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.search-container')) {
-            document.getElementById('search-results').style.display = 'none';
+            document.getElementById('search-results').classList.remove('visible');
         }
     });
 }
@@ -449,22 +474,31 @@ function showUpdateProgressModal() {
     nextStep(); // Start the process
 }
 
-// Function to create shooting stars dynamically
-function createShootingStars() {
+// تعديل: إنشاء جسيمات عائمة بدلاً من الشهب
+function createFloatingParticles() {
     const container = document.getElementById('animated-bg');
     if (!container) return;
-    const numStars = 10;
-    for (let i = 0; i < numStars; i++) {
-        const star = document.createElement('div');
-        star.className = 'shooting-star';
-        container.appendChild(star);
+    const numParticles = 50; // Increase number for a fuller effect
+    const colors = ['color-1', 'color-2', 'color-3'];
+    for (let i = 0; i < numParticles; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        const size = Math.random() * 3 + 1; // Size between 1px and 4px
+        particle.classList.add(colors[Math.floor(Math.random() * colors.length)]);
+        particle.style.width = `${size}px`;
+        particle.style.height = `${size}px`;
+        particle.style.left = `${Math.random() * 100}%`;
+        particle.style.animationDelay = `${Math.random() * 20}s`; // Staggered start
+        particle.style.animationDuration = `${Math.random() * 15 + 10}s`; // Duration between 10s and 25s
+        container.appendChild(particle);
     }
 }
 
 // Main entry point when the page loads
 document.addEventListener('DOMContentLoaded', () => {
     applyInitialTheme();
-    createShootingStars();
+    createFloatingParticles();
     setupNavbar();
+    setupAutoHidingNavbar();
     initializeSupabase();
 });

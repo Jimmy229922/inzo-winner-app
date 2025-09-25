@@ -22,14 +22,14 @@
 }
 
 /* Color Themes */
-.stat-card-v2.color-1 {
-    background: linear-gradient(135deg, #56ab2f, #a8e063); /* Green */
+.stat-card-v2.color-1 { /* New: Dark Blue to Bright Blue */
+    background: linear-gradient(135deg, rgb(22, 22, 60), #2575fc);
 }
-.stat-card-v2.color-2 {
-    background: linear-gradient(135deg, #6a11cb, #2575fc); /* Purple-Blue */
+.stat-card-v2.color-2 { /* New: Dark Blue to Purple */
+    background: linear-gradient(135deg, rgb(22, 22, 60), #6a11cb);
 }
-.stat-card-v2.color-3 {
-    background: linear-gradient(135deg, #f953c6, #b91d73); /* Pink */
+.stat-card-v2.color-3 { /* New: Dark Blue to Teal */
+    background: linear-gradient(135deg, rgb(22, 22, 60), #1abc9c);
 }
 
 .stat-card-v2-icon-bg {
@@ -322,6 +322,13 @@
     color: var(--text-secondary-color);
     font-size: 0.9em;
 }
+
+.classification-chart-container {
+    position: relative;
+    height: 200px; /* Adjust as needed */
+    margin-top: 15px;
+}
+
 
 /* Agent Quick Stats */
 .agent-quick-stats {

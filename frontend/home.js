@@ -9,7 +9,7 @@ async function renderHomePage() {
                 <div class="progress-bar-container">
                     <div id="tasks-progress-bar" class="progress-bar" style="width: 0%;"></div>
                     <span id="progress-label" class="progress-label">0 / 0</span>
-                </div>
+                </div> 
 
                 <h2 style="margin-top: 30px;">المسابقات المرسلة خلال اليوم</h2>
                 <div class="chart-container">
@@ -170,6 +170,9 @@ async function renderHomePage() {
                 return acc;
             }, {});
 
+            // Render the new classification chart
+            renderClassificationChart(classificationCounts);
+
             agentStatsContainer.innerHTML = `
                 <div class="quick-stat-item">
                     <i class="fas fa-user-clock"></i>
@@ -178,12 +181,59 @@ async function renderHomePage() {
                         <p>وكلاء جدد هذا الشهر</p>
                     </div>
                 </div>
-                <div class="quick-stat-item classification-breakdown">
-                    ${['R', 'A', 'B', 'C'].map(c => `<span class="classification-badge classification-${c.toLowerCase()}" title="تصنيف ${c}">${c}: ${classificationCounts[c] || 0}</span>`).join('')}
+                <div class="quick-stat-item">
+                    <div class="classification-chart-container">
+                        <canvas id="classification-chart"></canvas>
+                    </div>
                 </div>
             `;
         }
     }
+}
+
+function renderClassificationChart(classificationData) {
+    const ctx = document.getElementById('classification-chart')?.getContext('2d');
+    if (!ctx) return;
+
+    const labels = Object.keys(classificationData);
+    const data = Object.values(classificationData);
+
+    const backgroundColors = {
+        'R': '#9b59b6', // Purple
+        'A': '#e74c3c', // Red
+        'B': '#3498db', // Blue
+        'C': '#2ecc71', // Green
+    };
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'تصنيف الوكلاء',
+                data: data,
+                backgroundColor: labels.map(label => backgroundColors[label] || '#bdc3c7'),
+                borderColor: 'var(--card-bg-color)',
+                borderWidth: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        color: 'var(--text-color)',
+                        font: {
+                            weight: 'bold'
+                        }
+                    }
+                }
+            },
+            cutout: '60%'
+        }
+    });
 }
 
 function renderCompetitionsChart(competitions) {

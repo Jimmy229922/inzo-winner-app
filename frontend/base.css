@@ -1,5 +1,6 @@
 :root {
     --bg-color: #f4f4f9;
+    --animated-bg-color: transparent; /* Default for light mode */
     --card-bg-color: rgba(255, 255, 255, 0.9);
     --text-color: #333;
     --text-secondary-color: #6c757d;
@@ -12,23 +13,24 @@
 }
 
 body.dark-mode {
-    --bg-color: #000;
-    --card-bg-color: rgba(17, 17, 17, 0.8); /* Very Dark Gray with transparency */
+    --bg-color: rgb(22, 22, 60); /* New: Use the requested dark blue color */
+    --animated-bg-color: radial-gradient(ellipse at bottom, rgb(22, 22, 60) 0%, rgb(10, 10, 30) 100%);
+    --card-bg-color: rgba(32, 32, 70, 0.8); /* A slightly lighter blue for cards */
     --text-color: #e0e0e0;
     --text-secondary-color: #9e9e9e;
     --primary-color: #26c6da; /* Cyan */
     --primary-hover-color: #00acc1;
-    --border-color: #2a2a2a; /* Slightly lighter border for contrast */
-    --input-bg-color: #2c2c2c;
+    --border-color: rgb(42, 42, 80); /* A bluish border for contrast */
+    --input-bg-color: rgb(35, 35, 75);
     --shadow-color: rgba(0, 0, 0, 0.4);
-    --navbar-bg: rgba(17, 17, 17, 0.8); /* Very Dark Gray with transparency */
+    --navbar-bg: rgba(32, 32, 70, 0.8); /* Match card background */
 }
 
 body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: var(--bg-color);
     color: var(--text-color);
     margin: 0;
@@ -39,7 +41,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 20px;
+    padding: 0 20px; /* تعديل: إزالة الحشوة العلوية لحل مشكلة المساحة الفارغة */
     flex-grow: 1;
 }
 
@@ -49,9 +51,9 @@ main, footer {
     background-color: var(--card-bg-color);
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px var(--shadow-color);
-    margin-bottom: 20px;
-    transition: background-color 0.3s;
+    box-shadow: 0 4px 12px var(--shadow-color); /* تعديل: إزالة الهامش السفلي */
+    margin-bottom: 0;
+    transition: background-color 0.3s, opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
     border: 1px solid var(--border-color);
 }
 
@@ -69,10 +71,17 @@ main.full-width {
     flex-grow: 1;
 }
 
+main.page-loading {
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+
 h1, h2 {
     color: var(--primary-color);
     border-bottom: 2px solid var(--border-color);
     padding-bottom: 10px;
+    margin-top: 0; /* تعديل: إزالة الهامش العلوي الافتراضي للعناوين */
 }
 
 button {
@@ -147,6 +156,42 @@ footer {
     background-color: var(--primary-hover-color);
     transform: translateY(-1px);
 }
+.btn-secondary {
+    background-color: var(--text-secondary-color);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+}
+
+/* General Form Layout */
+.form-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.form-group label {
+    font-weight: bold;
+    color: var(--text-secondary-color);
+}
+.form-group input, .form-group select {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    font-size: 1em;
+}
+.form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
 .btn-secondary {
     background-color: var(--text-secondary-color);
     color: white;
