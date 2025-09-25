@@ -298,8 +298,6 @@ cron.schedule('0 0 * * *', async () => {
         console.error('[CRON] Error processing expired competitions:', err.message);
     }
 
-    console.log(`[CRON - ${new Date().toLocaleTimeString()}] Running daily check for agent balance renewals.`);
-
     try {
         // Fetch all agents with a renewal period
         const { data: agents, error: fetchError } = await supabaseAdmin
