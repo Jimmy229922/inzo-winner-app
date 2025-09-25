@@ -71,6 +71,26 @@
     border-radius: 0; /* No radius for table rows */
     transition: background-color 0.2s;
 }
+/* تعديل: إضافة position: relative لجعل تحديد موضع الأزرار ممكناً */
+.competitions-list-view .competition-card {
+    position: relative;
+}
+
+/* تعديل: إخفاء الأزرار بشكل افتراضي وتحديد موضعها */
+.competitions-list-view .competition-card-footer {
+    position: absolute;
+    left: 20px; /* تعديل: تحديد الموضع على اليسار */
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: var(--card-bg-color);
+    padding: 8px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    z-index: 10;
+}
 
 .competitions-list-view .competition-card:first-of-type {
     border-top-left-radius: 8px;
@@ -89,6 +109,12 @@
 
 .competitions-list-view .competition-card.selected {
     background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+
+/* تعديل: إظهار الأزرار عند مرور الماوس */
+.competitions-list-view .competition-card:hover .competition-card-footer {
+    opacity: 1;
+    visibility: visible;
 }
 
 .competitions-list-view .row-checkbox {
@@ -850,8 +876,8 @@
     border: 1px solid var(--border-color);
     border-radius: 8px;
     box-shadow: 0 8px 16px var(--shadow-color);
-    min-width: 200px;
-    z-index: 1000;
+    min-width: 200px; /* تعديل: زيادة قيمة z-index لضمان ظهور القائمة في المقدمة */
+    z-index: 1050;
     padding: 5px 0;
     margin-top: 5px;
 }

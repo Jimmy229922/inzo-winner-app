@@ -8,6 +8,9 @@
     background-color: var(--navbar-bg);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border-color);
+    /* تعديل: ضمان ظهور الشريط العلوي وقوائمه فوق كل شيء */
+    position: relative;
+    z-index: 1100;
     transition: background-color 0.3s, border-color 0.3s;
 }
 

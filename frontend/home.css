@@ -130,11 +130,34 @@
     text-decoration: none;
     color: var(--text-color);
     transition: all 0.2s;
+    position: relative; /* تعديل: إضافة position لجعل تحديد موضع الأزرار ممكناً */
+}
+
+/* تعديل: إخفاء الأزرار افتراضياً وتحديد موضعها */
+.pending-agent-actions {
+    position: absolute;
+    left: 12px; /* تعديل: تحديد الموضع على اليسار */
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: var(--card-bg-color);
+    padding: 8px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    z-index: 10;
 }
 
 .pending-agent-card-v2:hover {
     border-color: var(--primary-color);
     background-color: var(--card-bg-color);
+}
+
+/* تعديل: إظهار الأزرار عند مرور الماوس */
+.pending-agent-card-v2:hover .pending-agent-actions {
+    opacity: 1;
+    visibility: visible;
 }
 
 .pending-agent-info {
@@ -186,11 +209,6 @@
 
 .pending-icon-comp {
     color: #3498db; /* Blue */
-}
-
-.pending-agent-actions {
-    display: flex;
-    gap: 10px;
 }
 
 .pending-agent-actions .btn-small {
