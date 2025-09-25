@@ -154,9 +154,40 @@ apiRouter.post('/post-announcement', async (req, res) => {
         // console.log(`[SUCCESS] Announcement sent to Telegram.`);
         res.status(200).json({ message: 'Successfully posted announcement to Telegram' });
     } catch (error) {
-        const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
-        console.error(`[ERROR] Failed to send announcement to Telegram: ${errorDetails}`);
-        res.status(500).json({ message: `فشل الإرسال إلى تلجرام. السبب: ${error.response ? error.response.data.description : 'Unknown error'}` });
+        // --- التحسين التلقائي لمعرف الدردشة ---
+        const errorData = error.response?.data;
+        const newChatId = errorData?.parameters?.migrate_to_chat_id;
+
+        if (errorData && newChatId) {
+            console.warn(`[AUTO-FIX] Telegram group upgraded. Old Chat ID: ${targetChatId}, New Chat ID: ${newChatId}`);
+            
+            try {
+                // 1. تحديث معرف الدردشة في قاعدة البيانات
+                const { error: updateError } = await supabaseAdmin
+                    .from('agents')
+                    .update({ telegram_chat_id: newChatId.toString() })
+                    .eq('telegram_chat_id', targetChatId.toString());
+
+                if (updateError) throw new Error(`Failed to update Chat ID in DB: ${updateError.message}`);
+                console.log(`[AUTO-FIX] Successfully updated Chat ID for agent.`);
+
+                // 2. إعادة محاولة إرسال الرسالة بالمعرف الجديد
+                await axios.post(telegramApiUrl, {
+                    chat_id: newChatId,
+                    text: message,
+                    parse_mode: 'HTML'
+                });
+                console.log(`[AUTO-FIX] Successfully resent message to new Chat ID.`);
+                return res.status(200).json({ message: 'Successfully posted announcement after auto-fixing Chat ID.' });
+
+            } catch (autoFixError) {
+                console.error(`[AUTO-FIX-ERROR] Failed during auto-fix process: ${autoFixError.message}`);
+                // إذا فشلت عملية الإصلاح، يتم إرجاع الخطأ الأصلي
+            }
+        }
+
+        console.error(`[ERROR] Failed to send announcement to Telegram: ${error.response ? JSON.stringify(error.response.data) : error.message}`);
+        res.status(500).json({ message: `فشل الإرسال إلى تلجرام. السبب: ${error.response?.data?.description || 'Unknown error'}` });
     }
 });
 
@@ -318,7 +349,7 @@ cron.schedule('0 0 * * *', async () => {
                 
                 // 2. Send to Telegram
                 await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                    chat_id: targetChatId, // تعديل: استخدام المعرف المستهدف
+                    chat_id: targetChatId,
                     text: clicheText
                 });
 

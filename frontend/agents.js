@@ -24,6 +24,10 @@ async function renderTasksPage() {
         <div class="page-header column-header">
             <div class="header-top-row">
                 <h1>مهمات اليوم</h1>
+                <div class="header-actions-group">
+                    <button id="bulk-send-tasks-cliche-btn" class="btn-telegram-bonus"><i class="fas fa-broadcast-tower"></i> إرسال تعميم لمهام اليوم</button>
+                    <button id="mark-all-tasks-complete-btn" class="btn-primary"><i class="fas fa-check-double"></i> تمييز الكل كمكتمل</button>
+                </div>
             </div>
             <div class="agent-filters">
                 <div class="filter-search-container">
@@ -37,6 +41,16 @@ async function renderTasksPage() {
     `;
 
     await renderTaskList();
+
+    const bulkSendBtn = document.getElementById('bulk-send-tasks-cliche-btn');
+    if (bulkSendBtn) {
+        bulkSendBtn.addEventListener('click', handleBulkSendTasksMessage);
+    }
+
+    const markAllCompleteBtn = document.getElementById('mark-all-tasks-complete-btn');
+    if (markAllCompleteBtn) {
+        markAllCompleteBtn.addEventListener('click', handleMarkAllTasksComplete);
+    }
 }
 
 async function renderManageAgentsPage() {
@@ -45,7 +59,10 @@ async function renderManageAgentsPage() {
         <div class="page-header column-header">
             <div class="header-top-row">
                 <h1>إدارة الوكلاء</h1>
-                <button id="add-agent-btn" class="btn-primary"><i class="fas fa-plus"></i> إضافة وكيل جديد</button>
+                <div class="header-actions-group">
+                    <button id="bulk-send-cliche-btn" class="btn-telegram-bonus"><i class="fas fa-broadcast-tower"></i> إرسال تعميم للكل</button>
+                    <button id="add-agent-btn" class="btn-primary"><i class="fas fa-plus"></i> إضافة وكيل جديد</button>
+                </div>
             </div>
             <div class="agent-filters">
                 <div class="filter-search-container">
@@ -76,6 +93,11 @@ async function renderManageAgentsPage() {
         setActiveNav(null);
         window.location.hash = 'add-agent?returnTo=manage-agents';
     });
+
+    const bulkSendBtn = document.getElementById('bulk-send-cliche-btn');
+    if (bulkSendBtn) {
+        bulkSendBtn.addEventListener('click', handleBulkSendMessage);
+    }
 
     // Caching: If we already have the data, don't fetch it again.
     if (allAgentsData.length > 0) {
@@ -1044,6 +1066,242 @@ async function renderActivityLogPage() {
     });
 
     await loadAndDisplayLogs(currentPage);
+}
+
+async function handleMarkAllTasksComplete() {
+    // 1. جلب وكلاء اليوم
+    const today = new Date().getDay();
+    const { data: agentsForToday, error: fetchError } = await supabase
+        .from('agents')
+        .select('id') // نحتاج فقط إلى المعرفات
+        .contains('audit_days', [today]);
+
+    if (fetchError) {
+        showToast('فشل جلب قائمة وكلاء اليوم.', 'error');
+        return;
+    }
+
+    if (!agentsForToday || agentsForToday.length === 0) {
+        showToast('لا توجد مهام مجدولة لهذا اليوم.', 'info');
+        return;
+    }
+
+    // 2. إظهار نافذة التأكيد
+    showConfirmationModal(
+        `هل أنت متأكد من تمييز جميع مهام اليوم (${agentsForToday.length} وكيل) كمكتملة؟`,
+        async () => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const upsertData = agentsForToday.map(agent => ({
+                agent_id: agent.id,
+                task_date: todayStr,
+                audited: true,
+                competition_sent: true
+            }));
+
+            const { error } = await supabase.from('daily_tasks').upsert(upsertData, { onConflict: 'agent_id, task_date' });
+
+            if (error) {
+                showToast('فشل تحديث المهام بشكل جماعي.', 'error');
+                console.error('Bulk complete error:', error);
+            } else {
+                showToast('تم تمييز جميع المهام كمكتملة بنجاح.', 'success');
+                await renderTaskList(); // إعادة عرض قائمة المهام لتحديث الواجهة
+            }
+        }, { title: 'تأكيد إكمال جميع المهام', confirmText: 'نعم، إكمال الكل', confirmClass: 'btn-primary' }
+    );
+}
+
+async function handleBulkSendTasksMessage() {
+    // 1. جلب الوكلاء المجدولين لهذا اليوم
+    const today = new Date().getDay();
+    const { data: agentsForToday, error: fetchError } = await supabase
+        .from('agents')
+        .select('*')
+        .contains('audit_days', [today]);
+
+    if (fetchError) {
+        showToast('فشل جلب قائمة وكلاء اليوم.', 'error');
+        return;
+    }
+
+    // 2. فلترة الوكلاء الذين لديهم رصيد ومعرف دردشة
+    const eligibleAgents = agentsForToday.filter(agent => 
+        agent.telegram_chat_id && 
+        ((agent.remaining_balance || 0) > 0 || (agent.remaining_deposit_bonus || 0) > 0)
+    );
+
+    if (eligibleAgents.length === 0) {
+        showToast('لا يوجد وكلاء مؤهلون (لديهم رصيد ومعرف دردشة) في مهام اليوم.', 'warning');
+        return;
+    }
+
+    // 3. إظهار نافذة التأكيد
+    const modalContent = `<p>هل أنت متأكد من إرسال كليشة البونص إلى <strong>${eligibleAgents.length}</strong> وكيل مجدول لهذا اليوم؟</p>`;
+    showConfirmationModal(modalContent, async () => {
+        showBulkSendProgressModal(eligibleAgents.length);
+
+        let successCount = 0;
+        let errorCount = 0;
+        const errorAgents = [];
+
+        for (let i = 0; i < eligibleAgents.length; i++) {
+            const agent = eligibleAgents[i];
+            updateBulkSendProgress(Math.round(((i + 1) / eligibleAgents.length) * 100), `جاري الإرسال إلى: ${agent.name}`);
+
+            // 4. إنشاء الكليشة المخصصة
+            const renewalPeriodMap = { 'weekly': 'أسبوعي', 'biweekly': 'كل أسبوعين', 'monthly': 'شهري' };
+            const renewalText = renewalPeriodMap[agent.renewal_period] || 'تداولي';
+            let benefitsText = '';
+            if ((agent.remaining_balance || 0) > 0) benefitsText += `💰 <b>رصيد مسابقات (${renewalText}):</b> <code>${agent.remaining_balance}$</code>\n`;
+            if ((agent.remaining_deposit_bonus || 0) > 0) benefitsText += `🎁 <b>بونص ايداع:</b> <code>${agent.remaining_deposit_bonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
+            const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...\n\nيسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع بالمميزات التالية:\n\n${benefitsText.trim()}\n\nبامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.\n\nهل ترغب بارسال مسابقة لحضرتك؟`;
+
+            // 5. الإرسال مع تأخير
+            const todayStr = new Date().toISOString().split('T')[0];
+            try {
+                const response = await fetch('/api/post-announcement', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id }) });
+                if (!response.ok) throw new Error(`فشل الإرسال إلى ${agent.name}`);
+                
+                // --- تعديل: تفعيل التدقيق بعد الإرسال الناجح ---
+                const { error: auditError } = await supabase
+                    .from('daily_tasks')
+                    .upsert({ agent_id: agent.id, task_date: todayStr, audited: true }, { onConflict: 'agent_id, task_date' });
+                if (auditError) console.warn(`فشل تفعيل التدقيق للوكيل ${agent.name}:`, auditError.message);
+                // --- نهاية التعديل ---
+
+                successCount++;
+            } catch (err) {
+                errorCount++;
+                errorAgents.push(agent.name);
+            }
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        let finalMessage = `اكتملت العملية. تم الإرسال بنجاح إلى ${successCount} وكيل.`;
+        if (errorCount > 0) finalMessage += `<br>فشل الإرسال إلى ${errorCount} وكيل: <small>${errorAgents.join(', ')}</small>`;
+        updateBulkSendProgress(100, finalMessage, true);
+    }, { title: 'تأكيد إرسال التعميم اليومي', confirmText: 'نعم، إرسال للكل', confirmClass: 'btn-telegram-bonus' });
+}
+
+async function handleBulkSendMessage() {
+    // تعديل: فلترة الوكلاء الذين لديهم رصيد متاح (مسابقات أو إيداع) ومعرف دردشة
+    const agentsWithChatId = allAgentsData.filter(agent => 
+        agent.telegram_chat_id && 
+        agent.telegram_group_name &&
+        ((agent.remaining_balance || 0) > 0 || (agent.remaining_deposit_bonus || 0) > 0)
+    );
+
+    if (agentsWithChatId.length === 0) {
+        showToast('لا يوجد وكلاء لديهم أرصدة متاحة ومعرف دردشة (Chat ID) مسجل.', 'warning');
+        return;
+    }
+
+    const modalContent = `<p>هل أنت متأكد من إرسال كليشة البونص إلى <strong>${agentsWithChatId.length}</strong> وكيل مؤهل؟</p>
+    <small>سيتم إرسال رسالة مخصصة لكل وكيل بناءً على رصيده المتاح.</small>`;
+
+    showConfirmationModal(modalContent, async () => {
+        // Show progress modal
+        showBulkSendProgressModal(agentsWithChatId.length);
+
+        let successCount = 0;
+        let errorCount = 0;
+        const errorAgents = [];
+
+        for (let i = 0; i < agentsWithChatId.length; i++) {
+            const agent = agentsWithChatId[i];
+            const progress = Math.round(((i + 1) / agentsWithChatId.length) * 100);
+            updateBulkSendProgress(progress, `جاري الإرسال إلى: ${agent.name} (${i + 1} / ${agentsWithChatId.length})`);
+
+            // --- إنشاء الكليشة المخصصة لكل وكيل ---
+            const renewalPeriodMap = { 'weekly': 'أسبوعي', 'biweekly': 'كل أسبوعين', 'monthly': 'شهري' };
+            const renewalText = renewalPeriodMap[agent.renewal_period] || 'تداولي';
+            let benefitsText = '';
+            if ((agent.remaining_balance || 0) > 0) {
+                benefitsText += `💰 <b>رصيد مسابقات (${renewalText}):</b> <code>${agent.remaining_balance}$</code>\n`;
+            }
+            if ((agent.remaining_deposit_bonus || 0) > 0) {
+                benefitsText += `🎁 <b>بونص ايداع:</b> <code>${agent.remaining_deposit_bonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
+            }
+
+            const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...
+
+يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع بالمميزات التالية:
+
+${benefitsText.trim()}
+
+بامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.
+
+هل ترغب بارسال مسابقة لحضرتك؟`;
+            // --- نهاية إنشاء الكليشة ---
+
+            const todayStr = new Date().toISOString().split('T')[0];
+            try {
+                const response = await fetch('/api/post-announcement', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
+                });
+
+                if (!response.ok) throw new Error(`فشل الإرسال إلى ${agent.name}`);
+
+                // --- تعديل: تفعيل التدقيق بعد الإرسال الناجح ---
+                const { error: auditError } = await supabase
+                    .from('daily_tasks')
+                    .upsert({ agent_id: agent.id, task_date: todayStr, audited: true }, { onConflict: 'agent_id, task_date' });
+                if (auditError) console.warn(`فشل تفعيل التدقيق للوكيل ${agent.name}:`, auditError.message);
+                // --- نهاية التعديل ---
+
+                if (!response.ok) throw new Error(`فشل الإرسال إلى ${agent.name}`);
+                successCount++;
+            } catch (err) {
+                console.error(err);
+                errorCount++;
+                errorAgents.push(agent.name);
+            }
+
+            // **Important Delay:** Wait for 0.5 seconds between each request.
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+            // Finalize progress modal
+            let finalMessage = `اكتملت العملية. تم الإرسال بنجاح إلى ${successCount} وكيل.`;
+            if (errorCount > 0) {
+                finalMessage += `<br>فشل الإرسال إلى ${errorCount} وكيل.<br><small>الوكلاء: ${errorAgents.join(', ')}</small>`;
+            }
+            updateBulkSendProgress(100, finalMessage, true);
+    }, {
+        title: 'تأكيد إرسال كليشة البونص',
+        confirmText: 'نعم، إرسال للكل',
+        confirmClass: 'btn-telegram-bonus'
+    });
+}
+
+function showBulkSendProgressModal(total) {
+    const modalContent = `
+        <div class="update-progress-container">
+            <i class="fas fa-paper-plane update-icon"></i>
+            <h3 id="bulk-send-status-text">جاري التهيئة لإرسال ${total} رسالة...</h3>
+            <div class="progress-bar-outer">
+                <div id="bulk-send-progress-bar-inner" class="progress-bar-inner"></div>
+            </div>
+        </div>
+    `;
+    showConfirmationModal(modalContent, null, {
+        title: 'عملية الإرسال الجماعي',
+        showCancel: false,
+        showConfirm: false,
+        modalClass: 'modal-no-actions'
+    });
+}
+
+function updateBulkSendProgress(percentage, statusText, isFinished = false) {
+    const statusEl = document.getElementById('bulk-send-status-text');
+    const progressBar = document.getElementById('bulk-send-progress-bar-inner');
+    if (statusEl) statusEl.innerHTML = statusText;
+    if (progressBar) progressBar.style.width = `${percentage}%`;
+    if (isFinished) {
+        progressBar.style.backgroundColor = 'var(--success-color, #2ecc71)';
+    }
 }
 
 async function renderTopAgentsPage() {

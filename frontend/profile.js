@@ -235,20 +235,36 @@ async function renderAgentProfilePage(agentId, options = {}) {
             'monthly': 'شهري'
         };
         const renewalText = renewalPeriodMap[agent.renewal_period] || 'تداولي';
+
+        // --- NEW: Conditionally build the benefits text ---
+        let benefitsText = '';
+        const remainingBalance = agent.remaining_balance || 0;
+        const remainingDepositBonus = agent.remaining_deposit_bonus || 0;
+
+        if (remainingBalance > 0) {
+            benefitsText += `💰 <b>رصيد مسابقات (${renewalText}):</b> <code>${remainingBalance}$</code>\n`;
+        }
+        if (remainingDepositBonus > 0) {
+            benefitsText += `🎁 <b>بونص ايداع:</b> <code>${remainingDepositBonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
+        }
+
+        // If there are no benefits to show, don't proceed.
+        if (!benefitsText.trim()) {
+            showToast('لا توجد أرصدة متاحة لإرسال كليشة البونص لهذا الوكيل.', 'info');
+            return;
+        }
         
-        // تعديل: تحسين شكل الرسالة باستخدام HTML
         const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...
 
 يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع بالمميزات التالية:
 
-💰 <b>رصيد مسابقات (${renewalText}):</b> <code>${agent.remaining_balance || 0}$</code>
-🎁 <b>بونص ايداع:</b> <code>${agent.remaining_deposit_bonus || 0}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>
+${benefitsText.trim()}
 
 بامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.
 
 هل ترغب بارسال مسابقة لحضرتك؟`;
 
-        // --- NEW: Verification Logic ---
+        // --- Verification Logic ---
         let targetGroupInfo = 'المجموعة العامة';
         if (agent.telegram_chat_id && agent.telegram_group_name) {
             try {
