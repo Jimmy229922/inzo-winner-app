@@ -881,7 +881,10 @@ async function renderCompetitionCreatePage(agentId) {
             const telegramResponse = await fetch('/api/post-announcement', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: finalDescription })
+                body: JSON.stringify({ 
+                    message: finalDescription,
+                    chatId: agent.telegram_chat_id // تعديل: إرسال المعرف الخاص بالوكيل
+                })
             });
 
             if (!telegramResponse.ok) {

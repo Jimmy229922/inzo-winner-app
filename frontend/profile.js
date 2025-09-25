@@ -91,6 +91,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 </h1>
                 <p>رقم الوكالة: <strong class="agent-id-text" title="نسخ الرقم">${agent.agent_id}</strong> | التصنيف: ${agent.classification} | المرتبة: ${agent.rank || 'غير محدد'}</p>
                 <p>روابط التلجرام: ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank">القناة</a>` : 'القناة (غير محدد)'} | ${agent.telegram_group_url ? `<a href="${agent.telegram_group_url}" target="_blank">الجروب</a>` : 'الجروب (غير محدد)'}</p>
+                <p>معرف الدردشة: ${agent.telegram_chat_id ? `<code>${agent.telegram_chat_id}</code>` : 'غير محدد'} | اسم المجموعة: <strong>${agent.telegram_group_name || 'غير محدد'}</strong></p>
             </div>
             <div class="profile-header-actions">
                  <button id="edit-profile-btn" class="btn-secondary"><i class="fas fa-user-edit"></i> تعديل</button>
@@ -234,26 +235,62 @@ async function renderAgentProfilePage(agentId, options = {}) {
             'monthly': 'شهري'
         };
         const renewalText = renewalPeriodMap[agent.renewal_period] || 'تداولي';
+        
+        // تعديل: تحسين شكل الرسالة باستخدام HTML
+        const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...
 
-        const clicheText = `دمت بخير شريكنا العزيز ${agent.name} ...
-يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع برصيد مسابقات (${renewalText}) قيمته ${agent.remaining_balance || 0}$ و ${agent.deposit_bonus_percentage || 0}% بونص ايداع لـ ${agent.remaining_deposit_bonus || 0} مرات.
-بامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة. هل ترغب بارسال مسابقة لحضرتك؟`;
+يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع بالمميزات التالية:
 
-        // 2. Show confirmation modal before sending
+💰 <b>رصيد مسابقات (${renewalText}):</b> <code>${agent.remaining_balance || 0}$</code>
+🎁 <b>بونص ايداع:</b> <code>${agent.remaining_deposit_bonus || 0}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>
+
+بامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.
+
+هل ترغب بارسال مسابقة لحضرتك؟`;
+
+        // --- NEW: Verification Logic ---
+        let targetGroupInfo = 'المجموعة العامة';
+        if (agent.telegram_chat_id && agent.telegram_group_name) {
+            try {
+                showToast('جاري التحقق من بيانات المجموعة...', 'info');
+                const response = await fetch(`/api/get-chat-info?chatId=${agent.telegram_chat_id}`);
+                const data = await response.json();
+
+                if (!response.ok) throw new Error(data.message);
+
+                const actualGroupName = data.title;
+                if (actualGroupName.trim() !== agent.telegram_group_name.trim()) {
+                    showToast(`<b>خطأ في التحقق:</b> اسم المجموعة المسجل (<b>${agent.telegram_group_name}</b>) لا يطابق الاسم الفعلي على تلجرام (<b>${actualGroupName}</b>). يرجى تصحيح البيانات.`, 'error');
+                    return; // Stop the process
+                }
+                // Verification successful
+                targetGroupInfo = `مجموعة الوكيل: <strong>${agent.telegram_group_name}</strong> (تم التحقق بنجاح)`;
+
+            } catch (error) {
+                showToast(`فشل التحقق من المجموعة: ${error.message}`, 'error');
+                return; // Stop the process
+            }
+        } else if (agent.telegram_chat_id) {
+            showToast('لا يمكن التحقق. اسم المجموعة غير مسجل لهذا الوكيل.', 'warning');
+            return;
+        }
+        // --- End Verification Logic ---
+
+        // Show confirmation modal only after successful verification (if applicable)
         showConfirmationModal(
-            `<p>هل أنت متأكد من إرسال رسالة تذكير البونص إلى قناة التلجرام؟</p>
+            `<p>سيتم إرسال الرسالة إلى: ${targetGroupInfo}. هل أنت متأكد من المتابعة؟</p>
              <textarea class="modal-textarea-preview" readonly>${clicheText}</textarea>`,
             async () => {
-                // 3. Send to backend on confirmation
                 try {
                     const response = await fetch('/api/post-announcement', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: clicheText })
+                        body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
                     });
-                    const result = await response.json();
-                    if (!response.ok) throw new Error(result.message || 'فشل الاتصال بالخادم.');
-
+                    if (!response.ok) {
+                        const result = await response.json();
+                        throw new Error(result.message || 'فشل الاتصال بالخادم.');
+                    }
                     showToast('تم إرسال كليشة البونص إلى تلجرام بنجاح.', 'success');
                     await logAgentActivity(agent.id, 'BONUS_CLICHE_SENT', 'تم إرسال كليشة تذكير البونص إلى تلجرام.');
                 } catch (error) {
@@ -270,6 +307,10 @@ async function renderAgentProfilePage(agentId, options = {}) {
     });
 
     document.getElementById('send-winners-cliche-btn').addEventListener('click', () => {
+        const targetGroup = agent.telegram_group_name && agent.telegram_chat_id 
+            ? `مجموعة الوكيل: <strong>${agent.telegram_group_name}</strong>` 
+            : 'المجموعة العامة';
+
         const clicheText = `دمت بخير شريكنا العزيز ${agent.name}،
 
 يرجى اختيار الفائزين بالمسابقة الاخيرة التي تم انتهاء مدة المشاركة بها 
@@ -279,7 +320,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
         // Show confirmation modal before sending
         showConfirmationModal(
-            `<p>هل أنت متأكد من إرسال طلب اختيار الفائزين إلى قناة التلجرام؟</p>
+            `<p>سيتم إرسال الرسالة إلى: ${targetGroup}. هل أنت متأكد من المتابعة؟</p>
              <textarea class="modal-textarea-preview" readonly>${clicheText}</textarea>`,
             async () => {
                 // Send to backend on confirmation
@@ -287,7 +328,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                     const response = await fetch('/api/post-announcement', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: clicheText })
+                        body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
                     });
                     const result = await response.json();
                     if (!response.ok) throw new Error(result.message || 'فشل الاتصال بالخادم.');
@@ -893,6 +934,8 @@ function renderEditProfileHeader(agent, parentElement) {
                 </div>
                 <div class="form-group"><label for="telegram-channel-url">رابط قناة التلجرام</label><input type="text" id="telegram-channel-url" value="${agent.telegram_channel_url || ''}"></div>
                 <div class="form-group"><label for="telegram-group-url">رابط جروب التلجرام</label><input type="text" id="telegram-group-url" value="${agent.telegram_group_url || ''}"></div>
+                <div class="form-group"><label for="edit-telegram-chat-id">معرف الدردشة (Chat ID)</label><input type="text" id="edit-telegram-chat-id" value="${agent.telegram_chat_id || ''}" placeholder="مثال: -100123456789"></div>
+                <div class="form-group"><label for="edit-telegram-group-name">اسم مجموعة التلجرام</label><input type="text" id="edit-telegram-group-name" value="${agent.telegram_group_name || ''}"></div>
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label>أيام التدقيق</label>
                     <div class="days-selector">
@@ -994,6 +1037,8 @@ function renderEditProfileHeader(agent, parentElement) {
             audit_days: selectedDays,
             telegram_channel_url: headerV2.querySelector('#telegram-channel-url').value || null,
             telegram_group_url: headerV2.querySelector('#telegram-group-url').value || null,
+            telegram_chat_id: headerV2.querySelector('#edit-telegram-chat-id').value || null,
+            telegram_group_name: headerV2.querySelector('#edit-telegram-group-name').value || null,
             avatar_url: newAvatarUrl,
         };
 
@@ -1018,6 +1063,8 @@ function renderEditProfileHeader(agent, parentElement) {
                     audit_days: 'أيام التدقيق',
                     telegram_channel_url: 'رابط قناة التلجرام',
                     telegram_group_url: 'رابط جروب التلجرام',
+                    telegram_chat_id: 'معرف الدردشة',
+                    telegram_group_name: 'اسم مجموعة التلجرام',
                     avatar_url: 'الصورة الشخصية'
                 };
                 const changeDescriptions = changedKeys.map(key => {

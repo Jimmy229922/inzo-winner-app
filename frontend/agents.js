@@ -60,6 +60,13 @@ async function renderManageAgentsPage() {
                     <button class="filter-btn" data-filter="B">B</button>
                     <button class="filter-btn" data-filter="C">C</button>
                 </div>
+                <div class="sort-container">
+                    <label for="agent-sort-select">ترتيب حسب:</label>
+                    <select id="agent-sort-select">
+                        <option value="newest">الأحدث أولاً</option>
+                        <option value="name_asc">أبجدي (أ - ي)</option>
+                    </select>
+                </div>
             </div>
         </div>
         <div id="agent-table-container"></div>
@@ -83,7 +90,7 @@ async function renderManageAgentsPage() {
         const { data, error } = await supabase
             .from('agents')
             .select('*')
-            .order('name', { ascending: true });
+            .order('created_at', { ascending: false });
 
         if (error) {
             console.error("Error fetching agents:", error);
@@ -101,6 +108,7 @@ function setupAgentFilters() {
     const searchInput = document.getElementById('agent-search-input');
     const clearBtn = document.getElementById('agent-search-clear');
     const filterButtons = document.querySelectorAll('.agent-filters .filter-btn');
+    const sortSelect = document.getElementById('agent-sort-select');
 
     if (!searchInput) return;
 
@@ -111,8 +119,9 @@ function setupAgentFilters() {
 
         const searchTerm = searchInput.value.toLowerCase().trim();
         const activeFilter = document.querySelector('.agent-filters .filter-btn.active').dataset.filter;
+        const sortValue = sortSelect.value;
 
-        const filteredAgents = allAgentsData.filter(agent => {
+        let filteredAgents = allAgentsData.filter(agent => {
             const name = agent.name.toLowerCase();
             const agentIdStr = agent.agent_id;
             const classification = agent.classification;
@@ -120,6 +129,18 @@ function setupAgentFilters() {
             const matchesFilter = activeFilter === 'all' || classification === activeFilter;
             return matchesSearch && matchesFilter;
         });
+
+        // Sort the filtered results
+        filteredAgents.sort((a, b) => {
+            if (sortValue === 'name_asc') {
+                // Alphabetical sort
+                return a.name.localeCompare(b.name);
+            } else {
+                // Default to newest first
+                return new Date(b.created_at) - new Date(a.created_at);
+            }
+        });
+
 
         displayAgentsPage(filteredAgents, 1);
     };
@@ -142,6 +163,10 @@ function setupAgentFilters() {
                 applyFilters();
             });
         });
+    }
+
+    if (sortSelect) {
+        sortSelect.addEventListener('change', applyFilters);
     }
 }
 
@@ -250,7 +275,7 @@ function attachCardEventListeners(currentList, currentPage) {
         btn.addEventListener('click', (e) => {
             const card = e.currentTarget.closest('tr');
             const agentId = card.dataset.agentId;
-            const agentName = card.querySelector('.agent-name').textContent;
+            const agentName = card.querySelector('.agent-name-link').textContent;
 
             showConfirmationModal(
                 `هل أنت متأكد من حذف الوكيل "<strong>${agentName}</strong>"؟<br><small>سيتم حذف جميع بياناته المرتبطة بشكل دائم.</small>`,
@@ -792,6 +817,8 @@ function renderAddAgentForm() {
                     </div>
                     <div class="form-group"><label for="telegram-channel-url">رابط قناة التلجرام</label><input type="text" id="telegram-channel-url"></div>
                     <div class="form-group"><label for="telegram-group-url">رابط جروب التلجرام</label><input type="text" id="telegram-group-url"></div>
+                    <div class="form-group"><label for="telegram-chat-id">معرف الدردشة (Chat ID)</label><input type="text" id="telegram-chat-id" placeholder="مثال: -100123456789"></div>
+                    <div class="form-group"><label for="telegram-group-name">اسم مجموعة التلجرام</label><input type="text" id="telegram-group-name"></div>
                     <div class="form-group" style="grid-column: 1 / -1;">
                         <label>أيام التدقيق</label>
                         <div class="days-selector">
@@ -859,6 +886,8 @@ function renderAddAgentForm() {
             rank: rank || null,
             telegram_channel_url: document.getElementById('telegram-channel-url').value || null,
             telegram_group_url: document.getElementById('telegram-group-url').value || null,
+            telegram_chat_id: document.getElementById('telegram-chat-id').value || null,
+            telegram_group_name: document.getElementById('telegram-group-name').value || null,
             renewal_period: document.getElementById('agent-renewal-period').value,
             competition_bonus: rankData.competition_bonus,
             deposit_bonus_percentage: rankData.deposit_bonus_percentage,

@@ -128,33 +128,62 @@ apiRouter.post('/post-winner', async (req, res) => {
 
 // NEW: Endpoint to post a generic announcement
 apiRouter.post('/post-announcement', async (req, res) => {
-    const { message } = req.body;
+    const { message, chatId } = req.body; // استقبال chatId من الطلب
     // console.log(`[INFO] Received request to post announcement.`);
 
     if (!message) {
         console.warn('[WARN] Post announcement request received with no message.');
         return res.status(400).json({ message: 'Message content is required' });
     }
-
-    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+    
+    // تحديد chat_id الذي سيتم الإرسال إليه. الأولوية للـ chatId الخاص بالوكيل.
+    const targetChatId = chatId || TELEGRAM_CHAT_ID;
+    if (!TELEGRAM_BOT_TOKEN || !targetChatId) {
         const errorMsg = '[ERROR] Telegram Bot Token or Chat ID is not configured on the server.';
         console.error(errorMsg);
         return res.status(500).json({ message: 'Telegram integration is not configured on the server.' });
     }
 
     const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-
     try {
         await axios.post(telegramApiUrl, {
-            chat_id: TELEGRAM_CHAT_ID,
-            text: message,
+            chat_id: targetChatId, // استخدام المعرف المستهدف
+            text: message, // تعديل: إضافة parse_mode
+            parse_mode: 'HTML' // تعديل: إضافة parse_mode
         });
         // console.log(`[SUCCESS] Announcement sent to Telegram.`);
         res.status(200).json({ message: 'Successfully posted announcement to Telegram' });
     } catch (error) {
         const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
         console.error(`[ERROR] Failed to send announcement to Telegram: ${errorDetails}`);
-        res.status(500).json({ message: `Failed to post to Telegram. Reason: ${error.response ? error.response.data.description : 'Unknown error'}` });
+        res.status(500).json({ message: `فشل الإرسال إلى تلجرام. السبب: ${error.response ? error.response.data.description : 'Unknown error'}` });
+    }
+});
+
+// NEW: Endpoint to get chat info from Telegram
+apiRouter.get('/get-chat-info', async (req, res) => {
+    const { chatId } = req.query;
+
+    if (!chatId) {
+        return res.status(400).json({ message: 'Chat ID is required.' });
+    }
+
+    if (!TELEGRAM_BOT_TOKEN) {
+        return res.status(500).json({ message: 'Telegram integration is not configured.' });
+    }
+
+    const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getChat`;
+
+    try {
+        const response = await axios.post(telegramApiUrl, { chat_id: chatId });
+        const chatTitle = response.data?.result?.title;
+        if (!chatTitle) throw new Error('Could not retrieve chat title.');
+
+        res.status(200).json({ title: chatTitle });
+    } catch (error) {
+        const errorDetails = error.response ? error.response.data.description : error.message;
+        console.error(`[ERROR] Failed to get chat info for ${chatId}: ${errorDetails}`);
+        res.status(500).json({ message: `فشل جلب بيانات المجموعة من تلجرام. تأكد من أن البوت عضو في المجموعة وأن المعرف صحيح.` });
     }
 });
 
@@ -266,7 +295,7 @@ cron.schedule('0 0 * * *', async () => {
 
         const { data: competitionsForToday, error: fetchError } = await supabaseAdmin
             .from('competitions')
-            .select('id, name, correct_answer, agents(name)')
+            .select('id, name, correct_answer, agents(name, telegram_chat_id)') // تعديل: جلب chat_id الخاص بالوكيل
             .eq('status', 'sent')
             .gte('ends_at', todayStart) // Greater than or equal to the start of today
             .lt('ends_at', tomorrowStart); // Less than the start of tomorrow
@@ -282,11 +311,14 @@ cron.schedule('0 0 * * *', async () => {
 
             for (const comp of competitionsForToday) {
                 const agentName = comp.agents ? comp.agents.name : 'شريكنا';
+                // تعديل: تحديد المعرف المستهدف. الأولوية للمعرف الخاص بالوكيل.
+                const targetChatId = comp.agents?.telegram_chat_id || TELEGRAM_CHAT_ID;
+
                 const clicheText = `دمت بخير شريكنا العزيز ${agentName}،\n\nانتهى وقت المشاركة في مسابقة "${comp.name}".\n\nالإجابة الصحيحة هي: **${comp.correct_answer}**\n\nيرجى اختيار الفائزين وتزويدنا بفيديو الروليت وبياناتهم ليتم التحقق منهم من قبل القسم المختص.`;
                 
                 // 2. Send to Telegram
                 await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                    chat_id: TELEGRAM_CHAT_ID,
+                    chat_id: targetChatId, // تعديل: استخدام المعرف المستهدف
                     text: clicheText
                 });
 
