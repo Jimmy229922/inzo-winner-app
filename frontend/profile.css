@@ -503,46 +503,115 @@
     color: #e74c3c;
 }
 
-.status-badge-v2 {
-    font-size: 0.8em;
-    padding: 4px 10px;
-    border-radius: 12px;
+
+/* New Stepper Styles */
+.stepper-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+
+.stepper-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    z-index: 1;
+    flex-basis: 0;
+    flex-grow: 1;
+}
+
+.step-counter {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--bg-color);
+    border: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: var(--text-secondary-color);
+    transition: all 0.4s ease;
+    margin-bottom: 8px;
+}
+
+.step-name {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    transition: color 0.4s ease;
+}
+
+.stepper-item.completed .step-counter {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+.stepper-item.completed .step-name {
+    color: var(--text-color);
     font-weight: bold;
 }
-.status-badge-v2.status-sent { background-color: #3498db; color: white; }
-.status-badge-v2.status-awaiting_winners { background-color: #f39c12; color: white; }
-.status-badge-v2.status-completed { background-color: #27ae60; color: white; }
+
+.stepper-line {
+    flex-grow: 2;
+    height: 2px;
+    background-color: var(--border-color);
+    transition: background-color 0.4s ease;
+    position: relative;
+}
+
+.stepper-line.completed {
+    background-color: var(--primary-color);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--primary-color) 50%, transparent);
+    transition-delay: 0.2s; /* Add a slight delay to feel more sequential */
+}
 
 .competition-status-tracker {
-    padding: 10px 0;
+    padding: 20px 0;
+}
+
+
+
+.competition-status-tracker {
+    padding: 20px 0;
 }
 
 .competition-progress-bar {
     position: relative;
     width: 100%;
-    height: 20px; /* Increased height for labels */
+    margin-top: 10px;
 }
 
-.progress-track {
+.progress-bar-fill {
+    position: absolute;
+    top: 5px; /* Center it vertically on the dots */
+    left: 0;
+    height: 2px;
+    background-color: var(--primary-color);
+    transition: width 0.5s ease-in-out;
+    z-index: 0;
+}
+
+.progress-labels {
     display: flex;
     justify-content: space-between;
     position: relative;
-    width: 100%;
+    z-index: 1;
 }
 
-.progress-step {
-    flex: 1;
-    text-align: center;
-    position: relative;
-    color: var(--text-secondary-color);
+.progress-labels span {
     font-size: 0.8em;
-    font-weight: 500;
+    color: var(--text-secondary-color);
+    position: relative;
+    padding-top: 20px; /* Space for the dot */
 }
 
-.progress-step:before {
-    content: '';
+.progress-labels span::before {
+    content: "";
     position: absolute;
-    top: -6px; /* Position above the text */
+    top: 0;
     left: 50%;
     transform: translateX(-50%);
     width: 12px;
@@ -550,28 +619,16 @@
     border-radius: 50%;
     background-color: var(--border-color);
     border: 2px solid var(--card-bg-color);
-    z-index: 1;
-    transition: background-color 0.4s;
+    transition: background-color 0.4s ease;
 }
 
-.progress-step.active {
+.progress-labels .active {
     color: var(--primary-color);
     font-weight: bold;
 }
 
-.progress-step.active:before {
+.progress-labels .active::before {
     background-color: var(--primary-color);
-}
-
-.progress-track:before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background-color: var(--border-color);
-    z-index: 0;
 }
 
 .correct-answer-display-card {
@@ -601,79 +658,6 @@
     display: flex;
     align-items: center;
     gap: 10px;
-}
-.completed-competitions-group summary::-webkit-details-marker {
-    display: none; /* Hide default marker for Chrome/Safari */
-}
-
-.completed-competitions-group .competitions-list-profile {
-    padding: 15px;
-}
-
-
-/* Styles for confirmation modal with text preview */
-.modal-textarea-preview {
-    width: 100%;
-    min-height: 150px;
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 10px;
-    font-family: inherit;
-    font-size: 0.9em;
-    line-height: 1.6;
-    resize: vertical;
-    margin-top: 10px;
-    text-align: right; /* For RTL text */
-}
-
-.competitions-list-view {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.competitions-list-view .competition-card {
-    display: grid;
-    /* New grid layout with checkbox */
-    grid-template-columns: auto 1fr auto; /* تعديل لضمان تناسق الأعمدة */
-    grid-template-areas: "checkbox content actions";
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1.5rem;
-    background-color: var(--card-bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    transition: background-color 0.2s, border-color 0.2s;
-}
-
-.competitions-list-view .competition-card.selected {
-    background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
-    border-color: var(--primary-color);
-}
-
-.competitions-list-view .competition-card > * {
-    margin: 0;
-    padding: 0;
-    border: none;
-}
-
-/* New Checkbox area */
-.competitions-list-view .row-checkbox {
-    grid-area: checkbox;
-    padding-right: 10px;
-}
-
-/* New Content wrapper */
-.competitions-list-view .competition-card-content {
-    grid-area: content;
-    display: grid;
-    grid-template-columns: 2fr 1fr; /* إعطاء مساحة أكبر للمسابقة */
-    grid-template-areas: 
-        "header agent";
-    align-items: center;
-    gap: 1.5rem;
 }
 
 .competitions-list-view .competition-card-header {

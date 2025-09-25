@@ -318,12 +318,18 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 const currentStatus = statusSteps[comp.status] || statusSteps['sent'];
 
                 const progressBarHtml = `
-                    <div class="competition-progress-bar">
-                        <div class="progress-track">
-                            <div class="progress-step ${currentStatus.step >= 1 ? 'active' : ''}" title="تم الإرسال"><span>تم الإرسال</span></div>
-                            <div class="progress-step ${currentStatus.step >= 2 ? 'active' : ''}" title="في انتظار الفائزين"><span>في انتظار الفائزين</span></div>
-                            <div class="progress-step ${currentStatus.step >= 3 ? 'active' : ''}" title="مكتملة"><span>مكتملة</span></div>
-                        </div>
+                    <div class="stepper-wrapper step-${currentStatus.step}">
+                        ${Object.values(statusSteps).map((s, index) => {
+                            const isLineCompleted = currentStatus.step > s.step;
+                            return `
+                            <div class="stepper-item ${currentStatus.step >= s.step ? 'completed' : ''}">
+                                <div class="step-counter">
+                                    ${currentStatus.step > s.step ? '<i class="fas fa-check"></i>' : s.step}
+                                </div>
+                                <div class="step-name">${s.text}</div>
+                            </div>
+                            ${index < Object.values(statusSteps).length - 1 ? `<div class="stepper-line ${isLineCompleted ? 'completed' : ''}"></div>` : ''}
+                        `}).join('')}
                     </div>
                 `;
 
@@ -337,9 +343,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                         </div>
                     </div>
                     <div class="competition-card-body">
-                        <div class="competition-status-tracker">
-                            ${progressBarHtml}
-                        </div>
+                        <div class="competition-status-tracker">${progressBarHtml}</div>
                         <p class="correct-answer-display-card"><i class="fas fa-key"></i><strong>الإجابة الصحيحة:</strong> ${comp.correct_answer || '<em>غير محددة</em>'}</p>
                     </div>
                     <div class="competition-card-footer">
