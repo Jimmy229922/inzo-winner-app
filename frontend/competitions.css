@@ -658,7 +658,7 @@
 /* New Create Competition Page V3 */
 .create-competition-layout-v3 {
     display: grid;
-    grid-template-columns: 300px 1fr 1.5fr; /* Agent Info | Variables | Preview */
+    grid-template-columns: 300px 450px 1fr; /* Agent Info | Variables (fixed) | Preview (flexible) */
     gap: 25px;
     align-items: flex-start;
 }
@@ -696,8 +696,8 @@
 
 .variables-v3 .override-fields-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
     margin-top: 20px;
 }
 
@@ -727,6 +727,19 @@
     gap: 10px;
 }
 
+.variables-v3 #competition-cost-summary {
+    margin-top: 15px;
+    background-color: var(--bg-color);
+    padding: 10px 15px;
+    border-radius: 6px;
+}
+
+.variables-v3 #competition-cost-summary label {
+    color: var(--primary-color);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+}
 @keyframes pulse-red {
     0% { transform: scale(1); }
     50% { transform: scale(1.05); }

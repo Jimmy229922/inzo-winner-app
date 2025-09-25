@@ -554,6 +554,8 @@ async function renderCompetitionCreatePage(agentId) {
     const depositWinnersInput = document.getElementById('override-deposit-winners');
     const durationInput = document.getElementById('override-duration');
     const winnerDatePreview = document.getElementById('winner-selection-date-preview');
+    const costSummaryContainer = document.getElementById('competition-cost-summary');
+    const costSummaryText = document.getElementById('cost-summary-text');
 
     // NEW: Add listener to the variables card to update on blur/click away
     document.querySelector('.variables-v3').addEventListener('focusout', (e) => {
@@ -691,7 +693,6 @@ async function renderCompetitionCreatePage(agentId) {
         validationContainer.innerHTML = validationMessages;
         document.getElementById('balance-card').classList.toggle('invalid', newRemainingBalance < 0);
         document.getElementById('bonus-card').classList.toggle('invalid', newRemainingDepositBonus < 0);
-        sendBtn.disabled = isInvalid;
 
         // --- NEW: Update Winner Selection Date Preview ---
         if (duration) {
@@ -711,6 +712,22 @@ async function renderCompetitionCreatePage(agentId) {
             winnerDatePreview.parentElement.style.display = 'none';
         }
 
+        // --- NEW: Update Cost Summary Preview ---
+        if (costSummaryContainer && costSummaryText) {
+            const summaryParts = [];
+            if (totalCost > 0) {
+                summaryParts.push(`سيتم خصم <strong>${totalCost.toFixed(2)}$</strong> من رصيد المسابقات`);
+            }
+            if (depositWinners > 0) {
+                summaryParts.push(`سيتم خصم <strong>${depositWinners}</strong> من بونص الإيداع`);
+            }
+
+            if (summaryParts.length > 0) {
+                costSummaryText.innerHTML = summaryParts.join(' و ');
+            } else {
+                costSummaryText.innerHTML = 'لم يتم تحديد تكلفة بعد.';
+            }
+        }
     }
 
     [templateSelect, tradingWinnersInput, prizeInput, depositWinnersInput, durationInput].forEach(input => {
@@ -723,10 +740,6 @@ async function renderCompetitionCreatePage(agentId) {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const sendBtn = e.target.querySelector('.btn-send-telegram');
-        sendBtn.disabled = true;
-        sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
-
         const selectedTemplateId = templateSelect.value;
         const selectedTemplate = templates.find(t => t.id == selectedTemplateId);
         if (!selectedTemplate) {
@@ -741,20 +754,34 @@ async function renderCompetitionCreatePage(agentId) {
         const prizePerWinner = parseFloat(prizeInput.value) || 0;
         const depositWinnersCount = parseInt(depositWinnersInput.value) || 0;
         const totalCost = winnersCount * prizePerWinner;
+        const sendBtn = e.target.querySelector('.btn-send-telegram');
+        const originalBtnHtml = sendBtn.innerHTML;
 
-        if (totalCost > (agent.remaining_balance || 0)) {
-            showToast(`رصيد الوكيل غير كافٍ. التكلفة المطلوبة ${totalCost.toFixed(2)}$ بينما المتاح ${(agent.remaining_balance || 0).toFixed(2)}$ فقط.`, 'error');
-            sendBtn.disabled = false;
-            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال إلى تلجرام الآن';
-            return;
+        console.log('[Submit Debug] --- Checking Balances ---');
+        console.log(`[Submit Debug] Agent Balance: Available = ${agent.remaining_balance || 0}, Cost = ${totalCost.toFixed(2)}`);
+        console.log(`[Submit Debug] Deposit Bonus: Available = ${agent.remaining_deposit_bonus || 0}, Required = ${depositWinnersCount}`);
+        
+        // Enhanced validation on submit
+        if (totalCost > (agent.remaining_balance || 0) || depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
+            console.log('[Submit Debug] Validation FAILED. Entering error block.');
+            const errorParts = [];
+            if (totalCost > (agent.remaining_balance || 0)) {
+                console.log('[Submit Debug] Insufficient trading balance. Showing toast.');
+                errorParts.push(`رصيد المسابقات غير كافٍ (المطلوب: ${totalCost.toFixed(2)}$، المتاح: ${(agent.remaining_balance || 0).toFixed(2)}$)`);
+            }
+            if (depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
+                console.log('[Submit Debug] Insufficient deposit bonus. Showing toast.');
+                errorParts.push(`بونص الإيداع غير كافٍ (المطلوب: ${depositWinnersCount}، المتاح: ${agent.remaining_deposit_bonus || 0})`);
+            }
+            showToast(errorParts.join(' و '), 'error');
+            console.log('[Submit Debug] Stopping submission.');
+            // No need to disable the button here, just stop the process.
+            return; // Stop submission
         }
 
-        if (depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
-            showToast(`عدد مرات بونص الإيداع غير كافٍ. المطلوب ${depositWinnersCount} بينما المتاح ${agent.remaining_deposit_bonus || 0} فقط.`, 'error');
-            sendBtn.disabled = false;
-            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال إلى تلجرام الآن';
-            return;
-        }
+        // If validation passes, disable the button and show loading state
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
 
         try {
             // 1. Save the competition
@@ -848,7 +875,7 @@ async function renderCompetitionCreatePage(agentId) {
             showToast(error.message, 'error');
             console.error('Competition creation failed:', error);
             sendBtn.disabled = false;
-            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال إلى تلجرام الآن';
+            sendBtn.innerHTML = originalBtnHtml;
         }
     });
 }

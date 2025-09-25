@@ -128,7 +128,13 @@ async function renderHomePage() {
                             <div class="pending-agent-card-v2">
                                 <div class="pending-agent-info">
                                     ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
-                                    <a href="#profile/${agent.id}" class="agent-name-link">${agent.name}</a>
+                                    <div class="agent-name-wrapper">
+                                        <a href="#profile/${agent.id}" class="agent-name-link">${agent.name}</a>
+                                        <div class="pending-task-icons">
+                                            ${needsAudit ? '<i class="fas fa-clipboard-check pending-icon-audit" title="مطلوب تدقيق"></i>' : ''}
+                                            ${needsCompetition ? '<i class="fas fa-trophy pending-icon-comp" title="مطلوب إرسال مسابقة"></i>' : ''}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="pending-agent-actions">
                                     ${needsCompetition ? `<button class="btn-secondary btn-small create-comp-btn" data-agent-id="${agent.id}" title="إنشاء مسابقة"><i class="fas fa-magic"></i></button>` : ''}
