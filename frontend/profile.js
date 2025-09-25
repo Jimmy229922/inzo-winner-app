@@ -1,3 +1,15 @@
+let competitionCountdownIntervals = [];
+
+function stopCompetitionCountdowns() {
+    competitionCountdownIntervals.forEach(clearInterval);
+    competitionCountdownIntervals = [];
+}
+
+let renewalCountdownInterval;
+function stopRenewalCountdown() {
+    if (renewalCountdownInterval) clearInterval(renewalCountdownInterval);
+}
+
 async function renderAgentProfilePage(agentId, options = {}) {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = '';
@@ -6,6 +18,9 @@ async function renderAgentProfilePage(agentId, options = {}) {
         appContent.innerHTML = `<p class="error">لا يمكن عرض الملف الشخصي، لم يتم الاتصال بقاعدة البيانات.</p>`;
         return;
     }
+
+    // Clear any previous timers from other profiles
+    stopCompetitionCountdowns();
 
     // Check for edit mode in hash, e.g., #profile/123/edit
     const hashParts = window.location.hash.split('/');
@@ -37,18 +52,20 @@ async function renderAgentProfilePage(agentId, options = {}) {
     }
 
     const hasActiveCompetition = agentCompetitions.some(c => c.is_active);
+    const activeCompetition = agentCompetitions.find(c => c.is_active);
     const hasInactiveCompetition = !hasActiveCompetition && agentCompetitions.length > 0;
 
-    let birthdayIndicator = '';
-    if (agent.birth_date) {
-        const today = new Date();
-        const birthDate = new Date(agent.birth_date);
-        // Compare month and day, ignoring year and timezone differences
-        if (today.getMonth() === birthDate.getMonth() && today.getDate() === birthDate.getDate()) {
-            birthdayIndicator = `<button id="send-birthday-greeting-btn" class="birthday-badge"><i class="fas fa-birthday-cake"></i> عيد ميلاد سعيد!</button>`;
+    let activeCompetitionCountdownHtml = '';
+    if (activeCompetition && activeCompetition.ends_at) {
+        const endDate = new Date(activeCompetition.ends_at);
+        if (endDate.getTime() > new Date().getTime()) {
+            // The content will be filled by the live countdown timer
+            activeCompetitionCountdownHtml = `<div class="competition-countdown-header" data-end-date="${activeCompetition.ends_at}">
+                <i class="fas fa-clock"></i> 
+                <span>جاري حساب الوقت...</span>
+            </div>`;
         }
     }
-
     // Helper for audit days in Action Tab
     const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     const auditDaysHtml = (agent.audit_days && agent.audit_days.length > 0)
@@ -68,8 +85,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
             <div class="profile-main-info">
                 <h1>
                     ${agent.name} 
-                    ${hasActiveCompetition ? '<span class="status-badge active">مسابقة نشطة</span>' : ''}
-                    ${birthdayIndicator}
+                    ${hasActiveCompetition ? `<span class="status-badge active">مسابقة نشطة</span>${activeCompetitionCountdownHtml}` : ''}
                     ${hasInactiveCompetition ? '<span class="status-badge inactive">مسابقة غير نشطة</span>' : ''}
                 </h1>
                 <p>رقم الوكالة: <strong class="agent-id-text" title="نسخ الرقم">${agent.agent_id}</strong> | التصنيف: ${agent.classification} | المرتبة: ${agent.rank || 'غير محدد'}</p>
@@ -151,42 +167,6 @@ async function renderAgentProfilePage(agentId, options = {}) {
         agentIdEl.addEventListener('click', (e) => {
             e.stopPropagation();
             navigator.clipboard.writeText(agent.agent_id).then(() => showToast(`تم نسخ الرقم: ${agent.agent_id}`, 'info'));
-        });
-    }
-
-    // Birthday Greeting Button
-    const birthdayBtn = document.getElementById('send-birthday-greeting-btn');
-    if (birthdayBtn) {
-        birthdayBtn.addEventListener('click', () => {
-            const clicheText = `🎉 عيد ميلاد سعيد لشريكنا المميز ${agent.name}! 🎉
-
-تتمنى لك أسرة inzo يوماً رائعاً وعاماً مليئاً بالنجاح والتألق. 🎂`;
-
-            showConfirmationModal(
-                `<p>هل أنت متأكد من إرسال تهنئة عيد الميلاد إلى قناة التلجرام؟</p>
-                 <textarea class="modal-textarea-preview" readonly>${clicheText}</textarea>`,
-                async () => {
-                    try {
-                        const response = await fetch('/api/post-announcement', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ message: clicheText })
-                        });
-                        const result = await response.json();
-                        if (!response.ok) throw new Error(result.message || 'فشل الاتصال بالخادم.');
-
-                        showToast('تم إرسال تهنئة عيد الميلاد بنجاح.', 'success');
-                        await logAgentActivity(agent.id, 'BIRTHDAY_GREETING_SENT', 'تم إرسال تهنئة عيد الميلاد إلى تلجرام.');
-                    } catch (error) {
-                        showToast(`فشل إرسال التهنئة: ${error.message}`, 'error');
-                    }
-                },
-                {
-                    title: 'تهنئة عيد ميلاد',
-                    confirmText: 'إرسال التهنئة',
-                    confirmClass: 'btn-primary'
-                }
-            );
         });
     }
 
@@ -314,40 +294,77 @@ async function renderAgentProfilePage(agentId, options = {}) {
     // Render competitions in the new "agent-competitions" tab
     const agentCompetitionsContent = document.getElementById('agent-competitions-content');
     if (agentCompetitions && agentCompetitions.length > 0) {
-        agentCompetitionsContent.innerHTML = `
-            <div class="competitions-grid">
-                ${agentCompetitions.map(comp => {
-                    const endDate = agent.winner_selection_date ? new Date(agent.winner_selection_date) : null;
-                    let countdownHtml = '';
-                    if (endDate) {
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        const diffTime = endDate.getTime() - today.getTime();
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        let countdownText = '';
-                        if (diffDays > 0) countdownText = `(متبقي ${diffDays} أيام)`;
-                        else if (diffDays === 0) countdownText = `(تنتهي اليوم)`;
-                        else countdownText = `(منتهية)`;
-                        countdownHtml = `<p><i class="fas fa-calendar-alt"></i><div><strong>تاريخ الانتهاء:</strong> ${endDate.toLocaleDateString('ar-EG')} ${countdownText}</div></p>`;
-                    }
+        const activeAndPendingCompetitions = agentCompetitions.filter(c => c.status !== 'completed');
+        const completedCompetitions = agentCompetitions.filter(c => c.status === 'completed');
 
-                    return `
-                    <div class="competition-card">
-                        <div class="competition-card-header">
-                            <h3>${comp.name}</h3>
-                            <span class="status-badge ${comp.is_active ? 'active' : 'inactive'}">${comp.is_active ? 'نشطة' : 'غير نشطة'}</span>
-                        </div>
-                        <div class="competition-card-body">
-                            ${countdownHtml}
-                            <p class="description"><i class="fas fa-info-circle"></i><div><strong>الوصف:</strong> ${comp.description || '<em>لا يوجد وصف</em>'}</div></p>
-                        </div>
-                        <div class="competition-card-footer">
-                            <button class="btn-secondary edit-btn" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i> تعديل</button>
-                            <button class="btn-danger delete-competition-btn" data-id="${comp.id}"><i class="fas fa-trash-alt"></i> حذف</button>
+        const renderCompetitionList = (competitions) => {
+            return competitions.map(comp => {
+                const endDate = comp.ends_at ? new Date(comp.ends_at) : null;
+                let countdownHtml = '';
+                if (endDate && comp.status !== 'completed') {
+                    const diffTime = endDate.getTime() - new Date().getTime();
+                    if (diffTime > 0) {
+                        countdownHtml = `<div class="competition-countdown" data-end-date="${comp.ends_at}"><i class="fas fa-clock"></i> <span>جاري حساب الوقت...</span></div>`;
+                    } else {
+                        countdownHtml = `<div class="competition-countdown expired"><i class="fas fa-hourglass-end"></i> انتهى الوقت</div>`;
+                    }
+                }
+
+                const statusSteps = {
+                    'sent': { text: 'تم الإرسال', step: 1 },
+                    'awaiting_winners': { text: 'في انتظار الفائزين', step: 2 },
+                    'completed': { text: 'مكتملة', step: 3 }
+                };
+                const currentStatus = statusSteps[comp.status] || statusSteps['sent'];
+
+                const progressBarHtml = `
+                    <div class="competition-progress-bar">
+                        <div class="progress-track">
+                            <div class="progress-step ${currentStatus.step >= 1 ? 'active' : ''}" title="تم الإرسال"><span>تم الإرسال</span></div>
+                            <div class="progress-step ${currentStatus.step >= 2 ? 'active' : ''}" title="في انتظار الفائزين"><span>في انتظار الفائزين</span></div>
+                            <div class="progress-step ${currentStatus.step >= 3 ? 'active' : ''}" title="مكتملة"><span>مكتملة</span></div>
                         </div>
                     </div>
-                `}).join('')}
+                `;
+
+                return `
+                <div class="competition-card">
+                    <div class="competition-card-header">
+                        <h3>${comp.name}</h3>
+                        <div class="header-right-content">
+                            ${countdownHtml}
+                            <span class="status-badge-v2 status-${comp.status}">${currentStatus.text}</span>
+                        </div>
+                    </div>
+                    <div class="competition-card-body">
+                        <div class="competition-status-tracker">
+                            ${progressBarHtml}
+                        </div>
+                        <p class="correct-answer-display-card"><i class="fas fa-key"></i><strong>الإجابة الصحيحة:</strong> ${comp.correct_answer || '<em>غير محددة</em>'}</p>
+                    </div>
+                    <div class="competition-card-footer">
+                        <button class="btn-secondary edit-btn" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i> تعديل</button>
+                        ${comp.status === 'awaiting_winners' ? `<button class="btn-primary complete-competition-btn" data-id="${comp.id}" data-name="${comp.name}"><i class="fas fa-check-double"></i> تم اختيار الفائزين</button>` : ''}
+                        <button class="btn-danger delete-competition-btn" data-id="${comp.id}"><i class="fas fa-trash-alt"></i> حذف</button>
+                    </div>
+                </div>
+            `}).join('');
+        };
+
+        agentCompetitionsContent.innerHTML = `
+            <div class="competitions-list-profile">
+                ${renderCompetitionList(activeAndPendingCompetitions)}
             </div>
+            ${completedCompetitions.length > 0 ? `
+                <details class="completed-competitions-group">
+                    <summary>
+                        <i class="fas fa-archive"></i> المسابقات المكتملة (${completedCompetitions.length})
+                    </summary>
+                    <div class="competitions-list-profile">
+                        ${renderCompetitionList(completedCompetitions)}
+                    </div>
+                </details>
+            ` : ''}
         `;
     } else {
         agentCompetitionsContent.innerHTML = '<p>لا توجد مسابقات خاصة بهذا الوكيل بعد.</p>';
@@ -355,6 +372,31 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     agentCompetitionsContent.addEventListener('click', async (e) => {
         const deleteBtn = e.target.closest('.delete-competition-btn');
+        const completeBtn = e.target.closest('.complete-competition-btn');
+
+        if (completeBtn) {
+            const id = completeBtn.dataset.id;
+            const name = completeBtn.dataset.name;
+            showConfirmationModal(
+                `هل أنت متأكد من إكمال مسابقة "${name}"؟<br><small>سيتم نقلها إلى أرشيف المسابقات المنتهية.</small>`,
+                async () => {
+                    const { error } = await supabase.from('competitions').update({ status: 'completed', is_active: false }).eq('id', id);
+                    if (error) {
+                        showToast('فشل إكمال المسابقة.', 'error');
+                    } else {
+                        showToast('تم إكمال المسابقة بنجاح.', 'success');
+                        await logAgentActivity(agent.id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}".`);
+                        renderAgentProfilePage(agent.id, { activeTab: 'agent-competitions' });
+                    }
+                }, {
+                    title: 'تأكيد إكمال المسابقة',
+                    confirmText: 'نعم، اكتملت',
+                    confirmClass: 'btn-primary'
+                }
+            );
+            return; // Stop further execution
+        }
+
         if (deleteBtn) {
             const id = deleteBtn.dataset.id;
             if (!id) return;
@@ -381,6 +423,43 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     // Render the content for the details tab
     renderDetailsView(agent);
+
+    // Start live countdowns for competitions
+    startCompetitionCountdowns();
+}
+
+function startCompetitionCountdowns() {
+    const countdownElements = document.querySelectorAll('.competition-countdown, .competition-countdown-header');
+    if (countdownElements.length === 0) return;
+
+    const updateElements = () => {
+        let activeTimers = false;
+        countdownElements.forEach(el => {
+            if (!document.body.contains(el)) return;
+
+            const endDateStr = el.dataset.endDate;
+            if (!endDateStr) return;
+
+            const endDate = new Date(endDateStr);
+            const diffTime = endDate.getTime() - new Date().getTime();
+
+            if (diffTime <= 0) {
+                el.innerHTML = `<i class="fas fa-hourglass-end"></i> انتهى الوقت`;
+                el.classList.add('expired');
+            } else {
+                activeTimers = true;
+                const hours = Math.floor(diffTime / (1000 * 60 * 60));
+                const minutes = Math.floor((diffTime % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diffTime % (1000 * 60)) / 1000);
+                el.innerHTML = `<i class="fas fa-clock"></i> <span>متبقي: ${hours.toString().padStart(2, '0')} س و ${minutes.toString().padStart(2, '0')} د و ${seconds.toString().padStart(2, '0')} ث</span>`;
+            }
+        });
+        if (!activeTimers) stopCompetitionCountdowns();
+    };
+
+    updateElements();
+    const intervalId = setInterval(updateElements, 1000);
+    competitionCountdownIntervals.push(intervalId);
 }
 
 function generateActivityLogHTML(logs) {
@@ -390,8 +469,6 @@ function generateActivityLogHTML(logs) {
         if (actionType.includes('PROFILE_UPDATE')) return { icon: 'fa-user-edit', colorClass: 'log-icon-profile' };
         if (actionType.includes('DETAILS_UPDATE')) return { icon: 'fa-cogs', colorClass: 'log-icon-details' };
         if (actionType.includes('COMPETITION_CREATED')) return { icon: 'fa-trophy', colorClass: 'log-icon-competition' };
-        if (actionType.includes('BONUS_CLICHE_SENT')) return { icon: 'fa-paper-plane', colorClass: 'log-icon-telegram' };
-        if (actionType.includes('BIRTHDAY_GREETING_SENT')) return { icon: 'fa-birthday-cake', colorClass: 'log-icon-birthday' };
         if (actionType.includes('WINNERS_SELECTION_REQUESTED')) return { icon: 'fa-question-circle', colorClass: 'log-icon-telegram' };
         return { icon: 'fa-history', colorClass: 'log-icon-generic' };
     };
@@ -660,15 +737,6 @@ function renderInlineEditor(groupElement, agent) {
     });
 }
 
-function stopRenewalCountdown() {
-    if (renewalCountdownInterval) {
-        clearInterval(renewalCountdownInterval);
-        renewalCountdownInterval = null;
-        console.log('[Debug] Profile countdown timer cleared.');
-    }
-}
-
-let renewalCountdownInterval;
 function startRenewalCountdown(agent) {
     const countdownElement = document.getElementById('renewal-countdown-timer');
     if (!countdownElement || !agent.renewal_period || agent.renewal_period === 'none') {
@@ -680,8 +748,9 @@ function startRenewalCountdown(agent) {
     stopRenewalCountdown();
 
     // If last_renewal_date is null, it means it has never been renewed.
-    // We should treat the "start" of the countdown from now, or from the last renewal date if it exists.
-    const lastRenewal = !agent.last_renewal_date ? new Date() : new Date(agent.last_renewal_date);
+    // Use the agent's creation date as the base for the first renewal.
+    // If last_renewal_date exists, use that.
+    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.created_at);
     let nextRenewalDate = new Date(lastRenewal);
 
     if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
@@ -737,14 +806,12 @@ function renderEditProfileHeader(agent, parentElement) {
                 <div class="form-group">
                     <label for="edit-agent-classification">التصنيف</label>
                     <select id="edit-agent-classification">
-                        <option value="R" ${agent.classification === 'R' ? 'selected' : ''}>R</option>
                         <option value="A" ${agent.classification === 'A' ? 'selected' : ''}>A</option>
                         <option value="B" ${agent.classification === 'B' ? 'selected' : ''}>B</option>
                         <option value="C" ${agent.classification === 'C' ? 'selected' : ''}>C</option>
                     </select>
                 </div>
                 <div class="form-group"><label for="telegram-channel-url">رابط قناة التلجرام</label><input type="text" id="telegram-channel-url" value="${agent.telegram_channel_url || ''}"></div>
-                <div class="form-group"><label for="edit-agent-birth-date">تاريخ الميلاد</label><input type="date" id="edit-agent-birth-date" value="${agent.birth_date || ''}"></div>
                 <div class="form-group"><label for="telegram-group-url">رابط جروب التلجرام</label><input type="text" id="telegram-group-url" value="${agent.telegram_group_url || ''}"></div>
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label>أيام التدقيق</label>
@@ -847,7 +914,6 @@ function renderEditProfileHeader(agent, parentElement) {
             audit_days: selectedDays,
             telegram_channel_url: headerV2.querySelector('#telegram-channel-url').value || null,
             telegram_group_url: headerV2.querySelector('#telegram-group-url').value || null,
-            birth_date: headerV2.querySelector('#edit-agent-birth-date').value || null,
             avatar_url: newAvatarUrl,
         };
 
@@ -872,7 +938,6 @@ function renderEditProfileHeader(agent, parentElement) {
                     audit_days: 'أيام التدقيق',
                     telegram_channel_url: 'رابط قناة التلجرام',
                     telegram_group_url: 'رابط جروب التلجرام',
-                    birth_date: 'تاريخ الميلاد',
                     avatar_url: 'الصورة الشخصية'
                 };
                 const changeDescriptions = changedKeys.map(key => {

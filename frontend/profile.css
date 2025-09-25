@@ -89,15 +89,6 @@
     text-decoration: none;
     font-weight: bold;
 }
-.profile-main-info .agent-id-text {
-    cursor: pointer;
-    transition: color 0.2s;
-    display: inline-block;
-    padding: 2px 4px;
-}
-.profile-main-info .agent-id-text:hover {
-    color: var(--primary-color);
-}
 .status-badge {
     font-size: 0.5em;
     padding: 4px 10px;
@@ -116,27 +107,17 @@
     background-color: #f39c12; /* Orange */
 }
 
-.birthday-badge {
+.competition-countdown-header {
     font-size: 0.6em;
-    padding: 5px 12px;
-    border-radius: 15px;
-    font-weight: bold;
-    color: #fff;
-    background: linear-gradient(45deg, #ff6b6b, #feca57);
-    animation: birthday-glow 1.5s infinite alternate;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+    background-color: var(--bg-color);
+    padding: 4px 8px;
+    border-radius: 6px;
     display: inline-flex;
-    border: none;
-    font-family: inherit;
-    cursor: pointer;
     align-items: center;
     gap: 6px;
 }
-
-@keyframes birthday-glow {
-    from { box-shadow: 0 0 5px #ff6b6b, 0 0 10px #feca57; }
-    to { box-shadow: 0 0 15px #ff6b6b, 0 0 25px #feca57; }
-}
-
 .tabs {
     display: flex;
     margin-bottom: 20px;
@@ -274,8 +255,6 @@
 .log-icon-profile { background-color: #3498db; } /* Blue */
 .log-icon-details { background-color: #9b59b6; } /* Purple */
 .log-icon-competition { background-color: #f39c12; } /* Orange */
-.log-icon-telegram { background-color: #3498db; } /* Blue */
-.log-icon-birthday { background-color: #ff6b6b; } /* Pinkish-Red */
 .log-icon-generic { background-color: var(--text-secondary-color); } /* Gray */
 
 .log-item-content-v2 {
@@ -496,6 +475,141 @@
     background-color: #e67e22;
     transform: translateY(-2px);
 }
+
+.competitions-list-profile {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.competition-card-header .header-right-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.competition-countdown {
+    font-size: 0.85em;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+    background-color: var(--bg-color);
+    padding: 4px 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.competition-countdown.expired {
+    color: #e74c3c;
+}
+
+.status-badge-v2 {
+    font-size: 0.8em;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: bold;
+}
+.status-badge-v2.status-sent { background-color: #3498db; color: white; }
+.status-badge-v2.status-awaiting_winners { background-color: #f39c12; color: white; }
+.status-badge-v2.status-completed { background-color: #27ae60; color: white; }
+
+.competition-status-tracker {
+    padding: 10px 0;
+}
+
+.competition-progress-bar {
+    position: relative;
+    width: 100%;
+    height: 20px; /* Increased height for labels */
+}
+
+.progress-track {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+    width: 100%;
+}
+
+.progress-step {
+    flex: 1;
+    text-align: center;
+    position: relative;
+    color: var(--text-secondary-color);
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.progress-step:before {
+    content: '';
+    position: absolute;
+    top: -6px; /* Position above the text */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--border-color);
+    border: 2px solid var(--card-bg-color);
+    z-index: 1;
+    transition: background-color 0.4s;
+}
+
+.progress-step.active {
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.progress-step.active:before {
+    background-color: var(--primary-color);
+}
+
+.progress-track:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: var(--border-color);
+    z-index: 0;
+}
+
+.correct-answer-display-card {
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+    background-color: var(--bg-color);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.completed-competitions-group {
+    margin-top: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-color);
+}
+
+.completed-competitions-group summary {
+    padding: 12px 15px;
+    font-weight: bold;
+    cursor: pointer;
+    list-style: none; /* Hide default marker */
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.completed-competitions-group summary::-webkit-details-marker {
+    display: none; /* Hide default marker for Chrome/Safari */
+}
+
+.completed-competitions-group .competitions-list-profile {
+    padding: 15px;
+}
+
 
 /* Styles for confirmation modal with text preview */
 .modal-textarea-preview {

@@ -117,7 +117,7 @@ apiRouter.post('/post-winner', async (req, res) => {
 // NEW: Endpoint to post a generic announcement
 apiRouter.post('/post-announcement', async (req, res) => {
     const { message } = req.body;
-    console.log(`[INFO] Received request to post announcement.`);
+    // console.log(`[INFO] Received request to post announcement.`);
 
     if (!message) {
         console.warn('[WARN] Post announcement request received with no message.');
@@ -137,7 +137,7 @@ apiRouter.post('/post-announcement', async (req, res) => {
             chat_id: TELEGRAM_CHAT_ID,
             text: message,
         });
-        console.log(`[SUCCESS] Announcement sent to Telegram.`);
+        // console.log(`[SUCCESS] Announcement sent to Telegram.`);
         res.status(200).json({ message: 'Successfully posted announcement to Telegram' });
     } catch (error) {
         const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
@@ -240,143 +240,46 @@ cron.schedule('0 7 * * 0', async () => {
     timezone: "Africa/Cairo" // Set to your local timezone
 });
 
-// Schedule a task to deactivate expired competitions every hour.
-cron.schedule('0 * * * *', async () => {
-    console.log('[CRON] Running hourly check for expired competitions...');
+// Schedule a task to handle expired competitions (runs every 10 seconds for near-instant response).
+cron.schedule('*/10 * * * * *', async () => {
+    // console.log(`[CRON - ${new Date().toLocaleTimeString()}] Running check for expired competitions...`);
     if (!supabaseAdmin) {
         console.error('[CRON] Aborting expired competition check: Supabase admin client is not initialized.');
         return;
     }
     try {
-        const todayStr = new Date().toISOString().split('T')[0];
-
-        // Find active competitions where the winner selection date is in the past
+        const now = new Date().toISOString();
+        // Find competitions that are 'sent' and their end time is in the past.
         const { data: expiredCompetitions, error: fetchError } = await supabaseAdmin
-            .from('agents')
-            .select('id')
-            .lt('winner_selection_date', todayStr);
+            .from('competitions')
+            .select('id, name, correct_answer, agents(name)')
+            .eq('status', 'sent')
+            .lte('ends_at', now); // Use 'less than or equal to' to catch competitions ending now
 
         if (fetchError) throw fetchError;
 
         if (expiredCompetitions.length > 0) {
-            const agentIds = expiredCompetitions.map(a => a.id);
-            const { error: updateError } = await supabaseAdmin.from('competitions').update({ is_active: false }).in('agent_id', agentIds);
-            if (updateError) throw updateError;
-            console.log(`[CRON] Deactivated ${expiredCompetitions.length} expired competitions.`);
-        }
-    } catch (err) {
-        console.error('[CRON] Error deactivating expired competitions:', err.message);
-    }
-});
-
-// Schedule a task to reset agent balances based on their renewal period. Runs daily at 00:05 AM.
-cron.schedule('5 0 * * *', async () => {
-    console.log('[CRON] Running daily check for agent balance renewal...');
-    if (!supabaseAdmin) {
-        console.error('[CRON] Aborting balance renewal: Supabase admin client is not initialized.');
-        return;
-    }
-    try {
-        const { data: agents, error } = await supabaseAdmin
-            .from('agents')
-            .select('id, name, renewal_period, last_renewal_date')
-            .not('renewal_period', 'is', null);
-
-        if (error) throw error;
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const agentsToReset = [];
-
-        agents.forEach(agent => {
-            console.log(`[CRON DEBUG] Checking agent: ${agent.name} (ID: ${agent.id}), Period: ${agent.renewal_period}, Last Renewal: ${agent.last_renewal_date}`);
-            const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(0); // If never renewed, consider it very old
-            let nextRenewalDate = new Date(lastRenewal);
-
-            if (agent.renewal_period === 'weekly') {
-                nextRenewalDate.setDate(lastRenewal.getDate() + 7);
-                console.log(`[CRON DEBUG] Agent ${agent.name} is weekly. Next renewal: ${nextRenewalDate.toISOString()}`);
-            } else if (agent.renewal_period === 'biweekly') {
-                nextRenewalDate.setDate(lastRenewal.getDate() + 14);
-                console.log(`[CRON DEBUG] Agent ${agent.name} is biweekly. Next renewal: ${nextRenewalDate.toISOString()}`);
-            } else if (agent.renewal_period === 'monthly') {
-                nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
-                console.log(`[CRON DEBUG] Agent ${agent.name} is monthly. Next renewal: ${nextRenewalDate.toISOString()}`);
-            } else {
-                return; // Skip if renewal_period is not set or invalid
-            }
-
-            if (today.getTime() >= nextRenewalDate.getTime()) {
-                agentsToReset.push(agent);
-            }
-        });
-
-        // Process daily renewals
-        if (agentsToReset.length > 0) {
-            const agentIds = agentsToReset.map(a => a.id);
-            console.log(`[CRON] Renewing daily balances for ${agentsToReset.length} agents.`);
-            const { error: rpcError } = await supabaseAdmin.rpc('reset_agent_balances_by_ids', { p_agent_ids: agentIds });
-            if (rpcError) {
-                 console.error('[CRON] Failed to reset daily agent balances via RPC:', rpcError.message);
-            } else {
-                await supabaseAdmin.from('agents').update({ last_renewal_date: today.toISOString().split('T')[0] }).in('id', agentIds);
-                console.log('[CRON] Successfully renewed daily balances.');
-                // Send notifications for daily renewals
-                for (const agent of agentsToReset) {
-                    await supabaseAdmin.from('realtime_notifications').insert({ 
-                        message: `تم تجديد الرصيد اليومي للوكيل: ${agent.name}`, 
-                        type: 'success',
-                        notification_type: 'BALANCE_RENEWAL',
-                        agent_id: agent.id
-                    });
-                }
-            }
-        } else {
-            console.log('[CRON] No agents due for daily balance renewal.');
-        }
-
-    } catch (err) {
-        console.error('[CRON] Error during agent balance renewal check:', err.message);
-    }
-}, {
-    scheduled: true,
-    timezone: "Africa/Cairo" // Set to your local timezone
-});
-
-// Schedule a task to send winner selection reminders. Runs daily at 09:00 AM.
-cron.schedule('0 9 * * *', async () => {
-    console.log('[CRON] Running daily check for winner selection reminders...');
-    if (!supabaseAdmin) {
-        console.error('[CRON] Aborting winner selection check: Supabase admin client is not initialized.');
-        return;
-    }
-    try {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const { data: agents, error } = await supabaseAdmin
-            .from('agents')
-            .select('name')
-            .eq('winner_selection_date', todayStr);
-
-        if (error) throw error;
-
-        if (agents.length > 0) {
-            for (const agent of agents) {
-                const clicheText = `دمت بخير شريكنا العزيز ${agent.name}،\n\nيرجى اختيار الفائزين بالمسابقة الاخيرة التي تم انتهاء مدة المشاركة بها \nوتزويدنا بفيديو الروليت والاسم الثلاثي و معلومات الحساب لكل فائز قبل الاعلان عنهم في قناتكم كي يتم التحقق منهم من قبل القسم المختص\n\nكما يجب اختيار الفائزين بالقرعة لشفافية الاختيار.`;
+            // console.log(`[CRON] Found ${expiredCompetitions.length} expired competition(s).`);
+            for (const comp of expiredCompetitions) {
+                const agentName = comp.agents ? comp.agents.name : 'شريكنا';
+                const clicheText = `دمت بخير شريكنا العزيز ${agentName}،\n\nانتهى وقت المشاركة في مسابقة "${comp.name}".\n\nالإجابة الصحيحة هي: **${comp.correct_answer}**\n\nيرجى اختيار الفائزين وتزويدنا بفيديو الروليت وبياناتهم ليتم التحقق منهم من قبل القسم المختص.`;
                 // Send to Telegram
                 await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                     chat_id: TELEGRAM_CHAT_ID,
                     text: clicheText,
                 });
-                console.log(`[CRON] Sent winner selection reminder for agent: ${agent.name}`);
+                // console.log(`[CRON] --> Sent winner selection request for competition ID: ${comp.id}`);
+
+                // Update competition status
+                await supabaseAdmin.from('competitions').update({ status: 'awaiting_winners' }).eq('id', comp.id);
+
                 await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between messages
             }
-        } else {
-            console.log('[CRON] No winner selection reminders to send today.');
         }
     } catch (err) {
-        console.error('[CRON] Error sending winner selection reminders:', err.message);
+        console.error('[CRON] Error processing expired competitions:', err.message);
     }
-}, { scheduled: true, timezone: "Africa/Cairo" });
+});
 
 // تشغيل السيرفر
 app.listen(port, () => {

@@ -4,7 +4,6 @@ const COMPETITIONS_PER_PAGE = 9;
 let selectedCompetitionIds = []; // For bulk actions
 
 async function renderCompetitionsPage() {
-    const appContent = document.getElementById('app-content');
     const hash = window.location.hash;
     const urlParams = new URLSearchParams(hash.split('?')[1]);
     const agentId = urlParams.get('agentId');
@@ -14,19 +13,22 @@ async function renderCompetitionsPage() {
     } else if (hash.startsWith('#competitions/edit/')) {
         const compId = hash.split('/')[2];
         await renderCompetitionEditForm(compId);
+    } else if (hash.startsWith('#archived-competitions')) {
+        await renderArchivedCompetitionsPage();
     } else {
-        await renderAllCompetitionsListPage();
+        // Default to #competitions
+        await renderCompetitionManagementPage();
     }
 }
 
 // --- 0. All Competitions List Page (New Default) ---
-async function renderAllCompetitionsListPage() {
+async function renderCompetitionManagementPage() {
     selectedCompetitionIds = []; // Reset selection on page render
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
         <div class="page-header column-header">
             <div class="header-top-row">
-                <h1>إدارة المسابقات</h1>
+                <h1>إدارة المسابقات النشطة</h1>
             </div>
             <div class="filters-container">
                 <div class="filter-search-container">
@@ -173,6 +175,7 @@ async function renderAllCompetitionsListPage() {
         const { data: competitions, error } = await supabase
             .from('competitions')
             .select('*, agents(id, name, classification, avatar_url)')
+            .not('status', 'eq', 'completed') // Exclude completed competitions
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -433,7 +436,7 @@ async function refreshCompetitionsList(forceRefetch = false) {
     }
     selectedCompetitionIds = []; // Clear selection
     updateBulkActionBar(0);
-    await renderAllCompetitionsListPage();
+    await renderCompetitionManagementPage();
 }
 
 async function renderCompetitionCreatePage(agentId) {
@@ -510,16 +513,25 @@ async function renderCompetitionCreatePage(agentId) {
                         <select id="override-duration">
                             <option value="" disabled selected>-- اختر مدة --</option>
                             <option value="1d" ${agent.competition_duration === '1d' ? 'selected' : ''}>يوم</option>
+                            <option value="10s">10 ثواني (للاختبار)</option>
                             <option value="2d" ${agent.competition_duration === '2d' ? 'selected' : ''}>يومين</option>
                             <option value="1w" ${agent.competition_duration === '1w' ? 'selected' : ''}>أسبوع</option>
                         </select>
                     </div>
                 </div>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="override-correct-answer">الإجابة الصحيحة للمسابقة</label>
+                    <input type="text" id="override-correct-answer" placeholder="اكتب الإجابة الصحيحة هنا" required>
+                </div>
                 <div class="form-group" style="margin-top: 15px; background-color: var(--bg-color); padding: 10px; border-radius: 6px;">
                     <label for="winner-selection-date-preview" style="color: var(--primary-color);"><i class="fas fa-calendar-alt"></i> تاريخ اختيار الفائز المتوقع</label>
-                    <input type="text" id="winner-selection-date-preview" readonly style="background: transparent; border: none; font-weight: bold; padding: 0;">
+                    <p id="winner-selection-date-preview" class="summary-preview-text"></p>
                 </div>
-                <div id="validation-messages" class="validation-messages"></div>
+                <div class="form-group" style="margin-top: 15px; background-color: var(--bg-color); padding: 10px; border-radius: 6px; display: none;">
+                    <label style="color: var(--primary-color);"><i class="fas fa-key"></i> الإجابة الصحيحة</label>
+                    <p id="correct-answer-display" class="summary-preview-text" style="color: var(--text-color);"></p>
+                </div>
+                <div id="validation-messages" class="validation-messages" style="margin-top: 20px;"></div>
             </div>
 
             <!-- Preview Column -->
@@ -589,6 +601,11 @@ async function renderCompetitionCreatePage(agentId) {
                 }
             }
         }
+
+        // Show correct answer after template is selected
+        const correctAnswerDisplay = document.getElementById('correct-answer-display');
+        correctAnswerDisplay.textContent = selectedTemplate.correct_answer || 'غير محددة';
+        correctAnswerDisplay.parentElement.style.display = 'block';
 
         const originalTemplateContent = selectedTemplate.content;
         const selectedTemplateQuestion = selectedTemplate.question;
@@ -700,10 +717,11 @@ async function renderCompetitionCreatePage(agentId) {
             const newDate = new Date(today);
             switch (duration) {
                 case '1d': newDate.setDate(newDate.getDate() + 1); break;
+                case '10s': newDate.setSeconds(newDate.getSeconds() + 10); break;
                 case '2d': newDate.setDate(newDate.getDate() + 2); break;
                 case '1w': newDate.setDate(newDate.getDate() + 7); break;
             }
-            winnerDatePreview.value = newDate.toLocaleDateString('ar-EG', {
+            winnerDatePreview.textContent = newDate.toLocaleDateString('ar-EG', {
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
             });
             winnerDatePreview.parentElement.style.display = 'block';
@@ -783,6 +801,20 @@ async function renderCompetitionCreatePage(agentId) {
         sendBtn.disabled = true;
         sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
 
+        // Calculate ends_at date
+        const selectedDuration = durationInput.value;
+        let endsAtDate = null;
+        if (selectedDuration) {
+            const newDate = new Date();
+            switch (selectedDuration) {
+                case '1d': newDate.setDate(newDate.getDate() + 1); break;
+                case '10s': newDate.setSeconds(newDate.getSeconds() + 10); break;
+                case '2d': newDate.setDate(newDate.getDate() + 2); break;
+                case '1w': newDate.setDate(newDate.getDate() + 7); break;
+            }
+            endsAtDate = newDate.toISOString();
+        }
+
         try {
             // 1. Save the competition
             const { data: newCompetition, error: competitionError } = await supabase
@@ -791,9 +823,12 @@ async function renderCompetitionCreatePage(agentId) {
                     name: selectedTemplate.question,
                     description: finalDescription,
                     is_active: true,
+                    status: 'sent', // Initial status
                     agent_id: agent.id,
                     total_cost: totalCost,
-                    deposit_winners_count: depositWinnersCount
+                    ends_at: endsAtDate, // Save the end date
+                    deposit_winners_count: depositWinnersCount,
+                    correct_answer: selectedTemplate.correct_answer // Save correct answer from template
                 })
                 .select()
                 .single();
@@ -820,23 +855,6 @@ async function renderCompetitionCreatePage(agentId) {
             const today = new Date();
             const todayStr = today.toISOString().split('T')[0];
 
-            // Automatically calculate the new winner selection date
-            const selectedDuration = durationInput.value;
-            let newWinnerSelectionDate = null;
-            if (selectedDuration && today) {
-                const newDate = new Date(today);
-                switch (selectedDuration) { // Updated to match new options
-                    case '1d': newDate.setDate(newDate.getDate() + 1); break;
-                    case '2d': newDate.setDate(newDate.getDate() + 2); break;
-                    case '1w': newDate.setDate(newDate.getDate() + 7); break;
-                    // Removed 2w and 1m as they are no longer options
-                    default:
-                        // No change or handle as error
-                        break;
-                }
-                newWinnerSelectionDate = newDate.toISOString().split('T')[0];
-            }
-
             const { error: agentError } = await supabase
                 .from('agents')
                 .update({
@@ -845,7 +863,6 @@ async function renderCompetitionCreatePage(agentId) {
                     used_deposit_bonus: newUsedDepositBonus,
                     remaining_deposit_bonus: newRemainingDepositBonus,
                     last_competition_date: todayStr,
-                    winner_selection_date: newWinnerSelectionDate,
                     competition_duration: selectedDuration // حفظ المدة المختارة للوكيل
                 })
                 .eq('id', agent.id);
@@ -878,6 +895,114 @@ async function renderCompetitionCreatePage(agentId) {
             sendBtn.innerHTML = originalBtnHtml;
         }
     });
+}
+
+async function renderArchivedCompetitionsPage() {
+    const appContent = document.getElementById('app-content');
+    appContent.innerHTML = `
+        <div class="page-header column-header">
+            <div class="header-top-row">
+                <h1><i class="fas fa-archive"></i> المسابقات المنتهية</h1>
+            </div>
+            <div class="filters-container">
+                <div class="filter-search-container">
+                    <input type="search" id="archive-comp-search-input" placeholder="بحث باسم المسابقة أو الوكيل..." autocomplete="off">
+                    <i class="fas fa-search"></i>
+                    <i class="fas fa-times-circle search-clear-btn" id="archive-comp-search-clear"></i>
+                </div>
+                <div class="sort-container">
+                    <label for="archive-comp-sort-select">ترتيب حسب:</label>
+                    <select id="archive-comp-sort-select">
+                        <option value="newest">الأحدث أولاً</option>
+                        <option value="name_asc">اسم المسابقة (أ - ي)</option>
+                        <option value="agent_asc">اسم الوكيل (أ - ي)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div id="archived-competitions-list-container"></div>
+    `;
+
+    let allArchivedCompetitions = [];
+
+    async function loadArchivedCompetitions() {
+        const { data, error } = await supabase
+            .from('competitions')
+            .select('*, agents(id, name, classification, avatar_url)')
+            .eq('status', 'completed')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            document.getElementById('archived-competitions-list-container').innerHTML = '<p class="error">فشل تحميل المسابقات المنتهية.</p>';
+            return;
+        }
+        allArchivedCompetitions = data;
+        applyFiltersAndSort();
+    }
+
+    function displayArchived(competitions) {
+        const container = document.getElementById('archived-competitions-list-container');
+        if (competitions.length === 0) {
+            container.innerHTML = '<p class="no-results-message">لا توجد مسابقات منتهية.</p>';
+            return;
+        }
+        container.innerHTML = `
+            <div class="competitions-list-view">
+                ${competitions.map(comp => {
+                    const agent = comp.agents;
+                    const agentInfoHtml = agent
+                        ? `<a href="#profile/${agent.id}" class="table-agent-cell">
+                                ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy">` : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`}
+                                <div class="agent-details"><span>${agent.name}</span></div>
+                           </a>`
+                        : `<div><span>(وكيل محذوف)</span></div>`;
+
+                    return `
+                    <div class="competition-card" data-id="${comp.id}">
+                        <div class="competition-card-name"><h3>${comp.name}</h3></div>
+                        <div class="competition-card-status"><span class="status-badge-v2 status-completed">مكتملة</span></div>
+                        ${agentInfoHtml}
+                        <div class="competition-card-footer">
+                            <button class="btn-danger delete-competition-btn" title="حذف" data-id="${comp.id}"><i class="fas fa-trash-alt"></i></button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    function applyFiltersAndSort() {
+        const searchInput = document.getElementById('archive-comp-search-input');
+        const sortSelect = document.getElementById('archive-comp-sort-select');
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        const sortValue = sortSelect.value;
+
+        let filtered = allArchivedCompetitions.filter(comp => {
+            const name = comp.name.toLowerCase();
+            const agentName = comp.agents ? comp.agents.name.toLowerCase() : '';
+            return searchTerm === '' || name.includes(searchTerm) || agentName.includes(searchTerm);
+        });
+
+        filtered.sort((a, b) => {
+            switch (sortValue) {
+                case 'name_asc': return a.name.localeCompare(b.name);
+                case 'agent_asc': return (a.agents?.name || '').localeCompare(b.agents?.name || '');
+                default: return new Date(b.created_at) - new Date(a.created_at);
+            }
+        });
+
+        displayArchived(filtered);
+    }
+
+    document.getElementById('archive-comp-search-input').addEventListener('input', applyFiltersAndSort);
+    document.getElementById('archive-comp-sort-select').addEventListener('change', applyFiltersAndSort);
+    document.getElementById('archive-comp-search-clear').addEventListener('click', () => {
+        const searchInput = document.getElementById('archive-comp-search-input');
+        searchInput.value = '';
+        applyFiltersAndSort();
+    });
+
+    await loadArchivedCompetitions();
 }
 
 // --- 3. Edit Existing Competition Form ---
@@ -1131,6 +1256,10 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
                     <input type="text" id="create-template-question" required>
                 </div>
                 <div class="form-group">
+                    <label for="create-template-correct-answer">الإجابة الصحيحة</label>
+                    <input type="text" id="create-template-correct-answer" required>
+                </div>
+                <div class="form-group">
                     <label for="create-template-classification">التصنيف (لمن سيظهر هذا القالب)</label>
                     <select id="create-template-classification" required>
                         <option value="All" selected>الكل (يظهر لجميع التصنيفات)</option>
@@ -1171,6 +1300,7 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
             question: document.getElementById('create-template-question').value.trim(),
             classification: document.getElementById('create-template-classification').value,
             content: document.getElementById('create-template-content').value.trim(),
+            correct_answer: document.getElementById('create-template-correct-answer').value.trim(),
             usage_limit: document.getElementById('create-template-usage-limit').value ? parseInt(document.getElementById('create-template-usage-limit').value, 10) : null,
         };
 
@@ -1406,6 +1536,10 @@ function renderEditTemplateModal(template, onSaveCallback) {
                     <input type="text" id="edit-template-question" value="${template.question}" required>
                 </div>
                 <div class="form-group">
+                    <label for="edit-template-correct-answer">الإجابة الصحيحة</label>
+                    <input type="text" id="edit-template-correct-answer" value="${template.correct_answer || ''}" required>
+                </div>
+                <div class="form-group">
                     <label for="edit-template-classification">التصنيف</label>
                     <select id="edit-template-classification" required>
                         <option value="All" ${template.classification === 'All' ? 'selected' : ''}>الكل</option>
@@ -1446,6 +1580,7 @@ function renderEditTemplateModal(template, onSaveCallback) {
             question: document.getElementById('edit-template-question').value.trim(),
             classification: document.getElementById('edit-template-classification').value,
             content: document.getElementById('edit-template-content').value.trim(),
+            correct_answer: document.getElementById('edit-template-correct-answer').value.trim(),
             usage_limit: document.getElementById('edit-template-usage-limit').value ? parseInt(document.getElementById('edit-template-usage-limit').value, 10) : null,
         };
 

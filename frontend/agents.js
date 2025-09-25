@@ -1017,9 +1017,23 @@ async function renderTopAgentsPage() {
                 <i class="fas fa-crown"></i> أبرز الوكلاء
                 <span class="info-tooltip" title="قائمة بأفضل الوكلاء أداءً هذا الشهر بناءً على خورزميات دقيقة."><i class="fas fa-info-circle"></i></span>
             </h1>
+            <div class="filter-buttons" id="top-agents-time-filter">
+                <button class="filter-btn active" data-period="this_month">هذا الشهر</button>
+                <button class="filter-btn" data-period="last_month">الشهر الماضي</button>
+                <button class="filter-btn" data-period="this_week">هذا الأسبوع</button>
+            </div>
+        </div>
+        <div id="comparison-bar" class="comparison-bar">
+            <span id="comparison-text"></span>
+            <button id="compare-btn" class="btn-primary" disabled><i class="fas fa-balance-scale"></i> مقارنة</button>
+            <button id="clear-comparison-btn" class="btn-secondary" title="إلغاء التحديد">&times;</button>
         </div>
         <div id="overall-top-agents" class="podium-container">
             <!-- Top 3 overall will be rendered here -->
+            <div class="loader-container" style="display: none;">
+                <div class="loader"></div>
+                <p>جاري حساب الترتيب...</p>
+            </div>
         </div>
         <div class="top-agents-grid">
             <div class="top-agents-list">
@@ -1037,27 +1051,48 @@ async function renderTopAgentsPage() {
         </div>
     `;
 
-    // --- Logic to fetch and calculate top agents ---
-    // Fetch more than 3 to have fallbacks for the lists below
-    const { data: topExclusive, error: exclusiveError } = await supabase.rpc('get_top_agents_with_scores', { p_rank_type: 'exclusive', p_limit: 5 });
-    const { data: topStandard, error: standardError } = await supabase.rpc('get_top_agents_with_scores', { p_rank_type: 'standard', p_limit: 5 });
+    let selectedForComparison = [];
+    let topExclusiveCache = [];
+    let topStandardCache = [];
+    // Define helpers in the main function scope so they are accessible to all nested functions
+    const exclusiveRanks = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'];
+    const getAgentType = (rank) => exclusiveRanks.includes(rank) ? { text: 'حصري', class: 'exclusive' } : { text: 'اعتيادي', class: 'standard' };
 
-    if (exclusiveError || standardError) {
-        document.getElementById('top-exclusive-agents').innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء الحصريين.</p>';
-        document.getElementById('top-standard-agents').innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء الاعتياديين.</p>';
-        console.error("Error fetching top agents:", exclusiveError || standardError);
-        return;
+    async function fetchAndRenderScores(period = 'this_month') {
+        const podiumContainer = document.getElementById('overall-top-agents');
+        const exclusiveContainer = document.getElementById('top-exclusive-agents');
+        const standardContainer = document.getElementById('top-standard-agents');
+        const loader = podiumContainer.querySelector('.loader-container');
+
+        // Show loader and hide content
+        if (loader) loader.style.display = 'flex';
+        podiumContainer.style.minHeight = '300px';
+        exclusiveContainer.innerHTML = '<p>جاري تحميل القائمة...</p>';
+        standardContainer.innerHTML = '<p>جاري تحميل القائمة...</p>';
+
+        const [exclusiveResult, standardResult] = await Promise.all([
+            // The rpc function needs to be defined or imported. Assuming it's globally available via supabase.
+            supabase.rpc('get_top_agents_with_scores', { p_rank_type: 'exclusive', p_limit: 5 }),
+            supabase.rpc('get_top_agents_with_scores', { p_rank_type: 'standard', p_limit: 5 })
+        ]);
+
+        // Cache the results
+        topExclusiveCache = exclusiveResult.data || [];
+        topStandardCache = standardResult.data || [];
+
+        // Hide loader
+        if (loader) loader.style.display = 'none';
+        podiumContainer.style.minHeight = 'auto';
+
+        if (exclusiveResult.error || standardResult.error) {
+            exclusiveContainer.innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء الحصريين.</p>';
+            standardContainer.innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء الاعتياديين.</p>';
+            console.error("Error fetching top agents:", exclusiveResult.error || standardResult.error);
+            return;
+        }
+
+        renderScores(topExclusiveCache, topStandardCache);
     }
-
-    // --- NEW: Determine Overall Top 3 ---
-    const allRankedAgents = [...(topExclusive || []), ...(topStandard || [])];
-    const uniqueAgents = Array.from(new Map(allRankedAgents.map(item => [item['id'], item])).values());
-    const overallTop3 = uniqueAgents.sort((a, b) => b.combined_score - a.combined_score).slice(0, 3);
-    const overallTop3Ids = overallTop3.map(a => a.id);
-
-    // --- NEW: Filter the original lists to remove the overall top 3 ---
-    const filteredExclusive = (topExclusive || []).filter(a => !overallTop3Ids.includes(a.id));
-    const filteredStandard = (topStandard || []).filter(a => !overallTop3Ids.includes(a.id));
 
     // --- Render the Podium ---
     const renderPodium = (containerId, agentsList) => {
@@ -1073,6 +1108,8 @@ async function renderTopAgentsPage() {
             
             const rankClass = `rank-${index + 1}`;
             const rankIcon = `<div class="podium-rank-number">${index + 1}</div><i class="fas fa-medal"></i>`;
+            const isSelected = selectedForComparison.includes(agent.id);
+            const agentType = getAgentType(agent.rank);
 
             const scoreDetailsHtml = `
                 <div class="score-details">
@@ -1084,25 +1121,30 @@ async function renderTopAgentsPage() {
             `;
 
             return `
-                <a href="#profile/${agent.id}" class="podium-item ${rankClass}">
+                <div class="podium-item ${rankClass} ${isSelected ? 'selected-for-compare' : ''}" data-agent-id="${agent.id}">
+                    <label class="custom-checkbox compare-checkbox-container">
+                        <input type="checkbox" class="compare-checkbox" data-agent-id="${agent.id}" ${isSelected ? 'checked' : ''}>
+                        <span class="checkmark"></span>
+                    </label>
                     <div class="podium-rank">${rankIcon}</div>
                     ${avatarHtml}
                     <h3 class="podium-name">${agent.name}</h3>
+                    <div class="agent-type-badge-wrapper">
+                        <span class="agent-type-badge type-${agentType.class}">${agentType.text}</span>
+                    </div>
                     <p class="podium-rank-name">${agent.rank || 'غير محدد'}</p>
                     <div class="podium-score">
                         <span>${Math.round(agent.combined_score)}</span>
                         <small>نقطة أداء</small>
                     </div>
                     ${scoreDetailsHtml}
-                </a>
+                </div>
             `;
         }).join('');
     };
     
-    renderPodium('overall-top-agents', overallTop3);
-
     // --- Render the lists ---
-    const renderLeaderboard = (containerId, agentsList) => {
+    const renderLeaderboard = (containerId, agentsList, startingRank = 1) => {
         const container = document.getElementById(containerId);
         if (agentsList.length === 0) {
             container.innerHTML = '<p class="no-results-message">لا يوجد وكلاء آخرون في هذه الفئة.</p>';
@@ -1113,7 +1155,10 @@ async function renderTopAgentsPage() {
                 ? `<img src="${agent.avatar_url}" alt="Avatar" class="leaderboard-avatar" loading="lazy">`
                 : `<div class="leaderboard-avatar-placeholder"><i class="fas fa-user"></i></div>`;
             
-            const rankIcon = `<span>#${index + 1}</span>`;
+            const currentRank = startingRank + index;
+            const rankIcon = `<span>#${currentRank}</span>`;
+            const isSelected = selectedForComparison.includes(agent.id);
+            const agentType = getAgentType(agent.rank);
 
             const scoreDetailsHtml = `
                 <div class="score-details">
@@ -1125,11 +1170,18 @@ async function renderTopAgentsPage() {
             `;
 
             return `
-                <a href="#profile/${agent.id}" class="leaderboard-item">
+                <div class="leaderboard-item ${isSelected ? 'selected-for-compare' : ''}" data-agent-id="${agent.id}">
+                    <label class="custom-checkbox compare-checkbox-container">
+                        <input type="checkbox" class="compare-checkbox" data-agent-id="${agent.id}" ${isSelected ? 'checked' : ''}>
+                        <span class="checkmark"></span>
+                    </label>
                     <div class="leaderboard-rank">${rankIcon}</div>
                     ${avatarHtml}
                     <div class="leaderboard-info">
                         <h4 class="leaderboard-name">${agent.name}</h4>
+                        <div class="agent-type-badge-wrapper">
+                            <span class="agent-type-badge type-${agentType.class}">${agentType.text}</span>
+                        </div>
                         <p class="leaderboard-rank-name">${agent.rank || 'غير محدد'}</p>
                     </div>
                     <div class="leaderboard-score">
@@ -1137,11 +1189,154 @@ async function renderTopAgentsPage() {
                         <small>نقطة أداء</small>
                         ${scoreDetailsHtml}
                     </div>
-                </a>
+                </div>
             `;
         }).join('');
     };
 
-    renderLeaderboard('top-exclusive-agents', filteredExclusive);
-    renderLeaderboard('top-standard-agents', filteredStandard);
+    function renderScores(topExclusive, topStandard) {
+        // --- Determine Overall Top 3 ---
+        const allRankedAgents = [...(topExclusive || []), ...(topStandard || [])];
+        const uniqueAgents = Array.from(new Map(allRankedAgents.map(item => [item['id'], item])).values());
+        const overallTop3 = uniqueAgents.sort((a, b) => b.combined_score - a.combined_score).slice(0, 3);
+        const overallTop3Ids = overallTop3.map(a => a.id);
+
+        // --- Filter the original lists to remove the overall top 3 ---
+        const filteredExclusive = (topExclusive || []).filter(a => !overallTop3Ids.includes(a.id));
+        const filteredStandard = (topStandard || []).filter(a => !overallTop3Ids.includes(a.id));
+
+        renderPodium('overall-top-agents', overallTop3);
+
+        // --- Smart Ranking Logic ---
+        const standardAgentsInTop3 = overallTop3.some(agent => getAgentType(agent.rank).class === 'standard');
+        const standardStartingRank = standardAgentsInTop3 ? 4 : 1;
+
+        renderLeaderboard('top-exclusive-agents', filteredExclusive, 4);
+        renderLeaderboard('top-standard-agents', filteredStandard, standardStartingRank);
+    }
+
+    function updateComparisonBar() {
+        const bar = document.getElementById('comparison-bar');
+        const text = document.getElementById('comparison-text');
+        const btn = document.getElementById('compare-btn');
+
+        if (selectedForComparison.length > 0) {
+            bar.classList.add('visible');
+            text.textContent = `تم تحديد ${selectedForComparison.length} وكيل للمقارنة.`;
+            btn.disabled = selectedForComparison.length !== 2;
+        } else {
+            bar.classList.remove('visible');
+        }
+    }
+
+    function renderComparisonModal(agent1, agent2) {
+        const renderStatBar = (value1, value2, label) => {
+            const total = Math.max(1, value1 + value2);
+            const percent1 = (value1 / total) * 100;
+            const percent2 = (value2 / total) * 100;
+            return `
+                <div class="comparison-stat">
+                    <div class="stat-values"><span>${Math.round(value1)} ${label.unit || ''}</span><span>${label.name}</span><span>${Math.round(value2)} ${label.unit || ''}</span></div>
+                    <div class="stat-bar">
+                        <div class="bar-part agent1" style="width: ${percent1}%"></div>
+                        <div class="bar-part agent2" style="width: ${percent2}%"></div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const modalContent = `
+            <div class="comparison-modal-content">
+                <div class="comparison-header">
+                    <div class="agent-summary">
+                        <img src="${agent1.avatar_url || 'https://via.placeholder.com/80'}" class="comparison-avatar">
+                        <h4>${agent1.name}</h4>
+                        <p>${agent1.rank || 'N/A'}</p>
+                    </div>
+                    <div class="vs-icon"><i class="fas fa-balance-scale"></i></div>
+                    <div class="agent-summary">
+                        <img src="${agent2.avatar_url || 'https://via.placeholder.com/80'}" class="comparison-avatar">
+                        <h4>${agent2.name}</h4>
+                        <p>${agent2.rank || 'N/A'}</p>
+                    </div>
+                </div>
+                <div class="comparison-body">
+                    ${renderStatBar(agent1.combined_score, agent2.combined_score, { name: 'نقاط الأداء', unit: '' })}
+                    ${renderStatBar(agent1.consumed_balance, agent2.consumed_balance, { name: 'الرصيد المستهلك', unit: '$' })}
+                    ${renderStatBar(agent1.total_competitions_this_month, agent2.total_competitions_this_month, { name: 'عدد المسابقات', unit: '' })}
+                    ${renderStatBar(agent1.efficiency_score, agent2.efficiency_score, { name: 'كفاءة الاستهلاك', unit: '%' })}
+                    ${renderStatBar(agent1.consistency_score, agent2.consistency_score, { name: 'الالتزام بالمهام', unit: '%' })}
+                </div>
+            </div>
+        `;
+
+        showConfirmationModal(modalContent, null, {
+            title: 'مقارنة أداء الوكلاء',
+            showCancel: false,
+            confirmText: 'إغلاق',
+            modalClass: 'modal-comparison'
+        });
+    }
+
+    appContent.addEventListener('click', (e) => {
+        const checkbox = e.target.closest('.compare-checkbox');
+        if (checkbox) {
+            const agentId = parseInt(checkbox.dataset.agentId);
+            if (checkbox.checked) {
+                if (selectedForComparison.length < 2) {
+                    selectedForComparison.push(agentId);
+                } else {
+                    checkbox.checked = false; // Prevent selecting more than 2
+                    showToast('يمكنك مقارنة وكيلين فقط في المرة الواحدة.', 'info');
+                }
+            } else {
+                selectedForComparison = selectedForComparison.filter(id => id !== agentId);
+            }
+            // Re-render the lists to update the 'selected' class
+            fetchAndRenderScores(document.querySelector('#top-agents-time-filter .active').dataset.period);
+            updateComparisonBar();
+        }
+
+        const compareBtn = e.target.closest('#compare-btn');
+        if (compareBtn && selectedForComparison.length === 2) {
+            const allRankedAgents = [...(topExclusiveCache || []), ...(topStandardCache || [])];
+            const agent1 = allRankedAgents.find(a => a.id === selectedForComparison[0]);
+            const agent2 = allRankedAgents.find(a => a.id === selectedForComparison[1]);
+            if (agent1 && agent2) {
+                renderComparisonModal(agent1, agent2);
+            }
+        }
+
+        const clearBtn = e.target.closest('#clear-comparison-btn');
+        if (clearBtn) {
+            selectedForComparison = [];
+            fetchAndRenderScores(document.querySelector('#top-agents-time-filter .active').dataset.period);
+            updateComparisonBar();
+        }
+    });
+
+    // Initial render
+    await fetchAndRenderScores('this_month');
+
+    // Add event listeners for time filters
+    const filterButtons = document.getElementById('top-agents-time-filter');
+    if (filterButtons) {
+        filterButtons.addEventListener('click', (e) => {
+            if (e.target.matches('.filter-btn')) {
+                filterButtons.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                fetchAndRenderScores(e.target.dataset.period);
+            }
+        });
+    }
+
+    // Add click listener to agent cards for navigation
+    appContent.addEventListener('click', (e) => {
+        const card = e.target.closest('.podium-item, .leaderboard-item');
+        // Ensure the click is not on a checkbox or its container
+        if (card && !e.target.closest('.compare-checkbox-container')) {
+            const agentId = card.dataset.agentId;
+            window.location.hash = `#profile/${agentId}`;
+        }
+    });
 }

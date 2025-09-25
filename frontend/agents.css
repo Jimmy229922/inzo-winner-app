@@ -445,6 +445,7 @@
     border: 2px solid transparent;
     width: 240px; /* زيادة العرض الأساسي */
     text-decoration: none;
+    position: relative;
     color: var(--text-color);
     transition: all 0.3s ease;
 }
@@ -488,12 +489,11 @@
 .podium-avatar, .podium-avatar-placeholder { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 3px solid var(--border-color); margin-bottom: 15px; }
 .podium-avatar-placeholder { background-color: var(--bg-color); display: flex; align-items: center; justify-content: center; font-size: 3em; }
 .podium-name { font-size: 1.3em; font-weight: bold; margin: 0; }
-.podium-rank-name { font-size: 0.9em; color: var(--text-secondary-color); margin: 4px 0 10px 0; }
+.podium-rank-name { font-size: 0.9em; color: var(--text-secondary-color); margin: 0 0 10px 0; }
 .podium-score { margin-top: auto; }
 .podium-score span { font-size: 2em; font-weight: bold; color: var(--primary-color); }
 .podium-score small { display: block; color: var(--text-secondary-color); }
 
-/* Top Agents Page Styles */
 .top-agents-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -524,6 +524,7 @@
     border: 1px solid var(--border-color);
     border-radius: 12px;
     text-decoration: none;
+    position: relative;
     color: var(--text-color);
     transition: all 0.2s ease-in-out;
 }
@@ -586,7 +587,7 @@
 }
 
 .leaderboard-name {
-    margin: 0;
+    margin: 0 0 4px 0;
     font-size: 1.1em;
 }
 
@@ -636,6 +637,134 @@
 .score-details i {
     font-size: 0.9em;
     color: var(--primary-color);
+}
+
+.agent-type-badge-wrapper {
+    margin: 4px 0;
+}
+
+.agent-type-badge {
+    font-size: 0.75em;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: bold;
+    color: white;
+}
+.agent-type-badge.type-exclusive {
+    background-color: #9b59b6; /* Purple */
+}
+.agent-type-badge.type-standard {
+    background-color: #3498db; /* Blue */
+}
+
+.comparison-bar {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(-20px);
+    visibility: hidden;
+    transition: opacity 0.3s, transform 0.3s, visibility 0.3s;
+}
+
+.comparison-bar.visible {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+}
+
+#comparison-text {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.compare-checkbox-container {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 5;
+}
+
+.podium-item.selected-for-compare,
+.leaderboard-item.selected-for-compare {
+    box-shadow: 0 0 0 3px var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* Comparison Modal Styles */
+.modal-comparison .modal-message {
+    padding: 0;
+}
+
+.comparison-modal-content {
+    padding: 20px;
+}
+
+.comparison-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.agent-summary {
+    text-align: center;
+    width: 150px;
+}
+
+.comparison-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--border-color);
+    margin-bottom: 10px;
+}
+
+.agent-summary h4 { margin: 0; }
+.agent-summary p { margin: 5px 0 0 0; color: var(--text-secondary-color); }
+
+.vs-icon {
+    font-size: 2em;
+    color: var(--primary-color);
+}
+
+.comparison-body {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.comparison-stat .stat-values {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 0.9em;
+}
+.comparison-stat .stat-values span:nth-child(2) { font-weight: bold; color: var(--text-color); }
+.comparison-stat .stat-values span:first-child, .comparison-stat .stat-values span:last-child { color: var(--text-secondary-color); }
+
+.stat-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background-color: var(--bg-color); }
+.stat-bar .bar-part.agent1 { background-color: #3498db; }
+.stat-bar .bar-part.agent2 { background-color: #e74c3c; }
+
+.page-header .filter-buttons {
+    background-color: var(--card-bg-color);
+    border-radius: 20px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+    display: flex;
+}
+
+.page-header .filter-buttons .filter-btn {
+    padding: 6px 16px;
+    font-size: 0.9em;
+    border-radius: 16px;
 }
 
 @media (max-width: 900px) {

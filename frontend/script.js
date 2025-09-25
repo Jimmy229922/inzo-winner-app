@@ -59,11 +59,12 @@ async function handleRouting() {
 
     // Basic routing
     const routes = {
-        '#home': { func: renderHomePage, nav: 'nav-home' },
+        '#home': { func: () => renderHomePage(), nav: 'nav-home' },
         '#tasks': { func: renderTasksPage, nav: 'nav-tasks' },
         '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents' },
         '#top-agents': { func: renderTopAgentsPage, nav: 'nav-top-agents' },
-        '#competitions': { func: renderCompetitionsPage, nav: 'nav-competitions' },
+        '#competitions': { func: renderCompetitionsPage, nav: 'nav-manage-competitions' },
+        '#archived-competitions': { func: renderCompetitionsPage, nav: 'nav-archived-competitions' },
         '#competition-templates': { func: renderCompetitionTemplatesPage, nav: 'nav-competition-templates' },
         '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
         '#add-agent': { func: renderAddAgentForm, nav: null },
@@ -89,9 +90,12 @@ async function handleRouting() {
         if (typeof stopRenewalCountdown === 'function') {
             stopRenewalCountdown();
         }
+        if (typeof stopCompetitionCountdowns === 'function') {
+            stopCompetitionCountdowns();
+        }
     }
     
-    if (hash.startsWith('#competitions/new') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#top-agents') {
+    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#top-agents' || hash === '#archived-competitions') {
         mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
@@ -357,20 +361,22 @@ function setupNavbar() {
     const navHome = document.getElementById('nav-home');
     const navTasks = document.getElementById('nav-tasks');
     const navManageAgents = document.getElementById('nav-manage-agents');
-    const navCompetitions = document.getElementById('nav-competitions');
+    const navManageCompetitions = document.getElementById('nav-manage-competitions');
+    const navArchivedCompetitions = document.getElementById('nav-archived-competitions');
     const navCompetitionTemplates = document.getElementById('nav-competition-templates');
     const navArchivedTemplates = document.getElementById('nav-archived-templates');
     const navCalendar = document.getElementById('nav-calendar');
     const navActivityLog = document.getElementById('nav-activity-log');
     const navTopAgents = document.getElementById('nav-top-agents');
-    navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navCompetitions, navCompetitionTemplates, navCalendar, navActivityLog];
+    navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navActivityLog];
     
     // NEW: Navigation listeners update the hash, which triggers the router
     navHome.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'home'; });
     navTasks.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'tasks'; });
     navManageAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'manage-agents'; });
     navTopAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'top-agents'; });
-    navCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competitions'; });
+    navManageCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competitions'; });
+    navArchivedCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-competitions'; });
     navArchivedTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-templates'; });
     navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
     navActivityLog.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'activity-log'; });
