@@ -55,7 +55,7 @@ async function renderHomePage() {
         ] = await Promise.all([
             supabase.from('agents').select('*', { count: 'exact', head: true }),
             supabase.from('competitions').select('*', { count: 'exact', head: true }).eq('is_active', true),
-            supabase.from('agents').select('id, name, avatar_url').contains('audit_days', [todayDayIndex]),
+            supabase.from('agents').select('id, name, avatar_url, classification').contains('audit_days', [todayDayIndex]),
             supabase.from('competitions').select('created_at').gte('created_at', todayStart).lt('created_at', tomorrowStart),
             supabase.from('agents').select('*', { count: 'exact', head: true }).gte('created_at', monthStart),
             supabase.from('agents').select('classification'),
@@ -112,37 +112,38 @@ async function renderHomePage() {
                 document.getElementById('pending-count').textContent = pendingAgents.length;
                 
                 const pendingList = document.getElementById('pending-tasks-list');
-                const MAX_PENDING_TO_SHOW = 5;
                 let pendingHtml = '';
 
                 if (pendingAgents.length > 0) {
-                    pendingHtml = pendingAgents.slice(0, MAX_PENDING_TO_SHOW).map(agent => {
+                    // --- تعديل: عرض قائمة واحدة مبسطة ---
+                    pendingHtml = pendingAgents.slice(0, 3).map(agent => {
                         const task = tasksMap[agent.id] || {};
                         const needsAudit = !task.audited;
                         const needsCompetition = !task.competition_sent;
                         return `
-                            <div class="pending-agent-card-v2">
-                                <div class="pending-agent-info">
-                                    ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
-                                    <div class="agent-name-wrapper">
-                                        <a href="#profile/${agent.id}" class="agent-name-link">${agent.name}</a>
-                                        <div class="pending-task-icons">
-                                            ${needsAudit ? '<i class="fas fa-clipboard-check pending-icon-audit" title="مطلوب تدقيق"></i>' : ''}
-                                            ${needsCompetition ? '<i class="fas fa-trophy pending-icon-comp" title="مطلوب إرسال مسابقة"></i>' : ''}
-                                        </div>
+                        <div class="pending-agent-card-v2" data-agent-id="${agent.id}">
+                            <div class="pending-agent-info">
+                                ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
+                                <div class="agent-name-wrapper">
+                                    <a href="#profile/${agent.id}" class="agent-name-link">${agent.name}</a>
+                                    <div class="pending-task-actions">
+                                        ${needsAudit ? '<button class="btn-icon-action home-task-action audit" data-task-type="audit" title="تمييز التدقيق كمكتمل"><i class="fas fa-clipboard-check"></i> <span>تدقيق</span></button>' : ''}
+                                        ${needsCompetition ? '<button class="btn-icon-action home-task-action competition" data-task-type="competition" title="تمييز المسابقة كمكتملة"><i class="fas fa-pen-alt"></i> <span>مسابقة</span></button>' : ''}
                                     </div>
                                 </div>
-                                <div class="pending-agent-actions">
-                                    ${needsCompetition ? `<button class="btn-secondary btn-small create-comp-btn" data-agent-id="${agent.id}" title="إنشاء مسابقة"><i class="fas fa-magic"></i></button>` : ''}
-                                    <a href="#tasks?highlight=${agent.id}" class="btn-secondary btn-small" title="الذهاب للمهمة"><i class="fas fa-tasks"></i></a>
-                                </div>
                             </div>
+                            <div class="pending-agent-actions">
+                                <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
+                                <a href="#tasks?highlight=${agent.id}" class="go-to-task-icon" title="الذهاب للمهمة"><i class="fas fa-chevron-left"></i></a>
+                            </div>
+                        </div>
                         `;
                     }).join('');
 
-                    if (pendingAgents.length > MAX_PENDING_TO_SHOW) {
+                    if (pendingAgents.length > 3) {
                         pendingHtml += `<div class="view-all-container"><a href="#tasks" class="btn-secondary btn-small"><i class="fas fa-arrow-left"></i> عرض كل المهام (${pendingAgents.length})</a></div>`;
                     }
+
                 } else {
                     pendingHtml = '<p class="no-pending-tasks">لا توجد مهام متبقية لهذا اليوم. عمل رائع!</p>';
                 }
@@ -151,6 +152,8 @@ async function renderHomePage() {
                 // Add event listeners for the new create competition buttons
                 pendingList.querySelectorAll('.create-comp-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
+                        e.preventDefault(); // منع الانتقال عند الضغط على الزر
+                        e.stopPropagation(); // منع انتشار الحدث
                         const agentId = e.currentTarget.dataset.agentId;
                         window.location.hash = `competitions/new?agentId=${agentId}`;
                     });
@@ -170,9 +173,6 @@ async function renderHomePage() {
                 return acc;
             }, {});
 
-            // Render the new classification chart
-            renderClassificationChart(classificationCounts);
-
             agentStatsContainer.innerHTML = `
                 <div class="quick-stat-item">
                     <i class="fas fa-user-clock"></i>
@@ -187,6 +187,9 @@ async function renderHomePage() {
                     </div>
                 </div>
             `;
+            
+            // Render the new classification chart AFTER the container is in the DOM
+            renderClassificationChart(classificationCounts);
         }
     }
 }

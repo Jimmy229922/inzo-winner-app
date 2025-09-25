@@ -52,6 +52,24 @@ async function renderAgentProfilePage(agentId, options = {}) {
         return;
     }
 
+    // --- NEW: Fetch today's task status for this agent ---
+    const today = new Date();
+    const todayDayIndex = today.getDay();
+    const todayStr = today.toISOString().split('T')[0];
+    let agentTaskToday = {};
+    let isTaskDay = (agent.audit_days || []).includes(todayDayIndex);
+
+    if (isTaskDay) {
+        const { data: taskData, error: taskError } = await supabase
+            .from('daily_tasks')
+            .select('*')
+            .eq('agent_id', agentId)
+            .eq('task_date', todayStr)
+            .single();
+        if (taskData) agentTaskToday = taskData;
+    }
+    // --- End new fetch ---
+
     const hasActiveCompetition = agentCompetitions.some(c => c.is_active);
     const activeCompetition = agentCompetitions.find(c => c.is_active);
     const hasInactiveCompetition = !hasActiveCompetition && agentCompetitions.length > 0;
@@ -66,6 +84,14 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 <span>جاري حساب الوقت...</span>
             </div>`;
         }
+    }
+
+    // --- NEW: Prepare task icons for the header ---
+    let taskIconsHtml = '';
+    if (isTaskDay) {
+        const needsAudit = !agentTaskToday.audited;
+        const needsCompetition = !agentTaskToday.competition_sent;
+        taskIconsHtml = `<div class="profile-task-icons">${needsAudit ? '<i class="fas fa-clipboard-check pending-icon-audit" title="مطلوب تدقيق اليوم"></i>' : ''}${needsCompetition ? '<i class="fas fa-trophy pending-icon-comp" title="مطلوب إرسال مسابقة اليوم"></i>' : ''}</div>`;
     }
     // Helper for audit days in Action Tab
     const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -86,6 +112,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
             <div class="profile-main-info">
                 <h1>
                     ${agent.name} 
+                    ${taskIconsHtml}
                     ${hasActiveCompetition ? `<span class="status-badge active">مسابقة نشطة</span>${activeCompetitionCountdownHtml}` : ''}
                     ${hasInactiveCompetition ? '<span class="status-badge inactive">مسابقة غير نشطة</span>' : ''}
                 </h1>

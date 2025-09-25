@@ -63,7 +63,7 @@ async function handleRouting() {
 
     // Basic routing
     const routes = {
-        '#home': { func: () => renderHomePage(), nav: 'nav-home' },
+        '#home': { func: renderHomePage, nav: 'nav-home' },
         '#tasks': { func: renderTasksPage, nav: 'nav-tasks' },
         '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents' },
         '#top-agents': { func: renderTopAgentsPage, nav: 'nav-top-agents' },
