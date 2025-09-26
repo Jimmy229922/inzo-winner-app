@@ -45,8 +45,15 @@ async function logAgentActivity(agentId, actionType, description, metadata = {})
     }
 }
 
+// NEW: Helper function to format numbers with commas
+function formatNumber(num) {
+    if (num === null || num === undefined) return '0';
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
 // NEW: Function to fetch and store the current user's profile
 async function fetchUserProfile() {
+    console.time('[Performance] fetchUserProfile');
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
         const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
@@ -54,25 +61,33 @@ async function fetchUserProfile() {
         else currentUserProfile = null;
 
         // NEW: Update UI with user info
-        const userProfileMenu = document.getElementById('user-profile-menu');
+        const settingsMenu = document.getElementById('settings-menu');
         const userAvatar = document.getElementById('user-avatar');
         const userName = document.getElementById('user-name');
-        if (userProfileMenu && userAvatar && userName) {
-            userProfileMenu.style.display = 'flex';
+        const userEmail = document.getElementById('user-email');
+        if (settingsMenu && userAvatar && userName && userEmail) {
+            settingsMenu.style.display = 'flex';
             // Use a default avatar if none is set
             userAvatar.src = currentUserProfile?.avatar_url || `https://ui-avatars.com/api/?name=${user.email}&background=8A2BE2&color=fff`;
             userName.textContent = currentUserProfile?.full_name || user.email.split('@')[0];
+            userEmail.textContent = user.email;
         }
     } else {
         // Hide user menu if not logged in
-        const userProfileMenu = document.getElementById('user-profile-menu');
-        if (userProfileMenu) userProfileMenu.style.display = 'none';
+        const settingsMenu = document.getElementById('settings-menu');
+        // NEW: If no user is logged in, and we are not on the login page, redirect.
+        if (!window.location.pathname.endsWith('login.html')) {
+            console.log('[Auth] No active session found. Redirecting to login page.');
+            window.location.replace('/login.html');
+        }
     }
+    console.timeEnd('[Performance] fetchUserProfile');
 }
 
 // NEW: Router function to handle page navigation based on URL hash
 async function handleRouting() {
     showLoader(); // إضافة: إظهار شاشة التحميل في بداية كل عملية تنقل
+    console.time('[Performance] handleRouting');
     // Scroll to the top of the page on every navigation
     window.scrollTo(0, 0);
 
@@ -155,19 +170,23 @@ async function handleRouting() {
     } catch (err) {
         console.error("Routing error:", err);
     } finally {
+        console.timeEnd('[Performance] handleRouting');
         hideLoader();
     }
 }
 
 // 2. Function to initialize Supabase
 async function initializeSupabase() {
+    console.time('[Performance] initializeSupabase');
     try {
         updateStatus('connecting', 'جاري الاتصال بالخادم...');
+        console.time('[Performance] Fetch API Config');
         const response = await fetch('/api/config'); // Fetch from our own server
         if (!response.ok) {
             throw new Error(`Server responded with ${response.status}`);
         }
         const config = await response.json();
+        console.timeEnd('[Performance] Fetch API Config');
         
         if (!config.supabaseUrl || !config.supabaseKey) {
             throw new Error('Supabase configuration not found from server.');
@@ -178,29 +197,27 @@ async function initializeSupabase() {
         console.log('Supabase client configured.');
         updateStatus('connected', 'متصل وجاهز');
 
-        // NEW: Fetch user profile on initialization
-        await fetchUserProfile();
-
         // NEW: Control UI elements based on user role
-        const navUsers = document.getElementById('nav-manage-users'); // This ID should be on the link in the dropdown
-        const navManageAgents = document.getElementById('nav-manage-agents');
+        // Find admin-only items
+        const navUsersLink = document.getElementById('nav-users'); // The link is in the navbar
+        const updateAppBtn = document.getElementById('update-app-btn'); // Still in dropdown
 
-        // Example of moving 'Manage Users' into a dropdown or another place
-        // For now, let's assume it's a top-level link for simplicity
-        // We will create a new dropdown for admin actions later.
-        // Let's create a placeholder link for now.
-        const adminDropdown = document.querySelector('.navbar-left'); // A temporary parent
-        adminDropdown.insertAdjacentHTML('beforeend', '<a href="#users" id="nav-users" class="nav-link" style="display: none;"><i class="fas fa-shield-alt"></i> إدارة المستخدمين</a>');
-        const navUsersLink = document.getElementById('nav-users');
-
-        if (navUsers) {
-            if (currentUserProfile && currentUserProfile.role === 'admin') {
-                navUsersLink.style.display = 'block'; // Or 'flex', 'inline-block', etc.
-            }
+        if (currentUserProfile && currentUserProfile.role === 'admin') {
+            // If user is admin, show the admin-only buttons
+            if (navUsersLink) navUsersLink.style.display = 'flex'; // Show the top-level link
+            if (updateAppBtn) updateAppBtn.style.display = 'flex'; // Show the dropdown item
+        } else {
+            // Otherwise, ensure they are hidden
+            if (navUsersLink) navUsersLink.style.display = 'none';
+            if (updateAppBtn) updateAppBtn.style.display = 'none';
         }
 
-        // NEW: Setup routing
+        // NEW: Setup routing AFTER user profile is fetched
+        // We will now fetch the user profile in parallel
+        fetchUserProfile();
+
         window.addEventListener('hashchange', handleRouting);
+        // We call handleRouting immediately without await to render the page skeleton faster
         handleRouting(); // Initial route handling on page load
 
         // NEW: Listen for realtime notifications
@@ -234,6 +251,8 @@ async function initializeSupabase() {
         if (appContent) {
             appContent.innerHTML = `<p class="error">فشل الاتصال بالخادم. تأكد من أن الخادم يعمل وأن الإعدادات صحيحة.</p>`;
         }
+    } finally {
+        console.timeEnd('[Performance] initializeSupabase');
     }
 }
 
@@ -331,9 +350,8 @@ function applyInitialTheme() {
 
 // Setup listeners and dynamic content for the navbar
 function setupNavbar() {
-    // Dark Mode Toggle Logic
-    const themeBtn = document.getElementById('theme-toggle-btn');
-    themeBtn.addEventListener('click', () => {
+    // NEW: Dark Mode Toggle Logic from dropdown
+    const themeToggleHandler = () => {
         if (document.body.classList.contains('dark-mode')) {
             document.body.classList.remove('dark-mode');
             localStorage.setItem('theme', 'light');
@@ -341,7 +359,9 @@ function setupNavbar() {
             document.body.classList.add('dark-mode');
             localStorage.setItem('theme', 'dark');
         }
-    });
+    };
+    const themeBtnDropdown = document.getElementById('theme-toggle-btn-dropdown');
+    if (themeBtnDropdown) themeBtnDropdown.addEventListener('click', themeToggleHandler);
 
     // Update App Button Logic
     const updateBtn = document.getElementById('update-app-btn');
@@ -400,6 +420,7 @@ function setupNavbar() {
 
             const { data: agents, error } = await supabase
                 .from('agents')
+
                 .select('id, name, agent_id, avatar_url, classification')
                 .or(`name.ilike.%${searchTerm}%,agent_id.ilike.%${searchTerm}%`)
                 .limit(5);
@@ -437,6 +458,17 @@ function setupNavbar() {
                         if (mainSearchClearBtn) mainSearchClearBtn.style.display = 'none';
                     });
                 });
+                if (currentUserProfile && currentUserProfile.role === 'admin') {
+                 const usersResultItem = document.createElement('div');
+                    usersResultItem.className = "search-result-item";
+                  usersResultItem.textContent = "إدارة المستخدمين";
+                  searchResultsContainer.appendChild(usersResultItem)
+                     usersResultItem.addEventListener('click', async () => {
+                         window.location.hash = `users`;
+                          searchResultsContainer.classList.remove('visible');
+                           searchInput.value = '';
+                    })
+                }
             } else {
                 searchResultsContainer.innerHTML = '<div class="search-result-item" style="cursor: default;">لا توجد نتائج</div>';
                 searchResultsContainer.classList.add('visible');

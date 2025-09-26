@@ -27,52 +27,58 @@
 
     <!-- New Top Navigation Bar -->
     <nav class="navbar">
-        <div class="navbar-left">
-            <a href="#home" class="brand-v2">
-                <img src="images/logo.png" alt="IB Competition Logo" class="brand-logo">
-                <span class="brand-text">IB Competition system</span>
-            </a>
-            <a href="#home" id="nav-home" class="nav-link active"><i class="fas fa-home"></i> الرئيسية</a>
-            <a href="#tasks" id="nav-tasks" class="nav-link"><i class="fas fa-tasks"></i> المهام اليومية</a>
-            <a href="#manage-agents" id="nav-manage-agents" class="nav-link"><i class="fas fa-users-cog"></i> إدارة الوكلاء</a>
-            <div class="nav-item dropdown">
-                <a href="#competitions" class="nav-link dropdown-toggle" id="nav-competitions-dropdown"><i class="fas fa-trophy"></i> المسابقات</a>
-                <div class="dropdown-menu">
-                    <a href="#competitions" id="nav-manage-competitions" class="dropdown-item"><i class="fas fa-list-alt"></i> إدارة المسابقات</a>
-                    <a href="#archived-competitions" id="nav-archived-competitions" class="dropdown-item"><i class="fas fa-archive"></i> المسابقات المنتهية</a>
-                    <div class="dropdown-divider"></div>
-                    <a href="#competition-templates" id="nav-competition-templates" class="dropdown-item"><i class="fas fa-file-alt"></i> إدارة القوالب</a>
-                    <a href="#archived-templates" id="nav-archived-templates" class="dropdown-item"><i class="fas fa-box-open"></i> أرشيف القوالب</a>
+        <div class="navbar-container">
+            <div class="navbar-left">
+                <a href="#home" class="brand-v2">
+                    <img src="images/logo.png" alt="IB Competition Logo" class="brand-logo">
+                    <span class="brand-text">IB Competition system</span>
+                </a>
+                <a href="#home" id="nav-home" class="nav-link active"><i class="fas fa-home"></i> الرئيسية</a>
+                <a href="#tasks" id="nav-tasks" class="nav-link"><i class="fas fa-tasks"></i> المهام اليومية</a>
+                <a href="#manage-agents" id="nav-manage-agents" class="nav-link"><i class="fas fa-users-cog"></i> إدارة الوكلاء</a>
+                <div class="nav-item dropdown">
+                    <a href="#competitions" class="nav-link dropdown-toggle" id="nav-competitions-dropdown"><i class="fas fa-trophy"></i> المسابقات</a>
+                    <div class="dropdown-menu">
+                        <a href="#competitions" id="nav-manage-competitions" class="dropdown-item"><i class="fas fa-list-alt"></i> إدارة المسابقات</a>
+                        <a href="#archived-competitions" id="nav-archived-competitions" class="dropdown-item"><i class="fas fa-archive"></i> المسابقات المنتهية</a>
+                        <div class="dropdown-divider"></div>
+                        <a href="#competition-templates" id="nav-competition-templates" class="dropdown-item"><i class="fas fa-file-alt"></i> إدارة القوالب</a>
+                        <a href="#archived-templates" id="nav-archived-templates" class="dropdown-item"><i class="fas fa-box-open"></i> أرشيف القوالب</a>
+                    </div>
+                </div>
+                <a href="#calendar" id="nav-calendar" class="nav-link"><i class="fas fa-calendar-alt"></i> التقويم</a>
+            </div>
+            <div class="navbar-center">
+                <div class="search-container">
+                    <input type="search" placeholder="بحث بالاسم أو رقم الوكالة..." class="search-input" id="main-search-input" autocomplete="off">
+                    <i class="fas fa-search search-icon"></i>
+                    <i class="fas fa-times-circle search-clear-btn" id="main-search-clear"></i>
+                    <div id="search-results" class="search-results"></div>
                 </div>
             </div>
-            <a href="#calendar" id="nav-calendar" class="nav-link"><i class="fas fa-calendar-alt"></i> التقويم</a>
-        </div>
-        <div class="navbar-center">
-            <div class="search-container">
-                <input type="search" placeholder="بحث بالاسم أو رقم الوكالة..." class="search-input" id="main-search-input" autocomplete="off">
-                <i class="fas fa-search search-icon"></i>
-                <i class="fas fa-times-circle search-clear-btn" id="main-search-clear"></i>
-                <div id="search-results" class="search-results"></div>
-            </div>
-        </div>
-        <div class="navbar-right">
-            <div id="date-display" class="date-display"></div>
-            <button id="theme-toggle-btn" class="theme-toggle-btn">
-                <i class="fas fa-sun"></i>
-                <i class="fas fa-moon"></i>
-            </button>
-            <button id="update-app-btn" class="navbar-icon-btn" title="تحديث التطبيق">
-                <i class="fas fa-sync-alt"></i>
-            </button>
-            <!-- NEW: User profile dropdown -->
-            <div class="nav-item dropdown" id="user-profile-menu" style="display: none;">
-                <a href="#" class="nav-link dropdown-toggle" id="user-profile-dropdown">
-                    <img id="user-avatar" src="" alt="User Avatar" class="user-avatar">
-                    <span id="user-name"></span>
-                </a>
-                <div class="dropdown-menu dropdown-menu-right">
+            <div class="navbar-right">
+                <div id="date-display" class="date-display"></div>
+            <!-- NEW: Consolidated Settings Dropdown -->
+            <div class="nav-item dropdown" id="settings-menu" style="display: none;">
+                <a href="#" class="navbar-icon-btn dropdown-toggle" id="nav-settings-dropdown" title="الإعدادات">
+                    <i class="fas fa-cog"></i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right">
+                    <div class="dropdown-header">
+                        <img id="user-avatar" src="" alt="User Avatar" class="user-avatar">
+                        <div class="user-info">
+                            <p id="user-name" class="user-name"></p>
+                            <p id="user-email" class="user-email"></p>
+                        </div>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <a href="#users" id="nav-users" class="dropdown-item" style="display: none;"><i class="fas fa-shield-alt"></i> إدارة المستخدمين</a>
                     <a href="#profile-settings" id="nav-profile-settings" class="dropdown-item"><i class="fas fa-user-cog"></i> إعدادات الملف الشخصي</a>
-                    <a href="#" id="logout-btn" class="dropdown-item"><i class="fas fa-sign-out-alt"></i> تسجيل الخروج</a>
+                    <a href="#" id="update-app-btn" class="dropdown-item" style="display: none;"><i class="fas fa-sync-alt"></i> تحديث التطبيق</a>
+                    <a href="#" id="theme-toggle-btn-dropdown" class="dropdown-item"><i class="fas fa-palette"></i> تبديل الثيم</a>
+                    <div class="dropdown-divider"></div>
+                        <a href="#" id="logout-btn" class="dropdown-item logout-item"><i class="fas fa-sign-out-alt"></i> تسجيل الخروج</a>
+                    </div>
                 </div>
             </div>
         </div>

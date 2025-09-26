@@ -277,6 +277,83 @@ apiRouter.delete('/users/:id', async (req, res) => {
     }
 });
 
+// NEW: Endpoint to get a combined list of users with their emails (Admin only)
+apiRouter.get('/users', async (req, res) => {
+    console.log(`[ADMIN] Received request to fetch all users.`);
+
+    if (!supabaseAdmin) {
+        return res.status(500).json({ message: 'Admin features are not configured on the server.' });
+    }
+
+    try {
+        // 1. Get all users from the authentication system
+        const { data: { users: authUsers }, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+        if (authError) throw authError;
+
+        // 2. Get all profiles from our public table
+        const { data: profiles, error: profileError } = await supabaseAdmin.from('users').select('*');
+        if (profileError) throw profileError;
+
+        // 3. Create a map of profiles for easy lookup
+        const profileMap = new Map(profiles.map(p => [p.id, p]));
+
+        // 4. Combine the data
+        const combinedUsers = authUsers.map(authUser => {
+            const profile = profileMap.get(authUser.id) || {};
+            return {
+                ...profile, // full_name, role, created_at
+                id: authUser.id,
+                email: authUser.email,
+                last_sign_in_at: authUser.last_sign_in_at,
+            };
+        });
+
+        res.status(200).json(combinedUsers);
+    } catch (error) {
+        console.error(`[ERROR] Failed to fetch all users:`, error.message);
+        res.status(500).json({ message: `Failed to fetch users. Reason: ${error.message}` });
+    }
+});
+
+// NEW: Endpoint to create a new user (Admin only)
+apiRouter.post('/users', async (req, res) => {
+    const { email, password, full_name, role } = req.body;
+    console.log(`[ADMIN] Received request to create new user: ${email}`);
+
+    if (!supabaseAdmin) {
+        return res.status(500).json({ message: 'Admin features are not configured on the server.' });
+    }
+    if (!email || !password || !full_name || !role) {
+        return res.status(400).json({ message: 'Email, password, full name, and role are required.' });
+    }
+
+    try {
+        // 1. Create the user in the 'auth' schema
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+            email: email,
+            password: password,
+            email_confirm: true, // Automatically confirm the email
+            user_metadata: { full_name: full_name }
+        });
+
+        if (authError) throw authError;
+
+        const newUserId = authData.user.id;
+
+        // 2. The trigger 'handle_new_user' already created a profile with 'user' role.
+        //    If the requested role is 'admin', we need to update it.
+        if (role === 'admin') {
+            const { error: roleError } = await supabaseAdmin.from('users').update({ role: 'admin' }).eq('id', newUserId);
+            if (roleError) throw new Error(`User created, but failed to set role to admin: ${roleError.message}`);
+        }
+
+        res.status(201).json({ message: 'User created successfully.', user: authData.user });
+    } catch (error) {
+        console.error(`[ERROR] Failed to create user ${email}:`, error.message);
+        res.status(500).json({ message: `Failed to create user. Reason: ${error.message}` });
+    }
+});
+
 // NEW: Endpoint to update a user's role (Admin only)
 apiRouter.put('/users/:id/role', async (req, res) => {
     const { id } = req.params;
@@ -307,9 +384,6 @@ apiRouter.use((req, res) => {
     res.status(404).json({ message: `API route not found: ${req.method} ${req.originalUrl}` });
 });
 
-// Mount the main API router under the /api path
-app.use('/api', apiRouter);
-
 
 // --- Static File Serving & SPA Fallback ---
 // This should come AFTER all API routes.
@@ -317,9 +391,12 @@ app.use('/api', apiRouter);
 // Serve static files from the frontend directory
 app.use(express.static(path.join(__dirname, '../frontend')));
 
+// Mount the main API router under the /api path
+app.use('/api', apiRouter);
+
 // Handle Chrome DevTools requests gracefully to prevent console noise.
 app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
-    res.status(204).send();
+    res.status(204).send(); // No Content
 });
 
 // The SPA fallback. This should be the last route.

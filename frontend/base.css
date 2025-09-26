@@ -1,26 +1,28 @@
 :root {
-    --bg-color: #f4f4f9;
+    --bg-color: #f4f4f9; /* Light mode background */
     --animated-bg-color: transparent; /* Default for light mode */
     --card-bg-color: rgba(255, 255, 255, 0.9);
-    --text-color: #333;
-    --text-secondary-color: #6c757d;
-    --primary-color: #1abc9c; /* Teal */
-    --primary-hover-color: #16a085;
-    --border-color: #ddd;
+    --text-color: #333; /* Light mode text */
+    --text-secondary-color: #6c757d; /* Light mode secondary text */
+    --primary-color: #4CAF50; /* Green for light mode */
+    --primary-hover-color: #45a049; /* Darker green for light mode */
+    --accent-color: #F4A261; /* Orange accent for light mode */
+    --border-color: #ddd; /* Light mode border */
     --input-bg-color: #fff;
     --shadow-color: rgba(0, 0, 0, 0.1);
     --navbar-bg: rgba(255, 255, 255, 0.7);
 }
 
 body.dark-mode {
-    --bg-color: #0D1B2A; /* كحلي داكن جداً */
-    --animated-bg-color: radial-gradient(ellipse at bottom, #0D1B2A 0%, #1B263B 100%);
-    --card-bg-color: rgba(27, 38, 59, 0.8); /* كحلي متوسط مع شفافية */
-    --text-color: #FFFFFF; /* أبيض */
-    --text-secondary-color: #778DA9; /* أزرق فاتح أنيق */
-    --primary-color: #4CAF50; /* أخضر */
-    --primary-hover-color: #45a049; /* أخضر أغمق عند المرور */
-    --border-color: #415A77; /* أزرق رمادي فاتح */
+    --bg-color: #0D1B2A; /* كحلي داكن جداً - Background */
+    --animated-bg-color: radial-gradient(ellipse at bottom, #0D1B2A 0%, #1B263B 100%); /* Gradient background */
+    --card-bg-color: rgba(27, 38, 59, 0.8); /* كحلي متوسط مع شفافية - Secondary */
+    --text-color: #FFFFFF; /* أبيض - Text */
+    --text-secondary-color: #778DA9; /* أزرق فاتح أنيق - Secondary Text */
+    --primary-color: #4CAF50; /* أخضر - Accent */
+    --primary-hover-color: #45a049; /* أخضر أغمق - Accent Hover */
+    --accent-color: #F4A261; /* برتقالي هادي - Accent 2 */
+    --border-color: #415A77; /* أزرق رمادي فاتح - Secondary */
     --input-bg-color: #0D1B2A; /* نفس لون الخلفية */
     --shadow-color: rgba(0, 0, 0, 0.4);
     --navbar-bg: rgba(27, 38, 59, 0.8); /* Match card background */
@@ -227,4 +229,28 @@ footer {
     display: flex;
     gap: 10px;
     margin-top: 20px;
+}
+
+/* NEW: General Filter Container Styles */
+.filters-container {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+}
+
+.filter-search-container {
+    position: relative;
+    flex-grow: 1;
+    min-width: 250px;
+}
+
+.item-count-display {
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
 }

@@ -22,14 +22,14 @@
 }
 
 /* Color Themes */
-.stat-card-v2.color-1 { /* New: Dark Blue to Bright Blue */
-    background: linear-gradient(135deg, rgb(22, 22, 60), #2575fc);
+.stat-card-v2.color-1 { /* Dark Blue to Green */
+    background: linear-gradient(135deg, #1B263B, #4CAF50);
 }
-.stat-card-v2.color-2 { /* New: Dark Blue to Purple */
-    background: linear-gradient(135deg, rgb(22, 22, 60), #6a11cb);
+.stat-card-v2.color-2 { /* Dark Blue to Orange */
+    background: linear-gradient(135deg, #1B263B, #F4A261);
 }
-.stat-card-v2.color-3 { /* New: Dark Blue to Teal */
-    background: linear-gradient(135deg, rgb(22, 22, 60), #1abc9c);
+.stat-card-v2.color-3 { /* Dark Blue to Grey-Blue */
+    background: linear-gradient(135deg, #1B263B, #415A77);
 }
 
 .stat-card-v2-icon-bg {

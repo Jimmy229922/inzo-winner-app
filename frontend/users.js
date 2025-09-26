@@ -1,77 +1,78 @@
 async function renderUsersPage() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
-        <div class="page-header">
-            <h1><i class="fas fa-users-cog"></i> إدارة المستخدمين</h1>
+        <div class="page-header column-header">
+            <div class="header-top-row">
+                <h1><i class="fas fa-users-cog"></i> إدارة المستخدمين</h1>
+                <button id="add-new-user-btn" class="btn-primary"><i class="fas fa-user-plus"></i> إضافة مستخدم جديد</button>
+            </div>
+            <div class="filters-container">
+                <div class="filter-search-container">
+                    <input type="search" id="user-search-input" placeholder="بحث بالاسم أو البريد الإلكتروني..." autocomplete="off">
+                    <i class="fas fa-search"></i>
+                    <i class="fas fa-times-circle search-clear-btn" id="user-search-clear"></i>
+                </div>
+                <div id="user-count" class="item-count-display"></div>
+            </div>
         </div>
         <div id="users-list-container">
             <div class="loader-container"><div class="spinner"></div></div>
         </div>
     `;
 
+    // Add listener for the new user button
+    document.getElementById('add-new-user-btn').addEventListener('click', renderCreateUserModal);
+    
+    // Attach event listeners for actions (delete, role change) to the persistent container
+    attachUserActionListeners();
+
+    // Attach search listeners
+    setupUserPageFilters([]); // Setup with empty array initially
+
+    // NEW: Fetch data asynchronously
+    fetchUsersData();
+}
+
+async function fetchUsersData() {
     if (!supabase) {
         document.getElementById('users-list-container').innerHTML = '<p class="error">لا يمكن عرض المستخدمين، لم يتم الاتصال بقاعدة البيانات.</p>';
         return;
     }
 
-    // Fetch all users. This works because the current user is an admin
-    // and we have a policy that allows admins to read the 'users' table.
-    const { data: users, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-    if (error) {
+    // NEW: Fetch all users from our custom backend endpoint to get emails
+    try {
+        console.time('[Performance] Fetch Users API');
+        const response = await fetch('/api/users');
+        console.timeEnd('[Performance] Fetch Users API');
+        if (!response.ok) {
+            const result = await response.json();
+            throw new Error(result.message);
+        }
+        const users = await response.json();
+        setupUserPageFilters(users); // Re-setup filters with the fetched data
+    } catch (error) {
         document.getElementById('users-list-container').innerHTML = `<p class="error">فشل جلب المستخدمين: ${error.message}</p>`;
         return;
     }
-
-    const container = document.getElementById('users-list-container');
-    if (users.length === 0) {
-        container.innerHTML = '<p class="no-results-message">لا يوجد مستخدمون لعرضهم.</p>';
-        return;
-    }
-
-    container.innerHTML = `
-        <div class="table-responsive-container">
-            <table class="modern-table">
-                <thead>
-                    <tr>
-                        <th>الاسم الكامل</th>
-                        <th>البريد الإلكتروني (من المصادقة)</th>
-                        <th>الصلاحية</th>
-                        <th class="actions-column">الإجراءات</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${users.map(user => renderUserRow(user)).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
-
-    // Add event listeners after rendering
-    attachUserActionListeners();
 }
 
 function renderUserRow(user) {
-    // We need to fetch the email from the auth schema, as it's not in our public profiles table.
-    // This is a placeholder. A more robust solution would join this data on the backend.
-    // For now, we'll fetch it on demand or show the ID.
-    // Let's assume we can't easily get the email here and will add it later if needed.
-    // For now, we will show the user ID as a placeholder for email.
     const isCurrentUser = currentUserProfile && user.id === currentUserProfile.id;
+    const lastLogin = user.last_sign_in_at 
+        ? new Date(user.last_sign_in_at).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })
+        : 'لم يسجل دخول';
 
     return `
-        <tr data-user-id="${user.id}" data-user-name="${user.full_name || 'مستخدم'}">
+        <tr data-user-id="${user.id}" data-user-name="${user.full_name || 'مستخدم'}" data-user-email="${user.email || ''}">
             <td data-label="الاسم الكامل">${user.full_name || '<em>لم يحدد</em>'}</td>
-            <td data-label="معرف المستخدم">${user.id}</td>
+            <td data-label="البريد الإلكتروني">${user.email || '<em>غير متوفر</em>'}</td>
             <td data-label="الصلاحية">
                 <select class="role-select" data-user-id="${user.id}" ${isCurrentUser ? 'disabled' : ''}>
                     <option value="user" ${user.role === 'user' ? 'selected' : ''}>موظف</option>
                     <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>مسؤول</option>
                 </select>
             </td>
+            <td data-label="آخر تسجيل دخول">${lastLogin}</td>
             <td class="actions-cell">
                 <button class="btn-danger delete-user-btn" data-user-id="${user.id}" ${isCurrentUser ? 'disabled' : ''}>
                     <i class="fas fa-trash-alt"></i> حذف
@@ -79,6 +80,71 @@ function renderUserRow(user) {
             </td>
         </tr>
     `;
+}
+
+function setupUserPageFilters(allUsers) {
+    const searchInput = document.getElementById('user-search-input');
+    const clearBtn = document.getElementById('user-search-clear');
+    const userCountEl = document.getElementById('user-count');
+    const container = document.getElementById('users-list-container'); // The persistent container
+
+    if (!searchInput || !container) return;
+
+    const applyFilters = () => {
+        if (clearBtn) {
+            clearBtn.style.display = searchInput.value ? 'block' : 'none';
+        }
+
+        const searchTerm = searchInput.value.toLowerCase().trim();
+
+        const filteredUsers = allUsers.filter(user => {
+            const name = (user.full_name || '').toLowerCase();
+            const email = (user.email || '').toLowerCase();
+            return name.includes(searchTerm) || email.includes(searchTerm);
+        });
+
+        // Re-render the table with filtered users
+        if (filteredUsers.length === 0) {
+            container.innerHTML = '<p class="no-results-message">لا يوجد مستخدمون يطابقون بحثك.</p>';
+        } else {
+            container.innerHTML = `
+                <div class="table-responsive-container">
+                    <table class="modern-table">
+                        <thead>
+                            <tr>
+                                <th>الاسم الكامل</th>
+                                <th>البريد الإلكتروني</th>
+                                <th>الصلاحية</th>
+                                <th>آخر تسجيل دخول</th>
+                                <th class="actions-column">الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filteredUsers.map(user => renderUserRow(user)).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        
+        // Update user count
+        if (userCountEl) {
+            userCountEl.textContent = `إجمالي: ${filteredUsers.length} مستخدم`;
+        }
+    };
+
+    searchInput.addEventListener('input', applyFilters);
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            applyFilters();
+            searchInput.focus();
+        });
+    }
+
+    // Initial call to set up the count and table
+    applyFilters();
 }
 
 function attachUserActionListeners() {
@@ -133,4 +199,79 @@ function attachUserActionListeners() {
             }
         }
     });
+}
+
+function renderCreateUserModal() {
+    const modalContent = `
+        <form id="create-user-form" class="form-layout" style="text-align: right;">
+            <div class="form-group">
+                <label for="new-user-fullname">الاسم الكامل</label>
+                <input type="text" id="new-user-fullname" required>
+            </div>
+            <div class="form-group">
+                <label for="new-user-email">البريد الإلكتروني</label>
+                <input type="email" id="new-user-email" required>
+            </div>
+            <div class="form-group">
+                <label for="new-user-password">كلمة المرور</label>
+                <input type="password" id="new-user-password" required minlength="6">
+            </div>
+            <div class="form-group">
+                <label for="new-user-role">الصلاحية</label>
+                <select id="new-user-role">
+                    <option value="user" selected>موظف</option>
+                    <option value="admin">مسؤول</option>
+                </select>
+            </div>
+        </form>
+    `;
+
+    showConfirmationModal(
+        modalContent,
+        async () => {
+            // This function is called when the confirm button is clicked.
+            // We will handle the submission inside the form's event listener instead.
+            // We need to trigger the form submission here.
+            document.getElementById('create-user-form').dispatchEvent(new Event('submit', { cancelable: true }));
+        },
+        {
+            title: 'إنشاء مستخدم جديد',
+            confirmText: 'إنشاء',
+            confirmClass: 'btn-primary',
+            onRender: (modal) => {
+                const form = modal.querySelector('#create-user-form');
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const confirmBtn = document.getElementById('confirm-btn'); // The button in the modal
+                    confirmBtn.disabled = true;
+                    confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                    const newUser = {
+                        full_name: document.getElementById('new-user-fullname').value,
+                        email: document.getElementById('new-user-email').value,
+                        password: document.getElementById('new-user-password').value,
+                        role: document.getElementById('new-user-role').value,
+                    };
+
+                    try {
+                        const response = await fetch('/api/users', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newUser)
+                        });
+                        const result = await response.json();
+                        if (!response.ok) throw new Error(result.message);
+
+                        showToast('تم إنشاء المستخدم بنجاح.', 'success');
+                        modal.closest('.modal-overlay').remove(); // Close the modal on success
+                        await renderUsersPage(); // Refresh the user list
+                    } catch (error) {
+                        showToast(`فشل إنشاء المستخدم: ${error.message}`, 'error');
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = 'إنشاء';
+                    }
+                });
+            }
+        }
+    );
 }

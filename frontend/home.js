@@ -2,7 +2,7 @@ async function renderHomePage() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
         <div class="page-header"><h1><i class="fas fa-tachometer-alt"></i> لوحة التحكم الرئيسية</h1></div>
-        <div id="home-stats-container"></div>
+        <div id="home-stats-container"><div class="loader-container" style="min-height: 120px;"><div class="spinner"></div></div></div>
         <div class="home-grid">
             <div class="home-main-column">
                 <h2>تقدم مهام اليوم (<span id="progress-percentage">0</span>%)</h2>
@@ -10,9 +10,9 @@ async function renderHomePage() {
                     <div id="tasks-progress-bar" class="progress-bar" style="width: 0%;"></div>
                     <span id="progress-label" class="progress-label">0 / 0</span>
                 </div> 
-
+ 
                 <h2 style="margin-top: 30px;">المسابقات المرسلة خلال اليوم</h2>
-                <div class="chart-container">
+                <div class="chart-container"><div class="loader-container" style="min-height: 200px;"><div class="spinner"></div></div>
                     <canvas id="competitions-chart"></canvas>
                 </div>
             </div>
@@ -23,12 +23,12 @@ async function renderHomePage() {
                 </div>
 
                 <h2 style="margin-top: 30px;">نظرة سريعة على الوكلاء</h2>
-                <div id="agent-quick-stats" class="agent-quick-stats">
+                <div id="agent-quick-stats" class="agent-quick-stats"><div class="loader-container" style="min-height: 200px;"><div class="spinner"></div></div>
                     <!-- Stats will be rendered here -->
                 </div>
             </div>
         </div>
-
+ 
         <h2 style="margin-top: 40px;">إجراءات سريعة</h2>
         <div class="quick-actions">
             <a href="#add-agent?returnTo=home" class="quick-action-card"><h3><i class="fas fa-user-plus"></i> إضافة وكيل جديد</h3><p>إضافة وكيل جديد إلى النظام وتعيين بياناته.</p></a>            
@@ -36,6 +36,12 @@ async function renderHomePage() {
         </div>
     `;
 
+    // NEW: Start fetching data asynchronously AFTER rendering the skeleton
+    console.log('[Performance] Starting to fetch home page data...');
+    fetchHomePageData();
+}
+
+async function fetchHomePageData() {
     if (supabase) {
         const today = new Date();
         const todayDayIndex = today.getDay();
@@ -44,6 +50,7 @@ async function renderHomePage() {
         const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
         const tomorrowStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
 
+        console.time('[Performance] Home Page Data Fetch (Promise.all)');
         const [
             { count: totalAgents },
             { count: activeCompetitions },
@@ -61,6 +68,7 @@ async function renderHomePage() {
             supabase.from('agents').select('classification'),
             supabase.from('daily_tasks').select('*').eq('task_date', todayStr) // تعديل: إضافة جلب المهام هنا
         ]);
+        console.timeEnd('[Performance] Home Page Data Fetch (Promise.all)');
 
         // Update Stat Cards
         const statsContainer = document.getElementById('home-stats-container');
@@ -68,17 +76,17 @@ async function renderHomePage() {
             <div class="dashboard-grid-v2">
                 <a href="#manage-agents" class="stat-card-v2 color-1">
                     <div class="stat-card-v2-icon-bg"><i class="fas fa-users"></i></div>
-                    <p class="stat-card-v2-value">${totalAgents || 0}</p>
+                    <p class="stat-card-v2-value">${formatNumber(totalAgents)}</p>
                     <h3 class="stat-card-v2-title">إجمالي الوكلاء</h3>
                 </a>
                 <a href="#competitions" class="stat-card-v2 color-2">
                     <div class="stat-card-v2-icon-bg"><i class="fas fa-trophy"></i></div>
-                    <p class="stat-card-v2-value">${activeCompetitions || 0}</p>
+                    <p class="stat-card-v2-value">${formatNumber(activeCompetitions)}</p>
                     <h3 class="stat-card-v2-title">مسابقات نشطة</h3>
                 </a>
                 <a href="#competitions" class="stat-card-v2 color-3">
                     <div class="stat-card-v2-icon-bg"><i class="fas fa-paper-plane"></i></div>
-                    <p class="stat-card-v2-value">${competitionsToday?.length || 0}</p>
+                    <p class="stat-card-v2-value">${formatNumber(competitionsToday?.length)}</p>
                     <h3 class="stat-card-v2-title">المسابقات المرسلة اليوم</h3>
                 </a>
             </div>
@@ -177,7 +185,7 @@ async function renderHomePage() {
                 <div class="quick-stat-item">
                     <i class="fas fa-user-clock"></i>
                     <div class="quick-stat-info">
-                        <h4>${newAgentsThisMonth || 0}</h4>
+                        <h4>${formatNumber(newAgentsThisMonth)}</h4>
                         <p>وكلاء جدد هذا الشهر</p>
                     </div>
                 </div>
@@ -202,10 +210,10 @@ function renderClassificationChart(classificationData) {
     const data = Object.values(classificationData);
 
     const backgroundColors = {
-        'R': '#9b59b6', // Purple
-        'A': '#e74c3c', // Red
-        'B': '#3498db', // Blue
-        'C': '#2ecc71', // Green
+        'R': '#F4A261', // Orange Accent
+        'A': '#e74c3c', // Red (kept for high priority)
+        'B': '#3498db', // Blue (kept for contrast)
+        'C': '#4CAF50', // Green Primary
     };
 
     new Chart(ctx, {
@@ -269,13 +277,13 @@ function renderCompetitionsChart(competitions) {
                     const {ctx, chartArea} = chart;
                     if (!chartArea) return null;
                     const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-                    gradient.addColorStop(0, 'rgba(138, 43, 226, 0)');
-                    gradient.addColorStop(1, 'rgba(138, 43, 226, 0.4)');
+                    gradient.addColorStop(0, 'rgba(76, 175, 80, 0)'); // Green transparent
+                    gradient.addColorStop(1, 'rgba(76, 175, 80, 0.4)'); // Green with opacity
                     return gradient;
                 },
-                borderColor: 'rgba(138, 43, 226, 1)', // var(--primary-color)
+                borderColor: 'var(--primary-color)', // Use the new green
                 borderWidth: 2,
-                pointBackgroundColor: 'rgba(138, 43, 226, 1)',
+                pointBackgroundColor: 'var(--primary-color)',
                 pointRadius: 3,
                 pointHoverRadius: 5,
                 tension: 0.4 // Makes the line smooth
