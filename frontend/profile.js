@@ -772,12 +772,14 @@ function renderInlineEditor(groupElement, agent) {
     switch (fieldName) {
         case 'rank':
             editorHtml = `<select id="inline-edit-input">
-                <option value="">-- اختر --</option>
                 <optgroup label="⁕ مراتب الوكالة الأعتيادية ⁖">
-                ${Object.keys(RANKS_DATA).slice(0, 4).map(rank => `<option value="${rank}" ${currentValue === rank ? 'selected' : ''}>${rank}</option>`).join('')}
+                <option value="بدون مرتبة" ${currentValue === 'بدون مرتبة' ? 'selected' : ''}>بدون مرتبة</option>
+                ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map(rank => `<option value="${rank}" ${currentValue === rank ? 'selected' : ''}>${rank}</option>`).join('')}
                 </optgroup>
                 <optgroup label="⁕ مراتب الوكالة الحصرية ⁖">
-                ${Object.keys(RANKS_DATA).slice(4).map(rank => `<option value="${rank}" ${currentValue === rank ? 'selected' : ''}>${rank}</option>`).join('')}
+                <option value="بدون مرتبة حصرية" ${currentValue === 'بدون مرتبة حصرية' ? 'selected' : ''}>بدون مرتبة حصرية</option>
+                <option value="Center" ${currentValue === 'Center' ? 'selected' : ''}>Center</option>
+                ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}" ${currentValue === rank ? 'selected' : ''}>${rank}</option>`).join('')}
                 </optgroup>
             </select>`;
             break;
@@ -833,6 +835,13 @@ function renderInlineEditor(groupElement, agent) {
             updateData.deposit_bonus_count = rankData.deposit_bonus_count;
             // When rank changes, it might affect balances
             updateData.remaining_balance = (rankData.competition_bonus || 0) - (currentAgent.consumed_balance || 0);
+            // --- NEW: Special handling for 'بدون مرتبة حصرية' ---
+            if (newValue === 'بدون مرتبة حصرية') {
+                updateData.competition_bonus = 60;
+                updateData.remaining_balance = 60 - (currentAgent.consumed_balance || 0);
+            } else {
+                updateData.competition_bonus = rankData.competition_bonus;
+            }
             updateData.remaining_deposit_bonus = (rankData.deposit_bonus_count || 0) - (currentAgent.used_deposit_bonus || 0);
         } else {
             let finalValue;

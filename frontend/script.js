@@ -33,11 +33,14 @@ function updateStatus(status, message) {
 }
 
 async function logAgentActivity(agentId, actionType, description, metadata = {}) {
-    if (!supabase) return;
+    if (!supabase || !currentUserProfile) return;
+    const userName = currentUserProfile.full_name || currentUserProfile.email;
+    const finalDescription = `${description} (بواسطة: ${userName})`;
+
     const { error } = await supabase.from('agent_logs').insert({
         agent_id: agentId,
         action_type: actionType,
-        description: description,
+        description: finalDescription,
         metadata: metadata
     });
     if (error) {
@@ -71,16 +74,6 @@ async function fetchUserProfile() {
             userAvatar.src = currentUserProfile?.avatar_url || `https://ui-avatars.com/api/?name=${user.email}&background=8A2BE2&color=fff`;
             userName.textContent = currentUserProfile?.full_name || user.email.split('@')[0];
             userEmail.textContent = user.email;
-        }
-
-        // NEW: Control UI elements based on user role (Moved here to ensure it runs after profile is fetched)
-        const navUsersLink = document.getElementById('nav-users');
-
-        if (currentUserProfile && currentUserProfile.role === 'admin') {
-            if (navUsersLink) navUsersLink.style.display = 'flex';
-        } else {
-            // Ensure they are hidden for non-admins
-            if (navUsersLink) navUsersLink.style.display = 'none';
         }
     } else {
         // Hide user menu if not logged in
@@ -131,17 +124,6 @@ async function handleRouting() {
 
     const routeKey = hash.split('/')[0].split('?')[0]; // Get base route e.g., #profile from #profile/123 or #competitions from #competitions/new?agentId=1
     const route = routes[routeKey] || routes['#home'];
-
-    // NEW: Route protection
-    if (route.adminOnly) {
-        if (!currentUserProfile || currentUserProfile.role !== 'admin') {
-            console.warn('Access Denied. User is not an admin.');
-            showToast('غير مصرح لك بالوصول لهذه الصفحة.', 'error');
-            window.location.hash = '#home'; // Redirect to home
-            hideLoader();
-            return;
-        }
-    }
 
     renderFunction = route.func;
     navElement = document.getElementById(route.nav);

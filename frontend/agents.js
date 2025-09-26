@@ -7,6 +7,7 @@ const RANKS_DATA = {
     'Pro': { competition_bonus: 150, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
     'Elite': { competition_bonus: 200, deposit_bonus_percentage: 50, deposit_bonus_count: 4 },
     // الحصرية
+    'Center': { competition_bonus: 650, deposit_bonus_percentage: 70, deposit_bonus_count: 4 },
     'Bronze': { competition_bonus: 150, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
     'Silver': { competition_bonus: 230, deposit_bonus_percentage: 40, deposit_bonus_count: 3 },
     'Gold': { competition_bonus: 300, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
@@ -40,7 +41,6 @@ async function renderTasksPage() {
     `;
 
     await renderTaskList();
-
     const markAllCompleteBtn = document.getElementById('mark-all-tasks-complete-btn');
     if (markAllCompleteBtn) {
         markAllCompleteBtn.addEventListener('click', handleMarkAllTasksComplete);
@@ -807,12 +807,14 @@ function renderAddAgentForm() {
                     <div class="form-group">
                         <label for="agent-rank">المرتبة</label>
                         <select id="agent-rank">
-                            <option value="">-- اختر --</option>
                             <optgroup label="⁕ مراتب الوكالة الأعتيادية ⁖">
-                                ${Object.keys(RANKS_DATA).slice(0, 4).map(rank => `<option value="${rank}">${rank}</option>`).join('')}
+                                <option value="بدون مرتبة" selected>بدون مرتبة</option>
+                                ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map(rank => `<option value="${rank}">${rank}</option>`).join('')}
                             </optgroup>
                             <optgroup label="⁕ مراتب الوكالة الحصرية ⁖">
-                                ${Object.keys(RANKS_DATA).slice(4).map(rank => `<option value="${rank}">${rank}</option>`).join('')}
+                                <option value="بدون مرتبة حصرية">بدون مرتبة حصرية</option>
+                                <option value="Center">Center</option>
+                                ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}">${rank}</option>`).join('')}
                             </optgroup>
                         </select>
                     </div>
@@ -1115,4 +1117,48 @@ function showBulkSendProgressModal(total) {
         showConfirm: false,
         modalClass: 'modal-no-actions'
     });
+}
+
+async function renderMiniCalendar() {
+    const wrapper = document.getElementById('tasks-calendar-wrapper');
+    if (!wrapper) return;
+
+    wrapper.innerHTML = `
+        <div class="page-header" style="padding: 0; border: none;">
+            <div class="header-top-row">
+                <h2>التقويم</h2>
+            </div>
+        </div>
+        <div id="mini-calendar-container"></div>
+    `;
+
+    const calendarContainer = document.getElementById('mini-calendar-container');
+    const today = new Date();
+    const month = today.getMonth();
+    const year = today.getFullYear();
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    let calendarHtml = `
+        <div class="mini-calendar-header">
+            <span class="month-year">${today.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' })}</span>
+        </div>
+        <div class="mini-calendar-grid">
+            ${['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'].map(day => `<div class="day-name">${day}</div>`).join('')}
+    `;
+
+    // Add empty cells for the first day of the week
+    for (let i = 0; i < firstDay; i++) {
+        calendarHtml += '<div></div>';
+    }
+
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+        const isToday = day === today.getDate();
+        calendarHtml += `<div class="day-cell ${isToday ? 'today' : ''}">${day}</div>`;
+    }
+
+    calendarHtml += '</div>';
+    calendarContainer.innerHTML = calendarHtml;
 }
