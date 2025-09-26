@@ -227,7 +227,7 @@ apiRouter.post('/update-app', (req, res) => {
     exec('git pull origin main', { cwd: path.join(__dirname, '..') }, (error, stdout, stderr) => {
         if (error) {
             console.error(`[UPDATE-ERROR] exec error: ${error}`);
-            if (stderr.includes('not a git repository')) {
+            if (stderr.includes('not a git repository') || stderr.includes('is not recognized')) {
                 return res.status(500).json({ message: 'فشل التحديث: المجلد الحالي ليس مستودع Git صالح.' });
             }
             return res.status(500).json({ message: 'فشل تحديث التطبيق.', details: stderr });
