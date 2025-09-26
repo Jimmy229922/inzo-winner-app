@@ -170,7 +170,11 @@ async function fetchHomePageData() {
         }
 
         // Render Chart
-        renderCompetitionsChart(competitionsToday || []);
+        const chartContainer = document.getElementById('competitions-chart')?.parentElement;
+        if (chartContainer) {
+            chartContainer.innerHTML = '<canvas id="competitions-chart"></canvas>'; // Clear loader
+            renderCompetitionsChart(competitionsToday || []);
+        }
 
         // NEW: Render Agent Quick Stats
         const agentStatsContainer = document.getElementById('agent-quick-stats');
