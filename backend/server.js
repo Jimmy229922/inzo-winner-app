@@ -255,6 +255,53 @@ apiRouter.post('/update-app', (req, res) => {
     });
 });
 
+// NEW: Endpoint to delete a user (Admin only)
+// This is now /api/users/:id
+apiRouter.delete('/users/:id', async (req, res) => {
+    const { id } = req.params;
+    console.log(`[ADMIN] Received request to delete user with ID: ${id}`);
+
+    if (!supabaseAdmin) {
+        const errorMsg = '[ERROR] Supabase admin client is not configured.';
+        console.error(errorMsg);
+        return res.status(500).json({ message: 'Admin features are not configured on the server.' });
+    }
+
+    try {
+        const { data, error } = await supabaseAdmin.auth.admin.deleteUser(id);
+        if (error) throw error;
+        res.status(200).json({ message: 'User deleted successfully.', data });
+    } catch (error) {
+        console.error(`[ERROR] Failed to delete user ${id}:`, error.message);
+        res.status(500).json({ message: `Failed to delete user. Reason: ${error.message}` });
+    }
+});
+
+// NEW: Endpoint to update a user's role (Admin only)
+apiRouter.put('/users/:id/role', async (req, res) => {
+    const { id } = req.params;
+    const { role } = req.body;
+    console.log(`[ADMIN] Received request to update role for user ${id} to "${role}"`);
+
+    if (!supabaseAdmin) {
+        return res.status(500).json({ message: 'Admin features are not configured on the server.' });
+    }
+    if (!role || (role !== 'admin' && role !== 'user')) {
+        return res.status(400).json({ message: 'Invalid role specified. Must be "admin" or "user".' });
+    }
+
+    try {
+        // We update our public.users table, not auth.users
+        const { data, error } = await supabaseAdmin.from('users').update({ role: role }).eq('id', id).select().single();
+
+        if (error) throw error;
+        res.status(200).json({ message: 'User role updated successfully.', user: data });
+    } catch (error) {
+        console.error(`[ERROR] Failed to update role for user ${id}:`, error.message);
+        res.status(500).json({ message: `Failed to update role. Reason: ${error.message}` });
+    }
+});
+
 // API 404 Handler - This must be the last route on the API router
 apiRouter.use((req, res) => {
     res.status(404).json({ message: `API route not found: ${req.method} ${req.originalUrl}` });

@@ -1,6 +1,8 @@
 // 1. Global variable for Supabase client
 let supabase = null;
 let searchTimeout;
+let currentUserProfile = null; // NEW: To store the current user's profile with role
+
 
 // Global function to set the active navigation link
 function setActiveNav(activeLink) {
@@ -43,9 +45,34 @@ async function logAgentActivity(agentId, actionType, description, metadata = {})
     }
 }
 
+// NEW: Function to fetch and store the current user's profile
+async function fetchUserProfile() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+        const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
+        if (data) currentUserProfile = data;
+        else currentUserProfile = null;
+
+        // NEW: Update UI with user info
+        const userProfileMenu = document.getElementById('user-profile-menu');
+        const userAvatar = document.getElementById('user-avatar');
+        const userName = document.getElementById('user-name');
+        if (userProfileMenu && userAvatar && userName) {
+            userProfileMenu.style.display = 'flex';
+            // Use a default avatar if none is set
+            userAvatar.src = currentUserProfile?.avatar_url || `https://ui-avatars.com/api/?name=${user.email}&background=8A2BE2&color=fff`;
+            userName.textContent = currentUserProfile?.full_name || user.email.split('@')[0];
+        }
+    } else {
+        // Hide user menu if not logged in
+        const userProfileMenu = document.getElementById('user-profile-menu');
+        if (userProfileMenu) userProfileMenu.style.display = 'none';
+    }
+}
+
 // NEW: Router function to handle page navigation based on URL hash
 async function handleRouting() {
-    showLoader();
+    showLoader(); // إضافة: إظهار شاشة التحميل في بداية كل عملية تنقل
     // Scroll to the top of the page on every navigation
     window.scrollTo(0, 0);
 
@@ -65,20 +92,31 @@ async function handleRouting() {
     const routes = {
         '#home': { func: renderHomePage, nav: 'nav-home' },
         '#tasks': { func: renderTasksPage, nav: 'nav-tasks' },
-        '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents' },
-        '#top-agents': { func: renderTopAgentsPage, nav: 'nav-top-agents' },
+        '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents', adminOnly: false },
         '#competitions': { func: renderCompetitionsPage, nav: 'nav-manage-competitions' },
         '#archived-competitions': { func: renderCompetitionsPage, nav: 'nav-archived-competitions' },
         '#competition-templates': { func: renderCompetitionTemplatesPage, nav: 'nav-competition-templates' },
         '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
         '#add-agent': { func: renderAddAgentForm, nav: null },
+        '#users': { func: renderUsersPage, nav: 'nav-users', adminOnly: true }, // NEW: Users page, will be moved
+        '#profile-settings': { func: renderProfileSettingsPage, nav: null }, // NEW: Profile settings page
         '#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' },
-        '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
-        '#manage-users': { func: renderManageUsersPage, nav: 'nav-settings-dropdown' }, // إضافة المسار الجديد
+        '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' }
     };
 
     const routeKey = hash.split('/')[0].split('?')[0]; // Get base route e.g., #profile from #profile/123 or #competitions from #competitions/new?agentId=1
     const route = routes[routeKey] || routes['#home'];
+
+    // NEW: Route protection
+    if (route.adminOnly) {
+        if (!currentUserProfile || currentUserProfile.role !== 'admin') {
+            console.warn('Access Denied. User is not an admin.');
+            showToast('غير مصرح لك بالوصول لهذه الصفحة.', 'error');
+            window.location.hash = '#home'; // Redirect to home
+            hideLoader();
+            return;
+        }
+    }
 
     renderFunction = route.func;
     navElement = document.getElementById(route.nav);
@@ -99,8 +137,8 @@ async function handleRouting() {
             stopCompetitionCountdowns();
         }
     }
-    
-    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#top-agents' || hash === '#archived-competitions' || hash === '#manage-users') {
+
+    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#archived-competitions') {
         mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
@@ -139,6 +177,27 @@ async function initializeSupabase() {
         supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
         console.log('Supabase client configured.');
         updateStatus('connected', 'متصل وجاهز');
+
+        // NEW: Fetch user profile on initialization
+        await fetchUserProfile();
+
+        // NEW: Control UI elements based on user role
+        const navUsers = document.getElementById('nav-manage-users'); // This ID should be on the link in the dropdown
+        const navManageAgents = document.getElementById('nav-manage-agents');
+
+        // Example of moving 'Manage Users' into a dropdown or another place
+        // For now, let's assume it's a top-level link for simplicity
+        // We will create a new dropdown for admin actions later.
+        // Let's create a placeholder link for now.
+        const adminDropdown = document.querySelector('.navbar-left'); // A temporary parent
+        adminDropdown.insertAdjacentHTML('beforeend', '<a href="#users" id="nav-users" class="nav-link" style="display: none;"><i class="fas fa-shield-alt"></i> إدارة المستخدمين</a>');
+        const navUsersLink = document.getElementById('nav-users');
+
+        if (navUsers) {
+            if (currentUserProfile && currentUserProfile.role === 'admin') {
+                navUsersLink.style.display = 'block'; // Or 'flex', 'inline-block', etc.
+            }
+        }
 
         // NEW: Setup routing
         window.addEventListener('hashchange', handleRouting);
@@ -299,6 +358,18 @@ function setupNavbar() {
         );
     });
 
+    // Logout Button Logic
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            showConfirmationModal('هل أنت متأكد من رغبتك في تسجيل الخروج؟', async () => {
+                await supabase.auth.signOut();
+                window.location.replace('/login.html'); // Redirect to login
+            }, { title: 'تأكيد تسجيل الخروج' });
+        });
+    }
+
     // Date Display
     const dateDisplay = document.getElementById('date-display');
     const today = new Date();
@@ -393,88 +464,32 @@ function setupNavbar() {
     const navArchivedTemplates = document.getElementById('nav-archived-templates');
     const navCalendar = document.getElementById('nav-calendar');
     const navActivityLog = document.getElementById('nav-activity-log');
-    const navManageUsers = document.getElementById('nav-manage-users'); // إضافة الزر الجديد
-    const navTopAgents = document.getElementById('nav-top-agents');
-    navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navActivityLog];
+    const navUsers = document.getElementById('nav-users'); // NEW
+    const navProfileSettings = document.getElementById('nav-profile-settings'); // NEW
+    navLinks = [navHome, navTasks, navManageAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navActivityLog, navUsers, navProfileSettings, document.getElementById('logout-btn')];
     
     // NEW: Navigation listeners update the hash, which triggers the router
-    navHome.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'home'; });
-    navTasks.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'tasks'; });
-    navManageAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'manage-agents'; });
-    navTopAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'top-agents'; });
-    navManageCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competitions'; });
-    navArchivedCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-competitions'; });
-    navArchivedTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-templates'; });
-    navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
-    navActivityLog.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'activity-log'; });
-    navCalendar.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'calendar'; });
-    if (navManageUsers) navManageUsers.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'manage-users'; });
+    if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'home'; });
+    if (navTasks) navTasks.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'tasks'; });
+    if (navManageAgents) navManageAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'manage-agents'; });
+    if (navProfileSettings) navProfileSettings.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'profile-settings'; }); // NEW
+    if (navManageCompetitions) navManageCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competitions'; });
+    if (navArchivedCompetitions) navArchivedCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-competitions'; });
+    if (navArchivedTemplates) navArchivedTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-templates'; });
+    if (navCompetitionTemplates) navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
+    if (navActivityLog) navActivityLog.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'activity-log'; });
+    if (navUsers) navUsers.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'users'; }); // NEW
 
     // Hide search results when clicking outside
     document.addEventListener('click', (e) => {
-        if (!e.target.closest('.search-container')) {
+        const searchContainer = e.target.closest('.search-container');
+        const userDropdownContainer = e.target.closest('.nav-item.dropdown');
+
+        if (!searchContainer) {
             document.getElementById('search-results').classList.remove('visible');
         }
-    });
-}
 
-function showUpdateProgressModal() {
-    let currentStep = 0;
-    const steps = [
-        { text: 'جاري الاتصال بالخادم...', duration: 1000 },
-        { text: 'جاري سحب آخر التحديثات من Git...', duration: 3000 },
-        { text: 'جاري تطبيق التغييرات...', duration: 2000 },
-        { text: 'سيتم إعادة تشغيل الخادم الآن...', duration: 1500 }
-    ];
-
-    const modalContent = `
-        <div class="update-progress-container">
-            <i class="fas fa-rocket update-icon"></i>
-            <h3 id="update-status-text">جاري التهيئة...</h3>
-            <div class="progress-bar-outer">
-                <div id="update-progress-bar-inner" class="progress-bar-inner"></div>
-            </div>
-        </div>
-    `;
-
-    showConfirmationModal(modalContent, null, {
-        title: 'جاري تحديث النظام',
-        showCancel: false, // Hide cancel button
-        showConfirm: false, // Hide confirm button
-        modalClass: 'modal-no-actions'
-    });
-
-    const statusText = document.getElementById('update-status-text');
-    const progressBar = document.getElementById('update-progress-bar-inner');
-
-    function nextStep() {
-        if (currentStep >= steps.length) {
-            // This is where the actual API call happens, after the visual steps.
-            fetch('/api/update-app', { method: 'POST' })
-                .then(response => response.json())
-                .then(result => {
-                    if (!result.needsRestart) {
-                        showToast(result.message || 'أنت تستخدم بالفعل آخر إصدار.', 'success');
-                        document.querySelector('.modal-overlay')?.remove();
-                    } else {
-                        statusText.textContent = 'اكتمل التحديث! سيتم إعادة تحميل الصفحة.';
-                        progressBar.style.width = '100%';
-                        setTimeout(() => window.location.reload(), 2000);
-                    }
-                }).catch(err => {
-                    showToast(`فشل التحديث: ${err.message}`, 'error');
-                    document.querySelector('.modal-overlay')?.remove();
-                });
-            return;
-        }
-        const step = steps[currentStep];
-        statusText.textContent = step.text;
-        progressBar.style.width = `${((currentStep + 1) / steps.length) * 100}%`;
-        currentStep++;
-        setTimeout(nextStep, step.duration);
-    }
-
-    nextStep(); // Start the process
+    });    
 }
 
 // تعديل: إنشاء جسيمات عائمة بدلاً من الشهب

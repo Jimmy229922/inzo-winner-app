@@ -116,7 +116,7 @@ async function renderHomePage() {
 
                 if (pendingAgents.length > 0) {
                     // --- تعديل: عرض قائمة واحدة مبسطة ---
-                    pendingHtml = pendingAgents.slice(0, 3).map(agent => {
+                    pendingHtml = pendingAgents.slice(0, 5).map(agent => {
                         const task = tasksMap[agent.id] || {};
                         const needsAudit = !task.audited;
                         const needsCompetition = !task.competition_sent;
@@ -140,7 +140,7 @@ async function renderHomePage() {
                         `;
                     }).join('');
 
-                    if (pendingAgents.length > 3) {
+                    if (pendingAgents.length > 5) {
                         pendingHtml += `<div class="view-all-container"><a href="#tasks" class="btn-secondary btn-small"><i class="fas fa-arrow-left"></i> عرض كل المهام (${pendingAgents.length})</a></div>`;
                     }
 

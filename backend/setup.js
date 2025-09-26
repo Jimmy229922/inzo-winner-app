@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-function main() {
-    console.log('--------------------------------------------------');
+async function main() {
+    console.log('\n--------------------------------------------------');
     console.log('Creating configuration file automatically...');
     console.log('--------------------------------------------------');
 
@@ -33,4 +35,7 @@ SUPABASE_SERVICE_KEY=${supabaseServiceKey}
     console.log('\n[OK] Configuration file created successfully at backend\\.env');
 }
 
-main();
+(async () => {
+    await main();
+    console.log('\nSetup complete. You can now start the server.');
+})();

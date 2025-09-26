@@ -60,6 +60,7 @@
     border: none;
     padding: 0;
     color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap; /* إضافة: منع التفاف النص في عناوين البطاقات */
 }
 
 /* Fallback for old stat-card styles if needed elsewhere, but new ones are preferred */
@@ -111,6 +112,12 @@
     background-color: var(--card-bg-color);
     padding: 25px;
     border-radius: 12px;
+}
+/* إضافة: منع التفاف العناوين الرئيسية في الأعمدة */
+.home-main-column h2, .home-side-column h2 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .pending-tasks-list {
@@ -320,6 +327,7 @@
 .quick-action-card p {
     margin: 0;
     color: var(--text-secondary-color);
+    line-height: 1.6; /* إضافة: تحسين تباعد الأسطر للوصف */
     font-size: 0.9em;
 }
 

@@ -1130,3 +1130,85 @@ function renderEditProfileHeader(agent, parentElement) {
         }
     });
 }
+
+// NEW: Function to render the user's own profile settings page
+async function renderProfileSettingsPage() {
+    const appContent = document.getElementById('app-content');
+
+    if (!currentUserProfile) {
+        appContent.innerHTML = `<p class="error">يجب تسجيل الدخول لعرض هذه الصفحة.</p>`;
+        return;
+    }
+
+    // We need the user's email, which is in `supabase.auth.user()` not our profile table.
+    const { data: { user } } = await supabase.auth.getUser();
+
+    appContent.innerHTML = `
+        <div class="page-header">
+            <h1><i class="fas fa-user-cog"></i> إعدادات الملف الشخصي</h1>
+        </div>
+        <div class="form-container" style="max-width: 600px;">
+            <form id="profile-settings-form">
+                <div class="form-group">
+                    <label for="profile-email">البريد الإلكتروني</label>
+                    <input type="email" id="profile-email" value="${user?.email || ''}" disabled>
+                    <small class="form-hint">لا يمكن تغيير البريد الإلكتروني حالياً.</small>
+                </div>
+                <div class="form-group">
+                    <label for="profile-full-name">الاسم الكامل</label>
+                    <input type="text" id="profile-full-name" value="${currentUserProfile.full_name || ''}" required>
+                </div>
+                <div class="form-group">
+                    <label for="profile-new-password">كلمة المرور الجديدة (اختياري)</label>
+                    <input type="password" id="profile-new-password" placeholder="اتركه فارغاً لعدم التغيير">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" id="save-profile-settings-btn" class="btn-primary">
+                        <i class="fas fa-save"></i> حفظ التغييرات
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    const form = document.getElementById('profile-settings-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const saveBtn = document.getElementById('save-profile-settings-btn');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+
+        const fullName = document.getElementById('profile-full-name').value;
+        const newPassword = document.getElementById('profile-new-password').value;
+
+        try {
+            // 1. Update public profile table (users)
+            const { error: profileError } = await supabase
+                .from('users')
+                .update({ full_name: fullName })
+                .eq('id', currentUserProfile.id);
+
+            if (profileError) throw profileError;
+
+            // 2. If a new password is provided, update it in auth
+            if (newPassword) {
+                const { error: passwordError } = await supabase.auth.updateUser({
+                    password: newPassword
+                });
+                if (passwordError) throw passwordError;
+            }
+
+            // 3. Refresh local user profile data to reflect changes
+            await fetchUserProfile();
+
+            showToast('تم تحديث الملف الشخصي بنجاح.', 'success');
+
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            showToast(`فشل تحديث الملف الشخصي: ${error.message}`, 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التغييرات';
+        }
+    });
+}

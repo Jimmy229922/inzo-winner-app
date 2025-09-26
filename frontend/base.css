@@ -13,17 +13,17 @@
 }
 
 body.dark-mode {
-    --bg-color: rgb(22, 22, 60); /* New: Use the requested dark blue color */
-    --animated-bg-color: radial-gradient(ellipse at bottom, rgb(22, 22, 60) 0%, rgb(10, 10, 30) 100%);
-    --card-bg-color: rgba(32, 32, 70, 0.8); /* A slightly lighter blue for cards */
-    --text-color: #e0e0e0;
-    --text-secondary-color: #9e9e9e;
-    --primary-color: #26c6da; /* Cyan */
-    --primary-hover-color: #00acc1;
-    --border-color: rgb(42, 42, 80); /* A bluish border for contrast */
-    --input-bg-color: rgb(35, 35, 75);
+    --bg-color: #0D1B2A; /* كحلي داكن جداً */
+    --animated-bg-color: radial-gradient(ellipse at bottom, #0D1B2A 0%, #1B263B 100%);
+    --card-bg-color: rgba(27, 38, 59, 0.8); /* كحلي متوسط مع شفافية */
+    --text-color: #FFFFFF; /* أبيض */
+    --text-secondary-color: #778DA9; /* أزرق فاتح أنيق */
+    --primary-color: #4CAF50; /* أخضر */
+    --primary-hover-color: #45a049; /* أخضر أغمق عند المرور */
+    --border-color: #415A77; /* أزرق رمادي فاتح */
+    --input-bg-color: #0D1B2A; /* نفس لون الخلفية */
     --shadow-color: rgba(0, 0, 0, 0.4);
-    --navbar-bg: rgba(32, 32, 70, 0.8); /* Match card background */
+    --navbar-bg: rgba(27, 38, 59, 0.8); /* Match card background */
 }
 
 body {
@@ -40,8 +40,9 @@ body {
 .content-wrapper {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    padding: 0 20px; /* تعديل: إزالة الحشوة العلوية لحل مشكلة المساحة الفارغة */
+    align-items: center; /* تعديل: إزالة الهامش العلوي واستبداله بحشوة علوية */
+    padding: 70px 20px 20px 20px;
+    margin-top: 0;
     flex-grow: 1;
 }
 
