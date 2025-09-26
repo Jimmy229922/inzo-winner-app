@@ -488,10 +488,10 @@ cron.schedule('0 0 * * *', async () => {
     try {
         // Fetch all agents with a renewal period
         const { data: agents, error: fetchError } = await supabaseAdmin
-            .from('agents')
-            .select('id, name, created_at, renewal_period, last_renewal_date, competition_bonus, deposit_bonus_count')
-            .not('renewal_period', 'is', null)
-            .neq('renewal_period', 'none');
+            .from('agents') // تحسين: جلب المسابقات النشطة مع الوكلاء في استعلام واحد
+            .select('id, name, created_at, renewal_period, last_renewal_date, competition_bonus, deposit_bonus_count, competitions!inner(id, name, correct_answer, status, ends_at)')
+            .not('renewal_period', 'is', null) // جلب الوكلاء الذين لديهم نظام تجديد
+            .neq('renewal_period', 'none'); // استثناء الوكلاء الذين ليس لديهم نظام تجديد
 
         if (fetchError) throw fetchError;
 
