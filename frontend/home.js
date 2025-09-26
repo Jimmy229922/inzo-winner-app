@@ -42,6 +42,7 @@ async function renderHomePage() {
 }
 
 async function fetchHomePageData() {
+    console.time('[Performance] Home Page Data Fetch');
     if (supabase) {
         const today = new Date();
         const todayDayIndex = today.getDay();
@@ -49,26 +50,19 @@ async function fetchHomePageData() {
         const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
         const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
         const tomorrowStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
-
-        console.time('[Performance] Home Page Data Fetch (Promise.all)');
+        
+        // --- STAGE 1: Fetch critical stats first ---
+        console.time('[Performance] Home Page - Stage 1 (Critical Stats)');
         const [
             { count: totalAgents },
             { count: activeCompetitions },
-            { data: agentsForToday },
-            { data: competitionsToday },
-            { count: newAgentsThisMonth },
-            { data: agentsByClassification },
-            { data: tasksForToday } // تعديل: جلب مهام اليوم في نفس الطلب
+            { data: competitionsToday }
         ] = await Promise.all([
             supabase.from('agents').select('*', { count: 'exact', head: true }),
             supabase.from('competitions').select('*', { count: 'exact', head: true }).eq('is_active', true),
-            supabase.from('agents').select('id, name, avatar_url, classification').contains('audit_days', [todayDayIndex]),
-            supabase.from('competitions').select('created_at').gte('created_at', todayStart).lt('created_at', tomorrowStart),
-            supabase.from('agents').select('*', { count: 'exact', head: true }).gte('created_at', monthStart),
-            supabase.from('agents').select('classification'),
-            supabase.from('daily_tasks').select('*').eq('task_date', todayStr) // تعديل: إضافة جلب المهام هنا
+            supabase.from('competitions').select('created_at').gte('created_at', todayStart).lt('created_at', tomorrowStart)
         ]);
-        console.timeEnd('[Performance] Home Page Data Fetch (Promise.all)');
+        console.timeEnd('[Performance] Home Page - Stage 1 (Critical Stats)');
 
         // Update Stat Cards
         const statsContainer = document.getElementById('home-stats-container');
@@ -91,6 +85,21 @@ async function fetchHomePageData() {
                 </a>
             </div>
         `;
+
+        // --- STAGE 2: Fetch secondary data (tasks, charts) after rendering critical stats ---
+        console.time('[Performance] Home Page - Stage 2 (Secondary Data)');
+        const [
+            { data: agentsForToday },
+            { count: newAgentsThisMonth },
+            { data: agentsByClassification },
+            { data: tasksForToday }
+        ] = await Promise.all([
+            supabase.from('agents').select('id, name, avatar_url, classification').contains('audit_days', [todayDayIndex]),
+            supabase.from('agents').select('*', { count: 'exact', head: true }).gte('created_at', monthStart),
+            supabase.from('agents').select('classification'),
+            supabase.from('daily_tasks').select('*').eq('task_date', todayStr)
+        ]);
+        console.timeEnd('[Performance] Home Page - Stage 2 (Secondary Data)');
 
         // Update Tasks Progress
         const totalTodayTasks = agentsForToday?.length || 0;
@@ -203,6 +212,7 @@ async function fetchHomePageData() {
             // Render the new classification chart AFTER the container is in the DOM
             renderClassificationChart(classificationCounts);
         }
+        console.timeEnd('[Performance] Home Page Data Fetch');
     }
 }
 

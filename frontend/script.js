@@ -75,15 +75,12 @@ async function fetchUserProfile() {
 
         // NEW: Control UI elements based on user role (Moved here to ensure it runs after profile is fetched)
         const navUsersLink = document.getElementById('nav-users');
-        const updateAppBtn = document.getElementById('update-app-btn');
 
         if (currentUserProfile && currentUserProfile.role === 'admin') {
             if (navUsersLink) navUsersLink.style.display = 'flex';
-            if (updateAppBtn) updateAppBtn.style.display = 'flex';
         } else {
             // Ensure they are hidden for non-admins
             if (navUsersLink) navUsersLink.style.display = 'none';
-            if (updateAppBtn) updateAppBtn.style.display = 'none';
         }
     } else {
         // Hide user menu if not logged in
