@@ -72,6 +72,19 @@ async function fetchUserProfile() {
             userName.textContent = currentUserProfile?.full_name || user.email.split('@')[0];
             userEmail.textContent = user.email;
         }
+
+        // NEW: Control UI elements based on user role (Moved here to ensure it runs after profile is fetched)
+        const navUsersLink = document.getElementById('nav-users');
+        const updateAppBtn = document.getElementById('update-app-btn');
+
+        if (currentUserProfile && currentUserProfile.role === 'admin') {
+            if (navUsersLink) navUsersLink.style.display = 'flex';
+            if (updateAppBtn) updateAppBtn.style.display = 'flex';
+        } else {
+            // Ensure they are hidden for non-admins
+            if (navUsersLink) navUsersLink.style.display = 'none';
+            if (updateAppBtn) updateAppBtn.style.display = 'none';
+        }
     } else {
         // Hide user menu if not logged in
         const settingsMenu = document.getElementById('settings-menu');
@@ -196,21 +209,6 @@ async function initializeSupabase() {
         supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
         console.log('Supabase client configured.');
         updateStatus('connected', 'متصل وجاهز');
-
-        // NEW: Control UI elements based on user role
-        // Find admin-only items
-        const navUsersLink = document.getElementById('nav-users'); // The link is in the navbar
-        const updateAppBtn = document.getElementById('update-app-btn'); // Still in dropdown
-
-        if (currentUserProfile && currentUserProfile.role === 'admin') {
-            // If user is admin, show the admin-only buttons
-            if (navUsersLink) navUsersLink.style.display = 'flex'; // Show the top-level link
-            if (updateAppBtn) updateAppBtn.style.display = 'flex'; // Show the dropdown item
-        } else {
-            // Otherwise, ensure they are hidden
-            if (navUsersLink) navUsersLink.style.display = 'none';
-            if (updateAppBtn) updateAppBtn.style.display = 'none';
-        }
 
         // NEW: Setup routing AFTER user profile is fetched
         // We will now fetch the user profile in parallel
@@ -497,7 +495,7 @@ function setupNavbar() {
     const navCalendar = document.getElementById('nav-calendar');
     const navActivityLog = document.getElementById('nav-activity-log');
     const navUsers = document.getElementById('nav-users'); // NEW
-    const navProfileSettings = document.getElementById('nav-profile-settings'); // NEW
+    const navProfileSettings = document.getElementById('nav-profile-settings');
     navLinks = [navHome, navTasks, navManageAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navActivityLog, navUsers, navProfileSettings, document.getElementById('logout-btn')];
     
     // NEW: Navigation listeners update the hash, which triggers the router

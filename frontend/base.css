@@ -81,7 +81,7 @@ main.page-loading {
 
 
 h1, h2 {
-    color: var(--primary-color);
+    color: var(--text-color);
     border-bottom: 2px solid var(--border-color);
     padding-bottom: 10px;
     margin-top: 0; /* تعديل: إزالة الهامش العلوي الافتراضي للعناوين */
