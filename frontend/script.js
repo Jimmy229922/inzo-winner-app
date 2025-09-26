@@ -74,6 +74,7 @@ async function handleRouting() {
         '#add-agent': { func: renderAddAgentForm, nav: null },
         '#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' },
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
+        '#manage-users': { func: renderManageUsersPage, nav: 'nav-settings-dropdown' }, // إضافة المسار الجديد
     };
 
     const routeKey = hash.split('/')[0].split('?')[0]; // Get base route e.g., #profile from #profile/123 or #competitions from #competitions/new?agentId=1
@@ -99,7 +100,7 @@ async function handleRouting() {
         }
     }
     
-    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#top-agents' || hash === '#archived-competitions') {
+    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#top-agents' || hash === '#archived-competitions' || hash === '#manage-users') {
         mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
@@ -392,6 +393,7 @@ function setupNavbar() {
     const navArchivedTemplates = document.getElementById('nav-archived-templates');
     const navCalendar = document.getElementById('nav-calendar');
     const navActivityLog = document.getElementById('nav-activity-log');
+    const navManageUsers = document.getElementById('nav-manage-users'); // إضافة الزر الجديد
     const navTopAgents = document.getElementById('nav-top-agents');
     navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navActivityLog];
     
@@ -406,6 +408,7 @@ function setupNavbar() {
     navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
     navActivityLog.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'activity-log'; });
     navCalendar.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'calendar'; });
+    if (navManageUsers) navManageUsers.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'manage-users'; });
 
     // Hide search results when clicking outside
     document.addEventListener('click', (e) => {
