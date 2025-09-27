@@ -664,7 +664,7 @@ function generateActivityLogHTML(logs) {
                             <div class="log-item-icon-v2 ${colorClass}"><i class="fas ${icon}"></i></div>
                             <div class="log-item-content-v2">
                                 <p class="log-description">${log.description}</p>
-                                <p class="log-timestamp">${new Date(log.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</p>
+                                <p class="log-timestamp">${new Date(log.created_at).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</p>
                             </div>
                         </div>
                     `;
@@ -771,15 +771,20 @@ function renderInlineEditor(groupElement, agent) {
 
     switch (fieldName) {
         case 'rank':
+            // تعديل: توحيد شكل وترتيب قائمة المراتب مع صفحة الإضافة
             editorHtml = `<select id="inline-edit-input">
-                <optgroup label="⁕ مراتب الوكالة الأعتيادية ⁖">
-                <option value="بدون مرتبة" ${currentValue === 'بدون مرتبة' ? 'selected' : ''}>بدون مرتبة</option>
-                ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map(rank => `<option value="${rank}" ${currentValue === rank ? 'selected' : ''}>${rank}</option>`).join('')}
+                <optgroup label="⁕ وكلاء بدون مرتبة ⁖">
+                    <option value="بدون مرتبة" ${currentValue === 'بدون مرتبة' ? 'selected' : ''}>⚪ وكيل اعتيادي</option>
+                    <option value="بدون مرتبة حصرية" ${currentValue === 'بدون مرتبة حصرية' ? 'selected' : ''}>⚪ وكيل حصري</option>
+                </optgroup>
+                <optgroup label="⁕ مراتب الوكلاء الاعتيادية ⁖">
+                    ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map(rank => `<option value="${rank}" ${currentValue === rank ? 'selected' : ''}>🔸 ${rank}</option>`).join('')}
                 </optgroup>
                 <optgroup label="⁕ مراتب الوكالة الحصرية ⁖">
-                <option value="بدون مرتبة حصرية" ${currentValue === 'بدون مرتبة حصرية' ? 'selected' : ''}>بدون مرتبة حصرية</option>
-                <option value="Center" ${currentValue === 'Center' ? 'selected' : ''}>Center</option>
-                ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}" ${currentValue === rank ? 'selected' : ''}>${rank}</option>`).join('')}
+                    ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}" ${currentValue === rank ? 'selected' : ''}>⭐ ${rank}</option>`).join('')}
+                </optgroup>
+                <optgroup label="⁕ المراكز ⁖">
+                    <option value="Center" ${currentValue === 'Center' ? 'selected' : ''}>🏢 Center</option>
                 </optgroup>
             </select>`;
             break;
@@ -834,13 +839,15 @@ function renderInlineEditor(groupElement, agent) {
             updateData.deposit_bonus_percentage = rankData.deposit_bonus_percentage;
             updateData.deposit_bonus_count = rankData.deposit_bonus_count;
             // When rank changes, it might affect balances
-            updateData.remaining_balance = (rankData.competition_bonus || 0) - (currentAgent.consumed_balance || 0);
-            // --- NEW: Special handling for 'بدون مرتبة حصرية' ---
+            // --- تعديل: منطق خاص لمرتبة "بدون مرتبة حصرية" ---
             if (newValue === 'بدون مرتبة حصرية') {
                 updateData.competition_bonus = 60;
                 updateData.remaining_balance = 60 - (currentAgent.consumed_balance || 0);
+                updateData.deposit_bonus_percentage = null;
+                updateData.deposit_bonus_count = null;
             } else {
                 updateData.competition_bonus = rankData.competition_bonus;
+                updateData.remaining_balance = (rankData.competition_bonus || 0) - (currentAgent.consumed_balance || 0);
             }
             updateData.remaining_deposit_bonus = (rankData.deposit_bonus_count || 0) - (currentAgent.used_deposit_bonus || 0);
         } else {
@@ -902,7 +909,15 @@ function renderInlineEditor(groupElement, agent) {
             if (fieldName === 'rank' || fieldName === 'renewal_period') {
                 renderAgentProfilePage(agent.id, { activeTab: 'details' });
             } else {
-                renderDetailsView(updatedAgent); // For other fields, just re-render the details view to avoid page jump
+                // تحسين: إعادة عرض الأجزاء المتأثرة فقط، بما في ذلك سجل النشاط
+                renderDetailsView(updatedAgent);
+                
+                // تحديث سجل النشاط بشكل فوري
+                const { data: newLogs } = await supabase.from('agent_logs').select('*').eq('agent_id', agent.id).order('created_at', { ascending: false }).limit(20);
+                const logTabContent = document.getElementById('tab-log');
+                if (logTabContent && newLogs) {
+                    logTabContent.innerHTML = generateActivityLogHTML(newLogs);
+                }
             }
         }
     });
@@ -991,9 +1006,10 @@ function renderEditProfileHeader(agent, parentElement) {
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label>أيام التدقيق</label>
                     <div class="days-selector">
+                        <!-- تحسين: تحويل مربعات الاختيار إلى أزرار تفاعلية -->
                         ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => `
-                            <label class="day-checkbox"><input type="checkbox" value="${index}" ${(agent.audit_days || []).includes(index) ? 'checked' : ''}> <span>${day}</span></label>
-                        `).join('')}
+                            <input type="checkbox" id="day-edit-${index}" value="${index}" class="day-toggle-input" ${(agent.audit_days || []).includes(index) ? 'checked' : ''}>
+                            <label for="day-edit-${index}" class="day-toggle-btn">${day}</label>`).join('')}
                     </div>
                 </div>
             </div>
@@ -1132,10 +1148,12 @@ function renderEditProfileHeader(agent, parentElement) {
             }
 
             showToast('تم تحديث بيانات الوكيل بنجاح.', 'success');
-            // Manually re-render the page to reflect changes instantly,
-            // and clean the URL if it was in edit mode.
+            // تحسين: بدلاً من إعادة تحميل الصفحة بالكامل، نقوم بجلب البيانات الجديدة وإعادة عرض الأجزاء المتأثرة فقط
             history.replaceState(null, '', `#profile/${agent.id}`);
-            renderAgentProfilePage(agent.id);
+            const { data: freshAgent, error: freshError } = await supabase.from('agents').select('*').eq('id', agent.id).single();
+            if (freshAgent) {
+                renderAgentProfilePage(agent.id); // إعادة تحميل الصفحة بالكامل لضمان تحديث كل شيء
+            }
         }
     });
 }
@@ -1156,21 +1174,56 @@ async function renderProfileSettingsPage() {
         <div class="page-header">
             <h1><i class="fas fa-user-cog"></i> إعدادات الملف الشخصي</h1>
         </div>
-        <div class="form-container" style="max-width: 600px;">
+
+        <!-- NEW: Profile Header Section for display -->
+        <div class="profile-settings-header">
+            <div class="profile-avatar-edit large-avatar">
+                <img src="${currentUserProfile.avatar_url || `https://ui-avatars.com/api/?name=${currentUserProfile.full_name || user?.email}&background=8A2BE2&color=fff&size=128`}" alt="Avatar" id="avatar-preview">
+                <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+            </div>
+            <div class="profile-header-info">
+                <h2 class="profile-name-display">${currentUserProfile.full_name || 'مستخدم'}</h2>
+                <p class="profile-email-display">${user?.email || ''}</p>
+            </div>
+        </div>
+
+        <div class="form-container" style="max-width: 800px;">
             <form id="profile-settings-form">
-                <div class="form-group">
-                    <label for="profile-email">البريد الإلكتروني</label>
-                    <input type="email" id="profile-email" value="${user?.email || ''}" disabled>
-                    <small class="form-hint">لا يمكن تغيير البريد الإلكتروني حالياً.</small>
+                ${currentUserProfile.role === 'admin' ? `
+                    <h3 class="details-section-title">المعلومات الأساسية</h3>
+                    <div class="details-grid" style="grid-template-columns: 1fr; gap: 20px;"><div class="form-group"><label for="profile-full-name">الاسم الكامل</label><input type="text" id="profile-full-name" class="profile-name-input" value="${currentUserProfile.full_name || ''}" required></div></div>
+                ` : ''}
+                
+                <h3 class="details-section-title">تغيير كلمة المرور</h3>
+                <div class="details-grid" style="grid-template-columns: 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label for="profile-current-password">كلمة المرور الحالية</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="profile-current-password" placeholder="أدخل كلمة المرور الحالية للتغيير">
+                            <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="profile-new-password">كلمة المرور الجديدة</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="profile-new-password" placeholder="اتركه فارغاً لعدم التغيير">
+                            <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
+                        </div>
+                        <div class="password-strength-meter"><div class="strength-bar"></div></div>
+                        <div class="password-actions">
+                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small">إنشاء كلمة مرور قوية</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="profile-confirm-password">تأكيد كلمة المرور الجديدة</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="profile-confirm-password">
+                            <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
+                            <div id="password-match-error" class="validation-error-inline" style="display: none;">كلمتا المرور غير متطابقتين.</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="profile-full-name">الاسم الكامل</label>
-                    <input type="text" id="profile-full-name" value="${currentUserProfile.full_name || ''}" required>
-                </div>
-                <div class="form-group">
-                    <label for="profile-new-password">كلمة المرور الجديدة (اختياري)</label>
-                    <input type="password" id="profile-new-password" placeholder="اتركه فارغاً لعدم التغيير">
-                </div>
+
                 <div class="form-actions">
                     <button type="submit" id="save-profile-settings-btn" class="btn-primary">
                         <i class="fas fa-save"></i> حفظ التغييرات
@@ -1183,31 +1236,166 @@ async function renderProfileSettingsPage() {
     const form = document.getElementById('profile-settings-form');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const saveBtn = document.getElementById('save-profile-settings-btn');
+        
+        // --- Avatar Logic ---
+        const avatarUploadInput = form.querySelector('#avatar-upload');
+        const avatarPreview = form.querySelector('#avatar-preview');
+        avatarPreview.closest('.profile-avatar-edit').addEventListener('click', () => avatarUploadInput.click());
+        avatarUploadInput.addEventListener('change', () => {
+            const file = avatarUploadInput.files[0];
+            if (file) avatarPreview.src = URL.createObjectURL(file);
+        });
+
+        // --- Password Toggles & Strength Meter ---
+        form.querySelectorAll('.password-toggle-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const input = btn.previousElementSibling;
+                const isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                btn.querySelector('i').className = `fas ${isPassword ? 'fa-eye-slash' : 'fa-eye'}`;
+            });
+        });
+        const newPasswordInput = form.querySelector('#profile-new-password');
+        const strengthBar = form.querySelector('.strength-bar');
+        newPasswordInput.addEventListener('input', () => {
+            const password = newPasswordInput.value;
+            let strength = 0;
+            if (password.length >= 8) strength++;
+            if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength++;
+            if (password.match(/\d/)) strength++;
+            if (password.match(/[^a-zA-Z\d]/)) strength++;
+            strengthBar.className = 'strength-bar';
+            if (strength > 0) strengthBar.classList.add(`strength-${strength}`);
+        });
+
+        // --- NEW: Generate Password Button ---
+        const generatePasswordBtn = form.querySelector('#generate-password-btn');
+        if (generatePasswordBtn) {
+            generatePasswordBtn.addEventListener('click', () => {
+                const lower = 'abcdefghijklmnopqrstuvwxyz';
+                const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                const numbers = '0123456789';
+                const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+                const all = lower + upper + numbers + symbols;
+                let newPassword = '';
+                newPassword += lower.charAt(Math.floor(Math.random() * lower.length));
+                newPassword += upper.charAt(Math.floor(Math.random() * upper.length));
+                newPassword += numbers.charAt(Math.floor(Math.random() * numbers.length));
+                newPassword += symbols.charAt(Math.floor(Math.random() * symbols.length));
+                for (let i = newPassword.length; i < 14; i++) {
+                    newPassword += all.charAt(Math.floor(Math.random() * all.length));
+                }
+                newPassword = newPassword.split('').sort(() => 0.5 - Math.random()).join('');
+                newPasswordInput.value = newPassword;
+                confirmPasswordInput.value = newPassword;
+                newPasswordInput.dispatchEvent(new Event('input')); // Trigger strength check
+                navigator.clipboard.writeText(newPassword).then(() => {
+                    showToast('تم إنشاء ونسخ كلمة مرور قوية.', 'success');
+                });
+            });
+        }
+
+        // --- NEW: Real-time password match validation ---
+        const confirmPasswordInput = form.querySelector('#profile-confirm-password');
+        const passwordMatchError = form.querySelector('#password-match-error');
+        const saveBtn = form.querySelector('#save-profile-settings-btn');
+
+        const validatePasswordMatch = () => {
+            if (newPasswordInput.value && confirmPasswordInput.value && newPasswordInput.value !== confirmPasswordInput.value) {
+                passwordMatchError.style.display = 'block';
+                saveBtn.disabled = true;
+            } else {
+                passwordMatchError.style.display = 'none';
+                saveBtn.disabled = false;
+            }
+        };
+
+        newPasswordInput.addEventListener('input', validatePasswordMatch);
+        confirmPasswordInput.addEventListener('input', validatePasswordMatch);
+
+        // --- NEW: Disable form for non-admins ---
+        const avatarEditContainer = form.querySelector('.profile-avatar-edit');
+        if (currentUserProfile.role !== 'admin') {
+            const fullNameInput = form.querySelector('#profile-full-name');
+            if (fullNameInput) fullNameInput.disabled = true;
+            // Allow password change for all users, so these are not disabled.
+            
+            // Prevent non-admins from changing their avatar
+            avatarEditContainer.style.cursor = 'not-allowed';
+            avatarEditContainer.title = 'لا يمكنك تغيير الصورة الشخصية.';
+            avatarEditContainer.removeEventListener('click', () => avatarUploadInput.click());
+        } else {
+            // Ensure admins can change avatar
+            avatarEditContainer.addEventListener('click', () => avatarUploadInput.click());
+        }
+
+        // --- Submission Logic ---
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
 
-        const fullName = document.getElementById('profile-full-name').value;
+        const fullNameInput = document.getElementById('profile-full-name');
+        const fullName = fullNameInput ? fullNameInput.value : currentUserProfile.full_name;
         const newPassword = document.getElementById('profile-new-password').value;
+        const confirmPassword = document.getElementById('profile-confirm-password').value;
+        const currentPassword = document.getElementById('profile-current-password').value;
 
         try {
-            // 1. Update public profile table (users)
+            // --- Password Validation ---
+            if (newPassword && !currentPassword) {
+                throw new Error('يجب إدخال كلمة المرور الحالية لتغييرها.');
+            }
+            if (newPassword !== confirmPassword) {
+                throw new Error('كلمتا المرور الجديدتان غير متطابقتين.');
+            }
+
+            // 1. Handle avatar upload if a new file is selected
+            const avatarFile = avatarUploadInput.files[0];
+            let newAvatarUrl = currentUserProfile.avatar_url;
+
+            if (avatarFile) {
+                const filePath = `user-avatars/${currentUserProfile.id}-${Date.now()}`;
+                const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, avatarFile);
+
+                if (uploadError) {
+                    throw new Error('فشل رفع الصورة. يرجى المحاولة مرة أخرى.');
+                }
+
+                const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+                newAvatarUrl = urlData.publicUrl;
+            }
+
+            // 2. Update public profile table (users)
+            const profileUpdateData = { avatar_url: newAvatarUrl };
+            if (currentUserProfile.role === 'admin' && fullNameInput) {
+                profileUpdateData.full_name = fullName;
+            }
+
             const { error: profileError } = await supabase
                 .from('users')
-                .update({ full_name: fullName })
+                .update(profileUpdateData)
                 .eq('id', currentUserProfile.id);
 
             if (profileError) throw profileError;
 
-            // 2. If a new password is provided, update it in auth
-            if (newPassword) {
+            // 3. If a new password is provided, verify old and update in auth
+            if (newPassword && currentPassword) {
+                // --- FIX: Verify current password by attempting a sign-in ---
+                // This is a secure way to confirm the user knows their current password.
+                const { data: { user: authUser } } = await supabase.auth.getUser();
+                const { error: reauthError } = await supabase.auth.signInWithPassword({
+                    email: authUser.email,
+                    password: currentPassword
+                });
+                if (reauthError) throw new Error('كلمة المرور الحالية غير صحيحة.');
+
+                // If re-authentication is successful, update the password
                 const { error: passwordError } = await supabase.auth.updateUser({
                     password: newPassword
                 });
                 if (passwordError) throw passwordError;
             }
 
-            // 3. Refresh local user profile data to reflect changes
+            // 4. Refresh local user profile data to reflect changes
             await fetchUserProfile();
 
             showToast('تم تحديث الملف الشخصي بنجاح.', 'success');

@@ -55,20 +55,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
             email: email,
             password: password,
         });
 
         if (error) {
             errorMessage.textContent = 'البريد الإلكتروني أو كلمة المرور غير صحيحة. يرجى المحاولة مرة أخرى.';
-            loginBtn.disabled = false;
-            btnText.style.display = 'inline-block';
-            spinner.style.display = 'none';
-            document.getElementById('email').focus(); // Re-focus on email input
         } else {
-            // On successful login, redirect to the main page
-            window.location.replace('/');
+            // NEW: Check user status before redirecting
+            const { data: profile, error: profileError } = await supabase
+                .from('users')
+                .select('status')
+                .eq('id', data.user.id)
+                .single();
+
+            if (profileError || profile?.status === 'inactive') {
+                errorMessage.textContent = 'تم تعطيل حسابك. يرجى التواصل مع المدير.';
+                await supabase.auth.signOut(); // Log the user out immediately
+            } else {
+                // On successful login and active status, redirect to the main page
+                window.location.replace('/');
+            }
         }
+
+        loginBtn.disabled = false;
+        btnText.style.display = 'inline-block';
+        spinner.style.display = 'none';
     });
 });

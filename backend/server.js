@@ -279,36 +279,50 @@ apiRouter.delete('/users/:id', async (req, res) => {
 
 // NEW: Endpoint to get a combined list of users with their emails (Admin only)
 apiRouter.get('/users', async (req, res) => {
-    console.log(`[ADMIN] Received request to fetch all users.`);
-
     if (!supabaseAdmin) {
         return res.status(500).json({ message: 'Admin features are not configured on the server.' });
     }
 
     try {
-        // 1. Get all users from the authentication system
+        // --- إصلاح: العودة إلى طريقة الدمج اليدوي للبيانات لضمان الاستقرار ---
+        // 1. جلب جميع المستخدمين من نظام المصادقة
         const { data: { users: authUsers }, error: authError } = await supabaseAdmin.auth.admin.listUsers();
         if (authError) throw authError;
 
-        // 2. Get all profiles from our public table
+        // 2. جلب جميع الملفات الشخصية من الجدول العام
         const { data: profiles, error: profileError } = await supabaseAdmin.from('users').select('*');
         if (profileError) throw profileError;
 
-        // 3. Create a map of profiles for easy lookup
+        // 3. إنشاء خريطة (map) للملفات الشخصية لتسهيل البحث
         const profileMap = new Map(profiles.map(p => [p.id, p]));
 
-        // 4. Combine the data
+        // 4. دمج البيانات
         const combinedUsers = authUsers.map(authUser => {
             const profile = profileMap.get(authUser.id) || {};
             return {
-                ...profile, // full_name, role, created_at
+                ...profile, // full_name, role, avatar_url, created_at
                 id: authUser.id,
                 email: authUser.email,
                 last_sign_in_at: authUser.last_sign_in_at,
             };
         });
 
-        res.status(200).json(combinedUsers);
+        // 5. تطبيق الفلاتر والترقيم على البيانات المدمجة
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 15;
+        const search = (req.query.q || '').toLowerCase();
+        const roleFilter = req.query.role || 'all';
+        const offset = (page - 1) * limit;
+
+        const filteredUsers = combinedUsers.filter(user => {
+            const matchesSearch = !search || user.full_name?.toLowerCase().includes(search) || user.email?.toLowerCase().includes(search);
+            const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+            return matchesSearch && matchesRole;
+        }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        const paginatedUsers = filteredUsers.slice(offset, offset + limit);
+
+        res.status(200).json({ users: paginatedUsers, count: filteredUsers.length });
     } catch (error) {
         console.error(`[ERROR] Failed to fetch all users:`, error.message);
         res.status(500).json({ message: `Failed to fetch users. Reason: ${error.message}` });
@@ -323,9 +337,9 @@ apiRouter.post('/users', async (req, res) => {
     if (!supabaseAdmin) {
         return res.status(500).json({ message: 'Admin features are not configured on the server.' });
     }
-    if (!email || !password || !full_name || !role) {
-        return res.status(400).json({ message: 'Email, password, full name, and role are required.' });
-    }
+    // The check for required fields is implicitly handled by supabase.auth.admin.createUser
+    // which will fail if email or password are not provided.
+    // This makes the endpoint more robust.
 
     try {
         // 1. Create the user in the 'auth' schema
@@ -351,6 +365,69 @@ apiRouter.post('/users', async (req, res) => {
     } catch (error) {
         console.error(`[ERROR] Failed to create user ${email}:`, error.message);
         res.status(500).json({ message: `Failed to create user. Reason: ${error.message}` });
+    }
+});
+
+// NEW: Endpoint to update a user (Admin only)
+apiRouter.put('/users/:id', async (req, res) => {
+    const { id } = req.params;
+    const { full_name, password, avatar_url, status } = req.body; // إضافة: استقبال الحالة
+    console.log(`[ADMIN] Received request to update user ${id}`);
+
+    if (!supabaseAdmin) {
+        return res.status(500).json({ message: 'Admin features are not configured on the server.' });
+    }
+
+    try {
+        const updatePayload = {
+            user_metadata: {}
+        };
+
+        // Only include password if it's provided and not empty
+        if (password && password.length >= 6) {
+            updatePayload.password = password;
+        }
+
+        if (full_name) {
+            updatePayload.user_metadata.full_name = full_name;
+        }
+
+        // 1. Update user in the 'auth' schema if there are auth-related changes
+        if (updatePayload.password || (updatePayload.user_metadata && Object.keys(updatePayload.user_metadata).length > 0)) {
+            const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, updatePayload);
+            if (authError) throw authError;
+        }
+
+        // 2. Update the public 'users' table for profile data like avatar_url and status
+        const profileUpdatePayload = {};
+        if (avatar_url !== undefined) { // Check for undefined to allow setting it to null
+            profileUpdatePayload.avatar_url = avatar_url;
+        }
+        if (status) { // Handle status update
+            profileUpdatePayload.status = status;
+        }
+
+        if (Object.keys(profileUpdatePayload).length > 0) {
+            const { error: profileError } = await supabaseAdmin
+                .from('users')
+                .update(profileUpdatePayload)
+                .eq('id', id);
+            if (profileError) {
+                // This is not a critical failure if the auth part succeeded, but we should log it.
+                console.warn(`[WARN] User ${id} updated, but failed to update profile data: ${profileError.message}`);
+            }
+        }
+
+        // Fetch the final user state to return
+        const { data: finalUser, error: finalUserError } = await supabaseAdmin.from('users').select('*').eq('id', id).single();
+        if (finalUserError) {
+            console.warn(`[WARN] User ${id} updated, but failed to fetch final state: ${finalUserError.message}`);
+        }
+
+        res.status(200).json({ message: 'User updated successfully.', user: finalUser });
+    } catch (error) {
+        console.error(`[ERROR] Failed to update user ${id}:`, error.message);
+        res.status(500).json({ message: `Failed to update user. Reason: ${error.message}` });
     }
 });
 

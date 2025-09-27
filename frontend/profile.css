@@ -41,8 +41,8 @@
     font-size: 4em;
     color: var(--primary-color);
     background-color: var(--bg-color);
-    width: 120px;
-    height: 120px;
+    width: 80px; /* تعديل: تصغير حجم الصورة أكثر */
+    height: 80px; /* تعديل: تصغير حجم الصورة أكثر */
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -188,8 +188,8 @@
 }
 
 .profile-avatar-edit img {
-    width: 120px;
-    height: 120px;
+    width: 80px; /* تعديل: تصغير حجم الصورة أكثر */
+    height: 80px; /* تعديل: تصغير حجم الصورة أكثر */
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid var(--border-color);
@@ -202,6 +202,129 @@
     justify-content: center;
 }
 
+/* --- NEW: Professional Create/Edit User Modal --- */
+.form-layout-grid {
+    display: grid;
+    grid-template-columns: auto 1fr; /* Avatar | Fields */
+    grid-template-rows: auto auto; /* Content | Actions */
+    grid-template-areas: 
+        "avatar fields"
+        "actions actions";
+    gap: 20px 30px;
+}
+
+.form-grid-avatar { grid-area: avatar; }
+.form-grid-fields { grid-area: fields; }
+.form-grid-actions { 
+    grid-area: actions;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.profile-avatar-edit.large-avatar img {
+    cursor: pointer;
+    width: 128px;
+    height: 128px;
+}
+.profile-avatar-edit.large-avatar .avatar-edit-button {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 32px;
+    height: 32px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 2px solid var(--card-bg-color);
+    box-shadow: 0 2px 5px var(--shadow-color);
+}
+
+/* NEW: Action buttons for avatar editing */
+.avatar-action-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 15px; /* Add space below the avatar */
+}
+.avatar-action-buttons .btn-icon-action {
+    color: white;
+    font-size: 1em;
+}
+
+.avatar-action-buttons .btn-small {
+    padding: 6px 12px !important;
+    font-size: 0.9em !important;
+}
+
+/* NEW: Hover animation for avatar upload */
+.profile-avatar-edit.large-avatar {
+    position: relative;
+    overflow: hidden;
+    border-radius: 50%;
+}
+
+.profile-avatar-edit.large-avatar::after {
+    content: '\f030'; /* Font Awesome camera icon */
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2em;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.profile-avatar-edit.large-avatar:hover::after {
+    opacity: 1;
+}
+.profile-avatar-edit.large-avatar:hover img {
+    transform: scale(1.1);
+    filter: brightness(0.8);
+}
+
+.password-input-wrapper {
+    position: relative;
+}
+.password-toggle-btn {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+}
+.password-strength-meter { height: 5px; background-color: var(--border-color); border-radius: 5px; margin-top: 5px; overflow: hidden; }
+.strength-bar { height: 100%; width: 0; transition: width 0.3s, background-color 0.3s; }
+.strength-bar.strength-1 { width: 25%; background-color: #e74c3c; }
+.strength-bar.strength-2 { width: 50%; background-color: #f39c12; }
+.strength-bar.strength-3 { width: 75%; background-color: #2980b9; }
+.strength-bar.strength-4 { width: 100%; background-color: #27ae60; }
+.password-actions { margin-top: 10px; }
+
+/* NEW: Inline validation error style */
+.validation-error-inline {
+    color: #e74c3c;
+    font-size: 0.85em;
+    font-weight: 500;
+    margin-top: 5px;
+}
+
 /* Log Timeline Styles */
 .log-timeline-v2 {
     display: flex;
@@ -211,16 +334,16 @@
 
 .log-date-group {
     position: relative;
-    padding-left: 30px; /* Space for the timeline line */
-    border-left: 2px solid var(--border-color);
+    padding-right: 50px; /* تعديل: إضافة مساحة على اليمين للخط الزمني والأيقونات */
+    border-right: 2px solid var(--border-color); /* تعديل: إضافة الخط الزمني العمودي */
 }
 
 .log-date-header {
     font-weight: bold;
     color: var(--text-secondary-color);
     margin-bottom: 15px;
-    position: relative;
-    left: -42px; /* Pull it left to align with the line */
+    position: relative; /* تعديل: جعل تحديد الموضع ممكناً */
+    right: -62px; /* تعديل: سحب العنوان لليمين ليتوسط الخط الزمني */
     background-color: var(--card-bg-color);
     display: inline-block;
     padding: 2px 10px;
@@ -231,6 +354,7 @@
     gap: 15px;
     align-items: flex-start;
     margin-bottom: 20px;
+    position: relative; /* تعديل: جعل تحديد موضع الأيقونة ممكناً */
 }
 
 .log-item-icon-v2 {
@@ -244,8 +368,8 @@
     flex-shrink: 0;
     color: white;
     font-size: 1.1em;
-    position: relative;
-    left: -51px; /* Center it on the timeline line */
+    position: absolute; /* تعديل: تحديد موضع الأيقونة بشكل مطلق بالنسبة للعنصر الأب */
+    right: -72px; /* تعديل: وضع الأيقونة في منتصف الخط الزمني */
     border: 3px solid var(--card-bg-color);
 }
 
@@ -461,6 +585,37 @@
 
 .btn-telegram-bonus {
     background-color: #3498db; /* Blue */
+}
+
+/* NEW: Profile Settings Page Header */
+.profile-settings-header {
+    display: flex;
+    align-items: center;
+    gap: 25px;
+    background-color: var(--card-bg-color);
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.profile-settings-header .profile-header-info {
+    flex-grow: 1;
+}
+
+.profile-settings-header .profile-name-display {
+    font-size: 1.8em;
+    font-weight: 700;
+    margin: 0 0 5px 0;
+    padding: 0;
+    border: none;
+    color: var(--text-color);
+}
+
+.profile-settings-header .profile-email-display {
+    font-size: 1.1em;
+    color: var(--text-secondary-color);
+    margin: 0;
 }
 .btn-telegram-bonus:hover {
     background-color: #2980b9;
@@ -788,6 +943,155 @@
     align-items: center;
     justify-content: center;
     font-size: 1em;
+}
+
+/* NEW: Styles for user cell in users management table */
+.table-user-cell {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* تعديل: زيادة المسافة لتناسب حجم الصورة الجديد */
+    text-decoration: none;
+    color: var(--text-color);
+    min-width: 0; /* Prevents overflow */
+}
+
+.table-user-cell .avatar-small {
+    width: 50px; /* تعديل: زيادة حجم الصورة الرمزية */
+    height: 50px; /* تعديل: زيادة حجم الصورة الرمزية */
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid var(--card-bg-color); /* تعديل: تحسين لون الإطار */
+}
+
+.table-user-cell .user-details {
+    line-height: 1.4; /* تعديل: زيادة تباعد الأسطر */
+}
+
+/* NEW: Separate username and email into distinct lines */
+.table-user-cell .user-name {
+    display: block; /* Make it a block element to take a full line */
+    font-weight: 600;
+    color: var(--text-color);
+    font-size: 1.1em; /* تعديل: تكبير حجم خط الاسم */
+}
+
+.table-user-cell .user-email {
+    display: block; /* Make it a block element to take a full line */
+    font-size: 0.9em; /* تعديل: تكبير حجم خط البريد الإلكتروني */
+    color: var(--text-secondary-color);
+}
+
+/* NEW: Realtime online status indicator */
+.user-avatar-container .online-status-indicator {
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background-color: #778DA9; /* Gray for offline */
+    border-radius: 50%;
+    border: 2px solid var(--card-bg-color);
+    transition: background-color 0.3s;
+    z-index: 2;
+}
+
+.user-avatar-container .online-status-indicator.online {
+    background-color: #2ecc71; /* Green for online */
+    box-shadow: 0 0 5px #2ecc71;
+}
+
+
+/* NEW: Styles to identify admin users in the list */
+.table-user-cell .user-avatar-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.table-user-cell .admin-crown-icon {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: #f39c12; /* Orange/Gold color */
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7em;
+    border: 2px solid var(--card-bg-color);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.table-user-cell .admin-badge {
+    background-color: color-mix(in srgb, var(--primary-color) 20%, transparent);
+    color: var(--primary-color);
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* NEW: Styles for the employee badge */
+.table-user-cell .employee-badge {
+    background-color: var(--bg-color);
+    color: var(--text-secondary-color);
+    border: 1px solid var(--border-color);
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* NEW: Styles for the employee badge */
+.table-user-cell .employee-badge {
+    background-color: var(--bg-color);
+    color: var(--text-secondary-color);
+    border: 1px solid var(--border-color);
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* NEW: Style for inactive user rows */
+.modern-table tbody tr.inactive-row {
+    opacity: 0.6;
+    background-color: color-mix(in srgb, #e74c3c 10%, transparent); /* تعديل: زيادة وضوح اللون الأحمر */
+}
+.modern-table tbody tr.inactive-row:hover {
+    opacity: 1;
+    background-color: color-mix(in srgb, #e74c3c 15%, transparent); /* تعديل: زيادة وضوح اللون الأحمر عند المرور */
+}
+
+/* NEW: Style for the text in the main page loader */
+.page-loader p {
+    margin-top: 15px;
+    font-size: 1.1em;
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    animation: fadeIn 0.5s 0.3s ease-in-out both;
+}
+
+/* NEW: Improve layout for action buttons in tables */
+.modern-table .actions-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-start;
+}
+
+/* NEW: Color for the 4th stat card */
+.stat-card-v2.color-4 {
+    background: linear-gradient(135deg, #1B263B, #e74c3c);
 }
 
 /* New Sort Container in header */

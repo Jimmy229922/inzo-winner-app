@@ -2,6 +2,7 @@
 let supabase = null;
 let searchTimeout;
 let currentUserProfile = null; // NEW: To store the current user's profile with role
+window.onlineUsers = new Map(); // NEW: Global map to track online users
 
 
 // Global function to set the active navigation link
@@ -25,11 +26,19 @@ function setActiveNav(activeLink) {
 // Helper function to update the visual status indicator
 function updateStatus(status, message) {
     const statusElement = document.getElementById('connection-status');
-    if (statusElement) {
-        statusElement.textContent = `الحالة: ${message}`;
-        statusElement.className = ''; // Reset classes
-        statusElement.classList.add('status-' + status);
-    }
+    const statusText = document.getElementById('status-text');
+    const lastCheckTime = document.getElementById('last-check-time');
+
+    if (!statusElement || !statusText || !lastCheckTime) return;
+
+    // Update text and class
+    statusText.textContent = message;
+    statusElement.className = 'status-bar'; // Reset classes
+    statusElement.classList.add('status-' + status);
+
+    // Update timestamp
+    const time = new Date().toLocaleTimeString('ar-EG');
+    lastCheckTime.textContent = `آخر فحص: ${time}`;
 }
 
 async function logAgentActivity(agentId, actionType, description, metadata = {}) {
@@ -56,13 +65,23 @@ function formatNumber(num) {
 
 // NEW: Function to fetch and store the current user's profile
 async function fetchUserProfile() {
-    console.time('[Performance] fetchUserProfile');
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
         const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
         if (data) currentUserProfile = data;
         else currentUserProfile = null;
 
+        // NEW: Security check to block inactive users
+        if (currentUserProfile && currentUserProfile.status === 'inactive') {
+            console.warn(`[AUTH] Inactive user '${user.email}' attempted to login. Signing out.`);
+            await supabase.auth.signOut(); // Force sign out
+            // Redirect to login page with an error message
+            const params = new URLSearchParams();
+            params.set('error', 'account_disabled');
+            params.set('message', 'تم تعطيل حسابك. يرجى التواصل مع المدير.');
+            window.location.replace(`/login.html?${params.toString()}`);
+            return; // Stop further execution
+        }
         // NEW: Update UI with user info
         const settingsMenu = document.getElementById('settings-menu');
         const userAvatar = document.getElementById('user-avatar');
@@ -74,6 +93,16 @@ async function fetchUserProfile() {
             userAvatar.src = currentUserProfile?.avatar_url || `https://ui-avatars.com/api/?name=${user.email}&background=8A2BE2&color=fff`;
             userName.textContent = currentUserProfile?.full_name || user.email.split('@')[0];
             userEmail.textContent = user.email;
+
+            // --- إصلاح: إظهار الروابط الخاصة بالمدير العام بعد التحقق من هويته ---
+            // هذا يحل مشكلة اختفاء زر "إدارة المستخدمين"
+            const isSuperAdmin = user?.email === 'ahmed12@inzo.com';
+            document.querySelectorAll('[data-role="super-admin"]').forEach(el => {
+                el.style.display = isSuperAdmin ? 'flex' : 'none';
+            });
+
+            // NEW: Initialize presence tracking AFTER user profile is confirmed
+            initializePresenceTracking();
         }
     } else {
         // Hide user menu if not logged in
@@ -84,13 +113,11 @@ async function fetchUserProfile() {
             window.location.replace('/login.html');
         }
     }
-    console.timeEnd('[Performance] fetchUserProfile');
 }
 
 // NEW: Router function to handle page navigation based on URL hash
 async function handleRouting() {
     showLoader(); // إضافة: إظهار شاشة التحميل في بداية كل عملية تنقل
-    console.time('[Performance] handleRouting');
     // Scroll to the top of the page on every navigation
     window.scrollTo(0, 0);
 
@@ -145,7 +172,7 @@ async function handleRouting() {
         }
     }
 
-    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#archived-competitions') {
+    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#archived-competitions' || hash === '#users') {
         mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
@@ -162,23 +189,19 @@ async function handleRouting() {
     } catch (err) {
         console.error("Routing error:", err);
     } finally {
-        console.timeEnd('[Performance] handleRouting');
         hideLoader();
     }
 }
 
 // 2. Function to initialize Supabase
 async function initializeSupabase() {
-    console.time('[Performance] initializeSupabase');
     try {
         updateStatus('connecting', 'جاري الاتصال بالخادم...');
-        console.time('[Performance] Fetch API Config');
         const response = await fetch('/api/config'); // Fetch from our own server
         if (!response.ok) {
             throw new Error(`Server responded with ${response.status}`);
         }
         const config = await response.json();
-        console.timeEnd('[Performance] Fetch API Config');
         
         if (!config.supabaseUrl || !config.supabaseKey) {
             throw new Error('Supabase configuration not found from server.');
@@ -189,12 +212,9 @@ async function initializeSupabase() {
         console.log('Supabase client configured.');
         updateStatus('connected', 'متصل وجاهز');
 
-        // NEW: Setup routing AFTER user profile is fetched
-        // We will now fetch the user profile in parallel
-        fetchUserProfile();
-
+        // NEW: Fetch user profile and THEN handle routing
+        await fetchUserProfile();
         window.addEventListener('hashchange', handleRouting);
-        // We call handleRouting immediately without await to render the page skeleton faster
         handleRouting(); // Initial route handling on page load
 
         // NEW: Listen for realtime notifications
@@ -228,9 +248,44 @@ async function initializeSupabase() {
         if (appContent) {
             appContent.innerHTML = `<p class="error">فشل الاتصال بالخادم. تأكد من أن الخادم يعمل وأن الإعدادات صحيحة.</p>`;
         }
-    } finally {
-        console.timeEnd('[Performance] initializeSupabase');
     }
+}
+
+// NEW: Separated presence tracking initialization
+function initializePresenceTracking() {
+    // Ensure this runs only once and if the user profile is available
+    if (!supabase || !currentUserProfile || window.presenceChannel) {
+        return;
+    }
+
+    window.presenceChannel = supabase.channel('online-users', {
+        config: {
+            presence: {
+                key: currentUserProfile.id, // Use user ID as the unique key
+            },
+        },
+    });
+
+    window.presenceChannel
+        .on('presence', { event: 'sync' }, () => {
+            const newState = window.presenceChannel.presenceState();
+            window.onlineUsers.clear();
+            for (const id in newState) {
+                window.onlineUsers.set(id, newState[id][0]);
+            }
+            // If the user management page is active, update its indicators
+            if (typeof window.updateUserPresenceIndicators === 'function') {
+                window.updateUserPresenceIndicators();
+            }
+        })
+        .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await window.presenceChannel.track({ online_at: new Date().toISOString() });
+                console.log('[Presence] Successfully subscribed and tracking online status.');
+            } else {
+                console.warn('[Presence] Failed to subscribe:', status);
+            }
+        });
 }
 
 // --- UI Component Functions ---
@@ -328,7 +383,8 @@ function applyInitialTheme() {
 // Setup listeners and dynamic content for the navbar
 function setupNavbar() {
     // NEW: Dark Mode Toggle Logic from dropdown
-    const themeToggleHandler = () => {
+    const themeToggleHandler = (e) => {
+        e.preventDefault(); // Prevent navigation
         if (document.body.classList.contains('dark-mode')) {
             document.body.classList.remove('dark-mode');
             localStorage.setItem('theme', 'light');
@@ -499,6 +555,14 @@ function setupNavbar() {
         }
 
     });    
+
+    // NEW: Prevent settings dropdown toggle from navigating
+    const settingsToggle = document.getElementById('nav-settings-dropdown');
+    if (settingsToggle) {
+        settingsToggle.addEventListener('click', (e) => {
+            e.preventDefault(); // يمنع الرابط من تغيير الـ hash والانتقال للصفحة الرئيسية
+        });
+    }
 }
 
 // تعديل: إنشاء جسيمات عائمة بدلاً من الشهب
@@ -528,4 +592,20 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavbar();
     setupAutoHidingNavbar();
     initializeSupabase();
+
+    // --- NEW: Listen for browser online/offline events ---
+    window.addEventListener('offline', () => {
+        updateStatus('error', 'غير متصل. تحقق من اتصالك بالإنترنت.');
+    });
+
+    window.addEventListener('online', () => {
+        updateStatus('connecting', 'تم استعادة الاتصال. جاري إعادة المزامنة...');
+        // If Supabase wasn't initialized, try again.
+        if (!supabase) {
+            initializeSupabase();
+        } else {
+            // If it was initialized, just update status. Supabase client handles reconnection.
+            setTimeout(() => updateStatus('connected', 'متصل وجاهز'), 2000);
+        }
+    });
 });

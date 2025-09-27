@@ -202,6 +202,15 @@
     font-size: 1.5em;
 }
 
+.form-modal-header .btn-icon-action {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    padding: 5px;
+}
+
 .form-modal-body {
     overflow-y: auto;
     padding-right: 10px; /* space for scrollbar */

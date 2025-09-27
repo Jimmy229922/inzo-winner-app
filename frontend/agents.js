@@ -806,15 +806,20 @@ function renderAddAgentForm() {
                     </div>
                     <div class="form-group">
                         <label for="agent-rank">المرتبة</label>
+                        <!-- تعديل: إعادة ترتيب وتنسيق قائمة المراتب -->
                         <select id="agent-rank">
-                            <optgroup label="⁕ مراتب الوكالة الأعتيادية ⁖">
-                                <option value="بدون مرتبة" selected>بدون مرتبة</option>
-                                ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map(rank => `<option value="${rank}">${rank}</option>`).join('')}
+                            <optgroup label="⁕ وكلاء بدون مرتبة ⁖">
+                                <option value="بدون مرتبة" selected>⚪ وكيل اعتيادي</option>
+                                <option value="بدون مرتبة حصرية">⚪ وكيل حصري</option>
+                            </optgroup>
+                            <optgroup label="⁕ مراتب الوكلاء الاعتيادية ⁖">
+                                ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map(rank => `<option value="${rank}">🔸 ${rank}</option>`).join('')}
                             </optgroup>
                             <optgroup label="⁕ مراتب الوكالة الحصرية ⁖">
-                                <option value="بدون مرتبة حصرية">بدون مرتبة حصرية</option>
-                                <option value="Center">Center</option>
-                                ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}">${rank}</option>`).join('')}
+                                ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}">⭐ ${rank}</option>`).join('')}
+                            </optgroup>
+                            <optgroup label="⁕ المراكز ⁖">
+                                <option value="Center">🏢 Center</option>
                             </optgroup>
                         </select>
                     </div>
@@ -834,9 +839,10 @@ function renderAddAgentForm() {
                     <div class="form-group" style="grid-column: 1 / -1;">
                         <label>أيام التدقيق</label>
                         <div class="days-selector">
+                            <!-- تحسين: تحويل مربعات الاختيار إلى أزرار تفاعلية -->
                             ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => `
-                                <label class="day-checkbox"><input type="checkbox" value="${index}"> <span>${day}</span></label>
-                            `).join('')}
+                                <input type="checkbox" id="day-${index}" value="${index}" class="day-toggle-input">
+                                <label for="day-${index}" class="day-toggle-btn">${day}</label>`).join('')}
                         </div>
                     </div>
                 </div>
@@ -907,6 +913,15 @@ function renderAddAgentForm() {
             remaining_balance: rankData.competition_bonus,
             remaining_deposit_bonus: rankData.deposit_bonus_count,
         };
+
+        // --- تعديل: منطق خاص لمرتبة "بدون مرتبة حصرية" ---
+        if (rank === 'بدون مرتبة حصرية') {
+            newAgentData.competition_bonus = 60;
+            newAgentData.remaining_balance = 60;
+            newAgentData.deposit_bonus_percentage = null;
+            newAgentData.deposit_bonus_count = null;
+            newAgentData.remaining_deposit_bonus = null;
+        }
 
         // Check for uniqueness of agent_id
         const { data: existingAgents, error: checkError } = await supabase
