@@ -539,7 +539,7 @@ cron.schedule('0 0 * * *', async () => {
             
             // 1. Mark all found competitions as 'processing' immediately to prevent re-fetching
             const competitionIds = competitionsForToday.map(c => c.id);
-            await supabaseAdmin.from('competitions').update({ status: 'processing' }).in('id', competitionIds);
+            if (competitionIds.length > 0) await supabaseAdmin.from('competitions').update({ status: 'processing' }).in('id', competitionIds);
 
             for (const comp of competitionsForToday) {
                 const agentName = comp.agents ? comp.agents.name : 'شريكنا';

@@ -663,18 +663,24 @@ async function renderCompetitionCreatePage(agentId) {
             content = content.replace(/^.*{{deposit_bonus_prize_details}}.*\n?/gm, '');
         }
 
-        // NEW: Map duration codes to Arabic text for display
+        // NEW: Map duration codes to a formatted date string for display
         let displayDuration = '';
-        switch (duration) {
-            case '1d': displayDuration = 'يوم'; break;
-            case '2d': displayDuration = 'يومين'; break;
-            case '1w': displayDuration = 'أسبوع'; break;
-            default: displayDuration = 'غير محدد'; break; // Should not happen with new select options
+        if (duration) {
+            const endDate = new Date();
+            let daysToAdd = 0;
+            if (duration === '1d') daysToAdd = 1;
+            else if (duration === '2d') daysToAdd = 2;
+            else if (duration === '1w') daysToAdd = 7;
+
+            endDate.setDate(endDate.getDate() + daysToAdd);
+            const formattedEndDate = endDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            displayDuration = `من تاريخ اليوم وحتى نهاية يوم ${formattedEndDate}`;
         }
 
         // Replace duration placeholder with the selected display text
-        if (displayDuration && displayDuration !== 'غير محدد') content = content.replace(/{{competition_duration}}/g, displayDuration);
-        else content = content.replace(/^.*{{competition_duration}}.*\n?/gm, '');
+        if (displayDuration)
+            content = content.replace(/⏳ مدة المسابقة: {{competition_duration}}/g, `⏳ مدة المسابقة:\n${displayDuration}`);
+        else content = content.replace(/^.*⏳ مدة المسابقة: {{competition_duration}}.*\n?/gm, '');
         
 
         content = content.replace(/{{question}}/g, selectedTemplateQuestion || '');
@@ -718,19 +724,24 @@ async function renderCompetitionCreatePage(agentId) {
         if (duration) {
             const today = new Date();
             const newDate = new Date(today);
-            // تعديل: ضبط التاريخ ليبدأ من بداية اليوم المحدد
-            newDate.setHours(0, 0, 0, 0);
+            // Set to the beginning of the day to avoid time-of-day issues
+            newDate.setHours(0, 0, 0, 0); 
+            
+            let daysToAdd = 0;
             switch (duration) {
-                case '1d': newDate.setDate(newDate.getDate() + 1); break;
-                case '2d': newDate.setDate(newDate.getDate() + 2); break;
-                case '1w': newDate.setDate(newDate.getDate() + 7); break;
+                case '1d': daysToAdd = 2; break; // Day 1 (today), Day 2 (runs), Day 3 (selection)
+                case '2d': daysToAdd = 3; break; // Day 1 (today), Day 2,3 (runs), Day 4 (selection)
+                case '1w': daysToAdd = 8; break; // Day 1 (today), Day 2-8 (runs), Day 9 (selection)
             }
-            winnerDatePreview.textContent = `سيتم إرسال الطلب في بداية يوم ${newDate.toLocaleDateString('ar-EG', {
+            newDate.setDate(newDate.getDate() + daysToAdd);
+            
+            winnerDatePreview.innerHTML = `
+                سيتم إرسال طلب اختيار الفائزين في بداية يوم <br><strong>${newDate.toLocaleDateString('ar-EG', {
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-            })}`;
+            })}</strong>
+            `;
             winnerDatePreview.parentElement.style.display = 'block';
         } else {
-            winnerDatePreview.value = 'يرجى تحديد مدة المسابقة';
             winnerDatePreview.parentElement.style.display = 'none';
         }
 
@@ -811,14 +822,17 @@ async function renderCompetitionCreatePage(agentId) {
         let winnerSelectionDate = null;
         if (selectedDuration) {
             const newDate = new Date(); // Start from today
-            // تعديل: ضبط التاريخ ليبدأ من بداية اليوم المحدد
             newDate.setHours(0, 0, 0, 0);
+            let daysToAdd = 0;
             switch (selectedDuration) {
-                case '1d': newDate.setDate(newDate.getDate() + 1); break;
-                case '2d': newDate.setDate(newDate.getDate() + 2); break;
-                case '1w': newDate.setDate(newDate.getDate() + 7); break;
+                case '1d': daysToAdd = 2; break;
+                case '2d': daysToAdd = 3; break;
+                case '1w': daysToAdd = 8; break;
             }
-            endsAtDate = newDate.toISOString();
+            if (daysToAdd > 0) {
+                newDate.setDate(newDate.getDate() + daysToAdd);
+                endsAtDate = newDate.toISOString();
+            }
         }
 
         try {
