@@ -252,46 +252,112 @@ cron.schedule('0 7 * * 0', async () => {
     timezone: "Africa/Cairo" // Set to your local timezone
 });
 
-// Schedule a task to handle expired competitions (runs every 10 seconds for near-instant response).
+// تعديل: المهمة تعمل الآن كل 10 ثوانٍ للتحقق من المسابقات المنتهية بدقة
 cron.schedule('*/10 * * * * *', async () => {
-    // console.log(`[CRON - ${new Date().toLocaleTimeString()}] Running check for expired competitions...`);
+    // console.log(`[CRON] Checking for expired competitions...`);
     if (!supabaseAdmin) {
         console.error('[CRON] Aborting expired competition check: Supabase admin client is not initialized.');
         return;
     }
     try {
         const now = new Date().toISOString();
-        // Find competitions that are 'sent' and their end time is in the past.
+        // تعديل: البحث عن المسابقات التي انتهى وقتها بالفعل
         const { data: expiredCompetitions, error: fetchError } = await supabaseAdmin
             .from('competitions')
             .select('id, name, correct_answer, agents(name)')
             .eq('status', 'sent')
-            .lte('ends_at', now); // Use 'less than or equal to' to catch competitions ending now
+            .lte('ends_at', now);
 
         if (fetchError) throw fetchError;
 
         if (expiredCompetitions.length > 0) {
             // console.log(`[CRON] Found ${expiredCompetitions.length} expired competition(s).`);
+            
+            // 1. Mark all found competitions as 'processing' immediately to prevent re-fetching
+            const competitionIds = expiredCompetitions.map(c => c.id);
+            await supabaseAdmin.from('competitions').update({ status: 'processing' }).in('id', competitionIds);
+
             for (const comp of expiredCompetitions) {
                 const agentName = comp.agents ? comp.agents.name : 'شريكنا';
                 const clicheText = `دمت بخير شريكنا العزيز ${agentName}،\n\nانتهى وقت المشاركة في مسابقة "${comp.name}".\n\nالإجابة الصحيحة هي: **${comp.correct_answer}**\n\nيرجى اختيار الفائزين وتزويدنا بفيديو الروليت وبياناتهم ليتم التحقق منهم من قبل القسم المختص.`;
-                // Send to Telegram
+                
+                // 2. Send to Telegram
                 await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                     chat_id: TELEGRAM_CHAT_ID,
-                    text: clicheText,
+                    text: clicheText
                 });
-                // console.log(`[CRON] --> Sent winner selection request for competition ID: ${comp.id}`);
 
-                // Update competition status
+                // 3. Update competition status to its final state
                 await supabaseAdmin.from('competitions').update({ status: 'awaiting_winners' }).eq('id', comp.id);
-
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between messages
             }
         }
     } catch (err) {
         console.error('[CRON] Error processing expired competitions:', err.message);
     }
 });
+
+// Schedule a task to reset agent balances based on their renewal period. Runs once a day at midnight.
+cron.schedule('0 0 * * *', async () => {
+    console.log(`[CRON - ${new Date().toLocaleTimeString()}] Running daily check for agent balance renewals.`);
+    if (!supabaseAdmin) {
+        console.error('[CRON] Aborting agent renewal check: Supabase admin client is not initialized.');
+        return;
+    }
+    try {
+        // Fetch all agents with a renewal period
+        const { data: agents, error: fetchError } = await supabaseAdmin
+            .from('agents')
+            .select('id, name, created_at, renewal_period, last_renewal_date, competition_bonus, deposit_bonus_count')
+            .not('renewal_period', 'is', null)
+            .neq('renewal_period', 'none');
+
+        if (fetchError) throw fetchError;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize to start of day
+
+        for (const agent of agents) {
+            const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.created_at);
+            lastRenewal.setHours(0, 0, 0, 0);
+
+            let nextRenewalDate = new Date(lastRenewal);
+            if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
+            else if (agent.renewal_period === 'biweekly') nextRenewalDate.setDate(lastRenewal.getDate() + 14);
+            else if (agent.renewal_period === 'monthly') nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
+            else continue; // Skip if invalid period
+
+            // Check if today is the renewal day or later
+            if (today >= nextRenewalDate) {
+                console.log(`[CRON] Renewing balance for agent: ${agent.name} (ID: ${agent.id})`);
+
+                const { error: updateError } = await supabaseAdmin
+                    .from('agents')
+                    .update({
+                        consumed_balance: 0,
+                        remaining_balance: agent.competition_bonus,
+                        used_deposit_bonus: 0,
+                        remaining_deposit_bonus: agent.deposit_bonus_count,
+                        last_renewal_date: today.toISOString() // Set renewal date to today
+                    })
+                    .eq('id', agent.id);
+
+                if (updateError) {
+                    console.error(`[CRON] Failed to renew balance for agent ${agent.id}:`, updateError.message);
+                } else {
+                    // Send a realtime notification to the frontend
+                    await supabaseAdmin.from('realtime_notifications').insert({
+                        message: `تم تجديد رصيد المسابقات والبونص للوكيل ${agent.name}.`,
+                        type: 'success',
+                        notification_type: 'BALANCE_RENEWAL',
+                        agent_id: agent.id
+                    });
+                }
+            }
+        }
+    } catch (err) {
+        console.error('[CRON] Error processing agent renewals:', err.message);
+    }
+}, { timezone: "Africa/Cairo" });
 
 // --- بدء تشغيل السيرفر ---
 async function startServer() {

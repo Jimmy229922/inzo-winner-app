@@ -783,7 +783,6 @@ function renderAddAgentForm() {
                     </div>
                     <div class="form-group"><label for="telegram-channel-url">رابط قناة التلجرام</label><input type="text" id="telegram-channel-url"></div>
                     <div class="form-group"><label for="telegram-group-url">رابط جروب التلجرام</label><input type="text" id="telegram-group-url"></div>
-                    <div class="form-group"><label for="agent-birth-date">تاريخ الميلاد</label><input type="date" id="agent-birth-date"></div>
                     <div class="form-group" style="grid-column: 1 / -1;">
                         <label>أيام التدقيق</label>
                         <div class="days-selector">
@@ -851,7 +850,6 @@ function renderAddAgentForm() {
             rank: rank || null,
             telegram_channel_url: document.getElementById('telegram-channel-url').value || null,
             telegram_group_url: document.getElementById('telegram-group-url').value || null,
-            birth_date: document.getElementById('agent-birth-date').value || null,
             competition_bonus: rankData.competition_bonus,
             deposit_bonus_percentage: rankData.deposit_bonus_percentage,
             deposit_bonus_count: rankData.deposit_bonus_count,

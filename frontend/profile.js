@@ -21,6 +21,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     // Clear any previous timers from other profiles
     stopCompetitionCountdowns();
+    stopRenewalCountdown(); // تعديل: إيقاف عداد التجديد السابق قبل عرض ملف شخصي جديد
 
     // Check for edit mode in hash, e.g., #profile/123/edit
     const hashParts = window.location.hash.split('/');
@@ -344,7 +345,12 @@ async function renderAgentProfilePage(agentId, options = {}) {
                     </div>
                     <div class="competition-card-body">
                         <div class="competition-status-tracker">${progressBarHtml}</div>
-                        <p class="correct-answer-display-card"><i class="fas fa-key"></i><strong>الإجابة الصحيحة:</strong> ${comp.correct_answer || '<em>غير محددة</em>'}</p>
+                        <div class="competition-details-grid">
+                            <p class="competition-detail-item"><i class="fas fa-users"></i><strong>عدد الفائزين:</strong> ${comp.winners_count || 0}</p>
+                            <p class="competition-detail-item"><i class="fas fa-dollar-sign"></i><strong>الجائزة للفائز:</strong> ${comp.prize_per_winner ? comp.prize_per_winner.toFixed(2) : '0.00'}</p>
+                            <p class="competition-detail-item"><i class="fas fa-calendar-alt"></i><strong>تاريخ الاختيار:</strong> ${endDate ? endDate.toLocaleDateString('ar-EG') : 'غير محدد'}</p>
+                            <p class="competition-detail-item"><i class="fas fa-key"></i><strong>الإجابة الصحيحة:</strong> ${comp.correct_answer || '<em>غير محددة</em>'}</p>
+                        </div>
                     </div>
                     <div class="competition-card-footer">
                         <button class="btn-secondary edit-btn" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i> تعديل</button>

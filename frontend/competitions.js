@@ -607,6 +607,10 @@ async function renderCompetitionCreatePage(agentId) {
         correctAnswerDisplay.textContent = selectedTemplate.correct_answer || 'غير محددة';
         correctAnswerDisplay.parentElement.style.display = 'block';
 
+        // تعديل: ملء حقل الإجابة الصحيحة تلقائياً
+        const correctAnswerInput = document.getElementById('override-correct-answer');
+        if (correctAnswerInput) correctAnswerInput.value = selectedTemplate.correct_answer || '';
+
         const originalTemplateContent = selectedTemplate.content;
         const selectedTemplateQuestion = selectedTemplate.question;
 
@@ -768,9 +772,9 @@ async function renderCompetitionCreatePage(agentId) {
         }
 
         const finalDescription = descInput.value;
-        const winnersCount = parseInt(tradingWinnersInput.value) || 0;
-        const prizePerWinner = parseFloat(prizeInput.value) || 0;
-        const depositWinnersCount = parseInt(depositWinnersInput.value) || 0;
+        const winnersCount = parseInt(document.getElementById('override-trading-winners').value) || 0;
+        const prizePerWinner = parseFloat(document.getElementById('override-prize').value) || 0;
+        const depositWinnersCount = parseInt(document.getElementById('override-deposit-winners').value) || 0;
         const totalCost = winnersCount * prizePerWinner;
         const sendBtn = e.target.querySelector('.btn-send-telegram');
         const originalBtnHtml = sendBtn.innerHTML;
@@ -804,6 +808,7 @@ async function renderCompetitionCreatePage(agentId) {
         // Calculate ends_at date
         const selectedDuration = durationInput.value;
         let endsAtDate = null;
+        let winnerSelectionDate = null;
         if (selectedDuration) {
             const newDate = new Date();
             switch (selectedDuration) {
@@ -813,6 +818,7 @@ async function renderCompetitionCreatePage(agentId) {
                 case '1w': newDate.setDate(newDate.getDate() + 7); break;
             }
             endsAtDate = newDate.toISOString();
+            winnerSelectionDate = newDate.toISOString().split('T')[0]; // Save just the date part
         }
 
         try {
@@ -828,7 +834,9 @@ async function renderCompetitionCreatePage(agentId) {
                     total_cost: totalCost,
                     ends_at: endsAtDate, // Save the end date
                     deposit_winners_count: depositWinnersCount,
-                    correct_answer: selectedTemplate.correct_answer // Save correct answer from template
+                    correct_answer: selectedTemplate.correct_answer,
+                    winners_count: winnersCount, // تعديل: إعادة تفعيل حفظ عدد الفائزين
+                    prize_per_winner: prizePerWinner // تعديل: إعادة تفعيل حفظ الجائزة لكل فائز
                 })
                 .select()
                 .single();
