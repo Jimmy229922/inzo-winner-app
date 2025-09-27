@@ -4,7 +4,7 @@
     --card-bg-color: rgba(255, 255, 255, 0.9);
     --text-color: #333; /* Light mode text */
     --text-secondary-color: #6c757d; /* Light mode secondary text */
-    --primary-color: #4CAF50; /* Green for light mode */
+    --primary-color: #4CAF50; /* أخضر مائل للزرعي، احترافي */
     --primary-hover-color: #45a049; /* Darker green for light mode */
     --accent-color: #F4A261; /* Orange accent for light mode */
     --border-color: #ddd; /* Light mode border */
@@ -14,15 +14,15 @@
 }
 
 body.dark-mode {
-    --bg-color: #0D1B2A; /* كحلي داكن جداً - Background */
-    --animated-bg-color: radial-gradient(ellipse at bottom, #0D1B2A 0%, #1B263B 100%); /* Gradient background */
-    --card-bg-color: rgba(27, 38, 59, 0.8); /* كحلي متوسط مع شفافية - Secondary */
+    --bg-color: #0D1B2A; /* كحلي داكن جداً */
+    --animated-bg-color: radial-gradient(ellipse at bottom, #1B263B 0%, #0D1B2A 100%); /* تدرج كحلي */
+    --card-bg-color: rgba(27, 38, 59, 0.8); /* كحلي متوسط مع شفافية */
     --text-color: #FFFFFF; /* أبيض - Text */
-    --text-secondary-color: #778DA9; /* أزرق فاتح أنيق - Secondary Text */
-    --primary-color: #4CAF50; /* أخضر - Accent */
-    --primary-hover-color: #45a049; /* أخضر أغمق - Accent Hover */
+    --text-secondary-color: #778DA9; /* أزرق فاتح أنيق */
+    --primary-color: #4CAF50; /* أخضر احترافي */
+    --primary-hover-color: #45a049; /* أخضر أغمق */
     --accent-color: #F4A261; /* برتقالي هادي - Accent 2 */
-    --border-color: #415A77; /* أزرق رمادي فاتح - Secondary */
+    --border-color: #415A77; /* أزرق رمادي فاتح */
     --input-bg-color: #0D1B2A; /* نفس لون الخلفية */
     --shadow-color: rgba(0, 0, 0, 0.4);
     --navbar-bg: rgba(27, 38, 59, 0.8); /* Match card background */
@@ -56,10 +56,42 @@ main, footer {
     border-radius: 8px;
     box-shadow: 0 4px 12px var(--shadow-color); /* تعديل: إزالة الهامش السفلي */
     margin-bottom: 0;
+    margin-top: 40px; /* NEW: Add consistent top margin for all pages */
     transition: background-color 0.3s, opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
     border: 1px solid var(--border-color);
 }
 
+/* NEW: Scroll to Top Button Styles */
+#scroll-to-top-btn {
+    display: none; /* Hidden by default */
+    position: fixed; /* Fixed position */
+    bottom: 20px; /* Place at the bottom */
+    left: 20px; /* Place at the left (RTL) */
+    z-index: 1000; /* High z-index to be on top */
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 1.5em;
+    cursor: pointer;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    transition: opacity 0.3s, background-color 0.3s, transform 0.3s;
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+#scroll-to-top-btn:hover {
+    background-color: var(--primary-hover-color);
+    transform: scale(1);
+}
+
+#scroll-to-top-btn.show {
+    display: block;
+    opacity: 1;
+    transform: scale(1);
+}
 main.full-width {
     max-width: none;
     flex-grow: 1;

@@ -565,30 +565,9 @@ function setupNavbar() {
     }
 }
 
-// تعديل: إنشاء جسيمات عائمة بدلاً من الشهب
-function createFloatingParticles() {
-    const container = document.getElementById('animated-bg');
-    if (!container) return;
-    const numParticles = 50; // Increase number for a fuller effect
-    const colors = ['color-1', 'color-2', 'color-3'];
-    for (let i = 0; i < numParticles; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'particle';
-        const size = Math.random() * 3 + 1; // Size between 1px and 4px
-        particle.classList.add(colors[Math.floor(Math.random() * colors.length)]);
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
-        particle.style.left = `${Math.random() * 100}%`;
-        particle.style.animationDelay = `${Math.random() * 20}s`; // Staggered start
-        particle.style.animationDuration = `${Math.random() * 15 + 10}s`; // Duration between 10s and 25s
-        container.appendChild(particle);
-    }
-}
-
 // Main entry point when the page loads
 document.addEventListener('DOMContentLoaded', () => {
     applyInitialTheme();
-    createFloatingParticles();
     setupNavbar();
     setupAutoHidingNavbar();
     initializeSupabase();

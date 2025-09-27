@@ -4,12 +4,6 @@
     padding-top: 0;
 }
 
-/* تعديل: إزالة المسافة العلوية في الصفحة الرئيسية */
-#app-content:has(#home-stats-container) {
-    padding-top: 50;
-    margin-top: -100px; /* إلغاء الحشوة الافتراضية لعنصر main */
-}
-
 .dashboard-grid-v2 {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

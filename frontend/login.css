@@ -1,12 +1,50 @@
-/* Login Page Styles */
+/* login.css */
+
+/* NEW: Animated Background Styles (moved from stars.css) */
+#animated-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    overflow: hidden;
+    background: var(--animated-bg-color, var(--bg-color));
+}
+
+.particle {
+    position: absolute;
+    border-radius: 50%;
+    animation: floatUp linear infinite;
+    opacity: 0;
+    bottom: -10px; /* Start from below the screen */
+}
+
+.particle.color-1 { background-color: color-mix(in srgb, var(--primary-color) 50%, transparent); }
+.particle.color-2 { background-color: color-mix(in srgb, var(--accent-color) 40%, transparent); }
+.particle.color-3 { background-color: color-mix(in srgb, var(--text-secondary-color) 30%, transparent); }
+
+@keyframes floatUp {
+    0% {
+        transform: translateY(0);
+        opacity: 0;
+    }
+    10%, 90% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(-105vh);
+        opacity: 0;
+    }
+}
 
 body {
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background-color: var(--bg-color);
-    overflow: hidden; /* Hide scrollbars for the background */
+    overflow: hidden; /* Hide scrollbars from animated background */
+    background-color: var(--bg-color); /* Ensure body has a background */
 }
 
 .login-container {
@@ -14,14 +52,18 @@ body {
 }
 
 .login-card {
-    background-color: var(--card-bg-color);
+    background-color: color-mix(in srgb, var(--card-bg-color) 75%, transparent);
     padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 10px 30px var(--shadow-color);
+    border-radius: 16px;
+    box-shadow: 0 20px 50px var(--shadow-color);
     width: 100%;
     max-width: 400px;
     text-align: center;
-    border: 1px solid var(--border-color);
+    border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
+    backdrop-filter: blur(20px); /* Frosted glass effect */
+    -webkit-backdrop-filter: blur(20px);
+    transition: border-color 0.3s, box-shadow 0.3s;
+    animation: float-in 0.8s ease-out forwards;
 }
 
 .login-header .login-logo {
@@ -44,10 +86,131 @@ body {
     margin-bottom: 20px;
 }
 
+.input-wrapper {
+    position: relative;
+}
+
+#login-form label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 600;
+    font-size: 0.95em;
+    display: flex;
+    justify-content: flex-end; /* Align labels to the right */
+    align-items: center;
+}
+
+#login-form label span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#login-form input {
+    padding: 14px 15px;
+    background-color: var(--input-bg-color);
+    border: 1px solid var(--border-color);
+    transition: border-color 0.3s, box-shadow 0.3s;
+    width: 100%; /* Ensure input takes full width */
+    box-sizing: border-box;
+    padding-left: 40px; /* Space for the eye icon on the left */
+}
+
+#login-form input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: inset 0 0 5px color-mix(in srgb, var(--primary-color) 15%, transparent);
+}
+
+/* NEW: Add eye icon for password visibility toggle */
+.password-wrapper {
+    position: relative;
+}
+
+#password {
+    padding-right: 15px; /* Reset right padding, left padding handled above */
+}
+
+.eye-icon {
+    position: absolute;
+    left: 10px; /* Move to the left side */
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 1.2em;
+    color: var(--text-secondary-color);
+}
+
+.form-options {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 20px;
+    font-size: 0.9em;
+}
+
+/* Simple custom checkbox for login page */
+.custom-checkbox {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    gap: 8px;
+    color: var(--text-secondary-color);
+    user-select: none;
+}
+
+.custom-checkbox input {
+    display: none; /* Hide default checkbox */
+}
+
+.custom-checkbox .checkmark {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    display: inline-block;
+    position: relative;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.custom-checkbox input:checked + .checkmark {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* NEW: Add checkmark icon inside the checkbox */
+.custom-checkbox .checkmark::after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 5px;
+    top: 1px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.custom-checkbox input:checked + .checkmark::after {
+    display: block;
+}
+
 #login-form button {
     width: 100%;
     padding: 12px;
     font-size: 1.1em;
+    background: linear-gradient(45deg, var(--primary-hover-color), var(--primary-color));
+    box-shadow: 0 4px 15px color-mix(in srgb, var(--primary-color) 30%, transparent);
+    transition: all 0.3s ease;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#login-form button:active {
+    transform: scale(0.98);
 }
 
 .error-message {
@@ -55,4 +218,15 @@ body {
     margin-bottom: 15px;
     font-weight: bold;
     min-height: 20px;
+}
+
+@keyframes float-in {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
