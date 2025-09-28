@@ -452,6 +452,14 @@ function setupNavbar() {
             statusText.textContent = 'فشل التحديث';
             detailsText.textContent = `السبب: ${error.message}`;
             console.error('Update failed:', error);
+        } finally {
+            // --- تعديل: إخفاء نافذة التحديث تلقائياً بعد 3 ثوانٍ ---
+            setTimeout(() => {
+                const modalOverlay = document.querySelector('.modal-overlay');
+                if (modalOverlay) {
+                    modalOverlay.remove();
+                }
+            }, 3000); // إغلاق بعد 3 ثوانٍ
         }
     }
 

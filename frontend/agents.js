@@ -1188,12 +1188,11 @@ async function handleBulkSendBalances(agents) {
                 const progress = Math.round(((i + 1) / agentCount) * 100);
                 progressBar.style.width = `${progress}%`;
                 statusText.innerHTML = `جاري إرسال الأرصدة... (${i + 1} / ${agentCount})<br>نجح: ${successCount} | فشل: ${errorCount}`;
-            }
-
-            // إضافة تأخير بسيط بين كل طلب لتجنب الحظر من تليجرام
-            if (i < eligibleAgents.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 400)); // 400ms delay
-            }
+                // إصلاح: نقل التأخير الزمني إلى داخل الحلقة ليعمل بشكل صحيح
+                if (i < eligibleAgents.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 400)); // 400ms delay
+                }
+            } // نهاية الحلقة for
 
             // Update modal with final result
             statusText.innerHTML = `اكتمل تعميم الأرصدة.<br><strong>${successCount}</strong> رسالة ناجحة | <strong>${errorCount}</strong> رسالة فاشلة.`;
@@ -1201,6 +1200,26 @@ async function handleBulkSendBalances(agents) {
             document.querySelector('.modal-no-actions .update-icon').className = 'fas fa-check-circle update-icon';
             await logAgentActivity(null, 'BULK_BALANCE_SENT', `تم تعميم الأرصدة إلى ${successCount} وكيل (فشل ${errorCount}).`);
 
+            // --- تعديل: إخفاء نافذة التقدم تلقائياً بعد 3 ثوانٍ ---
+            setTimeout(() => {
+                // ابحث عن النافذة المنبثقة النشطة وقم بإزالتها
+                const modalOverlay = document.querySelector('.modal-overlay');
+                if (modalOverlay) {
+                    modalOverlay.remove();
+                }
+            }, 3000); // إغلاق بعد 3 ثوانٍ
+
+            // --- تعديل: إرسال إشعار بالنتيجة إلى المجموعة العامة ---
+            const summaryMessage = `✅ اكتملت عملية تعميم الأرصدة.\n\n- رسائل ناجحة: ${successCount}\n- رسائل فاشلة: ${errorCount}`;
+            try {
+                await fetch('/api/post-announcement', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: summaryMessage }) // لا نمرر chatId ليتم الإرسال للمجموعة العامة
+                });
+            } catch (e) {
+                console.warn('Could not send completion summary to Telegram:', e);
+            }
         }, {
             title: 'تعميم الأرصدة المتاحة',
             confirmText: 'إرسال الآن',

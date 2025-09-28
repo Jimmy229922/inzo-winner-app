@@ -546,7 +546,7 @@ cron.schedule('0 0 * * *', async () => {
                 // تعديل: تحديد المعرف المستهدف. الأولوية للمعرف الخاص بالوكيل.
                 const targetChatId = comp.agents?.telegram_chat_id || TELEGRAM_CHAT_ID;
 
-                const clicheText = `دمت بخير شريكنا العزيز ${agentName}،\n\nانتهى وقت المشاركة في مسابقة "${comp.name}".\n\nالإجابة الصحيحة هي: **${comp.correct_answer}**\n\nيرجى اختيار الفائزين وتزويدنا بفيديو الروليت وبياناتهم ليتم التحقق منهم من قبل القسم المختص.`;
+                const clicheText = `دمت بخير شريكنا العزيز ${agentName}،\n\nيرجى اختيار الفائزين بالمسابقة الاخيرة التي تم انتهاء مدة المشاركة بها \nوتزويدنا بفيديو الروليت والاسم الثلاثي و معلومات الحساب لكل فائز قبل الاعلان عنهم في قناتكم كي يتم التحقق منهم من قبل القسم المختص\n\nالإجابة الصحيحة هي : ${comp.correct_answer}\nكما يجب اختيار الفائزين بالقرعة لشفافية الاختيار.`;
                 
                 // 2. Send to Telegram
                 await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
