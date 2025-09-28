@@ -268,6 +268,22 @@ apiRouter.delete('/users/:id', async (req, res) => {
     }
 
     try {
+        // --- NEW: Security Check - Only Super Admin can delete users ---
+        const { data: performingUser, error: performingUserError } = await supabaseAdmin.from('users').select('role').eq('id', req.user.id).single();
+        if (performingUserError) throw new Error('Could not verify performing user permissions.');
+
+        // --- NEW: Allow Admins to delete Employees ---
+        const { data: targetUser, error: targetUserError } = await supabaseAdmin.from('users').select('role').eq('id', id).single();
+        if (targetUserError) throw new Error('Could not find the user to delete.');
+        if (performingUser.role === 'admin' && (targetUser.role === 'admin' || targetUser.role === 'super_admin')) {
+            return res.status(403).json({ message: 'لا يمكن لمسؤول حذف مسؤول آخر.' });
+        }
+
+        // --- NEW: Security Check - User cannot delete themselves ---
+        if (req.user.id === id) {
+            return res.status(403).json({ message: 'لا يمكنك حذف حسابك الخاص.' });
+        }
+
         const { data, error } = await supabaseAdmin.auth.admin.deleteUser(id);
         if (error) throw error;
         res.status(200).json({ message: 'User deleted successfully.', data });
@@ -378,7 +394,34 @@ apiRouter.put('/users/:id', async (req, res) => {
         return res.status(500).json({ message: 'Admin features are not configured on the server.' });
     }
 
+    // --- تعديل: إضافة صلاحيات للمسؤول العام ومنع التعديل الذاتي ---
     try {
+        // 1. جلب بيانات المستخدم الذي يقوم بالإجراء (المسؤول الحالي)
+        const { data: performingUser, error: performingUserError } = await supabaseAdmin.from('users').select('id, role, email').eq('id', req.user.id).single();
+        if (performingUserError) throw new Error('Could not verify performing user permissions.');
+
+        // 2. جلب بيانات المستخدم المراد تعديله
+        const { data: targetUser, error: targetUserError } = await supabaseAdmin.from('users').select('id, role').eq('id', id).single();
+        if (targetUserError) throw new Error('Could not find the user to update.');
+
+        // 3. تطبيق قواعد الصلاحيات
+        const isSuperAdmin = performingUser.role === 'super_admin';
+
+        // لا يمكن للمستخدم تعطيل حسابه بنفسه
+        if (req.user.id === id && status === 'inactive') {
+            return res.status(403).json({ message: 'لا يمكنك تعطيل حسابك الخاص.' });
+        }
+
+        // --- تعديل: السماح للمسؤول بتعديل الموظفين فقط ---
+        // لا يمكن لمسؤول ثانوي تعديل مسؤول آخر أو المدير العام
+        if (performingUser.role === 'admin' && !isSuperAdmin && (targetUser.role === 'admin' || targetUser.role === 'super_admin')) {
+            return res.status(403).json({ message: 'لا يمكن لمسؤول تعديل بيانات مسؤول آخر.' });
+        }
+
+        // لا يمكن لمسؤول ثانوي تعديل حالة (تفعيل/تعطيل) مسؤول آخر
+        if (status && targetUser.role === 'admin' && performingUser.role === 'admin' && !isSuperAdmin) {
+            return res.status(403).json({ message: 'ليس لديك الصلاحية لتغيير حالة مسؤول آخر.' });
+        }
         const updatePayload = {
             user_metadata: {}
         };
@@ -435,16 +478,31 @@ apiRouter.put('/users/:id', async (req, res) => {
 apiRouter.put('/users/:id/role', async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
-    console.log(`[ADMIN] Received request to update role for user ${id} to "${role}"`);
 
     if (!supabaseAdmin) {
         return res.status(500).json({ message: 'Admin features are not configured on the server.' });
     }
-    if (!role || (role !== 'admin' && role !== 'user')) {
-        return res.status(400).json({ message: 'Invalid role specified. Must be "admin" or "user".' });
+    if (!role || !['admin', 'user'].includes(role)) {
+        return res.status(400).json({ message: 'صلاحية غير صالحة. يجب أن تكون "admin" أو "user".' });
     }
 
     try {
+        // --- NEW: Security Check - Only Super Admin can change roles ---
+        const { data: performingUser, error: performingUserError } = await supabaseAdmin.from('users').select('role').eq('id', req.user.id).single();
+        if (performingUserError) throw new Error('Could not verify performing user permissions.');
+
+        if (performingUser.role !== 'super_admin') {
+            return res.status(403).json({ message: 'فقط المدير العام يمكنه تغيير صلاحيات المستخدمين.' });
+        }
+
+        // --- NEW: Security Check - Prevent changing Super Admin's role ---
+        const { data: targetUser, error: targetUserError } = await supabaseAdmin.from('users').select('role').eq('id', id).single();
+        if (targetUserError) throw new Error('Could not find the user to update.');
+
+        if (targetUser.role === 'super_admin') {
+            return res.status(403).json({ message: 'لا يمكن تغيير صلاحية المدير العام.' });
+        }
+
         // We update our public.users table, not auth.users
         const { data, error } = await supabaseAdmin.from('users').update({ role: role }).eq('id', id).select().single();
 

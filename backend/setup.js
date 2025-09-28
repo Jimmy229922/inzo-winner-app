@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -34,8 +35,58 @@ SUPABASE_SERVICE_KEY=${supabaseServiceKey}
     fs.writeFileSync(envPath, envContent);
     console.log('\n[OK] Configuration file created successfully at backend\\.env');
 }
+async function ensureSuperAdmin() {
+    console.log('\n--------------------------------------------------');
+    console.log('Verifying Super Admin account...');
+    console.log('--------------------------------------------------');
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey || supabaseServiceKey === 'YOUR_REAL_SERVICE_KEY_HERE') {
+        console.warn('[WARN] Cannot verify Super Admin. Supabase keys are not configured.');
+        return;
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const superAdminEmail = 'ahmed12@inzo.com';
+
+    try {
+        // 1. Check if the user exists in auth
+        const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+        if (listError) throw listError;
+
+        const superAdminUser = users.find(u => u.email === superAdminEmail);
+
+        if (!superAdminUser) {
+            console.log(`[INFO] Super Admin user (${superAdminEmail}) not found. It will be created upon first login.`);
+            return;
+        }
+
+        // 2. Check the role in the public 'users' table
+        const { data: userProfile, error: profileError } = await supabaseAdmin
+            .from('users')
+            .select('role')
+            .eq('id', superAdminUser.id)
+            .single();
+
+        if (profileError) throw new Error(`Could not fetch profile for ${superAdminEmail}: ${profileError.message}`);
+
+        if (userProfile.role !== 'super_admin') {
+            console.log(`[FIX] Role for ${superAdminEmail} is '${userProfile.role}'. Updating to 'super_admin'...`);
+            const { error: updateError } = await supabaseAdmin.from('users').update({ role: 'super_admin' }).eq('id', superAdminUser.id);
+            if (updateError) throw updateError;
+            console.log('[OK] Super Admin role has been set correctly.');
+        } else {
+            console.log('[OK] Super Admin role is already set correctly.');
+        }
+    } catch (error) {
+        console.error(`[ERROR] Failed to verify/update Super Admin role: ${error.message}`);
+    }
+}
 
 (async () => {
     await main();
+    await ensureSuperAdmin();
     console.log('\nSetup complete. You can now start the server.');
 })();

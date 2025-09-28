@@ -80,7 +80,7 @@ async function fetchUserProfile() {
             params.set('error', 'account_disabled');
             params.set('message', 'تم تعطيل حسابك. يرجى التواصل مع المدير.');
             window.location.replace(`/login.html?${params.toString()}`);
-            return; // Stop further execution
+            return null; // Stop further execution
         }
         // NEW: Update UI with user info
         const settingsMenu = document.getElementById('settings-menu');
@@ -94,17 +94,19 @@ async function fetchUserProfile() {
             userName.textContent = currentUserProfile?.full_name || user.email.split('@')[0];
             userEmail.textContent = user.email;
 
-            // --- تعديل: إظهار زر "إدارة المستخدمين" فقط للمدير العام، وإظهار زر التحديث للجميع ---
-            const isSuperAdmin = user?.email === 'ahmed12@inzo.com';
-            document.querySelectorAll('[data-role="super-admin"]').forEach(el => {
-                // هذا الشرط يضمن أن زر "إدارة المستخدمين" يظهر فقط للمدير العام
-                // بينما أي عناصر أخرى ليس لها هذا الدور (مثل زر التحديث) لن تتأثر وستظل ظاهرة للجميع.
-                el.style.display = isSuperAdmin ? 'flex' : 'none';
-            });
+            // --- إصلاح: التأكد من أن currentUserProfile موجود قبل التحقق من الصلاحيات ---
+            if (currentUserProfile) {
+                const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
+                document.querySelectorAll('[data-role="super-admin"]').forEach(el => {
+                    // هذا الشرط يضمن أن زر "إدارة المستخدمين" يظهر فقط للمسؤولين
+                    el.style.display = isAdmin ? 'flex' : 'none';
+                });
+            }
 
             // NEW: Initialize presence tracking AFTER user profile is confirmed
             initializePresenceTracking();
         }
+        return currentUserProfile; // إصلاح: إعادة بيانات المستخدم بعد جلبها
     } else {
         // Hide user menu if not logged in
         const settingsMenu = document.getElementById('settings-menu');
@@ -113,6 +115,7 @@ async function fetchUserProfile() {
             console.log('[Auth] No active session found. Redirecting to login page.');
             window.location.replace('/login.html');
         }
+        return null;
     }
 }
 
@@ -213,12 +216,14 @@ async function initializeSupabase() {
         console.log('Supabase client configured.');
         updateStatus('connected', 'متصل وجاهز');
 
-        // NEW: Fetch user profile and THEN handle routing
-        await fetchUserProfile();
-        window.addEventListener('hashchange', handleRouting);
-        handleRouting(); // Initial route handling on page load
+        // --- إصلاح: ضمان جلب بيانات المستخدم بالكامل قبل بدء التوجيه وعرض الصفحات ---
+        // 1. جلب بيانات المستخدم أولاً
+        const userProfile = await fetchUserProfile();
 
-        // NEW: Listen for realtime notifications
+        // 2. إذا نجح جلب البيانات، قم بإعداد باقي التطبيق
+        if (userProfile) {
+            window.addEventListener('hashchange', handleRouting);
+            handleRouting(); // Initial route handling on page load
         supabase.channel('public:realtime_notifications')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'realtime_notifications' }, payload => {
                 console.log('Realtime notification received:', payload.new);
@@ -242,6 +247,7 @@ async function initializeSupabase() {
                 if (status === 'SUBSCRIBED') console.log('Subscribed to realtime notifications channel.');
                 else console.warn('Failed to subscribe to realtime notifications:', status);
             });
+        }
     } catch (error) {
         console.error('Failed to initialize Supabase:', error);
         updateStatus('error', 'فشل الاتصال بالخادم');

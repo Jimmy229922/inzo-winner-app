@@ -70,7 +70,11 @@ async function fetchUsersData() {
 
 function renderUserRow(user) {
     const isCurrentUser = currentUserProfile && user.id === currentUserProfile.id;
-    const isAdmin = user.role === 'admin';
+    const isTargetAdmin = user.role === 'admin';
+    const isTargetSuperAdmin = user.role === 'super_admin';
+    const isCurrentUserAdmin = currentUserProfile?.role === 'admin';
+    const isCurrentUserSuperAdmin = currentUserProfile?.role === 'super_admin';
+
     const lastLogin = user.last_sign_in_at 
         ? new Date(user.last_sign_in_at).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })
         : 'لم يسجل دخول';
@@ -81,11 +85,11 @@ function renderUserRow(user) {
         : `<img src="https://ui-avatars.com/api/?name=${avatarName}&background=8A2BE2&color=fff" alt="Avatar" class="avatar-small" loading="lazy">`;
 
     // NEW: Add a crown icon for admins
-    const adminIconHtml = isAdmin ? '<div class="admin-crown-icon" title="مسؤول"><i class="fas fa-crown"></i></div>' : '';
+    const adminIconHtml = isTargetSuperAdmin ? '<div class="admin-crown-icon super-admin" title="مدير عام"><i class="fas fa-gem"></i></div>' : (isTargetAdmin ? '<div class="admin-crown-icon" title="مسؤول"><i class="fas fa-crown"></i></div>' : '');
     // NEW: Add a badge for admins
-    const adminBadgeHtml = isAdmin ? '<span class="admin-badge">مسؤول</span>' : '';
+    const adminBadgeHtml = isTargetSuperAdmin ? '<span class="admin-badge super-admin">مدير عام</span>' : (isTargetAdmin ? '<span class="admin-badge">مسؤول</span>' : null);
     // NEW: Add a badge for employees
-    const employeeBadgeHtml = !isAdmin ? '<span class="employee-badge">موظف</span>' : '';
+    const employeeBadgeHtml = user.role === 'user' ? '<span class="employee-badge">موظف</span>' : '';
 
     // NEW: Add status badge and styles for inactive users
     const isInactive = user.status === 'inactive';
@@ -104,29 +108,58 @@ function renderUserRow(user) {
                         ${adminIconHtml}
                     </div>
                     <div class="user-details">
-                        <span class="user-name">${user.full_name || '<em>لم يحدد</em>'} ${isAdmin ? adminBadgeHtml : employeeBadgeHtml} ${statusBadgeHtml}</span>
+                        <span class="user-name">${user.full_name || '<em>لم يحدد</em>'} ${adminBadgeHtml || employeeBadgeHtml} ${statusBadgeHtml}</span>
                         <span class="user-email">${user.email || '<em>غير متوفر</em>'}</span>
                     </div>
                 </div>
             </td>
             <td data-label="الصلاحية">
-                <select class="role-select" data-user-id="${user.id}" ${isCurrentUser || isAdmin ? 'disabled' : ''}>
-                    <option value="user" ${user.role === 'user' ? 'selected' : ''}>موظف</option>
-                    <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>مسؤول</option>
-                </select>
+                ${(() => {
+                    // A regular admin cannot change any roles. Only Super Admin can.
+                    const roleSelectDisabled = isCurrentUser || !isCurrentUserSuperAdmin;
+                    const roleSelectTitle = roleSelectDisabled ? 'لا يمكن تغيير هذه الصلاحية' : 'تغيير الصلاحية';
+
+                    if (isTargetSuperAdmin) {
+                        return `<span class="role-display super-admin">مدير عام</span>`;
+                    }
+                    return `<select class="role-select" data-user-id="${user.id}" ${roleSelectDisabled ? 'disabled' : ''} title="${roleSelectTitle}">
+                        <option value="user" ${user.role === 'user' ? 'selected' : ''}>موظف</option>
+                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>مسؤول</option>
+                    </select>`;
+                })()}
             </td>
             <td data-label="آخر تسجيل دخول">${lastLogin}</td>
             <td class="actions-cell">
-                <button class="btn-secondary edit-user-btn" data-user-id="${user.id}">
-                    <i class="fas fa-edit"></i> تعديل
-                </button>
-                <button class="btn-danger delete-user-btn" data-user-id="${user.id}" ${isCurrentUser || isAdmin ? 'disabled' : ''} title="${isAdmin ? 'لا يمكن حذف مسؤول آخر' : 'حذف المستخدم نهائياً'}">
-                    <i class="fas fa-trash-alt"></i> حذف
-                </button>
-                <label class="custom-checkbox toggle-switch small-toggle" title="${isInactive ? 'تفعيل الحساب' : 'تعطيل الحساب'}" ${isCurrentUser ? 'style="display:none;"' : ''}>
-                    <input type="checkbox" class="status-toggle" data-user-id="${user.id}" ${!isInactive ? 'checked' : ''} ${isCurrentUser ? 'disabled' : ''}>
-                    <span class="slider round"></span>
-                </label>
+                ${(() => {
+                    // New permission logic:
+                    // A regular admin can only edit/delete users, not other admins or super admins.
+                    const isOperatingOnPrivilegedAccount = isTargetAdmin || isTargetSuperAdmin;
+                    const canPerformAction = isCurrentUserSuperAdmin || (isCurrentUserAdmin && !isOperatingOnPrivilegedAccount);
+
+                    const editDisabled = isCurrentUser || !canPerformAction;
+                    const deleteDisabled = isCurrentUser || !canPerformAction;
+                    const editTitle = editDisabled ? 'لا يمكن لمسؤول تعديل بيانات مستخدم آخر' : 'تعديل المستخدم';
+                    const deleteTitle = deleteDisabled ? 'لا يمكن حذف هذا المستخدم' : 'حذف المستخدم نهائياً';
+
+                    let toggleDisabled = false;
+                    let toggleTitle = isInactive ? 'تفعيل الحساب' : 'تعطيل الحساب';
+
+                    if (isCurrentUser) toggleDisabled = true; // Can't disable self
+                    else if (isTargetAdmin && !isCurrentUserSuperAdmin) {
+                        toggleDisabled = true; // A regular admin cannot disable another admin
+                        toggleTitle = 'لا يمكن لمسؤول تعديل مسؤول آخر';
+                    }
+                    return `<button class="btn-secondary edit-user-btn" data-user-id="${user.id}" ${editDisabled ? 'disabled' : ''} title="${editTitle}">
+                        <i class="fas fa-edit"></i> تعديل
+                    </button>
+                    <button class="btn-danger delete-user-btn" data-user-id="${user.id}" ${deleteDisabled ? 'disabled' : ''} title="${deleteTitle}">
+                        <i class="fas fa-trash-alt"></i> حذف
+                    </button>
+                    <label class="custom-checkbox toggle-switch small-toggle" title="${toggleTitle}" ${isCurrentUser ? 'style="display:none;"' : ''}>
+                        <input type="checkbox" class="status-toggle" data-user-id="${user.id}" ${!isInactive ? 'checked' : ''} ${toggleDisabled ? 'disabled' : ''}>
+                        <span class="slider round"></span>
+                    </label>`;
+                })()}
             </td>
         </tr>
     `;

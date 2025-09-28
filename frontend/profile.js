@@ -1170,6 +1170,10 @@ async function renderProfileSettingsPage() {
     // We need the user's email, which is in `supabase.auth.user()` not our profile table.
     const { data: { user } } = await supabase.auth.getUser();
 
+    const isSuperAdmin = currentUserProfile.role === 'super_admin';
+    const isAdmin = currentUserProfile.role === 'admin';
+    const roleBadge = isSuperAdmin ? '<span class="admin-badge super-admin">مدير عام</span>' : (isAdmin ? '<span class="admin-badge">مسؤول</span>' : '<span class="employee-badge">موظف</span>');
+
     appContent.innerHTML = `
         <div class="page-header">
             <h1><i class="fas fa-user-cog"></i> إعدادات الملف الشخصي</h1>
@@ -1182,7 +1186,7 @@ async function renderProfileSettingsPage() {
                 <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
             </div>
             <div class="profile-header-info">
-                <h2 class="profile-name-display">${currentUserProfile.full_name || 'مستخدم'}</h2>
+                <h2 class="profile-name-display">${currentUserProfile.full_name || 'مستخدم'} ${roleBadge}</h2>
                 <p class="profile-email-display">${user?.email || ''}</p>
             </div>
         </div>
