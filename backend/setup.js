@@ -77,7 +77,7 @@ async function ensureSuperAdmin() {
                 .from('users')
                 .insert({
                     id: superAdminUser.id,
-                    full_name: 'Super Admin',
+                    full_name: 'INZO LLC مدير عام',
                     role: 'super_admin',
                     permissions: { agents: { view_financials: true, edit_profile: true, edit_financials: true, can_view_competitions_tab: true }, competitions: { manage_comps: 'full', manage_templates: 'full', can_create: true } }
                 });

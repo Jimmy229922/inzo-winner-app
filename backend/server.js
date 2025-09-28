@@ -301,10 +301,10 @@ apiRouter.delete('/users/:id', authMiddleware, async (req, res) => {
         const { data: performingUser, error: performingUserError } = await supabaseAdmin.from('users').select('role').eq('id', req.user.id).single();
         if (performingUserError) throw new Error('Could not verify performing user permissions.');
 
-        // --- NEW: Allow Admins to delete Employees ---
+        // Admins can delete other users, but not the Super Admin.
         const { data: targetUser, error: targetUserError } = await supabaseAdmin.from('users').select('role').eq('id', id).single();
         if (targetUserError) throw new Error('Could not find the user to delete.');
-        if (performingUser.role === 'admin' && (targetUser.role === 'admin' || targetUser.role === 'super_admin')) {
+        if (performingUser.role === 'admin' && targetUser.role === 'super_admin') {
             return res.status(403).json({ message: 'لا يمكن لمسؤول حذف مسؤول آخر.' });
         }
 
@@ -437,14 +437,8 @@ apiRouter.put('/users/:id', authMiddleware, async (req, res) => {
         const isSuperAdmin = performingUser.role === 'super_admin';
 
         // لا يمكن للمستخدم تعطيل حسابه بنفسه
-        if (req.user.id === id && status === 'inactive') {
+        if (performingUser.id === id && status === 'inactive') {
             return res.status(403).json({ message: 'لا يمكنك تعطيل حسابك الخاص.' });
-        }
-
-        // --- تعديل: السماح للمسؤول بتعديل الموظفين فقط ---
-        // لا يمكن لمسؤول ثانوي تعديل مسؤول آخر أو المدير العام
-        if (performingUser.role === 'admin' && !isSuperAdmin && (targetUser.role === 'admin' || targetUser.role === 'super_admin')) {
-            return res.status(403).json({ message: 'لا يمكن لمسؤول تعديل بيانات مسؤول آخر.' });
         }
 
         // لا يمكن لمسؤول ثانوي تعديل حالة (تفعيل/تعطيل) مسؤول آخر

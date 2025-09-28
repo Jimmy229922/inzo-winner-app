@@ -135,10 +135,10 @@ function renderUserRow(user) {
                 ${(() => {
                     // A regular admin cannot change any roles. Only Super Admin can.
                     const roleSelectDisabled = isCurrentUser || !isCurrentUserSuperAdmin;
-                    const roleSelectTitle = roleSelectDisabled ? 'لا يمكن تغيير هذه الصلاحية' : 'تغيير الصلاحية';
+                    const roleSelectTitle = isCurrentUserSuperAdmin ? 'تغيير الصلاحية' : 'فقط المدير العام يمكنه تغيير الصلاحيات';
 
                     if (isTargetSuperAdmin) {
-                        return `<span class="role-display super-admin">مدير عام</span>`;
+                        return `<span class="role-display super-admin" title="لا يمكن تغيير صلاحية المدير العام">مدير عام</span>`;
                     }
                     return `<select class="role-select" data-user-id="${user.id}" ${roleSelectDisabled ? 'disabled' : ''} title="${roleSelectTitle}">
                         <option value="user" ${user.role === 'user' ? 'selected' : ''}>موظف</option>
@@ -150,9 +150,9 @@ function renderUserRow(user) {
             <td class="actions-cell">
                 ${(() => {
                     // New permission logic:
-                    // A regular admin can only edit/delete users, not other admins or super admins.
-                    const isOperatingOnPrivilegedAccount = isTargetAdmin || isTargetSuperAdmin;
-                    const canPerformAction = isCurrentUserSuperAdmin || (isCurrentUserAdmin && !isOperatingOnPrivilegedAccount);
+                    // Super Admin can do anything. Admin can do anything except on Super Admin.
+                    const isOperatingOnSuperAdmin = isTargetSuperAdmin;
+                    const canPerformAction = isCurrentUserSuperAdmin || (isAdmin && !isOperatingOnSuperAdmin);
 
                     let toggleDisabled = false;
                     let toggleTitle = isInactive ? 'تفعيل الحساب' : 'تعطيل الحساب';
@@ -166,21 +166,21 @@ function renderUserRow(user) {
                                 </label>`;
                     }
                     
-                    const permissionsDisabled = !isCurrentUserSuperAdmin || isTargetSuperAdmin;
+                    const permissionsDisabled = !canPerformAction || isTargetSuperAdmin;
                     const editDisabled = !canPerformAction;
                     const deleteDisabled = !canPerformAction;
-                    const editTitle = editDisabled ? 'لا يمكن لمسؤول تعديل بيانات مستخدم آخر' : 'تعديل المستخدم';
+                    const editTitle = editDisabled ? 'لا يمكن تعديل بيانات هذا المستخدم' : 'تعديل المستخدم';
                     const deleteTitle = deleteDisabled ? 'لا يمكن حذف هذا المستخدم' : 'حذف المستخدم نهائياً';
 
-                    if (isTargetAdmin && !isCurrentUserSuperAdmin) {
-                        toggleDisabled = true; // A regular admin cannot disable another admin
-                        toggleTitle = 'لا يمكن لمسؤول تعديل مسؤول آخر';
+                    if (isOperatingOnSuperAdmin && !isCurrentUserSuperAdmin) {
+                        toggleDisabled = true;
+                        toggleTitle = 'لا يمكن تعديل حالة المدير العام';
                     }
 
                     return `<button class="btn-secondary edit-user-btn" data-user-id="${user.id}" ${editDisabled ? 'disabled' : ''} title="${editTitle}">
                         <i class="fas fa-edit"></i> تعديل
                     </button>
-                    <button class="btn-primary permissions-user-btn" data-user-id="${user.id}" ${permissionsDisabled ? 'disabled' : ''} title="إدارة الصلاحيات">
+                    <button class="btn-primary permissions-user-btn" data-user-id="${user.id}" ${permissionsDisabled ? 'disabled' : ''} title="${permissionsDisabled ? 'لا يمكن تعديل صلاحيات هذا المستخدم' : 'إدارة الصلاحيات'}">
                         <i class="fas fa-shield-alt"></i> الصلاحيات
                     </button>
                     <button class="btn-danger delete-user-btn" data-user-id="${user.id}" ${deleteDisabled ? 'disabled' : ''} title="${deleteTitle}">
@@ -855,8 +855,8 @@ function renderPermissionsModal(user) {
                 can_view_competitions_tab: modal.querySelector('#perm-agents-view-competitions')?.checked || false, // This will be read from the new toggle
             },
             competitions: {
-                manage_comps: modal.querySelector('input[name="competitions_perm"]:checked')?.value || 'none',
-                manage_templates: modal.querySelector('input[name="templates_perm"]:checked')?.value || 'none',
+                manage_comps: modal.querySelector('input[name="perm_manage_comps"]:checked')?.value || 'none',
+                manage_templates: modal.querySelector('input[name="perm_manage_templates"]:checked')?.value || 'none',
                 can_create: modal.querySelector('#perm-competitions-can-create')?.checked || false,
             }
         };

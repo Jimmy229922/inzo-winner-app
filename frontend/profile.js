@@ -28,9 +28,9 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const agentPerms = currentUserProfile?.permissions?.agents || {};
     const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
     const compsPerms = currentUserProfile?.permissions?.competitions || {};
-    const canViewFinancials = isSuperAdmin || isAdmin || agentPerms.view_financials;
+    const canViewFinancials = isSuperAdmin || isAdmin; // تعديل: السماح للمسؤول برؤية التفاصيل دائماً
     const canEditProfile = isAdmin; // تعديل: السماح للمسؤولين بتعديل الملف الشخصي
-    const canEditFinancials = isSuperAdmin || agentPerms.edit_financials;
+    const canEditFinancials = isSuperAdmin || isAdmin; // تعديل: السماح للمسؤول بتعديل البيانات المالية دائماً
     const canViewAgentComps = isAdmin || agentPerms.can_view_competitions_tab;
     const canCreateComp = isSuperAdmin || compsPerms.can_create;
 
@@ -76,7 +76,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
             .select('*')
             .eq('agent_id', agentId)
             .eq('task_date', todayStr)
-            .single();
+            .maybeSingle(); // FIX: Use maybeSingle() to prevent errors from duplicate entries.
         if (taskData) agentTaskToday = taskData;
     }
     // --- End new fetch ---
@@ -444,7 +444,7 @@ ${benefitsText.trim()}
     // Render competitions in the log tab
     const detailsTabContent = document.getElementById('tab-details');
     const logTabContent = document.getElementById('tab-log');
-    const agentCompetitionsContent = document.getElementById('agent-competitions-content');
+    const agentCompetitionsContent = document.getElementById('tab-agent-competitions');
 
     // --- NEW: Render tab content based on permissions ---
     if (detailsTabContent) {
@@ -730,10 +730,10 @@ function generateActivityLogHTML(logs) {
 function renderDetailsView(agent) {
     // --- NEW: Permission Check ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
-    const agentPerms = currentUserProfile?.permissions?.agents || {};
-    const canEditFinancials = isSuperAdmin || agentPerms.edit_financials;
+    const isAdmin = currentUserProfile?.role === 'admin';
+    const canEditFinancials = isSuperAdmin || isAdmin;
 
-    const container = document.getElementById('details-content');
+    const container = document.getElementById('tab-details');
     if (!container) return;
 
     const createFieldHTML = (label, value, fieldName, isEditable = true) => {
@@ -770,7 +770,7 @@ function renderDetailsView(agent) {
         `;
     };
 
-    container.innerHTML = `
+    const htmlContent = `
         <div class="details-grid">
             <h3 class="details-section-title">المرتبة والمكافآت</h3>
             ${createFieldHTML('المرتبة', agent.rank, 'rank', true)}
@@ -798,18 +798,20 @@ function renderDetailsView(agent) {
         </div>
     `;
 
-    // Use event delegation on the container
-    const newContainer = container.cloneNode(true);
-    container.parentNode.replaceChild(newContainer, container);
+    // --- FIX V3: Stable content update ---
+    // Clear the container's content and re-add the event listener.
+    // This prevents replacing the container itself, which caused content to leak across pages.
+    container.innerHTML = htmlContent;
+    container.addEventListener('click', function handler(e) {
+        // Remove listener to prevent duplicates on next render
+        container.removeEventListener('click', handler);
 
-    newContainer.addEventListener('click', (e) => {
         const trigger = e.target.closest('.inline-edit-trigger');
         if (trigger) {
             const group = trigger.closest('.details-group');
             renderInlineEditor(group, agent);
         }
     });
-
 }
 
 
