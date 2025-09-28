@@ -412,6 +412,49 @@ function setupNavbar() {
         );
     });
 
+    // --- إصلاح: إضافة الدالة المفقودة لعملية التحديث ---
+    function showUpdateProgressModal() {
+        const modalContent = `
+            <div class="update-progress-container">
+                <i class="fas fa-sync-alt fa-spin update-icon"></i>
+                <h3 id="update-status-text">جاري الاتصال بالخادم لبدء التحديث...</h3>
+                <p id="update-details-text" style="margin-top: 10px;"></p>
+            </div>
+        `;
+        showConfirmationModal(modalContent, null, {
+            title: 'جاري تحديث التطبيق',
+            showCancel: false,
+            showConfirm: false,
+            modalClass: 'modal-no-actions'
+        });
+
+        // استدعاء الخادم لبدء التحديث
+        triggerAppUpdate();
+    }
+
+    async function triggerAppUpdate() {
+        const statusText = document.getElementById('update-status-text');
+        const detailsText = document.getElementById('update-details-text');
+        const icon = document.querySelector('.modal-no-actions .update-icon');
+
+        try {
+            const response = await fetch('/api/update-app', { method: 'POST' });
+            const result = await response.json();
+
+            if (!response.ok) throw new Error(result.message || 'فشل غير معروف');
+
+            icon.className = 'fas fa-check-circle update-icon';
+            statusText.textContent = 'تم التحديث بنجاح!';
+            detailsText.textContent = result.message;
+
+        } catch (error) {
+            icon.className = 'fas fa-times-circle update-icon';
+            statusText.textContent = 'فشل التحديث';
+            detailsText.textContent = `السبب: ${error.message}`;
+            console.error('Update failed:', error);
+        }
+    }
+
     // Logout Button Logic
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
