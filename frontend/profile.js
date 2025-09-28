@@ -23,6 +23,17 @@ async function renderAgentProfilePage(agentId, options = {}) {
     // Clear any previous timers from other profiles
     stopAllProfileTimers();
 
+    // --- NEW: Permission Check ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const agentPerms = currentUserProfile?.permissions?.agents || {};
+    const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
+    const compsPerms = currentUserProfile?.permissions?.competitions || {};
+    const canViewFinancials = isSuperAdmin || isAdmin || agentPerms.view_financials;
+    const canEditProfile = isAdmin; // تعديل: السماح للمسؤولين بتعديل الملف الشخصي
+    const canEditFinancials = isSuperAdmin || agentPerms.edit_financials;
+    const canViewAgentComps = isAdmin || agentPerms.can_view_competitions_tab;
+    const canCreateComp = isSuperAdmin || compsPerms.can_create;
+
     // Check for edit mode in hash, e.g., #profile/123/edit
     const hashParts = window.location.hash.split('/');
     const startInEditMode = hashParts.includes('edit');
@@ -121,7 +132,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 <p>معرف الدردشة: ${agent.telegram_chat_id ? `<code>${agent.telegram_chat_id}</code>` : 'غير محدد'} | اسم المجموعة: <strong>${agent.telegram_group_name || 'غير محدد'}</strong></p>
             </div>
             <div class="profile-header-actions">
-                 <button id="edit-profile-btn" class="btn-secondary"><i class="fas fa-user-edit"></i> تعديل</button>
+                <button id="edit-profile-btn" class="btn-secondary"><i class="fas fa-user-edit"></i> تعديل</button>
             </div>
         </div>
 
@@ -172,12 +183,10 @@ async function renderAgentProfilePage(agentId, options = {}) {
             </div>
         </div>
         <div id="tab-details" class="tab-content">
-            <h2>تفاصيل الوكيل</h2>
-            <div id="details-content"></div>
+            <!-- Content will be rendered here -->
         </div>
         <div id="tab-agent-competitions" class="tab-content">
-            <h2>مسابقات الوكيل</h2>
-            <div id="agent-competitions-content"></div>
+            <!-- Content will be rendered here -->
         </div>
         <div id="tab-log" class="tab-content">
             <h2>سجل النشاط</h2>
@@ -198,9 +207,14 @@ async function renderAgentProfilePage(agentId, options = {}) {
         });
     }
 
-    document.getElementById('create-agent-competition').addEventListener('click', () => {
-        window.location.hash = `competitions/new?agentId=${agent.id}`;
-    });
+    const createCompBtn = document.getElementById('create-agent-competition');
+    if (createCompBtn) {
+        if (canCreateComp) {
+            createCompBtn.addEventListener('click', () => window.location.hash = `competitions/new?agentId=${agent.id}`);
+        } else {
+            createCompBtn.addEventListener('click', () => showToast('ليس لديك صلاحية لإنشاء مسابقة.', 'error'));
+        }
+    }
 
     // --- Manual Renewal Button Logic ---
     document.getElementById('manual-renew-btn').addEventListener('click', async () => {
@@ -394,9 +408,13 @@ ${benefitsText.trim()}
     });
 
     const editBtn = document.getElementById('edit-profile-btn');
-    editBtn.addEventListener('click', () => {
-        renderEditProfileHeader(agent, appContent);
-    });
+    if (editBtn) {
+        if (canEditProfile) {
+            editBtn.addEventListener('click', () => renderEditProfileHeader(agent, appContent));
+        } else {
+            editBtn.addEventListener('click', () => showToast('ليس لديك صلاحية لتعديل بيانات الوكيل.', 'error'));
+        }
+    }
 
     if (startInEditMode) {
         editBtn.click();
@@ -424,153 +442,183 @@ ${benefitsText.trim()}
     appContent.querySelector(`.tab-link[data-tab="${defaultTab}"]`)?.click();
 
     // Render competitions in the log tab
+    const detailsTabContent = document.getElementById('tab-details');
     const logTabContent = document.getElementById('tab-log');
-    if (agentLogs && agentLogs.length > 0) {
-        updateManualRenewButtonState(agent);
-        logTabContent.innerHTML = generateActivityLogHTML(agentLogs);
-    }
-
-    // Render competitions in the new "agent-competitions" tab
     const agentCompetitionsContent = document.getElementById('agent-competitions-content');
-    if (agentCompetitions && agentCompetitions.length > 0) {
-        const activeAndPendingCompetitions = agentCompetitions.filter(c => c.status !== 'completed');
-        const completedCompetitions = agentCompetitions.filter(c => c.status === 'completed');
 
-        const renderCompetitionList = (competitions) => {
-            return competitions.map(comp => {
-                const endDate = comp.ends_at ? new Date(comp.ends_at) : null;
-                let countdownHtml = '';
-                if (endDate && comp.status !== 'completed') {
-                    const diffTime = endDate.getTime() - new Date().getTime();
-                    if (diffTime > 0) {
-                        countdownHtml = `<div class="competition-countdown" data-end-date="${comp.ends_at}"><i class="fas fa-clock"></i> <span>جاري حساب الوقت...</span></div>`;
-                    } else {
-                        countdownHtml = `<div class="competition-countdown expired"><i class="fas fa-hourglass-end"></i> انتهى الوقت</div>`;
-                    }
-                }
-
-                const statusSteps = {
-                    'sent': { text: 'تم الإرسال', step: 1 },
-                    'awaiting_winners': { text: 'في انتظار الفائزين', step: 2 },
-                    'completed': { text: 'مكتملة', step: 3 }
-                };
-                const currentStatus = statusSteps[comp.status] || statusSteps['sent'];
-
-                const progressBarHtml = `
-                    <div class="stepper-wrapper step-${currentStatus.step}">
-                        ${Object.values(statusSteps).map((s, index) => {
-                            const isLineCompleted = currentStatus.step > s.step;
-                            return `
-                            <div class="stepper-item ${currentStatus.step >= s.step ? 'completed' : ''}">
-                                <div class="step-counter">
-                                    ${currentStatus.step > s.step ? '<i class="fas fa-check"></i>' : s.step}
-                                </div>
-                                <div class="step-name">${s.text}</div>
-                            </div>
-                            ${index < Object.values(statusSteps).length - 1 ? `<div class="stepper-line ${isLineCompleted ? 'completed' : ''}"></div>` : ''}
-                        `}).join('')}
-                    </div>
-                `;
-
-                return `
-                <div class="competition-card">
-                    <div class="competition-card-header">
-                        <h3>${comp.name}</h3>
-                        <div class="header-right-content">
-                            ${countdownHtml}
-                            <span class="status-badge-v2 status-${comp.status}">${currentStatus.text}</span>
-                        </div>
-                    </div>
-                    <div class="competition-card-body">
-                        <div class="competition-status-tracker">${progressBarHtml}</div>
-                        <div class="competition-details-grid">
-                            <p class="competition-detail-item"><i class="fas fa-users"></i><strong>عدد الفائزين:</strong> ${comp.winners_count || 0}</p>
-                            <p class="competition-detail-item"><i class="fas fa-dollar-sign"></i><strong>الجائزة للفائز:</strong> ${comp.prize_per_winner ? comp.prize_per_winner.toFixed(2) : '0.00'}</p>
-                            <p class="competition-detail-item"><i class="fas fa-calendar-alt"></i><strong>تاريخ الاختيار:</strong> ${endDate ? endDate.toLocaleDateString('ar-EG') : 'غير محدد'}</p>
-                            <p class="competition-detail-item"><i class="fas fa-key"></i><strong>الإجابة الصحيحة:</strong> ${comp.correct_answer || '<em>غير محددة</em>'}</p>
-                        </div>
-                    </div>
-                    <div class="competition-card-footer">
-                        <button class="btn-secondary edit-btn" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i> تعديل</button>
-                        ${comp.status === 'awaiting_winners' ? `<button class="btn-primary complete-competition-btn" data-id="${comp.id}" data-name="${comp.name}"><i class="fas fa-check-double"></i> تم اختيار الفائزين</button>` : ''}
-                        <button class="btn-danger delete-competition-btn" data-id="${comp.id}"><i class="fas fa-trash-alt"></i> حذف</button>
-                    </div>
-                </div>
-            `}).join('');
-        };
-
-        agentCompetitionsContent.innerHTML = `
-            <div class="competitions-list-profile">
-                ${renderCompetitionList(activeAndPendingCompetitions)}
-            </div>
-            ${completedCompetitions.length > 0 ? `
-                <details class="completed-competitions-group">
-                    <summary>
-                        <i class="fas fa-archive"></i> المسابقات المكتملة (${completedCompetitions.length})
-                    </summary>
-                    <div class="competitions-list-profile">
-                        ${renderCompetitionList(completedCompetitions)}
-                    </div>
-                </details>
-            ` : ''}
-        `;
-    } else {
-        agentCompetitionsContent.innerHTML = '<p>لا توجد مسابقات خاصة بهذا الوكيل بعد.</p>';
+    // --- NEW: Render tab content based on permissions ---
+    if (detailsTabContent) {
+        if (!canViewFinancials) {
+            detailsTabContent.innerHTML = `
+                <div class="access-denied-container">
+                    <i class="fas fa-lock"></i>
+                    <h2>ليس لديك صلاحية وصول</h2>
+                    <p>أنت لا تملك الصلاحية اللازمة لعرض التفاصيل المالية لهذا الوكيل.</p>
+                </div>`;
+        } else {
+            renderDetailsView(agent);
+        }
     }
 
-    agentCompetitionsContent.addEventListener('click', async (e) => {
-        const deleteBtn = e.target.closest('.delete-competition-btn');
-        const completeBtn = e.target.closest('.complete-competition-btn');
-
-        if (completeBtn) {
-            const id = completeBtn.dataset.id;
-            const name = completeBtn.dataset.name;
-            showConfirmationModal(
-                `هل أنت متأكد من إكمال مسابقة "${name}"؟<br><small>سيتم نقلها إلى أرشيف المسابقات المنتهية.</small>`,
-                async () => {
-                    const { error } = await supabase.from('competitions').update({ status: 'completed', is_active: false }).eq('id', id);
-                    if (error) {
-                        showToast('فشل إكمال المسابقة.', 'error');
-                    } else {
-                        showToast('تم إكمال المسابقة بنجاح.', 'success');
-                        await logAgentActivity(agent.id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}".`);
-                        renderAgentProfilePage(agent.id, { activeTab: 'agent-competitions' });
-                    }
-                }, {
-                    title: 'تأكيد إكمال المسابقة',
-                    confirmText: 'نعم، اكتملت',
-                    confirmClass: 'btn-primary'
-                }
-            );
-            return; // Stop further execution
+    if (logTabContent) {
+        if (agentLogs && agentLogs.length > 0) {
+            updateManualRenewButtonState(agent);
+            logTabContent.innerHTML = generateActivityLogHTML(agentLogs);
         }
+    }
+    if (agentCompetitionsContent) {
+        if (agentCompetitions && agentCompetitions.length > 0) {
+            if (!canViewAgentComps) {
+                agentCompetitionsContent.innerHTML = `
+                    <div class="access-denied-container">
+                        <i class="fas fa-lock"></i>
+                        <h2>ليس لديك صلاحية وصول</h2>
+                        <p>أنت لا تملك الصلاحية اللازمة لعرض مسابقات هذا الوكيل.</p>
+                    </div>`;
+                // Stop further processing for this tab
+                startCompetitionCountdowns(); // Still need to start other timers
+                return;
+            }
+            const activeAndPendingCompetitions = agentCompetitions.filter(c => c.status !== 'completed');
+            const completedCompetitions = agentCompetitions.filter(c => c.status === 'completed');
 
-        if (deleteBtn) {
-            const id = deleteBtn.dataset.id;
-            if (!id) return;
-    
-            showConfirmationModal(
-                'هل أنت متأكد من حذف هذه المسابقة؟<br><small>لا يمكن التراجع عن هذا الإجراء.</small>',
-                async () => {
-                    const { error } = await supabase.from('competitions').delete().eq('id', id);
-                    if (error) {
-                        showToast('فشل حذف المسابقة.', 'error');
-                        console.error('Delete competition error:', error);
-                    } else {
-                        showToast('تم حذف المسابقة بنجاح.', 'success');
-                        // Re-render the profile page, staying on the same tab
-                        renderAgentProfilePage(agent.id, { activeTab: 'agent-competitions' });
+            const renderCompetitionList = (competitions) => {
+                return competitions.map(comp => {
+                    const endDate = comp.ends_at ? new Date(comp.ends_at) : null;
+                    let countdownHtml = '';
+                    if (endDate && comp.status !== 'completed') {
+                        const diffTime = endDate.getTime() - new Date().getTime();
+                        if (diffTime > 0) {
+                            countdownHtml = `<div class="competition-countdown" data-end-date="${comp.ends_at}"><i class="fas fa-clock"></i> <span>جاري حساب الوقت...</span></div>`;
+                        } else {
+                            countdownHtml = `<div class="competition-countdown expired"><i class="fas fa-hourglass-end"></i> انتهى الوقت</div>`;
+                        }
                     }
-                }, {
-                    title: 'تأكيد الحذف',
-                    confirmText: 'حذف',
-                    confirmClass: 'btn-danger'
-                });
-        }
-    });
 
-    // Render the content for the details tab
-    renderDetailsView(agent);
+                    const statusSteps = {
+                        'sent': { text: 'تم الإرسال', step: 1 },
+                        'awaiting_winners': { text: 'في انتظار الفائزين', step: 2 },
+                        'completed': { text: 'مكتملة', step: 3 }
+                    };
+                    const currentStatus = statusSteps[comp.status] || statusSteps['sent'];
+
+                    const progressBarHtml = `
+                        <div class="stepper-wrapper step-${currentStatus.step}">
+                            ${Object.values(statusSteps).map((s, index) => {
+                                const isLineCompleted = currentStatus.step > s.step;
+                                return `
+                                <div class="stepper-item ${currentStatus.step >= s.step ? 'completed' : ''}">
+                                    <div class="step-counter">
+                                        ${currentStatus.step > s.step ? '<i class="fas fa-check"></i>' : s.step}
+                                    </div>
+                                    <div class="step-name">${s.text}</div>
+                                </div>
+                                ${index < Object.values(statusSteps).length - 1 ? `<div class="stepper-line ${isLineCompleted ? 'completed' : ''}"></div>` : ''}
+                            `}).join('')}
+                        </div>
+                    `;
+
+                    return `
+                    <div class="competition-card">
+                        <div class="competition-card-header">
+                            <h3>${comp.name}</h3>
+                            <div class="header-right-content">
+                                ${countdownHtml}
+                                <span class="status-badge-v2 status-${comp.status}">${currentStatus.text}</span>
+                            </div>
+                        </div>
+                        <div class="competition-card-body">
+                            <div class="competition-status-tracker">${progressBarHtml}</div>
+                            <div class="competition-details-grid">
+                                <p class="competition-detail-item"><i class="fas fa-users"></i><strong>عدد الفائزين:</strong> ${comp.winners_count || 0}</p>
+                                <p class="competition-detail-item"><i class="fas fa-dollar-sign"></i><strong>الجائزة للفائز:</strong> ${comp.prize_per_winner ? comp.prize_per_winner.toFixed(2) : '0.00'}</p>
+                                <p class="competition-detail-item"><i class="fas fa-calendar-alt"></i><strong>تاريخ الاختيار:</strong> ${endDate ? endDate.toLocaleDateString('ar-EG') : 'غير محدد'}</p>
+                                <p class="competition-detail-item"><i class="fas fa-key"></i><strong>الإجابة الصحيحة:</strong> ${comp.correct_answer || '<em>غير محددة</em>'}</p>
+                            </div>
+                        </div>
+                        <div class="competition-card-footer">
+                            <button class="btn-secondary edit-btn" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i> تعديل</button>
+                            ${comp.status === 'awaiting_winners' ? `<button class="btn-primary complete-competition-btn" data-id="${comp.id}" data-name="${comp.name}"><i class="fas fa-check-double"></i> تم اختيار الفائزين</button>` : ''}
+                            <button class="btn-danger delete-competition-btn" data-id="${comp.id}"><i class="fas fa-trash-alt"></i> حذف</button>
+                        </div>
+                    </div>
+                `}).join('');
+            };
+
+            agentCompetitionsContent.innerHTML = `
+                <div class="competitions-list-profile">
+                    ${renderCompetitionList(activeAndPendingCompetitions)}
+                </div>
+                ${completedCompetitions.length > 0 ? `
+                    <details class="completed-competitions-group">
+                        <summary>
+                            <i class="fas fa-archive"></i> المسابقات المكتملة (${completedCompetitions.length})
+                        </summary>
+                        <div class="competitions-list-profile">
+                            ${renderCompetitionList(completedCompetitions)}
+                        </div>
+                    </details>
+                ` : ''}
+            `;
+        } else {
+            if (canViewAgentComps) {
+                agentCompetitionsContent.innerHTML = '<p>لا توجد مسابقات خاصة بهذا الوكيل بعد.</p>';
+            }
+        }
+    }
+
+    if (agentCompetitionsContent) {
+        agentCompetitionsContent.addEventListener('click', async (e) => {
+            const deleteBtn = e.target.closest('.delete-competition-btn');
+            const completeBtn = e.target.closest('.complete-competition-btn');
+
+            if (completeBtn) {
+                const id = completeBtn.dataset.id;
+                const name = completeBtn.dataset.name;
+                showConfirmationModal(
+                    `هل أنت متأكد من إكمال مسابقة "${name}"؟<br><small>سيتم نقلها إلى أرشيف المسابقات المنتهية.</small>`,
+                    async () => {
+                        const { error } = await supabase.from('competitions').update({ status: 'completed', is_active: false }).eq('id', id);
+                        if (error) {
+                            showToast('فشل إكمال المسابقة.', 'error');
+                        } else {
+                            showToast('تم إكمال المسابقة بنجاح.', 'success');
+                            await logAgentActivity(agent.id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}".`);
+                            renderAgentProfilePage(agent.id, { activeTab: 'agent-competitions' });
+                        }
+                    }, {
+                        title: 'تأكيد إكمال المسابقة',
+                        confirmText: 'نعم، اكتملت',
+                        confirmClass: 'btn-primary'
+                    }
+                );
+                return; // Stop further execution
+            }
+
+            if (deleteBtn) {
+                const id = deleteBtn.dataset.id;
+                if (!id) return;
+        
+                showConfirmationModal(
+                    'هل أنت متأكد من حذف هذه المسابقة؟<br><small>لا يمكن التراجع عن هذا الإجراء.</small>',
+                    async () => {
+                        const { error } = await supabase.from('competitions').delete().eq('id', id);
+                        if (error) {
+                            showToast('فشل حذف المسابقة.', 'error');
+                            console.error('Delete competition error:', error);
+                        } else {
+                            showToast('تم حذف المسابقة بنجاح.', 'success');
+                            // Re-render the profile page, staying on the same tab
+                            renderAgentProfilePage(agent.id, { activeTab: 'agent-competitions' });
+                        }
+                    }, {
+                        title: 'تأكيد الحذف',
+                        confirmText: 'حذف',
+                        confirmClass: 'btn-danger'
+                    });
+            }
+        });
+    }
 
     // Start live countdowns for competitions
     startCompetitionCountdowns();
@@ -680,15 +728,24 @@ function generateActivityLogHTML(logs) {
 }
 
 function renderDetailsView(agent) {
+    // --- NEW: Permission Check ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const agentPerms = currentUserProfile?.permissions?.agents || {};
+    const canEditFinancials = isSuperAdmin || agentPerms.edit_financials;
+
     const container = document.getElementById('details-content');
     if (!container) return;
 
     const createFieldHTML = (label, value, fieldName, isEditable = true) => {
         const numericFields = ['competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'competitions_per_week'];
+        // --- NEW: Define which fields are financial ---
+        const financialFields = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period'];
+        const isFinancial = financialFields.includes(fieldName);
+
         let displayValue;
         let iconHtml;
 
-        if (isEditable) {
+        if (isEditable && (!isFinancial || (isFinancial && canEditFinancials))) {
             iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
         } else {
             iconHtml = `<span class="auto-calculated-indicator" title="يُحسب تلقائياً"><i class="fas fa-cogs"></i></span>`;

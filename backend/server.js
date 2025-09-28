@@ -71,6 +71,35 @@ async function loadSecureConfig() {
 // --- Main API Router ---
 const apiRouter = express.Router();
 
+// --- NEW: Authentication Middleware ---
+// This middleware will verify the JWT from the Authorization header
+// and attach the user object to the request for protected routes.
+const authMiddleware = async (req, res, next) => {
+    if (!supabaseAdmin) {
+        return res.status(500).json({ message: 'Authentication service is not configured.' });
+    }
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: 'Unauthorized: No token provided.' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    try {
+        const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+        if (error) {
+            console.warn('[AUTH-WARN] Token validation failed:', error.message);
+            return res.status(401).json({ message: 'Unauthorized: Invalid token.' });
+        }
+        if (!user) {
+            return res.status(401).json({ message: 'Unauthorized: User not found.' });
+        }
+        req.user = user; // Attach user to the request object
+        next();
+    } catch (e) {
+        res.status(500).json({ message: 'An unexpected authentication error occurred.' });
+    }
+};
+
 // Endpoint to provide public config to the frontend
 // This is now /api/config
 apiRouter.get('/config', (req, res) => {
@@ -257,7 +286,7 @@ apiRouter.post('/update-app', (req, res) => {
 
 // NEW: Endpoint to delete a user (Admin only)
 // This is now /api/users/:id
-apiRouter.delete('/users/:id', async (req, res) => {
+apiRouter.delete('/users/:id', authMiddleware, async (req, res) => {
     const { id } = req.params;
     console.log(`[ADMIN] Received request to delete user with ID: ${id}`);
 
@@ -294,7 +323,7 @@ apiRouter.delete('/users/:id', async (req, res) => {
 });
 
 // NEW: Endpoint to get a combined list of users with their emails (Admin only)
-apiRouter.get('/users', async (req, res) => {
+apiRouter.get('/users', authMiddleware, async (req, res) => {
     if (!supabaseAdmin) {
         return res.status(500).json({ message: 'Admin features are not configured on the server.' });
     }
@@ -346,7 +375,7 @@ apiRouter.get('/users', async (req, res) => {
 });
 
 // NEW: Endpoint to create a new user (Admin only)
-apiRouter.post('/users', async (req, res) => {
+apiRouter.post('/users', authMiddleware, async (req, res) => {
     const { email, password, full_name, role } = req.body;
     console.log(`[ADMIN] Received request to create new user: ${email}`);
 
@@ -385,9 +414,9 @@ apiRouter.post('/users', async (req, res) => {
 });
 
 // NEW: Endpoint to update a user (Admin only)
-apiRouter.put('/users/:id', async (req, res) => {
+apiRouter.put('/users/:id', authMiddleware, async (req, res) => {
     const { id } = req.params;
-    const { full_name, password, avatar_url, status } = req.body; // إضافة: استقبال الحالة
+    const { full_name, password, avatar_url, status, permissions } = req.body; // إضافة: استقبال الصلاحيات
     console.log(`[ADMIN] Received request to update user ${id}`);
 
     if (!supabaseAdmin) {
@@ -397,7 +426,7 @@ apiRouter.put('/users/:id', async (req, res) => {
     // --- تعديل: إضافة صلاحيات للمسؤول العام ومنع التعديل الذاتي ---
     try {
         // 1. جلب بيانات المستخدم الذي يقوم بالإجراء (المسؤول الحالي)
-        const { data: performingUser, error: performingUserError } = await supabaseAdmin.from('users').select('id, role, email').eq('id', req.user.id).single();
+        const { data: performingUser, error: performingUserError } = await supabaseAdmin.from('users').select('id, role').eq('id', req.user.id).single();
         if (performingUserError) throw new Error('Could not verify performing user permissions.');
 
         // 2. جلب بيانات المستخدم المراد تعديله
@@ -449,6 +478,9 @@ apiRouter.put('/users/:id', async (req, res) => {
         if (status) { // Handle status update
             profileUpdatePayload.status = status;
         }
+        if (permissions) { // Handle permissions update
+            profileUpdatePayload.permissions = permissions;
+        }
 
         if (Object.keys(profileUpdatePayload).length > 0) {
             const { error: profileError } = await supabaseAdmin
@@ -475,7 +507,7 @@ apiRouter.put('/users/:id', async (req, res) => {
 });
 
 // NEW: Endpoint to update a user's role (Admin only)
-apiRouter.put('/users/:id/role', async (req, res) => {
+apiRouter.put('/users/:id/role', authMiddleware, async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
 

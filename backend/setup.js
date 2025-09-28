@@ -69,9 +69,26 @@ async function ensureSuperAdmin() {
             .select('role')
             .eq('id', superAdminUser.id)
             .single();
+        
+        // --- FIX: Handle case where profile doesn't exist yet ---
+        if (profileError && profileError.code === 'PGRST116') {
+            console.log(`[FIX] Profile for ${superAdminEmail} not found. Creating it...`);
+            const { error: createProfileError } = await supabaseAdmin
+                .from('users')
+                .insert({
+                    id: superAdminUser.id,
+                    full_name: 'Super Admin',
+                    role: 'super_admin',
+                    permissions: { agents: { view_financials: true, edit_profile: true, edit_financials: true, can_view_competitions_tab: true }, competitions: { manage_comps: 'full', manage_templates: 'full', can_create: true } }
+                });
+            if (createProfileError) throw new Error(`Failed to create profile: ${createProfileError.message}`);
+            console.log('[OK] Super Admin profile created and role set correctly.');
+            return; // Exit after creating
+        } else if (profileError) {
+            throw new Error(`Could not fetch profile for ${superAdminEmail}: ${profileError.message}`);
+        }
 
-        if (profileError) throw new Error(`Could not fetch profile for ${superAdminEmail}: ${profileError.message}`);
-
+        // If profile exists, check and update the role
         if (userProfile.role !== 'super_admin') {
             console.log(`[FIX] Role for ${superAdminEmail} is '${userProfile.role}'. Updating to 'super_admin'...`);
             const { error: updateError } = await supabaseAdmin.from('users').update({ role: 'super_admin' }).eq('id', superAdminUser.id);

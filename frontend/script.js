@@ -583,12 +583,14 @@ function setupNavbar() {
     const navManageAgents = document.getElementById('nav-manage-agents');
     const navManageCompetitions = document.getElementById('nav-manage-competitions');
     const navArchivedCompetitions = document.getElementById('nav-archived-competitions');
+    const competitionsDropdown = document.getElementById('nav-competitions-dropdown');
     const navCompetitionTemplates = document.getElementById('nav-competition-templates');
     const navArchivedTemplates = document.getElementById('nav-archived-templates');
     const navCalendar = document.getElementById('nav-calendar');
     const navActivityLog = document.getElementById('nav-activity-log');
     const navUsers = document.getElementById('nav-users'); // NEW
     const navProfileSettings = document.getElementById('nav-profile-settings');
+
     navLinks = [navHome, navTasks, navManageAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navActivityLog, navUsers, navProfileSettings, document.getElementById('logout-btn')];
     
     // NEW: Navigation listeners update the hash, which triggers the router

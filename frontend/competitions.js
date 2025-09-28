@@ -23,8 +23,24 @@ async function renderCompetitionsPage() {
 
 // --- 0. All Competitions List Page (New Default) ---
 async function renderCompetitionManagementPage() {
-    selectedCompetitionIds = []; // Reset selection on page render
     const appContent = document.getElementById('app-content');
+    // --- NEW: Permission Check ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const compsPerm = currentUserProfile?.permissions?.competitions?.manage_comps || 'none';
+    const canEdit = isSuperAdmin || compsPerm === 'full';
+    const canView = isSuperAdmin || compsPerm === 'full' || compsPerm === 'view';
+
+    if (!canView) {
+        appContent.innerHTML = `
+            <div class="access-denied-container">
+                <i class="fas fa-lock"></i>
+                <h2>ليس لديك صلاحية وصول</h2>
+                <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
+            </div>`;
+        return;
+    }
+
+    selectedCompetitionIds = []; // Reset selection on page render
     appContent.innerHTML = `
         <div class="page-header column-header">
             <div class="header-top-row">
@@ -68,10 +84,12 @@ async function renderCompetitionManagementPage() {
         </div>
         <div id="bulk-action-bar" class="bulk-action-bar">
             <span id="bulk-action-count">0 عنصر محدد</span>
-            <div class="bulk-actions">
-                <button id="bulk-deactivate-btn" class="btn-secondary"><i class="fas fa-power-off"></i> تعطيل المحدد</button>
-                <button id="bulk-delete-btn" class="btn-danger"><i class="fas fa-trash-alt"></i> حذف المحدد</button>
-            </div>
+            ${canEdit ? `
+                <div class="bulk-actions">
+                    <button id="bulk-deactivate-btn" class="btn-secondary"><i class="fas fa-power-off"></i> تعطيل المحدد</button>
+                    <button id="bulk-delete-btn" class="btn-danger"><i class="fas fa-trash-alt"></i> حذف المحدد</button>
+                </div>
+            ` : ''}
         </div>
         <div id="competitions-list-container"></div>
     `;
@@ -80,8 +98,12 @@ async function renderCompetitionManagementPage() {
 
     // Use event delegation for delete buttons
     appContent.addEventListener('click', async (e) => { // Listen on a parent that persists
-        const deleteBtn = e.target.closest('.delete-competition-btn');
-        if (deleteBtn) {
+        if (!canEdit && (e.target.closest('.delete-competition-btn') || e.target.closest('#bulk-deactivate-btn') || e.target.closest('#bulk-delete-btn'))) {
+            showToast('ليس لديك صلاحية للقيام بهذا الإجراء.', 'error');
+            return;
+        }
+         const deleteBtn = e.target.closest('.delete-competition-btn');
+        if (deleteBtn && canEdit) {
             const id = deleteBtn.dataset.id;
             if (!id) return;
             showConfirmationModal(
@@ -103,7 +125,7 @@ async function renderCompetitionManagementPage() {
         }
 
         // Bulk Deactivate
-        if (e.target.closest('#bulk-deactivate-btn')) {
+        if (e.target.closest('#bulk-deactivate-btn') && canEdit) {
             showConfirmationModal(
                 `هل أنت متأكد من تعطيل ${selectedCompetitionIds.length} مسابقة؟`,
                 async () => {
@@ -119,7 +141,7 @@ async function renderCompetitionManagementPage() {
         }
 
         // Bulk Delete
-        if (e.target.closest('#bulk-delete-btn')) {
+        if (e.target.closest('#bulk-delete-btn') && canEdit) {
             showConfirmationModal(
                 `هل أنت متأكد من حذف ${selectedCompetitionIds.length} مسابقة بشكل نهائي؟`,
                 async () => {
@@ -141,6 +163,11 @@ async function renderCompetitionManagementPage() {
         // New: Handle competition status toggle
         const statusToggle = e.target.closest('.competition-status-toggle');
         if (statusToggle) {
+            if (!canEdit) {
+                showToast('ليس لديك صلاحية لتغيير حالة المسابقة.', 'error');
+                statusToggle.checked = !statusToggle.checked; // Revert UI
+                return;
+            }
             const id = parseInt(statusToggle.dataset.id, 10);
             const isActive = statusToggle.checked;
 
@@ -243,6 +270,10 @@ function displayCompetitionsPage(competitionsList, page) {
 }
 
 function generateCompetitionGridHtml(competitions) {
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const compsPerm = currentUserProfile?.permissions?.competitions?.manage_comps;
+    const canEdit = isSuperAdmin || compsPerm === 'full';
+
     if (competitions.length === 0) return ''; // Let displayCompetitionsPage handle the empty message
     return competitions.map(comp => {
         const isSelected = selectedCompetitionIds.includes(comp.id);
@@ -267,8 +298,8 @@ function generateCompetitionGridHtml(competitions) {
                 <h3>${comp.name}</h3>
             </div>
             <div class="competition-card-status">
-                <label class="custom-checkbox toggle-switch small-toggle" title="${comp.is_active ? 'تعطيل' : 'تفعيل'}">
-                    <input type="checkbox" class="competition-status-toggle" data-id="${comp.id}" ${comp.is_active ? 'checked' : ''}>
+                <label class="custom-checkbox toggle-switch small-toggle" title="${comp.is_active ? 'تعطيل' : 'تفعيل'}" ${!canEdit ? 'style="cursor:not-allowed;"' : ''}>
+                    <input type="checkbox" class="competition-status-toggle" data-id="${comp.id}" ${comp.is_active ? 'checked' : ''} ${!canEdit ? 'disabled' : ''}>
                     <span class="slider round"></span>
                 </label>
             </div>
@@ -441,6 +472,18 @@ async function refreshCompetitionsList(forceRefetch = false) {
 
 async function renderCompetitionCreatePage(agentId) {
     const appContent = document.getElementById('app-content');
+    // --- NEW: Permission Check ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const canCreate = isSuperAdmin || currentUserProfile?.permissions?.competitions?.can_create;
+    if (!canCreate) {
+        appContent.innerHTML = `
+            <div class="access-denied-container">
+                <i class="fas fa-lock"></i>
+                <h2>ليس لديك صلاحية لإنشاء مسابقة</h2>
+                <p>أنت لا تملك الصلاحية اللازمة للوصول إلى هذه الصفحة. يرجى التواصل مع المدير.</p>
+            </div>`;
+        return;
+    }
 
     if (!agentId) { // If no agent is selected, do not render the form.
         appContent.innerHTML = `<p class="error">تم إلغاء هذه الصفحة. لا يمكن إنشاء مسابقة بدون تحديد وكيل أولاً.</p>`;
@@ -939,6 +982,20 @@ async function renderCompetitionCreatePage(agentId) {
 
 async function renderArchivedCompetitionsPage() {
     const appContent = document.getElementById('app-content');
+    // --- NEW: Permission Check ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const compsPerm = currentUserProfile?.permissions?.competitions?.manage_comps || 'none';
+    const canView = isSuperAdmin || compsPerm === 'full' || compsPerm === 'view';
+
+    if (!canView) {
+        appContent.innerHTML = `
+            <div class="access-denied-container">
+                <i class="fas fa-lock"></i>
+                <h2>ليس لديك صلاحية وصول</h2>
+                <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
+            </div>`;
+        return;
+    }
     appContent.innerHTML = `
         <div class="page-header column-header">
             <div class="header-top-row">
@@ -1048,15 +1105,18 @@ async function renderArchivedCompetitionsPage() {
 // --- 3. Edit Existing Competition Form ---
 
 async function renderCompetitionEditForm(compId) {
-    const appContent = document.getElementById('app-content');
-    const { data: competition, error } = await supabase.from('competitions').select('*, agents(*)').eq('id', compId).single();
-    
-    if (error || !competition) {
-        showToast('لم يتم العثور على المسابقة.', 'error');
-        window.location.hash = 'competitions';
+    // --- NEW: Permission Check ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const canEdit = isSuperAdmin || (currentUserProfile?.permissions?.competitions?.manage_comps === 'full');
+    if (!canEdit) {
+        document.getElementById('app-content').innerHTML = `
+            <div class="access-denied-container">
+                <i class="fas fa-lock"></i>
+                <h2>ليس لديك صلاحية لتعديل المسابقات</h2>
+                <p>أنت لا تملك الصلاحية اللازمة للوصول إلى هذه الصفحة. يرجى التواصل مع المدير.</p>
+            </div>`;
         return;
     }
-
     appContent.innerHTML = `
         <div class="form-container">
             <h2>تعديل المسابقة: ${competition.name}</h2>
@@ -1100,7 +1160,23 @@ async function renderCompetitionEditForm(compId) {
 // --- 4. Competition Templates Page ---
 
 async function renderCompetitionTemplatesPage() {
+    // --- NEW: Permission Check ---
     const appContent = document.getElementById('app-content');
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const templatesPerm = currentUserProfile?.permissions?.competitions?.manage_templates || 'none';
+    const canEdit = isSuperAdmin || templatesPerm === 'full';
+    const canView = isSuperAdmin || templatesPerm === 'full' || templatesPerm === 'view';
+
+    if (!canView) {
+        appContent.innerHTML = `
+            <div class="access-denied-container">
+                <i class="fas fa-lock"></i>
+                <h2>ليس لديك صلاحية وصول</h2>
+                <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
+            </div>`;
+        return;
+    }
+
     document.querySelector('main').classList.add('full-width');
 
     const defaultTemplateContent = `مسابقة جديدة من شركة إنزو للتداول 🏆
@@ -1160,9 +1236,13 @@ async function renderCompetitionTemplatesPage() {
     const templatesListDiv = document.getElementById('templates-list');
     const showFormBtn = document.getElementById('show-template-form-btn');
 
-    showFormBtn.addEventListener('click', () => {
-        renderCreateTemplateModal(defaultTemplateContent, loadTemplates);
-    });
+    if (showFormBtn) {
+        if (canEdit) {
+            showFormBtn.addEventListener('click', () => renderCreateTemplateModal(defaultContent, loadTemplates));
+        } else {
+            showFormBtn.addEventListener('click', () => showToast('ليس لديك صلاحية لإنشاء قوالب.', 'error'));
+        }
+    }
 
     async function loadTemplates() {
         const { data: templates, error } = await supabase
@@ -1235,6 +1315,10 @@ async function renderCompetitionTemplatesPage() {
     templatesListDiv.addEventListener('click', async (e) => {
         const editBtn = e.target.closest('.edit-template-btn');
         if (editBtn) {
+            if (!canEdit) {
+                showToast('ليس لديك صلاحية لتعديل القوالب.', 'error');
+                return;
+            }
             const id = editBtn.dataset.id;
             const { data: template, error } = await supabase
                 .from('competition_templates')
@@ -1252,6 +1336,10 @@ async function renderCompetitionTemplatesPage() {
 
         const deleteBtn = e.target.closest('.delete-template-btn');
         if (deleteBtn) {
+            if (!canEdit) {
+                showToast('ليس لديك صلاحية لحذف القوالب.', 'error');
+                return;
+            }
             const id = deleteBtn.dataset.id;
             showConfirmationModal(
                 'هل أنت متأكد من حذف هذا القالب؟<br><small>لا يمكن التراجع عن هذا الإجراء.</small>',
@@ -1419,6 +1507,20 @@ function setupTemplateFilters() {
 
 async function renderArchivedTemplatesPage() {
     const appContent = document.getElementById('app-content');
+    // --- NEW: Permission Check ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const templatesPerm = currentUserProfile?.permissions?.competitions?.manage_templates || 'none';
+    const canView = isSuperAdmin || templatesPerm === 'full' || templatesPerm === 'view';
+
+    if (!canView) {
+        appContent.innerHTML = `
+            <div class="access-denied-container">
+                <i class="fas fa-lock"></i>
+                <h2>ليس لديك صلاحية وصول</h2>
+                <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
+            </div>`;
+        return;
+    }
     document.querySelector('main').classList.add('full-width');
 
     appContent.innerHTML = `

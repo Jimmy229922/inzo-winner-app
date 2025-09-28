@@ -46,6 +46,24 @@ async function renderUsersPage() {
     fetchUsersData();
 }
 
+// --- NEW: Helper function for authenticated API calls ---
+async function authedFetch(url, options = {}) {
+    if (!supabase) throw new Error('Supabase client is not initialized.');
+
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+        throw new Error('User not authenticated.');
+    }
+
+    const headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+    };
+
+    return fetch(url, { ...options, headers });
+}
+
 async function fetchUsersData() {
     if (!supabase) {
         document.getElementById('users-list-container').innerHTML = '<p class="error">لا يمكن عرض المستخدمين، لم يتم الاتصال بقاعدة البيانات.</p>';
@@ -54,7 +72,7 @@ async function fetchUsersData() {
 
     // NEW: Fetch all users from our custom backend endpoint to get emails
     try {
-        const response = await fetch('/api/users');
+        const response = await authedFetch('/api/users');
         if (!response.ok) {
             const result = await response.json();
             throw new Error(result.message);
@@ -136,21 +154,34 @@ function renderUserRow(user) {
                     const isOperatingOnPrivilegedAccount = isTargetAdmin || isTargetSuperAdmin;
                     const canPerformAction = isCurrentUserSuperAdmin || (isCurrentUserAdmin && !isOperatingOnPrivilegedAccount);
 
-                    const editDisabled = isCurrentUser || !canPerformAction;
-                    const deleteDisabled = isCurrentUser || !canPerformAction;
-                    const editTitle = editDisabled ? 'لا يمكن لمسؤول تعديل بيانات مستخدم آخر' : 'تعديل المستخدم';
-                    const deleteTitle = deleteDisabled ? 'لا يمكن حذف هذا المستخدم' : 'حذف المستخدم نهائياً';
-
                     let toggleDisabled = false;
                     let toggleTitle = isInactive ? 'تفعيل الحساب' : 'تعطيل الحساب';
 
-                    if (isCurrentUser) toggleDisabled = true; // Can't disable self
-                    else if (isTargetAdmin && !isCurrentUserSuperAdmin) {
+                    if (isCurrentUser) {
+                        toggleDisabled = true; // Can't disable self
+                        // For the current user (Super Admin), hide the main action buttons
+                        return `<label class="custom-checkbox toggle-switch small-toggle" title="لا يمكن تعطيل حسابك الخاص" ${isCurrentUser ? 'style="display:none;"' : ''}>
+                                    <input type="checkbox" class="status-toggle" data-user-id="${user.id}" ${!isInactive ? 'checked' : ''} disabled>
+                                    <span class="slider round"></span>
+                                </label>`;
+                    }
+                    
+                    const permissionsDisabled = !isCurrentUserSuperAdmin || isTargetSuperAdmin;
+                    const editDisabled = !canPerformAction;
+                    const deleteDisabled = !canPerformAction;
+                    const editTitle = editDisabled ? 'لا يمكن لمسؤول تعديل بيانات مستخدم آخر' : 'تعديل المستخدم';
+                    const deleteTitle = deleteDisabled ? 'لا يمكن حذف هذا المستخدم' : 'حذف المستخدم نهائياً';
+
+                    if (isTargetAdmin && !isCurrentUserSuperAdmin) {
                         toggleDisabled = true; // A regular admin cannot disable another admin
                         toggleTitle = 'لا يمكن لمسؤول تعديل مسؤول آخر';
                     }
+
                     return `<button class="btn-secondary edit-user-btn" data-user-id="${user.id}" ${editDisabled ? 'disabled' : ''} title="${editTitle}">
                         <i class="fas fa-edit"></i> تعديل
+                    </button>
+                    <button class="btn-primary permissions-user-btn" data-user-id="${user.id}" ${permissionsDisabled ? 'disabled' : ''} title="إدارة الصلاحيات">
+                        <i class="fas fa-shield-alt"></i> الصلاحيات
                     </button>
                     <button class="btn-danger delete-user-btn" data-user-id="${user.id}" ${deleteDisabled ? 'disabled' : ''} title="${deleteTitle}">
                         <i class="fas fa-trash-alt"></i> حذف
@@ -276,12 +307,19 @@ function attachUserActionListeners() {
     container.addEventListener('click', async (e) => {
         const deleteBtn = e.target.closest('.delete-user-btn');
         const editBtn = e.target.closest('.edit-user-btn');
+        const permissionsBtn = e.target.closest('.permissions-user-btn');
 
         if (editBtn && !editBtn.disabled) {
             const userId = editBtn.dataset.userId;
             // تحسين: استخدام البيانات المخزنة بدلاً من إعادة جلبها
             const userToEdit = allUsersCache.find(u => u.id === userId);
             if (userToEdit) renderEditUserModal(userToEdit);
+        }
+
+        if (permissionsBtn && !permissionsBtn.disabled) {
+            const userId = permissionsBtn.dataset.userId;
+            const userToManage = allUsersCache.find(u => u.id === userId);
+            if (userToManage) renderPermissionsModal(userToManage);
         }
 
         if (deleteBtn && !deleteBtn.disabled) {
@@ -293,7 +331,7 @@ function attachUserActionListeners() {
                 `هل أنت متأكد من حذف المستخدم "<strong>${userName}</strong>"؟<br><small>سيتم حذفه نهائياً من النظام ولا يمكن التراجع عن هذا الإجراء.</small>`,
                 async () => {
                     try {
-                        const response = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+                        const response = await authedFetch(`/api/users/${userId}`, { method: 'DELETE' });
                         if (!response.ok) {
                             const result = await response.json();
                             throw new Error(result.message);
@@ -316,9 +354,8 @@ function attachUserActionListeners() {
             const newRole = roleSelect.value;
 
             try {
-                const response = await fetch(`/api/users/${userId}/role`, {
+                const response = await authedFetch(`/api/users/${userId}/role`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ role: newRole })
                 });
                 const result = await response.json();
@@ -339,9 +376,8 @@ function attachUserActionListeners() {
             const newStatus = statusToggle.checked ? 'active' : 'inactive';
 
             try {
-                const response = await fetch(`/api/users/${userId}`, {
+                const response = await authedFetch(`/api/users/${userId}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: newStatus }) // Send status update to backend
                 });
                 const result = await response.json();
@@ -530,9 +566,8 @@ function renderCreateUserModal() {
         };
 
         try {
-            const response = await fetch('/api/users', {
+            const response = await authedFetch('/api/users', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newUser)
             });
             const result = await response.json();
@@ -571,6 +606,7 @@ function renderEditUserModal(user) {
     modal.className = 'form-modal-content modal-wide';
     
     const originalAvatarUrl = user.avatar_url || `https://ui-avatars.com/api/?name=${user.full_name || user.email}&background=8A2BE2&color=fff&size=128`;
+    const isCurrentUserSuperAdmin = currentUserProfile?.role === 'super_admin';
 
     modal.innerHTML = `
         <div class="form-modal-header">
@@ -686,9 +722,8 @@ function renderEditUserModal(user) {
             };
 
             // 3. Send update request to backend
-            const response = await fetch(`/api/users/${user.id}`, {
+            const response = await authedFetch(`/api/users/${user.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(userData)
             });
             if (!response.ok) throw new Error((await response.json()).message);
@@ -700,6 +735,146 @@ function renderEditUserModal(user) {
             showToast(`فشل تحديث المستخدم: ${error.message}`, 'error');
             submitBtn.disabled = false;
             submitBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التعديلات';
+        }
+    });
+}
+
+function renderPermissionsModal(user) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    
+    const modal = document.createElement('div');
+    modal.className = 'form-modal-content modal-fullscreen'; // تعديل: استخدام حجم ملء الشاشة
+
+    const p = user.permissions || {}; // Short alias for permissions
+    // Set defaults for any missing permission structures
+    p.agents = p.agents || { view_financials: false, edit_profile: false, edit_financials: false, can_view_competitions_tab: false };
+    p.competitions = p.competitions || { manage_comps: 'none', manage_templates: 'none', can_create: false };
+
+    modal.innerHTML = `
+        <div class="form-modal-header">
+            <h2><i class="fas fa-shield-alt"></i> إدارة صلاحيات: ${user.full_name}</h2>
+            <button id="close-modal-btn" class="btn-icon-action" title="إغلاق">&times;</button>
+        </div>
+        <div class="form-modal-body">
+            <form id="permissions-form">
+                <div class="table-responsive-container">
+                    <table class="permissions-table">
+                        <thead>
+                            <tr>
+                                <th>القسم</th>
+                                <th>بدون صلاحية</th>
+                                <th>مشاهدة فقط</th>
+                                <th>تحكم كامل</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="permission-name">
+                                    <i class="fas fa-trophy"></i>
+                                    <strong>إدارة المسابقات</strong>
+                                    <small>التحكم في عرض وتعديل وحذف المسابقات.</small>
+                                </td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_comps" value="none" ${p.competitions.manage_comps === 'none' || !p.competitions.manage_comps ? 'checked' : ''}><span></span></label></td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_comps" value="view" ${p.competitions.manage_comps === 'view' ? 'checked' : ''}><span></span></label></td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_comps" value="full" ${p.competitions.manage_comps === 'full' ? 'checked' : ''}><span></span></label></td>
+                            </tr>
+                            <tr>
+                                <td class="permission-name">
+                                    <i class="fas fa-file-alt"></i>
+                                    <strong>إدارة القوالب</strong>
+                                    <small>التحكم في عرض وتعديل وحذف قوالب المسابقات.</small>
+                                </td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_templates" value="none" ${p.competitions.manage_templates === 'none' || !p.competitions.manage_templates ? 'checked' : ''}><span></span></label></td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_templates" value="view" ${p.competitions.manage_templates === 'view' ? 'checked' : ''}><span></span></label></td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_templates" value="full" ${p.competitions.manage_templates === 'full' ? 'checked' : ''}><span></span></label></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <table class="permissions-table" style="margin-top: 20px;">
+                         <thead>
+                            <tr>
+                                <th>صلاحيات خاصة</th>
+                                <th>تفعيل / إلغاء</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                             <tr>
+                                <td class="permission-name">
+                                    <i class="fas fa-magic"></i>
+                                    <strong>إنشاء مسابقة للوكيل</strong>
+                                    <small>السماح للموظف باستخدام زر "إنشاء مسابقة" من داخل صفحة ملف الوكيل.</small>
+                                </td>
+                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-competitions-can-create" ${p.competitions.can_create ? 'checked' : ''}><span class="slider round"></span></label></td>
+                            </tr>
+                            <tr>
+                                <td class="permission-name">
+                                    <i class="fas fa-list-alt"></i>
+                                    <strong>عرض تبويب مسابقات الوكيل</strong>
+                                    <small>السماح للموظف برؤية تبويب "المسابقات" وسجلها داخل صفحة ملف الوكيل.</small>
+                                </td>
+                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-agents-view-competitions" ${p.agents.can_view_competitions_tab ? 'checked' : ''}><span class="slider round"></span></label></td>
+                            </tr>
+                            <tr>
+                                <td class="permission-name">
+                                    <i class="fas fa-eye"></i>
+                                    <strong>عرض التفاصيل المالية للوكيل</strong>
+                                    <small>السماح للموظف برؤية تبويب "تفاصيل" الذي يحتوي على البيانات المالية الحساسة للوكيل.</small>
+                                </td>
+                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-agents-view-financials" ${p.agents.view_financials ? 'checked' : ''}><span class="slider round"></span></label></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="submit" id="save-permissions-btn" class="btn-primary"><i class="fas fa-save"></i> حفظ الصلاحيات</button>
+                    <button type="button" id="cancel-permissions-modal" class="btn-secondary">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const closeModal = () => overlay.remove();
+    modal.querySelector('#close-modal-btn').addEventListener('click', closeModal);
+    modal.querySelector('#cancel-permissions-modal').addEventListener('click', closeModal);
+
+    modal.querySelector('#permissions-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = modal.querySelector('#save-permissions-btn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+
+        const permissionsData = {
+            agents: {
+                view_financials: modal.querySelector('#perm-agents-view-financials')?.checked || false,
+                edit_profile: false, 
+                edit_financials: false, 
+                can_view_competitions_tab: modal.querySelector('#perm-agents-view-competitions')?.checked || false, // This will be read from the new toggle
+            },
+            competitions: {
+                manage_comps: modal.querySelector('input[name="competitions_perm"]:checked')?.value || 'none',
+                manage_templates: modal.querySelector('input[name="templates_perm"]:checked')?.value || 'none',
+                can_create: modal.querySelector('#perm-competitions-can-create')?.checked || false,
+            }
+        };
+
+        try {
+            const response = await authedFetch(`/api/users/${user.id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ permissions: permissionsData })
+            });
+            if (!response.ok) throw new Error((await response.json()).message);
+
+            showToast('تم تحديث صلاحيات المستخدم بنجاح.', 'success');
+            closeModal();
+            await fetchUsersData(); // Refresh the user list to reflect changes
+        } catch (error) {
+            showToast(`فشل تحديث الصلاحيات: ${error.message}`, 'error');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> حفظ الصلاحيات';
         }
     });
 }
