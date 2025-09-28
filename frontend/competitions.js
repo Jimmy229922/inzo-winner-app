@@ -891,6 +891,21 @@ async function renderCompetitionCreatePage(agentId) {
             
             if (agentError) throw new Error(`فشل تحديث رصيد الوكيل: ${agentError.message}`);
 
+            // --- NEW: Mark competition task as complete for today ---
+            const todayStrForTask = new Date().toISOString().split('T')[0];
+            const { error: taskError } = await supabase
+                .from('daily_tasks')
+                .upsert({
+                    agent_id: agent.id,
+                    task_date: todayStrForTask,
+                    competition_sent: true
+                }, {
+                    onConflict: 'agent_id, task_date'
+                });
+            if (taskError) {
+                console.warn('Could not update daily task for competition sent:', taskError.message);
+            }
+
             // 3. Send to Telegram
             const telegramResponse = await fetch('/api/post-announcement', {
                 method: 'POST',

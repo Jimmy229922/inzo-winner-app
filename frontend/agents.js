@@ -54,6 +54,7 @@ async function renderManageAgentsPage() {
             <div class="header-top-row">
                 <h1>إدارة الوكلاء</h1>
                 <div class="header-actions-group">
+                    <button id="bulk-send-balance-btn" class="btn-telegram-bonus"><i class="fas fa-bullhorn"></i> تعميم الأرصدة</button>
                     <button id="add-agent-btn" class="btn-primary"><i class="fas fa-plus"></i> إضافة وكيل جديد</button>
                 </div>
             </div>
@@ -85,6 +86,11 @@ async function renderManageAgentsPage() {
     document.getElementById('add-agent-btn').addEventListener('click', () => {
         setActiveNav(null);
         window.location.hash = 'add-agent?returnTo=manage-agents';
+    });
+
+    // تعديل: إضافة معالج لزر الإرسال الجماعي
+    document.getElementById('bulk-send-balance-btn').addEventListener('click', () => {
+        handleBulkSendBalances(allAgentsData);
     });
 
     // Caching: If we already have the data, don't fetch it again.
@@ -1115,6 +1121,96 @@ async function handleMarkAllTasksComplete() {
         }, { title: 'تأكيد إكمال جميع المهام', confirmText: 'نعم، إكمال الكل', confirmClass: 'btn-primary' }
     );
 }
+
+async function handleBulkSendBalances(agents) {
+    // فلترة الوكلاء الذين لديهم معرف دردشة ورصيد أو بونص متبقي
+    const eligibleAgents = agents.filter(agent => 
+        agent.telegram_chat_id && 
+        ((agent.remaining_balance || 0) > 0 || (agent.remaining_deposit_bonus || 0) > 0)
+    );
+    const agentCount = eligibleAgents.length;
+
+    if (agentCount === 0) {
+        showToast('لا يوجد وكلاء مؤهلون (لديهم معرف دردشة ورصيد متاح) لإرسال التعميم.', 'info');
+        return;
+    }
+
+    const modalContent = `
+        <p>سيتم إرسال كليشة الرصيد المتاح إلى <strong>${agentCount}</strong> وكيل مؤهل.</p>
+        <p>سيتم تجهيز رسالة فريدة لكل وكيل تحتوي على تفاصيل رصيده وبونص الإيداع الخاص به.</p>
+        <p class="warning-text" style="margin-top: 15px;"><i class="fas fa-exclamation-triangle"></i> هل أنت متأكد من المتابعة؟</p>
+    `;
+
+    showConfirmationModal(
+        modalContent,
+        async () => {
+            showBulkSendProgressModal(agentCount);
+
+            let successCount = 0;
+            let errorCount = 0;
+            const progressBar = document.getElementById('bulk-send-progress-bar-inner');
+            const statusText = document.getElementById('bulk-send-status-text');
+            const renewalPeriodMap = {
+                'weekly': 'أسبوعي',
+                'biweekly': 'كل أسبوعين',
+                'monthly': 'شهري'
+            };
+
+            for (let i = 0; i < eligibleAgents.length; i++) {
+                const agent = eligibleAgents[i];
+                
+                // بناء الرسالة الخاصة بكل وكيل
+                const renewalText = renewalPeriodMap[agent.renewal_period] || 'تداولي';
+                let benefitsText = '';
+                if ((agent.remaining_balance || 0) > 0) {
+                    benefitsText += `💰 <b>رصيد مسابقات (${renewalText}):</b> <code>${agent.remaining_balance}$</code>\n`;
+                }
+                if ((agent.remaining_deposit_bonus || 0) > 0) {
+                    benefitsText += `🎁 <b>بونص ايداع:</b> <code>${agent.remaining_deposit_bonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
+                }
+
+                const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...\n\nيسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع بالمميزات التالية:\n\n${benefitsText.trim()}\n\nبامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.\n\nهل ترغب بارسال مسابقة لحضرتك؟`;
+
+                try {
+                    const response = await fetch('/api/post-announcement', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
+                    });
+
+                    if (!response.ok) errorCount++;
+                    else successCount++;
+
+                } catch (e) {
+                    errorCount++;
+                }
+
+                const progress = Math.round(((i + 1) / agentCount) * 100);
+                progressBar.style.width = `${progress}%`;
+                statusText.innerHTML = `جاري إرسال الأرصدة... (${i + 1} / ${agentCount})<br>نجح: ${successCount} | فشل: ${errorCount}`;
+            }
+
+            // إضافة تأخير بسيط بين كل طلب لتجنب الحظر من تليجرام
+            if (i < eligibleAgents.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 400)); // 400ms delay
+            }
+
+            // Update modal with final result
+            statusText.innerHTML = `اكتمل تعميم الأرصدة.<br><strong>${successCount}</strong> رسالة ناجحة | <strong>${errorCount}</strong> رسالة فاشلة.`;
+            progressBar.style.backgroundColor = errorCount > 0 ? 'var(--danger-color)' : 'var(--success-color)';
+            document.querySelector('.modal-no-actions .update-icon').className = 'fas fa-check-circle update-icon';
+            await logAgentActivity(null, 'BULK_BALANCE_SENT', `تم تعميم الأرصدة إلى ${successCount} وكيل (فشل ${errorCount}).`);
+
+        }, {
+            title: 'تعميم الأرصدة المتاحة',
+            confirmText: 'إرسال الآن',
+            confirmClass: 'btn-telegram-bonus',
+            cancelText: 'إلغاء',
+            modalClass: 'modal-wide'
+        }
+    );
+}
+
 
 function showBulkSendProgressModal(total) {
     const modalContent = `

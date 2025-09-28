@@ -354,11 +354,13 @@ ${benefitsText.trim()}
             ? `مجموعة الوكيل: <strong>${agent.telegram_group_name}</strong>` 
             : 'المجموعة العامة';
 
+
         const clicheText = `دمت بخير شريكنا العزيز ${agent.name}،
 
 يرجى اختيار الفائزين بالمسابقة الاخيرة التي تم انتهاء مدة المشاركة بها 
 وتزويدنا بفيديو الروليت والاسم الثلاثي و معلومات الحساب لكل فائز قبل الاعلان عنهم في قناتكم كي يتم التحقق منهم من قبل القسم المختص
 
+الإجابة الصحيحة هي :${activeCompetition?.correct_answer}
 كما يجب اختيار الفائزين بالقرعة لشفافية الاختيار.`;
 
         // Show confirmation modal before sending
@@ -616,7 +618,7 @@ function startCompetitionCountdowns() {
 function generateActivityLogHTML(logs) {
     const getLogIconDetails = (actionType) => {
         if (actionType.includes('CREATED')) return { icon: 'fa-user-plus', colorClass: 'log-icon-create' };
-        if (actionType.includes('DELETED')) return { icon: 'fa-user-slash', colorClass: 'log-icon-delete' };
+        if (actionType.includes('DELETED')) return { icon: 'fa-user-slash', colorClass: 'log-icon-delete' }
         if (actionType.includes('PROFILE_UPDATE')) return { icon: 'fa-user-edit', colorClass: 'log-icon-profile' };
         if (actionType.includes('DETAILS_UPDATE')) return { icon: 'fa-cogs', colorClass: 'log-icon-details' };
         if (actionType.includes('COMPETITION_CREATED')) return { icon: 'fa-trophy', colorClass: 'log-icon-competition' };
@@ -842,7 +844,7 @@ function renderInlineEditor(groupElement, agent) {
             // --- تعديل: منطق خاص لمرتبة "بدون مرتبة حصرية" ---
             if (newValue === 'بدون مرتبة حصرية') {
                 updateData.competition_bonus = 60;
-                updateData.remaining_balance = 60 - (currentAgent.consumed_balance || 0);
+                updateData.remaining_balance = 60 - (currentAgent.consumed_balance || 0)
                 updateData.deposit_bonus_percentage = null;
                 updateData.deposit_bonus_count = null;
             } else {
@@ -854,7 +856,7 @@ function renderInlineEditor(groupElement, agent) {
             let finalValue;
             if (fieldName.includes('_date')) {
                 finalValue = newValue === '' ? null : newValue;
-            } else {
+            }else {
                 const parsedValue = parseFloat(newValue);
                 finalValue = newValue === '' ? null : (isNaN(parsedValue) ? newValue : parsedValue);
             }
@@ -1134,7 +1136,7 @@ function renderEditProfileHeader(agent, parentElement) {
                     telegram_chat_id: 'معرف الدردشة',
                     telegram_group_name: 'اسم مجموعة التلجرام',
                     avatar_url: 'الصورة الشخصية'
-                };
+                  };
                 const changeDescriptions = changedKeys.map(key => {
                     const label = fieldLabels[key] || key;
                     const oldValue = agent[key] || 'فارغ';
