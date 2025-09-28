@@ -94,10 +94,11 @@ async function fetchUserProfile() {
             userName.textContent = currentUserProfile?.full_name || user.email.split('@')[0];
             userEmail.textContent = user.email;
 
-            // --- إصلاح: إظهار الروابط الخاصة بالمدير العام بعد التحقق من هويته ---
-            // هذا يحل مشكلة اختفاء زر "إدارة المستخدمين"
+            // --- تعديل: إظهار زر "إدارة المستخدمين" فقط للمدير العام، وإظهار زر التحديث للجميع ---
             const isSuperAdmin = user?.email === 'ahmed12@inzo.com';
             document.querySelectorAll('[data-role="super-admin"]').forEach(el => {
+                // هذا الشرط يضمن أن زر "إدارة المستخدمين" يظهر فقط للمدير العام
+                // بينما أي عناصر أخرى ليس لها هذا الدور (مثل زر التحديث) لن تتأثر وستظل ظاهرة للجميع.
                 el.style.display = isSuperAdmin ? 'flex' : 'none';
             });
 
