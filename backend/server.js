@@ -8,7 +8,7 @@ const { exec } = require('child_process');
 const cron = require('node-cron');
 
 const app = express();
-const port = 3001; // يمكنك تغيير هذا الرقم إلى المنفذ الذي تريده
+const port = 30001; // تم تثبيت المنفذ بناءً على الطلب
 
 // Middlewares
 app.use(cors()); // للسماح للـ Frontend بالتواصل مع الـ Backend
