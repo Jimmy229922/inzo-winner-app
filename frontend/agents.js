@@ -17,6 +17,7 @@ const RANKS_DATA = {
     'Emerald': { competition_bonus: 2000, deposit_bonus_percentage: 90, deposit_bonus_count: 4 },
     'King': { competition_bonus: 2500, deposit_bonus_percentage: 95, deposit_bonus_count: 4 },
     'Legend': { competition_bonus: Infinity, deposit_bonus_percentage: 100, deposit_bonus_count: Infinity },
+    'وكيل حصري بدون مرتبة': { competition_bonus: 60, deposit_bonus_percentage: null, deposit_bonus_count: null },
 };
 
 async function renderTasksPage() {
@@ -814,14 +815,12 @@ function renderAddAgentForm() {
                         <label for="agent-rank">المرتبة</label>
                         <!-- تعديل: إعادة ترتيب وتنسيق قائمة المراتب -->
                         <select id="agent-rank">
-                            <optgroup label="⁕ وكلاء بدون مرتبة ⁖">
-                                <option value="بدون مرتبة" selected>⚪ وكيل اعتيادي</option>
-                                <option value="بدون مرتبة حصرية">⚪ وكيل حصري</option>
-                            </optgroup>
                             <optgroup label="⁕ مراتب الوكلاء الاعتيادية ⁖">
-                                ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map(rank => `<option value="${rank}">🔸 ${rank}</option>`).join('')}
+                                ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map((rank, index) => `<option value="${rank}" ${index === 0 ? 'selected' : ''}>🔸 ${rank}</option>`).join('')}
                             </optgroup>
                             <optgroup label="⁕ مراتب الوكالة الحصرية ⁖">
+                                <option value="وكيل حصري بدون مرتبة">⭐ وكيل حصري بدون مرتبة</option>
+                                <option disabled>──────────</option>
                                 ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}">⭐ ${rank}</option>`).join('')}
                             </optgroup>
                             <optgroup label="⁕ المراكز ⁖">

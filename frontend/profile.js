@@ -775,14 +775,12 @@ function renderInlineEditor(groupElement, agent) {
         case 'rank':
             // تعديل: توحيد شكل وترتيب قائمة المراتب مع صفحة الإضافة
             editorHtml = `<select id="inline-edit-input">
-                <optgroup label="⁕ وكلاء بدون مرتبة ⁖">
-                    <option value="بدون مرتبة" ${currentValue === 'بدون مرتبة' ? 'selected' : ''}>⚪ وكيل اعتيادي</option>
-                    <option value="بدون مرتبة حصرية" ${currentValue === 'بدون مرتبة حصرية' ? 'selected' : ''}>⚪ وكيل حصري</option>
-                </optgroup>
                 <optgroup label="⁕ مراتب الوكلاء الاعتيادية ⁖">
                     ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map(rank => `<option value="${rank}" ${currentValue === rank ? 'selected' : ''}>🔸 ${rank}</option>`).join('')}
                 </optgroup>
                 <optgroup label="⁕ مراتب الوكالة الحصرية ⁖">
+                    <option value="وكيل حصري بدون مرتبة" ${currentValue === 'وكيل حصري بدون مرتبة' ? 'selected' : ''}>⭐ وكيل حصري بدون مرتبة</option>
+                    <option disabled>──────────</option>
                     ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}" ${currentValue === rank ? 'selected' : ''}>⭐ ${rank}</option>`).join('')}
                 </optgroup>
                 <optgroup label="⁕ المراكز ⁖">
