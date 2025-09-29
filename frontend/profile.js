@@ -1381,12 +1381,13 @@ function renderEditProfileHeader(agent, parentElement) {
                 <div class="form-group"><label for="edit-telegram-chat-id">معرف الدردشة (Chat ID)</label><input type="text" id="edit-telegram-chat-id" value="${agent.telegram_chat_id || ''}" placeholder="مثال: -100123456789"></div>
                 <div class="form-group"><label for="edit-telegram-group-name">اسم مجموعة التلجرام</label><input type="text" id="edit-telegram-group-name" value="${agent.telegram_group_name || ''}"></div>
                 <div class="form-group" style="grid-column: 1 / -1;">
-                    <label>أيام التدقيق</label>
-                    <div class="days-selector">
-                        <!-- تحسين: تحويل مربعات الاختيار إلى أزرار تفاعلية -->
+                    <label style="margin-bottom: 10px;">أيام التدقيق</label>
+                    <div class="days-selector-v2">
                         ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => `
-                            <input type="checkbox" id="day-edit-${index}" value="${index}" class="day-toggle-input" ${(agent.audit_days || []).includes(index) ? 'checked' : ''}>
-                            <label for="day-edit-${index}" class="day-toggle-btn">${day}</label>`).join('')}
+                            <div class="day-toggle-wrapper">
+                                <input type="checkbox" id="day-edit-${index}" value="${index}" class="day-toggle-input" ${(agent.audit_days || []).includes(index) ? 'checked' : ''}>
+                                <label for="day-edit-${index}" class="day-toggle-btn">${day}</label>
+                            </div>`).join('')}
                     </div>
                 </div>
             </div>
@@ -1472,7 +1473,7 @@ function renderEditProfileHeader(agent, parentElement) {
             newAvatarUrl = urlData.publicUrl;
         }
 
-        const selectedDays = Array.from(headerV2.querySelectorAll('.days-selector input:checked')).map(input => parseInt(input.value, 10));
+        const selectedDays = Array.from(headerV2.querySelectorAll('.days-selector-v2 input:checked')).map(input => parseInt(input.value, 10));
 
         // 3. Prepare the data to update in the 'agents' table
         const updatedData = {

@@ -141,6 +141,7 @@ async function handleRouting() {
     const routes = {
         '#home': { func: renderHomePage, nav: 'nav-home' },
         '#tasks': { func: renderTasksPage, nav: 'nav-tasks' }, // Re-added this route
+        '#add-agent': { func: renderAddAgentForm, nav: null }, // إصلاح: إضافة المسار المفقود
         '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents', adminOnly: false },
         '#competitions/edit': { func: renderCompetitionEditForm, nav: 'nav-manage-competitions' }, // NEW: Dedicated route for editing
         '#competitions': { func: renderCompetitionsPage, nav: 'nav-manage-competitions' },

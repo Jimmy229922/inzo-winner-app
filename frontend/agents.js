@@ -910,66 +910,80 @@ function renderAddAgentForm() {
 
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
-        <div class="form-container" style="max-width: 800px;">
-            <h1><i class="fas fa-user-plus"></i> إضافة وكيل جديد</h1>
-            <form id="add-agent-form" class="profile-header-edit-form">
-                <div class="profile-avatar-edit">
-                    <img src="https://via.placeholder.com/80/8A2BE2/FFFFFF?text=inzo" alt="Avatar" id="avatar-preview">
-                    <label for="avatar-upload" class="btn-secondary" style="cursor: pointer; width: 100%; justify-content: center;">
-                        <i class="fas fa-upload"></i> تغيير الصورة
-                    </label>
-                    <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+        <div class="page-header"><h1><i class="fas fa-user-plus"></i> إضافة وكيل جديد</h1></div>
+        <div class="form-container-v2">
+            <form id="add-agent-form">
+                <div class="form-section avatar-section">
+                    <div class="profile-avatar-edit large-avatar">
+                        <img src="https://ui-avatars.com/api/?name=?&background=8A2BE2&color=fff&size=128" alt="Avatar" id="avatar-preview">
+                        <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+                    </div>
                 </div>
-                <div style="flex-grow: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group"><label for="agent-name">اسم الوكيل</label><input type="text" id="agent-name" required></div>
-                    <div class="form-group"><label for="agent-id">رقم الوكالة</label><input type="text" id="agent-id" required></div>
-                    <div class="form-group">
-                        <label for="agent-classification">التصنيف</label>
-                        <select id="agent-classification">
-                            <option value="R">R</option><option value="A">A</option><option value="B">B</option><option value="C">C</option>
-                        </select>
+
+                <div class="form-section">
+                    <h3 class="details-section-title"><i class="fas fa-id-card"></i> المعلومات الأساسية</h3>
+                    <div class="details-grid">
+                        <div class="form-group"><label for="agent-name">اسم الوكيل</label><input type="text" id="agent-name" required></div>
+                        <div class="form-group"><label for="agent-id">رقم الوكالة</label><input type="text" id="agent-id" required></div>
                     </div>
-                    <div class="form-group">
-                        <label for="agent-rank">المرتبة</label>
-                        <!-- تعديل: إعادة ترتيب وتنسيق قائمة المراتب -->
-                        <select id="agent-rank">
-                            <optgroup label="⁕ مراتب الوكلاء الاعتيادية ⁖">
-                                ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map((rank, index) => `<option value="${rank}" ${index === 0 ? 'selected' : ''}>🔸 ${rank}</option>`).join('')}
-                            </optgroup>
-                            <optgroup label="⁕ مراتب الوكالة الحصرية ⁖">
-                                <option value="وكيل حصري بدون مرتبة">⭐ وكيل حصري بدون مرتبة</option>
-                                <option disabled>──────────</option>
-                                ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}">⭐ ${rank}</option>`).join('')}
-                            </optgroup>
-                            <optgroup label="⁕ المراكز ⁖">
-                                <option value="Center">🏢 Center</option>
-                            </optgroup>
-                        </select>
+                </div>
+
+                <div class="form-section">
+                    <h3 class="details-section-title"><i class="fab fa-telegram-plane"></i> بيانات التلجرام</h3>
+                    <div class="details-grid">
+                        <div class="form-group"><label for="telegram-channel-url">رابط قناة التلجرام</label><input type="text" id="telegram-channel-url"></div>
+                        <div class="form-group"><label for="telegram-group-url">رابط جروب التلجرام</label><input type="text" id="telegram-group-url"></div>
+                        <div class="form-group"><label for="telegram-chat-id">معرف الدردشة (Chat ID)</label><input type="text" id="telegram-chat-id" placeholder="مثال: -100123456789"></div>
+                        <div class="form-group"><label for="telegram-group-name">اسم مجموعة التلجرام</label><input type="text" id="telegram-group-name"></div>
                     </div>
-                    <div class="form-group">
-                        <label for="agent-renewal-period">فترة تجديد الرصيد</label>
-                        <select id="agent-renewal-period">
-                            <option value="none" selected>بدون تجديد</option>
-                            <option value="weekly">أسبوعي</option>
-                            <option value="biweekly">كل أسبوعين</option>
-                            <option value="monthly">شهري</option>
-                        </select>
+                </div>
+
+                <div class="form-section">
+                    <h3 class="details-section-title"><i class="fas fa-cogs"></i> إعدادات النظام</h3>
+                    <div class="details-grid">
+                        <div class="form-group">
+                            <label for="agent-classification">التصنيف</label>
+                            <select id="agent-classification"><option value="R">R</option><option value="A">A</option><option value="B">B</option><option value="C">C</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="agent-rank">المرتبة</label>
+                            <select id="agent-rank">
+                                <optgroup label="⁕ مراتب الوكلاء الاعتيادية ⁖">
+                                    ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map((rank, index) => `<option value="${rank}" ${index === 0 ? 'selected' : ''}>🔸 ${rank}</option>`).join('')}
+                                </optgroup>
+                                <optgroup label="⁕ مراتب الوكالة الحصرية ⁖">
+                                    <option value="وكيل حصري بدون مرتبة">⭐ وكيل حصري بدون مرتبة</option>
+                                    <option disabled>──────────</option>
+                                    ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}">⭐ ${rank}</option>`).join('')}
+                                </optgroup>
+                                <optgroup label="⁕ المراكز ⁖">
+                                    <option value="Center">🏢 Center</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="agent-renewal-period">فترة تجديد الرصيد</label>
+                            <select id="agent-renewal-period">
+                                <option value="none" selected>بدون تجديد</option>
+                                <option value="weekly">أسبوعي</option>
+                                <option value="biweekly">كل أسبوعين</option>
+                                <option value="monthly">شهري</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group"><label for="telegram-channel-url">رابط قناة التلجرام</label><input type="text" id="telegram-channel-url"></div>
-                    <div class="form-group"><label for="telegram-group-url">رابط جروب التلجرام</label><input type="text" id="telegram-group-url"></div>
-                    <div class="form-group"><label for="telegram-chat-id">معرف الدردشة (Chat ID)</label><input type="text" id="telegram-chat-id" placeholder="مثال: -100123456789"></div>
-                    <div class="form-group"><label for="telegram-group-name">اسم مجموعة التلجرام</label><input type="text" id="telegram-group-name"></div>
-                    <div class="form-group" style="grid-column: 1 / -1;">
-                        <label>أيام التدقيق</label>
-                        <div class="days-selector">
-                            <!-- تحسين: تحويل مربعات الاختيار إلى أزرار تفاعلية -->
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label style="margin-bottom: 10px;">أيام التدقيق</label>
+                        <div class="days-selector-v2">
                             ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => `
-                                <input type="checkbox" id="day-${index}" value="${index}" class="day-toggle-input">
-                                <label for="day-${index}" class="day-toggle-btn">${day}</label>`).join('')}
+                                <div class="day-toggle-wrapper">
+                                    <input type="checkbox" id="day-${index}" value="${index}" class="day-toggle-input">
+                                    <label for="day-${index}" class="day-toggle-btn">${day}</label>
+                                </div>`).join('')}
                         </div>
                     </div>
                 </div>
-                <div class="form-actions" style="grid-column: 1 / -1; justify-content: flex-end; width: 100%; padding-top: 20px; border-top: 1px solid var(--border-color);">
+
+                <div class="form-actions-v2">
                     <button type="submit" id="save-agent-btn" class="btn-primary">حفظ الوكيل</button>
                     <button type="button" id="cancel-add-agent" class="btn-secondary">إلغاء</button>
                 </div>
@@ -980,6 +994,12 @@ function renderAddAgentForm() {
     // Avatar preview logic
     const avatarUploadInput = document.getElementById('avatar-upload');
     const avatarPreview = document.getElementById('avatar-preview');
+    const avatarContainer = avatarPreview.closest('.profile-avatar-edit');
+
+    if (avatarContainer) {
+        avatarContainer.addEventListener('click', () => avatarUploadInput.click());
+    }
+
     avatarUploadInput.addEventListener('change', () => {
         const file = avatarUploadInput.files[0];
         if (file) {
@@ -1015,7 +1035,7 @@ function renderAddAgentForm() {
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
 
-        const selectedDays = Array.from(document.querySelectorAll('.days-selector input:checked')).map(input => parseInt(input.value, 10));
+        const selectedDays = Array.from(document.querySelectorAll('.days-selector-v2 input:checked')).map(input => parseInt(input.value, 10));
         const rank = document.getElementById('agent-rank').value;
         const rankData = RANKS_DATA[rank] || {};
 

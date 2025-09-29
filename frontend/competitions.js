@@ -1240,7 +1240,7 @@ async function renderCompetitionTemplatesPage() {
 
     if (showFormBtn) {
         if (canEdit) {
-            showFormBtn.addEventListener('click', () => renderCreateTemplateModal(defaultContent, loadTemplates));
+            showFormBtn.addEventListener('click', () => renderCreateTemplateModal(defaultTemplateContent, loadTemplates));
         } else {
             showFormBtn.addEventListener('click', () => showToast('ليس لديك صلاحية لإنشاء قوالب.', 'error'));
         }
@@ -1369,45 +1369,47 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
     
     const modal = document.createElement('div');
     // I need to add a function to create the modal for archived templates
-    // Let's add the archive page first.
-    // The user wants a new page for the archive.
-
     modal.className = 'form-modal-content modal-wide'; // Use existing style from components.css
     
     modal.innerHTML = `
         <div class="form-modal-header">
             <h2><i class="fas fa-plus-circle"></i> إنشاء قالب مسابقة جديد</h2>
-            <button id="close-modal-btn" class="btn-secondary" style="min-width: 40px; padding: 5px 10px;">&times;</button>
+            <button id="close-modal-btn" class="btn-icon-action" title="إغلاق">&times;</button>
         </div>
         <div class="form-modal-body">
-            <form id="create-template-form" class="form-layout">
-                <div class="form-group">
-                    <label for="create-template-question">السؤال (سيكون اسم المسابقة)</label>
-                    <input type="text" id="create-template-question" required>
+            <form id="create-template-form" class="template-form-grid">
+                <div class="template-form-fields">
+                    <h3 class="details-section-title" style="margin-top: 0;"><i class="fas fa-info-circle"></i> الحقول الأساسية</h3>
+                    <div class="form-group">
+                        <label for="create-template-question">السؤال (سيكون اسم المسابقة)</label>
+                        <input type="text" id="create-template-question" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="create-template-correct-answer">الإجابة الصحيحة</label>
+                        <input type="text" id="create-template-correct-answer" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="create-template-classification">التصنيف (لمن سيظهر هذا القالب)</label>
+                        <select id="create-template-classification" required>
+                            <option value="All" selected>الكل (يظهر لجميع التصنيفات)</option>
+                            <option value="R">R</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="create-template-usage-limit">عدد مرات الاستخدام (اتركه فارغاً للاستخدام غير المحدود)</label>
+                        <input type="number" id="create-template-usage-limit" min="1" placeholder="مثال: 5">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="create-template-correct-answer">الإجابة الصحيحة</label>
-                    <input type="text" id="create-template-correct-answer" required>
+                <div class="template-form-content">
+                    <h3 class="details-section-title" style="margin-top: 0;"><i class="fas fa-file-alt"></i> محتوى المسابقة</h3>
+                    <div class="form-group">
+                        <textarea id="create-template-content" rows="15" required>${defaultContent}</textarea>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="create-template-classification">التصنيف (لمن سيظهر هذا القالب)</label>
-                    <select id="create-template-classification" required>
-                        <option value="All" selected>الكل (يظهر لجميع التصنيفات)</option>
-                        <option value="R">R</option>
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="create-template-content">محتوى المسابقة (الوصف)</label>
-                    <textarea id="create-template-content" rows="10" required>${defaultContent}</textarea>
-                </div>
-                <div class="form-group">
-                    <label for="create-template-usage-limit">عدد مرات الاستخدام (اتركه فارغاً للاستخدام غير المحدود)</label>
-                    <input type="number" id="create-template-usage-limit" min="1" placeholder="مثال: 5">
-                </div>
-                <div class="form-actions">
+                <div class="form-actions" style="grid-column: 1 / -1;">
                     <button type="submit" class="btn-primary"><i class="fas fa-save"></i> حفظ القالب</button>
                     <button type="button" id="cancel-create-modal" class="btn-secondary">إلغاء</button>
                 </div>
