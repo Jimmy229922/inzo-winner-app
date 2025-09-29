@@ -105,11 +105,16 @@ async function renderAgentProfilePage(agentId, options = {}) {
         taskIconsHtml = `<div class="profile-task-icons">${needsAudit ? '<i class="fas fa-clipboard-check pending-icon-audit" title="مطلوب تدقيق اليوم"></i>' : ''}${needsCompetition ? '<i class="fas fa-trophy pending-icon-comp" title="مطلوب إرسال مسابقة اليوم"></i>' : ''}</div>`;
     }
     // Helper for audit days in Action Tab
+    // --- تعديل: تحويل أيام التدقيق إلى أزرار تفاعلية ---
     const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-    const auditDaysHtml = (agent.audit_days && agent.audit_days.length > 0)
-        ? agent.audit_days.sort().map(dayIndex => `<span class="day-tag">${dayNames[dayIndex]}</span>`).join('')
-        : '<span class="day-tag-none">لا توجد أيام محددة</span>';
-
+    const auditDaysHtml = `
+        <div class="days-selector-v2 interactive-days">
+            ${dayNames.map((day, index) => `
+                <input type="checkbox" id="day-action-${index}" value="${index}" class="day-toggle-input" ${(agent.audit_days || []).includes(index) ? 'checked' : ''}>
+                <label for="day-action-${index}" class="day-toggle-btn">${day}</label>
+            `).join('')}
+        </div>
+    `;
     appContent.innerHTML = `
         <div class="profile-page-top-bar">
             <button id="back-btn" class="btn-secondary">&larr; عودة</button>
@@ -211,6 +216,36 @@ async function renderAgentProfilePage(agentId, options = {}) {
         });
     }
 
+    // --- تعديل: إضافة معالج للأحداث لأيام التدقيق التفاعلية ---
+    const interactiveDaysContainer = appContent.querySelector('.interactive-days');
+    if (interactiveDaysContainer) {
+        interactiveDaysContainer.addEventListener('change', async (e) => {
+            if (e.target.matches('.day-toggle-input')) {
+                const checkbox = e.target;
+                const selectedDays = Array.from(interactiveDaysContainer.querySelectorAll('input:checked')).map(input => parseInt(input.value, 10));
+
+                // Optimistic UI update
+                checkbox.disabled = true;
+
+                const { error } = await supabase
+                    .from('agents')
+                    .update({ audit_days: selectedDays })
+                    .eq('id', agent.id);
+
+                checkbox.disabled = false;
+
+                if (error) {
+                    showToast('فشل تحديث أيام التدقيق.', 'error');
+                    // Revert UI on error
+                    checkbox.checked = !checkbox.checked;
+                } else {
+                    showToast('تم تحديث أيام التدقيق بنجاح.', 'success');
+                    // Update local agent object to keep it in sync
+                    agent.audit_days = selectedDays;
+                }
+            }
+        });
+    }
     const createCompBtn = document.getElementById('create-agent-competition');
     if (createCompBtn) {
         if (canCreateComp) {
