@@ -141,6 +141,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
             <button class="tab-link" data-tab="details">تفاصيل</button>
             <button class="tab-link" data-tab="agent-competitions">المسابقات</button>
             <button class="tab-link" data-tab="log">سجل</button>
+            ${(isSuperAdmin || isAdmin) ? '<button class="tab-link" data-tab="analytics">تحليلات</button>' : ''}
         </div>
 
         <div id="tab-action" class="tab-content active">
@@ -191,6 +192,9 @@ async function renderAgentProfilePage(agentId, options = {}) {
         <div id="tab-log" class="tab-content">
             <h2>سجل النشاط</h2>
             <p>لا توجد سجلات حالياً لهذا الوكيل.</p>
+        </div>
+        <div id="tab-analytics" class="tab-content">
+            <!-- Analytics content will be rendered here -->
         </div>
     `;
  
@@ -445,6 +449,7 @@ ${benefitsText.trim()}
     const detailsTabContent = document.getElementById('tab-details');
     const logTabContent = document.getElementById('tab-log');
     const agentCompetitionsContent = document.getElementById('tab-agent-competitions');
+    const analyticsTabContent = document.getElementById('tab-analytics');
 
     // --- NEW: Render tab content based on permissions ---
     if (detailsTabContent) {
@@ -465,6 +470,11 @@ ${benefitsText.trim()}
             updateManualRenewButtonState(agent);
             logTabContent.innerHTML = generateActivityLogHTML(agentLogs);
         }
+    }
+
+    if (analyticsTabContent && (isSuperAdmin || isAdmin)) {
+        // Render analytics tab content
+        renderAgentAnalytics(agent.id, analyticsTabContent);
     }
     if (agentCompetitionsContent) {
         if (agentCompetitions && agentCompetitions.length > 0) {
@@ -505,7 +515,7 @@ ${benefitsText.trim()}
                     const progressBarHtml = `
                         <div class="stepper-wrapper step-${currentStatus.step}">
                             ${Object.values(statusSteps).map((s, index) => {
-                                const isLineCompleted = currentStatus.step > s.step;
+                                const isLineCompleted = currentStatus.step > index + 1;
                                 return `
                                 <div class="stepper-item ${currentStatus.step >= s.step ? 'completed' : ''}">
                                     <div class="step-counter">
@@ -575,21 +585,64 @@ ${benefitsText.trim()}
             if (completeBtn) {
                 const id = completeBtn.dataset.id;
                 const name = completeBtn.dataset.name;
+
+                // --- NEW: Show modal with required fields before completing ---
+                const modalContent = `
+                    <p>لإكمال مسابقة "<strong>${name}</strong>"، يرجى إدخال البيانات التالية:</p>
+                    <div class="form-layout" style="margin-top: 15px;">
+                        <div class="form-group">
+                            <label for="comp-views-count">عدد المشاهدات</label>
+                            <input type="number" id="comp-views-count" class="modal-input" required min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="comp-reactions-count">عدد التفاعلات</label>
+                            <input type="number" id="comp-reactions-count" class="modal-input" required min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="comp-participants-count">عدد المشاركات</label>
+                            <input type="number" id="comp-participants-count" class="modal-input" required min="0">
+                        </div>
+                    </div>
+                `;
+
                 showConfirmationModal(
-                    `هل أنت متأكد من إكمال مسابقة "${name}"؟<br><small>سيتم نقلها إلى أرشيف المسابقات المنتهية.</small>`,
+                    modalContent,
                     async () => {
-                        const { error } = await supabase.from('competitions').update({ status: 'completed', is_active: false }).eq('id', id);
+                        const views = document.getElementById('comp-views-count').value;
+                        const reactions = document.getElementById('comp-reactions-count').value;
+                        const participants = document.getElementById('comp-participants-count').value;
+
+                        const updateData = {
+                            status: 'completed',
+                            is_active: false,
+                            views_count: parseInt(views, 10),
+                            reactions_count: parseInt(reactions, 10),
+                            participants_count: parseInt(participants, 10)
+                        };
+
+                        const { error } = await supabase.from('competitions').update(updateData).eq('id', id);
+
                         if (error) {
                             showToast('فشل إكمال المسابقة.', 'error');
                         } else {
                             showToast('تم إكمال المسابقة بنجاح.', 'success');
-                            await logAgentActivity(agent.id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}".`);
+                            await logAgentActivity(agent.id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}" مع تسجيل بيانات الأداء.`);
                             renderAgentProfilePage(agent.id, { activeTab: 'agent-competitions' });
                         }
                     }, {
-                        title: 'تأكيد إكمال المسابقة',
+                        title: 'إكمال المسابقة وتسجيل الأداء',
                         confirmText: 'نعم، اكتملت',
-                        confirmClass: 'btn-primary'
+                        confirmClass: 'btn-primary',
+                        onRender: (modal) => {
+                            const confirmBtn = modal.querySelector('#confirm-btn');
+                            const inputs = modal.querySelectorAll('.modal-input');
+                            confirmBtn.disabled = true; // Disable by default
+
+                            inputs.forEach(input => input.addEventListener('input', () => {
+                                const allFilled = Array.from(inputs).every(i => i.value.trim() !== '' && parseInt(i.value, 10) >= 0);
+                                confirmBtn.disabled = !allFilled;
+                            }));
+                        }
                     }
                 );
                 return; // Stop further execution
@@ -802,16 +855,14 @@ function renderDetailsView(agent) {
     // Clear the container's content and re-add the event listener.
     // This prevents replacing the container itself, which caused content to leak across pages.
     container.innerHTML = htmlContent;
-    container.addEventListener('click', function handler(e) {
-        // Remove listener to prevent duplicates on next render
-        container.removeEventListener('click', handler);
-
+    const eventHandler = (e) => {
         const trigger = e.target.closest('.inline-edit-trigger');
         if (trigger) {
             const group = trigger.closest('.details-group');
             renderInlineEditor(group, agent);
         }
-    });
+    };
+    container.addEventListener('click', eventHandler);
 }
 
 
@@ -1030,6 +1081,205 @@ function displayNextRenewalDate(agent) {
 
     // Also update the button state based on the date
     updateManualRenewButtonState(agent);
+}
+
+// --- NEW: Agent Analytics Section ---
+async function renderAgentAnalytics(agentId, container, dateRange = 'all') {
+    container.innerHTML = '<div class="loader-container"><div class="spinner"></div></div>';
+
+    let query = supabase
+        .from('competitions')
+        .select('id, name, created_at, views_count, reactions_count, participants_count')
+        .eq('agent_id', agentId)
+        .not('views_count', 'is', null);
+
+    // --- NEW: Date Range Filtering ---
+    if (dateRange !== 'all') {
+        const today = new Date();
+        today.setHours(23, 59, 59, 999); // End of today
+        let startDate = new Date();
+
+        if (dateRange === '7d') {
+            startDate.setDate(today.getDate() - 7);
+        } else if (dateRange === '30d') {
+            startDate.setDate(today.getDate() - 30);
+        } else if (dateRange === 'month') {
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        }
+        startDate.setHours(0, 0, 0, 0); // Start of the day
+
+        query = query.gte('created_at', startDate.toISOString()).lte('created_at', today.toISOString());
+    }
+
+    const { data: competitions, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+        container.innerHTML = '<p class="error">فشل تحميل بيانات التحليلات.</p>';
+        return;
+    }
+
+    // --- NEW: Calculate KPIs ---
+    const totalCompetitions = competitions.length;
+    const totalViews = competitions.reduce((sum, c) => sum + (c.views_count || 0), 0);
+    const totalReactions = competitions.reduce((sum, c) => sum + (c.reactions_count || 0), 0);
+    const totalParticipants = competitions.reduce((sum, c) => sum + (c.participants_count || 0), 0);
+    const avgViews = totalCompetitions > 0 ? totalViews / totalCompetitions : 0;
+
+    // --- NEW: Calculate Growth Rate ---
+    let growthRate = 0;
+    if (competitions.length >= 2) {
+        const latest = competitions[0];
+        const previous = competitions[1];
+        const latestTotal = (latest.views_count || 0) + (latest.reactions_count || 0) + (latest.participants_count || 0);
+        const previousTotal = (previous.views_count || 0) + (previous.reactions_count || 0) + (previous.participants_count || 0);
+        if (previousTotal > 0) {
+            growthRate = ((latestTotal - previousTotal) / previousTotal) * 100;
+        }
+    }
+
+    const kpiCardsHtml = `
+        <div class="dashboard-grid-v2" style="margin-bottom: 20px;">
+            <div class="stat-card-v2 color-1">
+                <div class="stat-card-v2-icon-bg"><i class="fas fa-eye"></i></div>
+                <p class="stat-card-v2-value">${formatNumber(totalViews)}</p>
+                <h3 class="stat-card-v2-title">إجمالي المشاهدات</h3>
+            </div>
+            <div class="stat-card-v2 color-2">
+                <div class="stat-card-v2-icon-bg"><i class="fas fa-heart"></i></div>
+                <p class="stat-card-v2-value">${formatNumber(totalReactions)}</p>
+                <h3 class="stat-card-v2-title">إجمالي التفاعلات</h3>
+            </div>
+            <div class="stat-card-v2 color-3">
+                <div class="stat-card-v2-icon-bg"><i class="fas fa-users"></i></div>
+                <p class="stat-card-v2-value">${formatNumber(totalParticipants)}</p>
+                <h3 class="stat-card-v2-title">إجمالي المشاركات</h3>
+            </div>
+            <div class="stat-card-v2 color-4">
+                <div class="stat-card-v2-icon-bg"><i class="fas fa-chart-line"></i></div>
+                <p class="stat-card-v2-value">${growthRate.toFixed(1)}%</p>
+                <h3 class="stat-card-v2-title">معدل النمو</h3>
+            </div>
+        </div>
+    `;
+
+    // --- NEW: Date Filter and Export Buttons ---
+    const analyticsHeaderHtml = `
+        <div class="analytics-header">
+            <h2><i class="fas fa-chart-line"></i> تحليلات أداء المسابقات</h2>
+            <div class="analytics-actions">
+                <div class="filter-buttons">
+                    <button class="filter-btn ${dateRange === 'all' ? 'active' : ''}" data-range="all">الكل</button>
+                    <button class="filter-btn ${dateRange === '7d' ? 'active' : ''}" data-range="7d">آخر 7 أيام</button>
+                    <button class="filter-btn ${dateRange === '30d' ? 'active' : ''}" data-range="30d">آخر 30 يوم</button>
+                    <button class="filter-btn ${dateRange === 'month' ? 'active' : ''}" data-range="month">هذا الشهر</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // --- NEW: Event listener for date filters ---
+    container.addEventListener('click', (e) => {
+        if (e.target.matches('.filter-btn')) {
+            const newRange = e.target.dataset.range;
+            renderAgentAnalytics(agentId, container, newRange);
+        }
+    });
+
+    if (competitions.length === 0) {
+        container.innerHTML = `${analyticsHeaderHtml}<p class="no-results-message">لا توجد بيانات تحليلية في النطاق الزمني المحدد.</p>`;
+        return;
+    }
+
+    container.innerHTML = `
+        ${analyticsHeaderHtml}
+        ${kpiCardsHtml}
+        <div class="analytics-container">
+            <div class="chart-container" style="height: 350px; margin-bottom: 30px;">
+                <canvas id="agent-analytics-chart"></canvas>
+            </div>
+            <div class="table-responsive-container">
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th>اسم المسابقة</th>
+                            <th>تاريخ الإنشاء</th>
+                            <th>المشاهدات</th>
+                            <th>التفاعلات</th>
+                            <th>المشاركات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${competitions.map(c => `
+                            <tr>
+                                <td data-label="اسم المسابقة">${c.name}</td>
+                                <td data-label="تاريخ الإنشاء">${new Date(c.created_at).toLocaleDateString('ar-EG')}</td>
+                                <td data-label="المشاهدات">${formatNumber(c.views_count)}</td>
+                                <td data-label="التفاعلات">${formatNumber(c.reactions_count)}</td>
+                                <td data-label="المشاركات">${formatNumber(c.participants_count)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    // --- NEW: Render hourly performance chart (same as home page) ---
+    const ctx = document.getElementById('agent-analytics-chart')?.getContext('2d');
+    if (!ctx) return;
+
+    // Group performance data by hour
+    const hourlyViews = Array(24).fill(0);
+    const hourlyReactions = Array(24).fill(0);
+    const hourlyParticipants = Array(24).fill(0);
+
+    competitions.forEach(comp => {
+        const hour = new Date(comp.created_at).getHours();
+        hourlyViews[hour] += comp.views_count || 0;
+        hourlyReactions[hour] += comp.reactions_count || 0;
+        hourlyParticipants[hour] += comp.participants_count || 0;
+    });
+
+    const chartLabels = Array.from({ length: 24 }, (_, i) => {
+        const hour = i % 12 === 0 ? 12 : i % 12;
+        const ampm = i < 12 ? 'ص' : 'م';
+        return `${hour} ${ampm}`;
+    });
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartLabels,
+            datasets: [
+                {
+                    label: 'المشاهدات',
+                    data: hourlyViews,
+                    borderColor: 'var(--primary-color)',
+                    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'التفاعلات',
+                    data: hourlyReactions,
+                    borderColor: '#F4A261', // Accent color
+                    backgroundColor: 'rgba(244, 162, 97, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' } }
+            },
+            plugins: { legend: { position: 'top' } },
+            interaction: { mode: 'index', intersect: false }
+        }
+    });
 }
 
 function renderEditProfileHeader(agent, parentElement) {

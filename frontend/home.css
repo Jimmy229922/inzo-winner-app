@@ -46,6 +46,47 @@
     background: linear-gradient(135deg, #1B263B, #415A77);
 }
 
+/* --- NEW: Tooltip for Analytics Cards --- */
+.info-tooltip-v2 {
+    position: relative;
+    cursor: help;
+    display: inline-block; /* Ensure it takes space */
+}
+
+.info-tooltip-v2 .fa-info-circle {
+    color: rgba(255, 255, 255, 0.7);
+    transition: color 0.2s;
+}
+
+.info-tooltip-v2:hover .fa-info-circle {
+    color: white;
+}
+
+.info-tooltip-v2::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%; /* Position above the icon */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px; /* Use a fixed font size for consistency */
+    white-space: nowrap;
+    z-index: 10;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none; /* Prevent tooltip from blocking hover */
+}
+
+.info-tooltip-v2:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+/* --- End Tooltip Styles --- */
+
 .stat-card-v2-icon-bg {
     position: absolute;
     top: -20px;
