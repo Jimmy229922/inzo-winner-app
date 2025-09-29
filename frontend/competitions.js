@@ -64,7 +64,7 @@ async function renderCompetitionManagementPage() {
                     <div class="filter-group">
                         <label class="filter-label">فلترة حسب التصنيف</label>
                         <div class="filter-buttons" data-filter-group="classification">
-                            <button class="filter-btn active" data-filter="all">كل التصنيفات</button>
+                            <button class="filter-btn active" data-filter="all">الكل</button>
                             <button class="filter-btn" data-filter="R">R</button>
                             <button class="filter-btn" data-filter="A">A</button>
                             <button class="filter-btn" data-filter="B">B</button>
@@ -1391,7 +1391,7 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
                     <div class="form-group">
                         <label for="create-template-classification">التصنيف (لمن سيظهر هذا القالب)</label>
                         <select id="create-template-classification" required>
-                            <option value="All" selected>الكل (يظهر لجميع التصنيفات)</option>
+                            <option value="All" selected>عام (يظهر للجميع)</option>
                             <option value="R">R</option>
                             <option value="A">A</option>
                             <option value="B">B</option>
@@ -1688,7 +1688,7 @@ function renderEditTemplateModal(template, onSaveCallback) {
                 <div class="form-group">
                     <label for="edit-template-classification">التصنيف</label>
                     <select id="edit-template-classification" required>
-                        <option value="All" ${template.classification === 'All' ? 'selected' : ''}>الكل</option>
+                        <option value="All" ${template.classification === 'All' ? 'selected' : ''}>عام</option>
                         <option value="R" ${template.classification === 'R' ? 'selected' : ''}>R</option>
                         <option value="A" ${template.classification === 'A' ? 'selected' : ''}>A</option>
                         <option value="B" ${template.classification === 'B' ? 'selected' : ''}>B</option>

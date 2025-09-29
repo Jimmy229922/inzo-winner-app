@@ -142,6 +142,7 @@ async function handleRouting() {
         '#home': { func: renderHomePage, nav: 'nav-home' },
         '#tasks': { func: renderTasksPage, nav: 'nav-tasks' }, // Re-added this route
         '#add-agent': { func: renderAddAgentForm, nav: null }, // إصلاح: إضافة المسار المفقود
+        '#top-agents': { func: renderTopAgentsPage, nav: 'nav-top-agents' }, // NEW: Top Agents page
         '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents', adminOnly: false },
         '#competitions/edit': { func: renderCompetitionEditForm, nav: 'nav-manage-competitions' }, // NEW: Dedicated route for editing
         '#competitions': { func: renderCompetitionsPage, nav: 'nav-manage-competitions' },
@@ -182,7 +183,7 @@ async function handleRouting() {
         }
     }
 
-    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#archived-competitions' || hash === '#users') {
+    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#archived-competitions' || hash === '#users' || hash === '#top-agents') {
         mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
@@ -595,6 +596,7 @@ function setupNavbar() {
     const navHome = document.getElementById('nav-home');
     const navTasks = document.getElementById('nav-tasks');
     const navManageAgents = document.getElementById('nav-manage-agents');
+    const navTopAgents = document.getElementById('nav-top-agents'); // NEW
     const navManageCompetitions = document.getElementById('nav-manage-competitions');
     const navArchivedCompetitions = document.getElementById('nav-archived-competitions');
     const competitionsDropdown = document.getElementById('nav-competitions-dropdown');
@@ -605,11 +607,12 @@ function setupNavbar() {
     const navUsers = document.getElementById('nav-users'); // NEW
     const navProfileSettings = document.getElementById('nav-profile-settings');
 
-    navLinks = [navHome, navTasks, navManageAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navActivityLog, navUsers, navProfileSettings, document.getElementById('logout-btn')];
+    navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navActivityLog, navUsers, navProfileSettings, document.getElementById('logout-btn')];
     
     // NEW: Navigation listeners update the hash, which triggers the router
     if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'home'; });
     if (navTasks) navTasks.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'tasks'; });
+    if (navTopAgents) navTopAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'top-agents'; }); // NEW
     if (navManageAgents) navManageAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'manage-agents'; });
     if (navProfileSettings) navProfileSettings.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'profile-settings'; }); // NEW
     if (navManageCompetitions) navManageCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competitions'; });

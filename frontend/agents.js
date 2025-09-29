@@ -7,7 +7,7 @@ const RANKS_DATA = {
     'Pro': { competition_bonus: 150, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
     'Elite': { competition_bonus: 200, deposit_bonus_percentage: 50, deposit_bonus_count: 4 },
     // الحصرية
-    'Center': { competition_bonus: 650, deposit_bonus_percentage: 70, deposit_bonus_count: 4 },
+    'Center': { competition_bonus: 300, deposit_bonus_percentage: null, deposit_bonus_count: null },
     'Bronze': { competition_bonus: 150, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
     'Silver': { competition_bonus: 230, deposit_bonus_percentage: 40, deposit_bonus_count: 3 },
     'Gold': { competition_bonus: 300, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
@@ -90,6 +90,7 @@ async function renderManageAgentsPage() {
                 <div class="header-actions-group">
                     ${canRenewAll ? `<button id="renew-all-balances-btn" class="btn-primary"><i class="fas fa-sync-alt"></i> تجديد رصيد الوكلاء</button>` : ''}
                     <button id="bulk-send-balance-btn" class="btn-telegram-bonus"><i class="fas fa-bullhorn"></i> تعميم الأرصدة</button>
+                    ${isAdmin ? `<button id="bulk-add-agents-btn" class="btn-secondary"><i class="fas fa-users-cog"></i> إضافة وكلاء دفعة واحدة</button>` : ''}
                     <button id="add-agent-btn" class="btn-primary"><i class="fas fa-plus"></i> إضافة وكيل جديد</button>
                 </div>
             </div>
@@ -135,6 +136,14 @@ async function renderManageAgentsPage() {
     document.getElementById('bulk-send-balance-btn').addEventListener('click', () => {
         handleBulkSendBalances(allAgentsData);
     });
+
+    // --- NEW: Add listener for bulk add agents button ---
+    const bulkAddBtn = document.getElementById('bulk-add-agents-btn');
+    if (bulkAddBtn) {
+        bulkAddBtn.addEventListener('click', () => {
+            renderBulkAddAgentsModal();
+        });
+    }
 
     // Caching: If we already have the data, don't fetch it again.
     if (allAgentsData.length > 0) {
@@ -1093,12 +1102,14 @@ function renderAddAgentForm() {
         const rank = document.getElementById('agent-rank').value;
         const rankData = RANKS_DATA[rank] || {};
 
+        const selectedDays = Array.from(document.querySelectorAll('.days-selector-v2 input:checked')).map(input => parseInt(input.value, 10));
+
         const newAgentData = {
             name: document.getElementById('agent-name').value,
             agent_id: document.getElementById('agent-id').value,
             classification: document.getElementById('agent-classification').value,
             audit_days: selectedDays,
-            rank: rank || null,
+            rank: rank,
             telegram_channel_url: document.getElementById('telegram-channel-url').value || null,
             telegram_group_url: document.getElementById('telegram-group-url').value || null,
             telegram_chat_id: document.getElementById('telegram-chat-id').value || null,
@@ -1307,6 +1318,418 @@ async function renderActivityLogPage() {
     });
 
     await loadAndDisplayLogs(currentPage);
+}
+
+// --- NEW: Top Agents Page ---
+
+async function renderTopAgentsPage() {
+    const appContent = document.getElementById('app-content');
+    appContent.innerHTML = `
+        <div class="page-header column-header">
+            <div class="header-top-row">
+                <h1><i class="fas fa-star"></i> أبرز الوكلاء</h1>
+            </div>
+            <div class="agent-filters">
+                <div class="filter-group">
+                    <label class="filter-label">ترتيب حسب</label>
+                    <div class="filter-buttons" data-filter-group="sort">
+                        <button class="filter-btn active" data-sort="total_views">عدد المشاهدات</button>
+                        <button class="filter-btn" data-sort="total_reactions">عدد التفاعلات</button>
+                        <button class="filter-btn" data-sort="total_participants">عدد المشاركات</button>
+                        <button class="filter-btn" data-sort="growth_rate">معدل النمو</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">فلترة حسب التصنيف</label>
+                    <div class="filter-buttons" data-filter-group="classification">
+                        <button class="filter-btn active" data-filter="all">الكل</button>
+                        <button class="filter-btn" data-filter="R">R</button>
+                        <button class="filter-btn" data-filter="A">A</button>
+                        <button class="filter-btn" data-filter="B">B</button>
+                        <button class="filter-btn" data-filter="C">C</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="leaderboard-tabs">
+            <button class="leaderboard-tab-btn active" data-agent-type="exclusive">الوكلاء الحصريون</button>
+            <button class="leaderboard-tab-btn" data-agent-type="regular">الوكلاء الاعتياديون</button>
+        </div>
+        <div id="leaderboard-content-container">
+        </div>
+    `;
+
+    const [agentsResult, competitionsResult] = await Promise.all([
+        supabase.from('agents').select('id, name, agent_id, avatar_url, classification'),
+        supabase.from('competitions').select('agent_id, views_count, reactions_count, participants_count, created_at')
+            .not('views_count', 'is', null) // Only consider competitions with stats
+            .order('created_at', { ascending: false })
+    ]);
+
+    if (agentsResult.error || competitionsResult.error) {
+        document.getElementById('top-agents-list-container').innerHTML = '<p class="error">فشل تحميل بيانات الوكلاء.</p>';
+        return;
+    }
+
+    const agents = agentsResult.data;
+    const competitions = competitionsResult.data;
+
+    // Group competitions by agent
+    const competitionsByAgent = competitions.reduce((acc, comp) => {
+        if (!acc[comp.agent_id]) {
+            acc[comp.agent_id] = [];
+        }
+        acc[comp.agent_id].push(comp);
+        return acc;
+    }, {});
+
+    const agentStats = agents.map(agent => {
+        const agentComps = competitionsByAgent[agent.id] || [];
+        const total_views = agentComps.reduce((sum, c) => sum + (c.views_count || 0), 0);
+        const total_reactions = agentComps.reduce((sum, c) => sum + (c.reactions_count || 0), 0);
+        const total_participants = agentComps.reduce((sum, c) => sum + (c.participants_count || 0), 0);
+
+        let growth_rate = 0;
+        if (agentComps.length >= 2) {
+            const latest = agentComps[0];
+            const previous = agentComps[1];
+            const latestTotal = (latest.views_count || 0) + (latest.reactions_count || 0) + (latest.participants_count || 0);
+            const previousTotal = (previous.views_count || 0) + (previous.reactions_count || 0) + (previous.participants_count || 0);
+            if (previousTotal > 0) {
+                growth_rate = ((latestTotal - previousTotal) / previousTotal) * 100;
+            }
+        }
+
+        return {
+            ...agent,
+            total_views,
+            total_reactions,
+            total_participants,
+            growth_rate
+        };
+    });
+
+    setupTopAgentsFilters(agentStats, 'all'); // إصلاح: تمرير القيمة الافتراضية 'all'
+}
+
+function setupTopAgentsFilters(agentStats, dateRange) {
+    const container = document.getElementById('top-agents-list-container');
+    const sortFilterGroup = document.querySelector('.filter-buttons[data-filter-group="sort"]');
+    const classificationFilterGroup = document.querySelector('.filter-buttons[data-filter-group="classification"]');
+
+    const applyFilters = () => {
+        const sortKey = sortFilterGroup.querySelector('.active').dataset.sort;
+        const classification = classificationFilterGroup.querySelector('.active').dataset.filter;
+
+        let filteredAgents = agentStats;
+
+        if (classification !== 'all') {
+            filteredAgents = filteredAgents.filter(agent => agent.classification === classification);
+        }
+
+        filteredAgents.sort((a, b) => b[sortKey] - a[sortKey]);
+
+        displayTopAgents(filteredAgents, sortKey);
+    };
+
+    sortFilterGroup.addEventListener('click', (e) => {
+        if (e.target.matches('.filter-btn')) {
+            sortFilterGroup.querySelector('.active').classList.remove('active');
+            e.target.classList.add('active');
+            applyFilters();
+        }
+    });
+
+    classificationFilterGroup.addEventListener('click', (e) => {
+        if (e.target.matches('.filter-btn')) {
+            classificationFilterGroup.querySelector('.active').classList.remove('active');
+            e.target.classList.add('active');
+            applyFilters();
+        }
+    });
+
+    // Initial call to apply filters based on default UI state
+    applyFilters();
+}
+
+function applyAndDisplay(sortKey, classification) {
+    const agentStats = window.currentAgentStats || [];
+    const activeTab = document.querySelector('.leaderboard-tab-btn.active').dataset.agentType;
+
+    const exclusiveRanks = ['Center', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend', 'وكيل حصري بدون مرتبة'];
+    const regularRanks = ['Beginning', 'Growth', 'Pro', 'Elite'];
+
+    let agentsForTab = agentStats.filter(agent => {
+        if (activeTab === 'exclusive') return exclusiveRanks.includes(agent.rank);
+        return regularRanks.includes(agent.rank);
+    });
+
+    if (classification !== 'all') {
+        agentsForTab = agentsForTab.filter(agent => agent.classification === classification);
+    }
+
+    const classificationOrder = { 'R': 1, 'A': 2, 'B': 3, 'C': 4 };
+    agentsForTab.sort((a, b) => {
+        const sortValue = b[sortKey] - a[sortKey];
+        if (sortValue !== 0) return sortValue;
+        const orderA = classificationOrder[a.classification] || 99;
+        const orderB = classificationOrder[b.classification] || 99;
+        return orderA - orderB;
+    });
+
+    displayTopAgents(agentsForTab, sortKey);
+}
+
+
+function displayTopAgents(sortedAgents, sortKey) {
+    const container = document.getElementById('leaderboard-content-container');
+    const dateRange = document.querySelector('.filter-buttons[data-filter-group="date"] .active')?.dataset.range || 'all';
+
+    if (!container) return;
+    // --- NEW: Clear previous content and add a loading state ---
+    container.innerHTML = '<div class="loader-container"><div class="spinner"></div></div>';
+
+
+    if (!sortedAgents || sortedAgents.length === 0) {
+        container.innerHTML = '<div class="no-results-message"><i class="fas fa-ghost"></i><p>لا توجد بيانات لعرضها حسب الفلاتر المحددة.</p></div>';
+        return;
+    }
+
+    const getStatLabel = (key) => {
+        switch (key) {
+            case 'total_views': return 'مشاهدة';
+            case 'total_reactions': return 'تفاعل';
+            case 'total_participants': return 'مشاركة';
+            case 'growth_rate': return 'نمو';
+            default: return '';
+        }
+    };
+
+    const getStatValue = (agent, key) => {
+        if (key === 'growth_rate') {
+            return `${agent[key].toFixed(1)}%`;
+        }
+        return formatNumber(agent[key]);
+    };
+
+    const getRankIcon = (rank) => {
+        if (rank === 1) return '<span class="rank-icon gold">🥇</span>';
+        if (rank === 2) return '<span class="rank-icon silver">🥈</span>';
+        if (rank === 3) return '<span class="rank-icon bronze">🥉</span>';
+        return `<span class="rank-number">${rank}</span>`;
+    };
+
+    container.innerHTML = `
+        <div class="top-agents-list">
+            ${sortedAgents.map((agent, index) => {
+                const rank = index + 1;
+                const avatarHtml = agent.avatar_url
+                    ? `<img src="${agent.avatar_url}" alt="Avatar" class="avatar-medium" loading="lazy">`
+                    : `<div class="avatar-placeholder-medium"><i class="fas fa-user"></i></div>`;
+
+                return `
+                    <div class="top-agent-card" onclick="window.location.hash='#profile/${agent.id}'">
+                        <div class="rank-section">
+                            ${getRankIcon(rank)}
+                        </div>
+                        <div class="agent-info-section">
+                            ${avatarHtml}
+                            <div class="agent-details">
+                                <span class="agent-name">${agent.name}</span>
+                                <span class="agent-id">#${agent.agent_id}</span>
+                            </div>
+                        </div>
+                        <div class="stat-section">
+                            <span class="stat-value">${getStatValue(agent, sortKey)}</span>
+                            <span class="stat-label">${getStatLabel(sortKey)}</span>
+                        </div>
+                        <div class="classification-section">
+                            <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+// --- NEW: Bulk Add Agents Feature ---
+
+function renderBulkAddAgentsModal() {
+    const modalContent = `
+        <div class="form-layout" style="gap: 15px;">
+            <div class="form-group">
+                <label for="bulk-agents-data">
+                    <i class="fas fa-paste"></i> الصق بيانات الوكلاء هنا
+                </label>
+                <p class="form-hint">
+                    يجب أن تكون البيانات مفصولة بمسافة Tab (يمكنك نسخها من جدول Excel).<br>
+                    الترتيب المطلوب للأعمدة: <strong>الاسم، رقم الوكالة، التصنيف، المرتبة، فترة التجديد، أيام التدقيق، رابط القناة، رابط الجروب، معرف الدردشة، اسم المجموعة</strong>
+                </p>
+                <textarea id="bulk-agents-data" rows="15" placeholder="مثال:\nأحمد علي\t12345\tR\tGrowth\tweekly\t1,3,5\thttps://t.me/channel\thttps://t.me/group\t-100123\tGroup Name"></textarea>
+            </div>
+        </div>
+    `;
+
+    showConfirmationModal(
+        modalContent,
+        () => {
+            const data = document.getElementById('bulk-agents-data').value;
+            handleBulkAddAgents(data);
+        },
+        {
+            title: 'إضافة وكلاء دفعة واحدة',
+            confirmText: 'بدء الإضافة',
+            confirmClass: 'btn-primary',
+            modalClass: 'modal-fullscreen'
+        }
+    );
+}
+
+async function handleBulkAddAgents(data) {
+    const lines = data.trim().split('\n');
+    if (lines.length === 0 || (lines.length === 1 && lines[0].trim() === '')) {
+        showToast('لم يتم إدخال أي بيانات.', 'info');
+        return;
+    }
+
+    const agentsToInsert = [];
+    const errors = [];
+    const validRenewalPeriods = ['none', 'weekly', 'biweekly', 'monthly'];
+    
+    // --- NEW: Mappings for Arabic input ---
+    const renewalPeriodMap = {
+        'اسبوع': 'weekly', 'أسبوعي': 'weekly',
+        'اسبوعين': 'biweekly', 'كل أسبوعين': 'biweekly',
+        'شهر': 'monthly', 'شهري': 'monthly',
+        'بدون': 'none'
+    };
+    const auditDayMap = {
+        'الاحد': 0, 'الأحد': 0,
+        'الاثنين': 1, 'الإثنين': 1,
+        'الثلاثاء': 2,
+        'الاربعاء': 3, 'الأربعاء': 3,
+        'الخميس': 4,
+        'الجمعة': 5,
+        'السبت': 6
+    };
+
+    lines.forEach((line, index) => {
+        const fields = line.split('\t').map(f => f.trim());
+        if (fields.length < 4) { // At least Name, ID, Classification, Rank are required
+            errors.push(`السطر ${index + 1}: عدد الحقول غير كافٍ.`);
+            return;
+        }
+
+        const [
+            name, agent_id, classification, rank, 
+            renewal_period = 'none', 
+            audit_days_str = '', 
+            telegram_channel_url = '', 
+            telegram_group_url = '', 
+            telegram_chat_id = '', 
+            telegram_group_name = ''] = fields;
+
+        if (!name || !agent_id || !classification || !rank) {
+            errors.push(`السطر ${index + 1}: الحقول الأساسية (الاسم، الرقم، التصنيف، المرتبة) مطلوبة.`);
+            return;
+        }
+
+        if (!RANKS_DATA[rank]) {
+            errors.push(`السطر ${index + 1}: المرتبة "${rank}" غير صالحة.`);
+            return;
+        }
+
+        // --- NEW: Process renewal period with Arabic mapping ---
+        const processedRenewalPeriod = renewalPeriodMap[renewal_period.toLowerCase()] || renewal_period.toLowerCase();
+        if (!validRenewalPeriods.includes(processedRenewalPeriod)) {
+            errors.push(`السطر ${index + 1}: فترة التجديد "${renewal_period}" غير صالحة.`);
+            return;
+        }
+
+        // --- NEW: Process audit days with Arabic mapping ---
+        const audit_days = audit_days_str
+            .split(/[,/]/) // Split by comma or slash
+            .map(dayName => auditDayMap[dayName.trim()])
+            .filter(dayIndex => dayIndex !== undefined && dayIndex >= 0 && dayIndex <= 6);
+
+        const rankData = RANKS_DATA[rank];
+        const newAgent = {
+            name,
+            agent_id,
+            classification,
+            rank,
+            renewal_period: processedRenewalPeriod,
+            audit_days,
+            telegram_channel_url: telegram_channel_url || null,
+            telegram_group_url: telegram_group_url || null,
+            telegram_chat_id: telegram_chat_id || null,
+            telegram_group_name: telegram_group_name || null,
+            competition_bonus: rankData.competition_bonus,
+            deposit_bonus_percentage: rankData.deposit_bonus_percentage,
+            deposit_bonus_count: rankData.deposit_bonus_count,
+            remaining_balance: rankData.competition_bonus,
+            remaining_deposit_bonus: rankData.deposit_bonus_count,
+            consumed_balance: 0,
+            used_deposit_bonus: 0,
+        };
+        agentsToInsert.push(newAgent);
+    });
+
+    if (errors.length > 0) {
+        showToast(`تم العثور على ${errors.length} أخطاء في البيانات. يرجى تصحيحها والمحاولة مرة أخرى.`, 'error');
+        console.error('Bulk Add Errors:', errors);
+        // Optionally, show a modal with all errors
+        return;
+    }
+
+    if (agentsToInsert.length === 0) {
+        showToast('لا توجد بيانات صالحة للإضافة.', 'info');
+        return;
+    }
+
+    // Show progress modal
+    showBulkSendProgressModal(agentsToInsert.length);
+    const progressBar = document.getElementById('bulk-send-progress-bar-inner');
+    const statusText = document.getElementById('bulk-send-status-text');
+    statusText.innerHTML = `جاري إضافة ${agentsToInsert.length} وكيل...`;
+
+    const { data: insertedAgents, error: insertError } = await supabase
+        .from('agents')
+        .insert(agentsToInsert)
+        .select('name');
+
+    if (insertError) {
+        progressBar.style.width = '100%';
+        progressBar.style.backgroundColor = 'var(--danger-color)';
+        statusText.innerHTML = `فشل إضافة الوكلاء.<br><small>${insertError.message}</small>`;
+        document.querySelector('.modal-no-actions .update-icon').className = 'fas fa-times-circle update-icon';
+        showToast('فشل إضافة الوكلاء بشكل جماعي.', 'error');
+        console.error('Bulk insert error:', insertError);
+    } else {
+        const successCount = insertedAgents.length;
+        const errorCount = agentsToInsert.length - successCount;
+
+        progressBar.style.width = '100%';
+        progressBar.style.backgroundColor = errorCount > 0 ? 'var(--warning-color)' : 'var(--success-color)';
+        statusText.innerHTML = `اكتملت العملية.<br><strong>${successCount}</strong> وكيل بنجاح | <strong>${errorCount}</strong> فشل.`;
+        document.querySelector('.modal-no-actions .update-icon').className = 'fas fa-check-circle update-icon';
+        
+        await logAgentActivity(null, 'BULK_AGENT_CREATED', `تمت إضافة ${successCount} وكيل بشكل جماعي.`);
+        showToast('اكتملت عملية الإضافة الجماعية.', 'success');
+
+        // Refresh the agents list
+        allAgentsData = []; // Clear cache
+        await renderManageAgentsPage();
+    }
+
+    // Auto-close progress modal
+    setTimeout(() => {
+        const modalOverlay = document.querySelector('.modal-overlay');
+        if (modalOverlay) {
+            modalOverlay.remove();
+        }
+    }, 4000);
 }
 
 async function handleMarkAllTasksComplete() {

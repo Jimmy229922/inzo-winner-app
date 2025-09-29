@@ -14,11 +14,11 @@
     font-weight: bold;
     color: white;
 }
-
-.classification-badge.classification-r { background-color: #9b59b6; } /* Purple */
-.classification-badge.classification-a { background-color: #e74c3c; } /* Red */
-.classification-badge.classification-b { background-color: #3498db; } /* Blue */
-.classification-badge.classification-c { background-color: #2ecc71; } /* Green */
+/* تعديل: جعل الألوان أغمق لتحسين وضوح النص الأبيض */
+.classification-badge.classification-r { background-color: #8e44ad; } /* Darker Purple */
+.classification-badge.classification-a { background-color: #c0392b; } /* Darker Red */
+.classification-badge.classification-b { background-color: #2980b9; } /* Darker Blue */
+.classification-badge.classification-c { background-color: #27ae60; } /* Darker Green */
 
 /* --- Task Group Header Redesign --- */
 .task-group-header {
