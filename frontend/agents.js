@@ -77,13 +77,18 @@ async function renderTasksPage() {
 }
 
 async function renderManageAgentsPage() {
+    // --- NEW: Permission Check ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
+    const canRenewAll = isAdmin || currentUserProfile?.permissions?.agents?.can_renew_all_balances;
+
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
         <div class="page-header column-header">
             <div class="header-top-row">
                 <h1>إدارة الوكلاء</h1>
                 <div class="header-actions-group">
-                    <button id="renew-all-balances-btn" class="btn-primary"><i class="fas fa-sync-alt"></i> تجديد رصيد الوكلاء</button>
+                    ${canRenewAll ? `<button id="renew-all-balances-btn" class="btn-primary"><i class="fas fa-sync-alt"></i> تجديد رصيد الوكلاء</button>` : ''}
                     <button id="bulk-send-balance-btn" class="btn-telegram-bonus"><i class="fas fa-bullhorn"></i> تعميم الأرصدة</button>
                     <button id="add-agent-btn" class="btn-primary"><i class="fas fa-plus"></i> إضافة وكيل جديد</button>
                 </div>
@@ -119,9 +124,12 @@ async function renderManageAgentsPage() {
     });
 
     // تعديل: إضافة معالج لزر تجديد رصيد الوكلاء
-    document.getElementById('renew-all-balances-btn').addEventListener('click', () => {
-        handleRenewAllBalances();
-    });
+    const renewBtn = document.getElementById('renew-all-balances-btn');
+    if (renewBtn) {
+        renewBtn.addEventListener('click', () => {
+            handleRenewAllBalances();
+        });
+    }
 
     // تعديل: إضافة معالج لزر الإرسال الجماعي
     document.getElementById('bulk-send-balance-btn').addEventListener('click', () => {

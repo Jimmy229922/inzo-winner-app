@@ -29,10 +29,10 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
     const compsPerms = currentUserProfile?.permissions?.competitions || {};
     const canViewFinancials = isSuperAdmin || isAdmin; // تعديل: السماح للمسؤول برؤية التفاصيل دائماً
-    const canEditProfile = isAdmin; // تعديل: السماح للمسؤولين بتعديل الملف الشخصي
+    const canEditProfile = isAdmin;
     const canEditFinancials = isSuperAdmin || isAdmin; // تعديل: السماح للمسؤول بتعديل البيانات المالية دائماً
-    const canViewAgentComps = isAdmin || agentPerms.can_view_competitions_tab;
-    const canCreateComp = isSuperAdmin || compsPerms.can_create;
+    const canViewAgentComps = isAdmin || agentPerms.can_view_competitions_tab; // المسؤولون لديهم صلاحية عرض المسابقات دائماً
+    const canCreateComp = isAdmin || compsPerms.can_create; // المسؤولون لديهم صلاحية إنشاء المسابقات دائماً
 
     // Check for edit mode in hash, e.g., #profile/123/edit
     const hashParts = window.location.hash.split('/');

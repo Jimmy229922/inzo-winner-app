@@ -89,9 +89,12 @@ async function fetchUsersData() {
 function renderUserRow(user) {
     const isCurrentUser = currentUserProfile && user.id === currentUserProfile.id;
     const isTargetAdmin = user.role === 'admin';
-    const isTargetSuperAdmin = user.role === 'super_admin';
     const isCurrentUserAdmin = currentUserProfile?.role === 'admin';
     const isCurrentUserSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const isTargetSuperAdmin = user.role === 'super_admin';
+
+    // --- إصلاح: تعريف متغير الحالة في بداية الدالة لتجنب أخطاء الوصول ---
+    const isInactive = user.status === 'inactive';
 
     const lastLogin = user.last_sign_in_at 
         ? new Date(user.last_sign_in_at).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })
@@ -110,7 +113,6 @@ function renderUserRow(user) {
     const employeeBadgeHtml = user.role === 'user' ? '<span class="employee-badge">موظف</span>' : '';
 
     // NEW: Add status badge and styles for inactive users
-    const isInactive = user.status === 'inactive';
     const statusBadgeHtml = isInactive ? '<span class="status-badge inactive">معطل</span>' : '';
     
     // NEW: Realtime presence indicator
@@ -133,9 +135,10 @@ function renderUserRow(user) {
             </td>
             <td data-label="الصلاحية">
                 ${(() => {
-                    // A regular admin cannot change any roles. Only Super Admin can.
-                    const roleSelectDisabled = isCurrentUser || !isCurrentUserSuperAdmin;
-                    const roleSelectTitle = isCurrentUserSuperAdmin ? 'تغيير الصلاحية' : 'فقط المدير العام يمكنه تغيير الصلاحيات';
+                    // --- تعديل: فقط المدير العام يمكنه تغيير الصلاحيات ---
+                    const canChangeRoles = isCurrentUserSuperAdmin;
+                    const roleSelectDisabled = isCurrentUser || !canChangeRoles || isTargetAdmin; // لا يمكن للمدير العام تغيير صلاحية مسؤول آخر
+                    const roleSelectTitle = canChangeRoles ? 'تغيير الصلاحية' : 'فقط المدير العام يمكنه تغيير الصلاحيات';
 
                     if (isTargetSuperAdmin) {
                         return `<span class="role-display super-admin" title="لا يمكن تغيير صلاحية المدير العام">مدير عام</span>`;
@@ -147,18 +150,18 @@ function renderUserRow(user) {
                 })()}
             </td>
             <td data-label="آخر تسجيل دخول">${lastLogin}</td>
-            <td class="actions-cell">
+            ${(() => {
+                const isAdmin = isCurrentUserAdmin || isCurrentUserSuperAdmin;
+                if (!isAdmin) return ''; // لا تعرض العمود لغير المسؤولين
+                                return `<td class="actions-cell">
                 ${(() => {
-                    // New permission logic:
-                    // Super Admin can do anything. Admin can do anything except on Super Admin.
-                    const isOperatingOnSuperAdmin = isTargetSuperAdmin;
-                    const canPerformAction = isCurrentUserSuperAdmin || (isAdmin && !isOperatingOnSuperAdmin);
-
-                    let toggleDisabled = false;
-                    let toggleTitle = isInactive ? 'تفعيل الحساب' : 'تعطيل الحساب';
-
+                    // --- تعديل: تحديد صلاحيات الإجراءات بدقة ---
+                    // لا يمكن للمسؤول العادي اتخاذ أي إجراء على المدير العام
+                    if (isCurrentUserAdmin && isTargetSuperAdmin) {
+                        return ''; // إرجاع خلية فارغة
+                    }
+                    
                     if (isCurrentUser) {
-                        toggleDisabled = true; // Can't disable self
                         // For the current user (Super Admin), hide the main action buttons
                         return `<label class="custom-checkbox toggle-switch small-toggle" title="لا يمكن تعطيل حسابك الخاص" ${isCurrentUser ? 'style="display:none;"' : ''}>
                                     <input type="checkbox" class="status-toggle" data-user-id="${user.id}" ${!isInactive ? 'checked' : ''} disabled>
@@ -166,32 +169,24 @@ function renderUserRow(user) {
                                 </label>`;
                     }
                     
-                    const permissionsDisabled = !canPerformAction || isTargetSuperAdmin;
-                    const editDisabled = !canPerformAction;
-                    const deleteDisabled = !canPerformAction;
-                    const editTitle = editDisabled ? 'لا يمكن تعديل بيانات هذا المستخدم' : 'تعديل المستخدم';
-                    const deleteTitle = deleteDisabled ? 'لا يمكن حذف هذا المستخدم' : 'حذف المستخدم نهائياً';
-
-                    if (isOperatingOnSuperAdmin && !isCurrentUserSuperAdmin) {
-                        toggleDisabled = true;
-                        toggleTitle = 'لا يمكن تعديل حالة المدير العام';
-                    }
-
-                    return `<button class="btn-secondary edit-user-btn" data-user-id="${user.id}" ${editDisabled ? 'disabled' : ''} title="${editTitle}">
+                    return `<button class="btn-secondary edit-user-btn" data-user-id="${user.id}" title="تعديل بيانات المستخدم">
                         <i class="fas fa-edit"></i> تعديل
                     </button>
-                    <button class="btn-primary permissions-user-btn" data-user-id="${user.id}" ${permissionsDisabled ? 'disabled' : ''} title="${permissionsDisabled ? 'لا يمكن تعديل صلاحيات هذا المستخدم' : 'إدارة الصلاحيات'}">
+                    <button class="btn-primary permissions-user-btn" data-user-id="${user.id}" title="إدارة الصلاحيات">
                         <i class="fas fa-shield-alt"></i> الصلاحيات
                     </button>
-                    <button class="btn-danger delete-user-btn" data-user-id="${user.id}" ${deleteDisabled ? 'disabled' : ''} title="${deleteTitle}">
+                    <button class="btn-danger delete-user-btn" data-user-id="${user.id}" title="حذف المستخدم نهائياً" ${!isCurrentUserSuperAdmin ? 'disabled' : ''}>
                         <i class="fas fa-trash-alt"></i> حذف
                     </button>
-                    <label class="custom-checkbox toggle-switch small-toggle" title="${toggleTitle}" ${isCurrentUser ? 'style="display:none;"' : ''}>
-                        <input type="checkbox" class="status-toggle" data-user-id="${user.id}" ${!isInactive ? 'checked' : ''} ${toggleDisabled ? 'disabled' : ''}>
+                    <label class="custom-checkbox toggle-switch small-toggle" title="${isInactive ? 'تفعيل الحساب' : 'تعطيل الحساب'}">
+                        <input type="checkbox" class="status-toggle" data-user-id="${user.id}" ${!isInactive ? 'checked' : ''}>
                         <span class="slider round"></span>
                     </label>`;
                 })()}
-            </td>
+
+
+            </td>`;
+            })()}
         </tr>
     `;
 }
@@ -206,6 +201,10 @@ function setupUserPageFilters(allUsers) {
 
     if (!searchInput || !container) return;
     allUsersCache = allUsers; // Store users in cache
+
+    // --- إصلاح: تعريف متغير صلاحية المدير العام في النطاق الصحيح ---
+    const isCurrentUserSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const isCurrentUserAdmin = currentUserProfile?.role === 'admin';
 
     const applyFilters = () => {
         if (clearBtn) {
@@ -235,7 +234,7 @@ function setupUserPageFilters(allUsers) {
                             <th class="user-column">المستخدم</th>
                                 <th>الصلاحية</th>
                                 <th>آخر تسجيل دخول</th>
-                                <th class="actions-column">الإجراءات</th>
+                                ${isCurrentUserSuperAdmin || isCurrentUserAdmin ? '<th class="actions-column">الإجراءات</th>' : ''}
                             </tr>
                         </thead>
                         <tbody>
@@ -748,7 +747,7 @@ function renderPermissionsModal(user) {
 
     const p = user.permissions || {}; // Short alias for permissions
     // Set defaults for any missing permission structures
-    p.agents = p.agents || { view_financials: false, edit_profile: false, edit_financials: false, can_view_competitions_tab: false };
+    p.agents = p.agents || { view_financials: false, edit_profile: false, edit_financials: false, can_view_competitions_tab: false, can_renew_all_balances: false };
     p.competitions = p.competitions || { manage_comps: 'none', manage_templates: 'none', can_create: false };
 
     modal.innerHTML = `
@@ -799,6 +798,14 @@ function renderPermissionsModal(user) {
                             </tr>
                         </thead>
                         <tbody>
+                             <tr>
+                                <td class="permission-name">
+                                    <i class="fas fa-sync-alt"></i>
+                                    <strong>تجديد رصيد جميع الوكلاء</strong>
+                                    <small>السماح للموظف باستخدام زر "تجديد رصيد الوكلاء" في صفحة إدارة الوكلاء.</small>
+                                </td>
+                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-agents-renew-all" ${p.agents.can_renew_all_balances ? 'checked' : ''}><span class="slider round"></span></label></td>
+                            </tr>
                              <tr>
                                 <td class="permission-name">
                                     <i class="fas fa-magic"></i>
@@ -853,6 +860,7 @@ function renderPermissionsModal(user) {
                 edit_profile: false, 
                 edit_financials: false, 
                 can_view_competitions_tab: modal.querySelector('#perm-agents-view-competitions')?.checked || false, // This will be read from the new toggle
+                can_renew_all_balances: modal.querySelector('#perm-agents-renew-all')?.checked || false,
             },
             competitions: {
                 manage_comps: modal.querySelector('input[name="perm_manage_comps"]:checked')?.value || 'none',

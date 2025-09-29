@@ -310,14 +310,12 @@ apiRouter.delete('/users/:id', authMiddleware, async (req, res) => {
     try {
         // --- NEW: Security Check - Only Super Admin can delete users ---
         const { data: performingUser, error: performingUserError } = await supabaseAdmin.from('users').select('role').eq('id', req.user.id).single();
-        if (performingUserError) throw new Error('Could not verify performing user permissions.');
+        if (performingUserError || performingUser.role !== 'super_admin') {
+            return res.status(403).json({ message: 'فقط المدير العام يمكنه حذف المستخدمين.' });
+        }
 
-        // Admins can delete other users, but not the Super Admin.
         const { data: targetUser, error: targetUserError } = await supabaseAdmin.from('users').select('role').eq('id', id).single();
         if (targetUserError) throw new Error('Could not find the user to delete.');
-        if (performingUser.role === 'admin' && targetUser.role === 'super_admin') {
-            return res.status(403).json({ message: 'لا يمكن لمسؤول حذف مسؤول آخر.' });
-        }
 
         // --- NEW: Security Check - User cannot delete themselves ---
         if (req.user.id === id) {
@@ -340,6 +338,13 @@ apiRouter.get('/users', authMiddleware, async (req, res) => {
     }
 
     try {
+        // --- إصلاح: التحقق من صلاحيات المسؤول قبل جلب البيانات ---
+        const { data: performingUser, error: performingUserError } = await supabaseAdmin.from('users').select('role').eq('id', req.user.id).single();
+        if (performingUserError) throw new Error('Could not verify performing user permissions.');
+        const isAdmin = performingUser.role === 'admin' || performingUser.role === 'super_admin';
+        if (!isAdmin) {
+            return res.status(403).json({ message: 'ليس لديك الصلاحية لعرض هذه الصفحة.' });
+        }
         // --- إصلاح: العودة إلى طريقة الدمج اليدوي للبيانات لضمان الاستقرار ---
         // 1. جلب جميع المستخدمين من نظام المصادقة
         const { data: { users: authUsers }, error: authError } = await supabaseAdmin.auth.admin.listUsers();

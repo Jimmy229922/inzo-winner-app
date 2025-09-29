@@ -26,10 +26,9 @@ async function renderCompetitionManagementPage() {
     const appContent = document.getElementById('app-content');
     // --- NEW: Permission Check ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
     const compsPerm = currentUserProfile?.permissions?.competitions?.manage_comps || 'none';
-    const canEdit = isSuperAdmin || compsPerm === 'full';
-    const canView = isSuperAdmin || compsPerm === 'full' || compsPerm === 'view';
-
+    const canView = isAdmin || compsPerm === 'full' || compsPerm === 'view';
     if (!canView) {
         appContent.innerHTML = `
             <div class="access-denied-container">
@@ -40,6 +39,7 @@ async function renderCompetitionManagementPage() {
         return;
     }
 
+    const canEdit = isAdmin || compsPerm === 'full';
     selectedCompetitionIds = []; // Reset selection on page render
     appContent.innerHTML = `
         <div class="page-header column-header">
@@ -984,8 +984,9 @@ async function renderArchivedCompetitionsPage() {
     const appContent = document.getElementById('app-content');
     // --- NEW: Permission Check ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
     const compsPerm = currentUserProfile?.permissions?.competitions?.manage_comps || 'none';
-    const canView = isSuperAdmin || compsPerm === 'full' || compsPerm === 'view';
+    const canView = isAdmin || templatesPerm === 'full' || templatesPerm === 'view';
 
     if (!canView) {
         appContent.innerHTML = `
@@ -1163,9 +1164,9 @@ async function renderCompetitionTemplatesPage() {
     // --- NEW: Permission Check ---
     const appContent = document.getElementById('app-content');
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
     const templatesPerm = currentUserProfile?.permissions?.competitions?.manage_templates || 'none';
-    const canEdit = isSuperAdmin || templatesPerm === 'full';
-    const canView = isSuperAdmin || templatesPerm === 'full' || templatesPerm === 'view';
+    const canView = isAdmin || templatesPerm === 'full' || templatesPerm === 'view';
 
     if (!canView) {
         appContent.innerHTML = `
@@ -1177,6 +1178,7 @@ async function renderCompetitionTemplatesPage() {
         return;
     }
 
+    const canEdit = isAdmin || templatesPerm === 'full'; // إصلاح: تعريف الصلاحية بعد التحقق من العرض
     document.querySelector('main').classList.add('full-width');
 
     const defaultTemplateContent = `مسابقة جديدة من شركة إنزو للتداول 🏆
@@ -1509,12 +1511,12 @@ async function renderArchivedTemplatesPage() {
     const appContent = document.getElementById('app-content');
     // --- NEW: Permission Check ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
     const templatesPerm = currentUserProfile?.permissions?.competitions?.manage_templates || 'none';
-    const canView = isSuperAdmin || templatesPerm === 'full' || templatesPerm === 'view';
+    const canView = isAdmin || templatesPerm === 'full' || templatesPerm === 'view';
 
     if (!canView) {
-        appContent.innerHTML = `
-            <div class="access-denied-container">
+        appContent.innerHTML = ` d
                 <i class="fas fa-lock"></i>
                 <h2>ليس لديك صلاحية وصول</h2>
                 <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
