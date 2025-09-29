@@ -234,6 +234,12 @@ async function initializeSupabase() {
                     showToast(message, type || 'info');
                 }
 
+                // --- NEW: Handle automatic page reload on app update ---
+                if (notification_type === 'APP_UPDATE') {
+                    console.log('[RELOAD] App update notification received. Reloading page in 3 seconds...');
+                    setTimeout(() => window.location.reload(true), 3000); // Reload after 3 seconds
+                }
+
                 // If it's a balance renewal and we are on the correct profile page, refresh the page content.
                 if (notification_type === 'BALANCE_RENEWAL' && agent_id) {
                     const currentHash = window.location.hash;

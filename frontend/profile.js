@@ -832,9 +832,9 @@ function renderDetailsView(agent) {
             ${createFieldHTML('نسبة بونص الإيداع', agent.deposit_bonus_percentage, 'deposit_bonus_percentage', false)}
             
             <h3 class="details-section-title">الأرصدة</h3>
-            ${createFieldHTML('رصيد مستهلك', agent.consumed_balance, 'consumed_balance', false)}
+            ${createFieldHTML('رصيد مستهلك', agent.consumed_balance, 'consumed_balance', true)}
             ${createFieldHTML('رصيد متبقي', agent.remaining_balance, 'remaining_balance', false)}            
-            ${createFieldHTML('بونص إيداع مستخدم', agent.used_deposit_bonus, 'used_deposit_bonus', false)}
+            ${createFieldHTML('بونص إيداع مستخدم', agent.used_deposit_bonus, 'used_deposit_bonus', true)}
             ${createFieldHTML('بونص إيداع متبقي', agent.remaining_deposit_bonus, 'remaining_deposit_bonus', false)}
 
             <h3 class="details-section-title">إعدادات المسابقة الواحدة</h3>
@@ -876,7 +876,7 @@ function renderInlineEditor(groupElement, agent) {
     let editorHtml = '';
 
     // Special cases for read-only fields
-    if (['competition_bonus', 'deposit_bonus_percentage', 'deposit_bonus_count', 'remaining_balance', 'remaining_deposit_bonus', 'winner_selection_date', 'prize_per_winner', 'competition_duration', 'consumed_balance', 'used_deposit_bonus', 'last_competition_date'].includes(fieldName)) {
+    if (['competition_bonus', 'deposit_bonus_percentage', 'deposit_bonus_count', 'remaining_balance', 'remaining_deposit_bonus', 'winner_selection_date', 'prize_per_winner', 'competition_duration', 'last_competition_date'].includes(fieldName)) {
         showToast('يتم حساب هذا الحقل تلقائياً.', 'info');
         return;
     }
@@ -1224,49 +1224,58 @@ async function renderAgentAnalytics(agentId, container, dateRange = 'all') {
         </div>
     `;
 
-    // --- NEW: Render hourly performance chart (same as home page) ---
+    // --- NEW: Render daily performance chart ---
     const ctx = document.getElementById('agent-analytics-chart')?.getContext('2d');
     if (!ctx) return;
 
-    // Group performance data by hour
-    const hourlyViews = Array(24).fill(0);
-    const hourlyReactions = Array(24).fill(0);
-    const hourlyParticipants = Array(24).fill(0);
+    // Determine the date range for the chart labels
+    const chartLabels = [];
+    const dailyData = {};
+    const today = new Date();
+    let daysInChart = 7; // Default for 'all' or '7d'
+
+    if (dateRange === '30d') daysInChart = 30;
+    else if (dateRange === 'month') daysInChart = today.getDate();
+    else if (dateRange === 'all') {
+        // For 'all', find the oldest competition to set the range, or default to 30 days
+        if (competitions.length > 0) {
+            const oldestDate = new Date(competitions[competitions.length - 1].created_at);
+            const diffTime = Math.abs(today - oldestDate);
+            daysInChart = Math.max(7, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+        } else {
+            daysInChart = 7;
+        }
+    }
+
+    for (let i = daysInChart - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(today.getDate() - i);
+        const dateString = date.toISOString().split('T')[0];
+        chartLabels.push(date.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }));
+        dailyData[dateString] = { views: 0, reactions: 0, participants: 0 };
+    }
 
     competitions.forEach(comp => {
-        const hour = new Date(comp.created_at).getHours();
-        hourlyViews[hour] += comp.views_count || 0;
-        hourlyReactions[hour] += comp.reactions_count || 0;
-        hourlyParticipants[hour] += comp.participants_count || 0;
+        const dateString = new Date(comp.created_at).toISOString().split('T')[0];
+        if (dailyData[dateString]) {
+            dailyData[dateString].views += comp.views_count || 0;
+            dailyData[dateString].reactions += comp.reactions_count || 0;
+            dailyData[dateString].participants += comp.participants_count || 0;
+        }
     });
 
-    const chartLabels = Array.from({ length: 24 }, (_, i) => {
-        const hour = i % 12 === 0 ? 12 : i % 12;
-        const ampm = i < 12 ? 'ص' : 'م';
-        return `${hour} ${ampm}`;
-    });
+    const dailyViews = Object.values(dailyData).map(d => d.views);
+    const dailyReactions = Object.values(dailyData).map(d => d.reactions);
+    const dailyParticipants = Object.values(dailyData).map(d => d.participants);
 
     new Chart(ctx, {
         type: 'line',
         data: {
             labels: chartLabels,
             datasets: [
-                {
-                    label: 'المشاهدات',
-                    data: hourlyViews,
-                    borderColor: 'var(--primary-color)',
-                    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-                    fill: true,
-                    tension: 0.4
-                },
-                {
-                    label: 'التفاعلات',
-                    data: hourlyReactions,
-                    borderColor: '#F4A261', // Accent color
-                    backgroundColor: 'rgba(244, 162, 97, 0.2)',
-                    fill: true,
-                    tension: 0.4
-                }
+                { label: 'المشاهدات', data: dailyViews, borderColor: 'rgba(54, 162, 235, 1)', backgroundColor: 'rgba(54, 162, 235, 0.2)', fill: true, tension: 0.3 },
+                { label: 'التفاعلات', data: dailyReactions, borderColor: 'rgba(255, 206, 86, 1)', backgroundColor: 'rgba(255, 206, 86, 0.2)', fill: true, tension: 0.3 },
+                { label: 'المشاركات', data: dailyParticipants, borderColor: 'rgba(75, 192, 192, 1)', backgroundColor: 'rgba(75, 192, 192, 0.2)', fill: true, tension: 0.3 }
             ]
         },
         options: {

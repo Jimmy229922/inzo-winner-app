@@ -249,11 +249,11 @@ apiRouter.get('/get-chat-info', async (req, res) => {
 
 // Endpoint to update the application via git pull
 // This is now /api/update-app
-apiRouter.post('/update-app', (req, res) => {
+apiRouter.post('/update-app', async (req, res) => { // تعديل: تحويل الدالة إلى async
     console.log('[UPDATE] Received request to update the application from remote.');
 
     // Execute git pull command in the project's root directory
-    exec('git pull origin main', { cwd: path.join(__dirname, '..') }, (error, stdout, stderr) => {
+    exec('git pull origin main', { cwd: path.join(__dirname, '..') }, async (error, stdout, stderr) => { // تعديل: تحويل الدالة إلى async
         if (error) {
             console.error(`[UPDATE-ERROR] exec error: ${error}`);
             if (stderr.includes('not a git repository') || stderr.includes('is not recognized')) {
@@ -272,6 +272,17 @@ apiRouter.post('/update-app', (req, res) => {
             console.log('[UPDATE] Application is already up to date.');
             return res.status(200).json({ message: 'أنت تستخدم بالفعل آخر إصدار.', needsRestart: false });
         }
+
+        // --- NEW: Broadcast update notification before restarting ---
+        if (supabaseAdmin) {
+            await supabaseAdmin.from('realtime_notifications').insert({
+                message: 'تم تحديث التطبيق بنجاح! سيتم إعادة تحميل الصفحة.',
+                type: 'success',
+                notification_type: 'APP_UPDATE'
+            });
+            console.log('[UPDATE] Broadcasted APP_UPDATE notification to all clients.');
+        }
+        // --- End of new code ---
 
         // If there were changes, send a response and then restart the server.
         res.status(200).json({ message: 'تم العثور على تحديثات! سيتم إعادة تشغيل التطبيق الآن لتطبيقها.', needsRestart: true });
