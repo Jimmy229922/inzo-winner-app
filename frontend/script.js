@@ -3,7 +3,7 @@ let supabase = null;
 let searchTimeout;
 let currentUserProfile = null; // NEW: To store the current user's profile with role
 window.onlineUsers = new Map(); // NEW: Global map to track online users
-
+window.appContent = null; // NEW: Make appContent globally accessible
 
 // Global function to set the active navigation link
 function setActiveNav(activeLink) {
@@ -127,7 +127,7 @@ async function handleRouting() {
 
     const hash = window.location.hash || '#home'; // Default to home
     const mainElement = document.querySelector('main');
-    const appContent = document.getElementById('app-content');
+    window.appContent = document.getElementById('app-content'); // Assign to global
     mainElement.classList.add('page-loading');
 
     // Reset layout classes
@@ -140,16 +140,15 @@ async function handleRouting() {
     // Basic routing
     const routes = {
         '#home': { func: renderHomePage, nav: 'nav-home' },
-        '#tasks': { func: renderTasksPage, nav: 'nav-tasks' },
+        '#tasks': { func: renderTasksPage, nav: 'nav-tasks' }, // Re-added this route
         '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents', adminOnly: false },
+        '#competitions/edit': { func: renderCompetitionEditForm, nav: 'nav-manage-competitions' }, // NEW: Dedicated route for editing
         '#competitions': { func: renderCompetitionsPage, nav: 'nav-manage-competitions' },
         '#archived-competitions': { func: renderCompetitionsPage, nav: 'nav-archived-competitions' },
         '#competition-templates': { func: renderCompetitionTemplatesPage, nav: 'nav-competition-templates' },
-        '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
-        '#add-agent': { func: renderAddAgentForm, nav: null },
+    '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
         '#users': { func: renderUsersPage, nav: 'nav-users', adminOnly: true }, // NEW: Users page, will be moved
         '#profile-settings': { func: renderProfileSettingsPage, nav: null }, // NEW: Profile settings page
-        '#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' },
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' }
     };
 
@@ -165,6 +164,12 @@ async function handleRouting() {
         if (agentId) {
             renderFunction = () => renderAgentProfilePage(agentId);
             navElement = null; // No nav item is active on a profile page
+        }
+    } else if (hash.startsWith('#competitions/edit/')) {
+        const competitionId = hash.split('/')[2];
+        if (competitionId) {
+            renderFunction = () => renderCompetitionEditForm(competitionId);
+            navElement = document.getElementById('nav-manage-competitions');
         }
     } else {
         // If we are navigating away from a profile page, stop its countdown timer.
@@ -223,8 +228,8 @@ async function initializeSupabase() {
         // 2. إذا نجح جلب البيانات، قم بإعداد باقي التطبيق
         if (userProfile) {
             window.addEventListener('hashchange', handleRouting);
-            handleRouting(); // Initial route handling on page load
-        supabase.channel('public:realtime_notifications')
+            //handleRouting(); // Initial route handling on page load - moved to end
+            supabase.channel('public:realtime_notifications')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'realtime_notifications' }, payload => {
                 console.log('Realtime notification received:', payload.new);
                 const { message, type, notification_type, agent_id } = payload.new;
@@ -254,6 +259,8 @@ async function initializeSupabase() {
                 else console.warn('Failed to subscribe to realtime notifications:', status);
             });
         }
+        window.addEventListener('hashchange', handleRouting);
+        handleRouting(); // Initial route handling on page load
     } catch (error) {
         console.error('Failed to initialize Supabase:', error);
         updateStatus('error', 'فشل الاتصال بالخادم');

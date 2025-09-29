@@ -474,7 +474,7 @@ ${benefitsText.trim()}
 
     if (analyticsTabContent && (isSuperAdmin || isAdmin)) {
         // Render analytics tab content
-        renderAgentAnalytics(agent.id, analyticsTabContent);
+        renderAgentAnalytics(agent, analyticsTabContent);
     }
     if (agentCompetitionsContent) {
         if (agentCompetitions && agentCompetitions.length > 0) {
@@ -543,11 +543,13 @@ ${benefitsText.trim()}
                                 <p class="competition-detail-item"><i class="fas fa-users"></i><strong>عدد الفائزين:</strong> ${comp.winners_count || 0}</p>
                                 <p class="competition-detail-item"><i class="fas fa-dollar-sign"></i><strong>الجائزة للفائز:</strong> ${comp.prize_per_winner ? comp.prize_per_winner.toFixed(2) : '0.00'}</p>
                                 <p class="competition-detail-item"><i class="fas fa-calendar-alt"></i><strong>تاريخ الاختيار:</strong> ${endDate ? endDate.toLocaleDateString('ar-EG') : 'غير محدد'}</p>
+                                <p class="competition-detail-item"><i class="fas fa-eye"></i><strong>المشاهدات:</strong> ${formatNumber(comp.views_count)}</p>
+                                <p class="competition-detail-item"><i class="fas fa-heart"></i><strong>التفاعلات:</strong> ${formatNumber(comp.reactions_count)}</p>
+                                <p class="competition-detail-item"><i class="fas fa-user-check"></i><strong>المشاركات:</strong> ${formatNumber(comp.participants_count)}</p>
                                 <p class="competition-detail-item"><i class="fas fa-key"></i><strong>الإجابة الصحيحة:</strong> ${comp.correct_answer || '<em>غير محددة</em>'}</p>
                             </div>
                         </div>
                         <div class="competition-card-footer">
-                            <button class="btn-secondary edit-btn" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i> تعديل</button>
                             ${comp.status === 'awaiting_winners' ? `<button class="btn-primary complete-competition-btn" data-id="${comp.id}" data-name="${comp.name}"><i class="fas fa-check-double"></i> تم اختيار الفائزين</button>` : ''}
                             <button class="btn-danger delete-competition-btn" data-id="${comp.id}"><i class="fas fa-trash-alt"></i> حذف</button>
                         </div>
@@ -793,16 +795,19 @@ function renderDetailsView(agent) {
         const numericFields = ['competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'competitions_per_week'];
         // --- NEW: Define which fields are financial ---
         const financialFields = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period'];
-        const isFinancial = financialFields.includes(fieldName);
+                const isFinancial = financialFields.includes(fieldName);
 
         let displayValue;
-        let iconHtml;
+        let iconHtml = '';
 
-        if (isEditable && (!isFinancial || (isFinancial && canEditFinancials))) {
+        // إصلاح: منطق عرض أيقونة التعديل
+        if (isSuperAdmin || (isEditable && (!isFinancial || (isFinancial && canEditFinancials)))) {
             iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
-        } else {
+        } else if (!isEditable) {
             iconHtml = `<span class="auto-calculated-indicator" title="يُحسب تلقائياً"><i class="fas fa-cogs"></i></span>`;
         }
+
+
 
         if (numericFields.includes(fieldName)) {
             displayValue = (value === null || value === undefined) ? 0 : value;
@@ -851,6 +856,8 @@ function renderDetailsView(agent) {
         </div>
     `;
 
+
+
     // --- FIX V3: Stable content update ---
     // Clear the container's content and re-add the event listener.
     // This prevents replacing the container itself, which caused content to leak across pages.
@@ -865,9 +872,12 @@ function renderDetailsView(agent) {
     container.addEventListener('click', eventHandler);
 }
 
-
-
-function renderInlineEditor(groupElement, agent) {
+async function renderInlineEditor(groupElement, agent) {
+    // --- NEW: Permission Check ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const isAdmin = currentUserProfile?.role === 'admin';
+    const canEditFinancials = isSuperAdmin || isAdmin;
+    
     const fieldName = groupElement.dataset.field;
     const originalContent = groupElement.innerHTML;
     const currentValue = agent[fieldName];
@@ -875,10 +885,11 @@ function renderInlineEditor(groupElement, agent) {
 
     let editorHtml = '';
 
-    // Special cases for read-only fields
-    if (['competition_bonus', 'deposit_bonus_percentage', 'deposit_bonus_count', 'remaining_balance', 'remaining_deposit_bonus', 'winner_selection_date', 'prize_per_winner', 'competition_duration', 'last_competition_date'].includes(fieldName)) {
-        showToast('يتم حساب هذا الحقل تلقائياً.', 'info');
-        return;
+    // --- إصلاح: السماح للمدير العام بتعديل الحقول المحسوبة، مع إظهار تنبيه ---
+    const calculatedFields = ['competition_bonus', 'deposit_bonus_percentage', 'deposit_bonus_count', 'remaining_balance', 'remaining_deposit_bonus', 'winner_selection_date', 'prize_per_winner', 'competition_duration', 'last_competition_date'];
+    if (calculatedFields.includes(fieldName) && !isSuperAdmin) {
+        showToast('يتم حساب هذا الحقل تلقائياً ولا يمكن تعديله مباشرة.', 'info');
+        return; // منع التعديل لغير المدير العام
     }
 
     switch (fieldName) {
@@ -909,8 +920,12 @@ function renderInlineEditor(groupElement, agent) {
         case 'competitions_per_week':
             editorHtml = `<select id="inline-edit-input"><option value="1" ${currentValue == 1 ? 'selected' : ''}>1</option><option value="2" ${currentValue == 2 ? 'selected' : ''}>2</option><option value="3" ${currentValue == 3 ? 'selected' : ''}>3</option></select>`;
             break;
-        case 'last_competition_date':
+        case 'last_competition_date': // تعديل: السماح بتعديل تاريخ آخر مسابقة
+        case 'winner_selection_date': // تعديل: السماح بتعديل تاريخ اختيار الفائز
             editorHtml = `<input type="date" id="inline-edit-input" value="${currentValue || ''}">`;
+            break;
+        case 'competition_duration': // تعديل: السماح بتعديل مدة المسابقة
+            editorHtml = `<select id="inline-edit-input"><option value="24h" ${currentValue === '24h' ? 'selected' : ''}>24 ساعة</option><option value="48h" ${currentValue === '48h' ? 'selected' : ''}>48 ساعة</option></select>`;
             break;
         default: // for text/number inputs
             editorHtml = `<input type="number" id="inline-edit-input" value="${currentValue || ''}" placeholder="${label}">`;
@@ -925,6 +940,41 @@ function renderInlineEditor(groupElement, agent) {
             <button id="inline-cancel-btn" class="btn-secondary"><i class="fas fa-times"></i></button>
         </div>
     `;
+
+    // --- تعديل: إضافة تحديث فوري لتاريخ اختيار الفائز ---
+    const inputElement = groupElement.querySelector('#inline-edit-input');
+    if (inputElement && (fieldName === 'last_competition_date' || fieldName === 'competition_duration')) {
+        const liveUpdateWinnerDate = () => {
+            // --- إصلاح: جلب القيم الحالية من الصفحة مباشرة ---
+            // ابحث عن حقل الإدخال النشط لتاريخ آخر مسابقة، أو استخدم القيمة المعروضة إذا لم يكن في وضع التعديل.
+            const lastCompDateInput = document.querySelector('.details-group[data-field="last_competition_date"] #inline-edit-input');
+            const lastCompDateValue = lastCompDateInput ? lastCompDateInput.value : agent.last_competition_date;
+
+            // ابحث عن حقل الإدخال النشط لمدة المسابقة، أو استخدم القيمة المعروضة.
+            const durationInput = document.querySelector('.details-group[data-field="competition_duration"] #inline-edit-input');
+            const durationValue = durationInput ? durationInput.value : agent.competition_duration;
+            
+            // ابحث عن عنصر عرض تاريخ اختيار الفائز لتحديثه.
+            const winnerDateElement = document.querySelector('.details-group[data-field="winner_selection_date"] p');
+
+            if (lastCompDateValue && durationValue && winnerDateElement) {
+                const durationMap = { '24h': 1, '48h': 2, 'monthly': 30 };
+                const durationDays = durationMap[durationValue] || 0;
+                if (durationDays > 0) {
+                    try {
+                        const newDate = new Date(lastCompDateValue);
+                        newDate.setDate(newDate.getDate() + durationDays);
+                        winnerDateElement.textContent = newDate.toLocaleDateString('ar-EG');
+                    } catch (e) {
+                        // تجاهل الأخطاء الناتجة عن إدخال تاريخ غير صالح مؤقتاً
+                    }
+                }
+            }
+        };
+
+        // استدعاء الدالة عند تغيير القيمة
+        inputElement.addEventListener('change', liveUpdateWinnerDate);
+    }
 
     groupElement.querySelector('#inline-cancel-btn').addEventListener('click', () => {
         renderDetailsView(agent);
@@ -968,37 +1018,51 @@ function renderInlineEditor(groupElement, agent) {
                 const parsedValue = parseFloat(newValue);
                 finalValue = newValue === '' ? null : (isNaN(parsedValue) ? newValue : parsedValue);
             }
-            updateData[fieldName] = finalValue;
 
-            // تعديل: عند تغيير فترة التجديد، أعد تعيين المؤقت عن طريق تحديث تاريخ آخر تجديد إلى الآن.
-            if (fieldName === 'renewal_period') {
-                updateData.last_renewal_date = new Date().toISOString();
-            }
+            // --- إصلاح: منطق الحفظ للمدير العام والحسابات التلقائية ---
+            // إذا كان المدير العام يعدل حقلاً محسوباً، احفظ قيمته مباشرة وتوقف.
+            if (isSuperAdmin && calculatedFields.includes(fieldName)) {
+                updateData[fieldName] = finalValue;
+            } else {
+                // إذا لم يكن المدير العام أو كان يعدل حقلاً عادياً، قم بتطبيق المنطق المترابط.
+                updateData[fieldName] = finalValue;
 
-            // Interconnected logic on save
-            if (fieldName === 'consumed_balance') {
-                updateData.remaining_balance = (currentAgent.competition_bonus || 0) - (finalValue || 0);
-            } else if (fieldName === 'used_deposit_bonus') {
-                updateData.remaining_deposit_bonus = (currentAgent.deposit_bonus_count || 0) - (finalValue || 0);
-            } else if (fieldName === 'last_competition_date') {
-                const duration = currentAgent.competition_duration;
-                if (duration && finalValue) {
-                    const durationMap = { '24h': 1, '48h': 2, 'monthly': 30 };
-                    const durationDays = durationMap[duration] || 0;
-                    const newDate = new Date(finalValue);
-                    newDate.setDate(newDate.getDate() + durationDays);
-                    updateData.winner_selection_date = newDate.toISOString().split('T')[0];
+                if (fieldName === 'renewal_period') {
+                    updateData.last_renewal_date = new Date().toISOString();
                 }
-            } else if (fieldName === 'competitions_per_week') {
-                const compsPerWeek = finalValue;
-                updateData.competition_duration = (compsPerWeek == 1) ? '48h' : '24h';
-            } else if (fieldName === 'single_competition_balance' || fieldName === 'winners_count') {
-                const balance = (fieldName === 'single_competition_balance' ? finalValue : currentAgent.single_competition_balance) || 0;
-                const winners = (fieldName === 'winners_count' ? finalValue : currentAgent.winners_count) || 0;
-                if (balance && winners > 0) {
-                    updateData.prize_per_winner = (balance / winners).toFixed(2);
-                } else {
-                    updateData.prize_per_winner = 0;
+                if (fieldName === 'consumed_balance') {
+                    updateData.remaining_balance = (currentAgent.competition_bonus || 0) - (finalValue || 0);
+                } else if (fieldName === 'used_deposit_bonus') {
+                    updateData.remaining_deposit_bonus = (currentAgent.deposit_bonus_count || 0) - (finalValue || 0);
+                } else if (fieldName === 'last_competition_date' || fieldName === 'competition_duration' || fieldName === 'competitions_per_week') {
+                    // --- إصلاح: جلب القيم الحالية من الصفحة عند الحفظ ---
+                    const lastDate = (fieldName === 'last_competition_date') ? finalValue : currentAgent.last_competition_date;
+                    let duration = (fieldName === 'competition_duration') ? finalValue : currentAgent.competition_duration;
+                    
+                    // إذا تم تغيير عدد المسابقات، قم بتحديث المدة أولاً
+                    if (fieldName === 'competitions_per_week') {
+                        duration = (finalValue == 1) ? '48h' : '24h';
+                        updateData.competition_duration = duration;
+                    }
+
+                    if (lastDate && duration) {
+                        const durationMap = { '24h': 1, '48h': 2 };
+                        const durationDays = durationMap[duration] || 0;
+                        const newDate = new Date(lastDate);
+                        newDate.setDate(newDate.getDate() + durationDays);
+                        updateData.winner_selection_date = newDate.toISOString().split('T')[0];
+                    }
+                } else if (fieldName === 'competitions_per_week') {
+                    const compsPerWeek = finalValue;
+                    updateData.competition_duration = (compsPerWeek == 1) ? '48h' : '24h';
+                } else if (fieldName === 'single_competition_balance' || fieldName === 'winners_count') {
+                    const balance = (fieldName === 'single_competition_balance' ? finalValue : currentAgent.single_competition_balance) || 0;
+                    const winners = (fieldName === 'winners_count' ? finalValue : currentAgent.winners_count) || 0;
+                    if (balance && winners > 0) {
+                        updateData.prize_per_winner = (balance / winners).toFixed(2);
+                    } else {
+                        updateData.prize_per_winner = 0;
+                    }
                 }
             }
         }
@@ -1084,13 +1148,13 @@ function displayNextRenewalDate(agent) {
 }
 
 // --- NEW: Agent Analytics Section ---
-async function renderAgentAnalytics(agentId, container, dateRange = 'all') {
+async function renderAgentAnalytics(agent, container, dateRange = 'all') {
     container.innerHTML = '<div class="loader-container"><div class="spinner"></div></div>';
 
     let query = supabase
         .from('competitions')
         .select('id, name, created_at, views_count, reactions_count, participants_count')
-        .eq('agent_id', agentId)
+        .eq('agent_id', agent.id)
         .not('views_count', 'is', null);
 
     // --- NEW: Date Range Filtering ---
@@ -1181,7 +1245,7 @@ async function renderAgentAnalytics(agentId, container, dateRange = 'all') {
     container.addEventListener('click', (e) => {
         if (e.target.matches('.filter-btn')) {
             const newRange = e.target.dataset.range;
-            renderAgentAnalytics(agentId, container, newRange);
+            renderAgentAnalytics(agent, container, newRange);
         }
     });
 
@@ -1237,14 +1301,9 @@ async function renderAgentAnalytics(agentId, container, dateRange = 'all') {
     if (dateRange === '30d') daysInChart = 30;
     else if (dateRange === 'month') daysInChart = today.getDate();
     else if (dateRange === 'all') {
-        // For 'all', find the oldest competition to set the range, or default to 30 days
-        if (competitions.length > 0) {
-            const oldestDate = new Date(competitions[competitions.length - 1].created_at);
-            const diffTime = Math.abs(today - oldestDate);
-            daysInChart = Math.max(7, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-        } else {
-            daysInChart = 7;
-        }
+        const oldestDate = new Date(agent.created_at); // Use agent creation date
+        const diffTime = Math.abs(today - oldestDate);
+        daysInChart = Math.max(7, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1); // +1 to include today
     }
 
     for (let i = daysInChart - 1; i >= 0; i--) {

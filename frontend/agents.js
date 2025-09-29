@@ -48,6 +48,34 @@ async function renderTasksPage() {
     }
 }
 
+async function renderTasksPage() {
+    const appContent = document.getElementById('app-content');
+    appContent.innerHTML = `
+        <div class="page-header column-header">
+            <div class="header-top-row">
+                <h1>مهمات اليوم</h1>
+                <div class="header-actions-group">
+                    <button id="mark-all-tasks-complete-btn" class="btn-primary"><i class="fas fa-check-double"></i> تمييز الكل كمكتمل</button>
+                </div>
+            </div>
+            <div class="agent-filters">
+                <div class="filter-search-container">
+                    <input type="search" id="task-search-input" placeholder="بحث بالاسم أو الرقم..." autocomplete="off">
+                    <i class="fas fa-search"></i>
+                    <i class="fas fa-times-circle search-clear-btn" id="task-search-clear"></i>
+                </div>
+            </div>
+        </div>
+        <div id="tasks-content-wrapper"></div>
+    `;
+
+    await renderTaskList();
+    const markAllCompleteBtn = document.getElementById('mark-all-tasks-complete-btn');
+    if (markAllCompleteBtn) {
+        markAllCompleteBtn.addEventListener('click', handleMarkAllTasksComplete);
+    }
+}
+
 async function renderManageAgentsPage() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
@@ -55,6 +83,7 @@ async function renderManageAgentsPage() {
             <div class="header-top-row">
                 <h1>إدارة الوكلاء</h1>
                 <div class="header-actions-group">
+                    <button id="renew-all-balances-btn" class="btn-primary"><i class="fas fa-sync-alt"></i> تجديد رصيد الوكلاء</button>
                     <button id="bulk-send-balance-btn" class="btn-telegram-bonus"><i class="fas fa-bullhorn"></i> تعميم الأرصدة</button>
                     <button id="add-agent-btn" class="btn-primary"><i class="fas fa-plus"></i> إضافة وكيل جديد</button>
                 </div>
@@ -87,6 +116,11 @@ async function renderManageAgentsPage() {
     document.getElementById('add-agent-btn').addEventListener('click', () => {
         setActiveNav(null);
         window.location.hash = 'add-agent?returnTo=manage-agents';
+    });
+
+    // تعديل: إضافة معالج لزر تجديد رصيد الوكلاء
+    document.getElementById('renew-all-balances-btn').addEventListener('click', () => {
+        handleRenewAllBalances();
     });
 
     // تعديل: إضافة معالج لزر الإرسال الجماعي
@@ -259,6 +293,82 @@ function displayAgentsPage(agentsList, page) {
     container.innerHTML = `<div class="table-responsive-container">${tableHtml}</div>${paginationHtml}`;
 
     attachCardEventListeners(agentsList, page);
+}
+
+async function handleRenewAllBalances() {
+    showConfirmationModal(
+        `هل أنت متأكد من تجديد رصيد جميع الوكلاء؟`,
+        async () => {
+            // 1. جلب جميع الوكلاء من ذاكرة التخزين المؤقت
+            const agentsToRenew = allAgentsData;
+            const agentCount = agentsToRenew.length;
+
+            if (agentCount === 0) {
+                showToast('لا يوجد وكلاء لتجديد أرصدتهم.', 'info');
+                return;
+            }
+
+            // 2. إظهار نافذة التقدم
+            showBulkSendProgressModal(agentCount);
+            const progressBar = document.getElementById('bulk-send-progress-bar-inner');
+            const statusText = document.getElementById('bulk-send-status-text');
+            let successCount = 0;
+            let errorCount = 0;
+
+            // 3. المرور على كل وكيل وتحديثه
+            for (let i = 0; i < agentCount; i++) {
+                const agent = agentsToRenew[i];
+                const updateData = {
+                    consumed_balance: 0,
+                    remaining_balance: agent.competition_bonus,
+                    used_deposit_bonus: 0,
+                    remaining_deposit_bonus: agent.deposit_bonus_count,
+                    last_renewal_date: new Date().toISOString()
+                };
+
+                try {
+                    const { error } = await supabase.from('agents').update(updateData).eq('id', agent.id);
+                    if (error) throw error;
+                    successCount++;
+                } catch (e) {
+                    console.error(`Failed to renew balance for agent ${agent.name}:`, e);
+                    errorCount++;
+                }
+
+                // تحديث واجهة التقدم
+                const progress = Math.round(((i + 1) / agentCount) * 100);
+                progressBar.style.width = `${progress}%`;
+                statusText.innerHTML = `جاري تجديد الأرصدة... (${i + 1} / ${agentCount})<br>نجح: ${successCount} | فشل: ${errorCount}`;
+                
+                // إضافة تأخير بسيط بين الطلبات لتجنب الضغط على الخادم
+                if (i < agentCount - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+                }
+            }
+
+            // 4. تحديث الواجهة بعد الانتهاء
+            statusText.innerHTML = `اكتمل تجديد الأرصدة.<br><strong>${successCount}</strong> وكيل بنجاح | <strong>${errorCount}</strong> فشل.`;
+            progressBar.style.backgroundColor = errorCount > 0 ? 'var(--danger-color)' : 'var(--success-color)';
+            document.querySelector('.modal-no-actions .update-icon').className = 'fas fa-check-circle update-icon';
+            await logAgentActivity(null, 'BULK_RENEWAL', `تم تجديد رصيد ${successCount} وكيل (فشل ${errorCount}).`);
+
+            // 5. إعادة تحميل بيانات الوكلاء من قاعدة البيانات لعرضها محدثة
+            const { data, error } = await supabase.from('agents').select('*').order('created_at', { ascending: false });
+            if (!error) {
+                allAgentsData = data;
+                displayAgentsPage(allAgentsData, 1);
+            }
+
+            // --- تعديل: إخفاء نافذة التقدم تلقائياً بعد 3 ثوانٍ ---
+            setTimeout(() => {
+                // ابحث عن النافذة المنبثقة النشطة وقم بإزالتها
+                const modalOverlay = document.querySelector('.modal-overlay');
+                if (modalOverlay) {
+                    modalOverlay.remove();
+                }
+            }, 3000); // إصلاح: إضافة المدة الزمنية والقوس الختامي
+        }, { title: 'تأكيد تجديد الأرصدة', confirmText: 'تجديد الآن', confirmClass: 'btn-primary' }
+    );
 }
 
 function attachCardEventListeners(currentList, currentPage) {
@@ -1264,6 +1374,8 @@ async function renderMiniCalendar() {
     const calendarContainer = document.getElementById('mini-calendar-container');
     const today = new Date();
     const month = today.getMonth();
+
+
     const year = today.getFullYear();
 
     const firstDay = new Date(year, month, 1).getDay();
