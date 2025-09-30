@@ -3,6 +3,7 @@ let allCompetitionsData = [];
 const COMPETITIONS_PER_PAGE = 9;
 let selectedCompetitionIds = []; // For bulk actions
 
+
 async function renderCompetitionsPage() {
     const hash = window.location.hash;
     const urlParams = new URLSearchParams(hash.split('?')[1]);
@@ -590,6 +591,11 @@ async function renderCompetitionCreatePage(agentId) {
                         <div class="telegram-preview-body">
                             <textarea id="competition-description" rows="15" required readonly></textarea>
                         </div>
+                    <!-- NEW: Image Preview in Telegram Box -->
+                    <div id="telegram-image-preview-container" class="telegram-image-preview-container" style="display: none;">
+                        <img id="telegram-image-preview" src="" alt="Competition Image Preview">
+                        <button type="button" id="remove-telegram-image-btn" class="btn-icon-action">&times;</button>
+                    </div>
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn-primary btn-send-telegram"><i class="fas fa-paper-plane"></i> إرسال إلى تلجرام الآن</button>
@@ -626,6 +632,12 @@ async function renderCompetitionCreatePage(agentId) {
             descInput.value = ''; // Clear preview if no template is selected
             return;
         }
+
+        // NEW: Handle image preview
+        const imagePreviewContainer = document.getElementById('telegram-image-preview-container');
+        const imagePreview = document.getElementById('telegram-image-preview');
+        imagePreview.src = selectedTemplate.image_url || '';
+        imagePreviewContainer.style.display = selectedTemplate.image_url ? 'flex' : 'none';
 
         console.log('[Debug] Selected Template:', selectedTemplate);
 
@@ -810,6 +822,29 @@ async function renderCompetitionCreatePage(agentId) {
         input.addEventListener('change', updateDescriptionAndPreview);
     });
 
+    // --- NEW: Image preview modal ---
+    const imagePreviewContainer = document.getElementById('telegram-image-preview-container');
+    if (imagePreviewContainer) {
+        imagePreviewContainer.addEventListener('click', (e) => {
+            if (e.target.closest('#remove-telegram-image-btn')) {
+                // Handle image removal
+                const imagePreview = document.getElementById('telegram-image-preview');
+                imagePreview.src = '';
+                imagePreviewContainer.style.display = 'none';
+                return;
+            }
+
+            const imgSrc = document.getElementById('telegram-image-preview').src;
+            if (imgSrc && imgSrc.startsWith('http')) {
+                const modalOverlay = document.createElement('div');
+                modalOverlay.className = 'image-modal-overlay';
+                modalOverlay.innerHTML = `<img src="${imgSrc}" class="image-modal-content">`;
+                modalOverlay.addEventListener('click', () => modalOverlay.remove());
+                document.body.appendChild(modalOverlay);
+            }
+        });
+    }
+
     document.getElementById('cancel-competition-form').addEventListener('click', () => {
         window.location.hash = `profile/${agent.id}`;
     });
@@ -826,6 +861,7 @@ async function renderCompetitionCreatePage(agentId) {
         }
 
         const finalDescription = descInput.value;
+        const finalImageUrl = document.getElementById('telegram-image-preview').src; // Get image URL from preview
         const winnersCount = parseInt(document.getElementById('override-trading-winners').value) || 0;
         const prizePerWinner = parseFloat(document.getElementById('override-prize').value) || 0;
         const depositWinnersCount = parseInt(document.getElementById('override-deposit-winners').value) || 0;
@@ -955,7 +991,8 @@ async function renderCompetitionCreatePage(agentId) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     message: finalDescription,
-                    chatId: agent.telegram_chat_id // تعديل: إرسال المعرف الخاص بالوكيل
+                    chatId: agent.telegram_chat_id, // تعديل: إرسال المعرف الخاص بالوكيل
+                    imageUrl: finalImageUrl.startsWith('http') ? finalImageUrl : null // NEW: Send image URL
                 })
             });
 
@@ -1382,11 +1419,11 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
                     <h3 class="details-section-title" style="margin-top: 0;"><i class="fas fa-info-circle"></i> الحقول الأساسية</h3>
                     <div class="form-group">
                         <label for="create-template-question">السؤال (سيكون اسم المسابقة)</label>
-                        <input type="text" id="create-template-question" required>
+                        <textarea id="create-template-question" rows="3" required></textarea>
                     </div>
                     <div class="form-group">
                         <label for="create-template-correct-answer">الإجابة الصحيحة</label>
-                        <input type="text" id="create-template-correct-answer" required>
+                        <textarea id="create-template-correct-answer" rows="2" required></textarea>
                     </div>
                     <div class="form-group">
                         <label for="create-template-classification">التصنيف (لمن سيظهر هذا القالب)</label>
@@ -1405,11 +1442,17 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
                 </div>
                 <div class="template-form-content">
                     <h3 class="details-section-title" style="margin-top: 0;"><i class="fas fa-file-alt"></i> محتوى المسابقة</h3>
+                    <!-- NEW: Image Preview Section (Generated Automatically) -->
                     <div class="form-group">
+                        <label>معاينة الصورة التلقائية</label>
+                        <img id="create-template-image-preview" src="images/competition_bg.jpg" alt="صورة القالب الثابتة" class="image-preview">
+                    </div>
+                    <div class="form-group">
+                        <label for="create-template-content">نص المسابقة</label>
                         <textarea id="create-template-content" rows="15" required>${defaultContent}</textarea>
                     </div>
                 </div>
-                <div class="form-actions" style="grid-column: 1 / -1;">
+                <div class="form-actions template-form-actions">
                     <button type="submit" class="btn-primary"><i class="fas fa-save"></i> حفظ القالب</button>
                     <button type="button" id="cancel-create-modal" class="btn-secondary">إلغاء</button>
                 </div>
@@ -1425,23 +1468,84 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('cancel-create-modal').addEventListener('click', closeModal);
     
+    // --- NEW: Live image generation on text input ---
+    const questionInput = document.getElementById('create-template-question');
+    const yPosInput = document.getElementById('text-y-position');
+    const xPosInput = document.getElementById('text-x-position');
+    const fontSizeInput = document.getElementById('text-font-size');
+    const imagePreview = document.getElementById('create-template-image-preview');
+    let debounceTimer;
+
+    const updateGeneratedImage = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+            const questionText = questionInput.value.trim();
+            const options = {
+                yPercent: yPosInput.value,
+                xPercent: xPosInput.value,
+                fontSize: fontSizeInput.value
+            };
+            if (questionText) {
+                await generateCompetitionImage(questionText, imagePreview, options);
+            } else {
+                // If question is empty, show the base image
+                imagePreview.src = 'images/competition_bg.jpg';
+            }
+        }, 300); // Wait 300ms after user stops typing
+    };
+
+    [questionInput, yPosInput, xPosInput, fontSizeInput].forEach(input => input.addEventListener('input', updateGeneratedImage));
+
     document.getElementById('create-template-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+        console.log('[Template Create] 1. Form submitted.');
+
+        const questionText = document.getElementById('create-template-question').value.trim();
+        let imageUrl = null;
+
+        if (questionText) {
+            console.log('[Template Create] 2. Generating final image for upload...');
+            const options = {
+                yPercent: document.getElementById('text-y-position').value,
+                xPercent: document.getElementById('text-x-position').value,
+                fontSize: document.getElementById('text-font-size').value
+            };
+            const canvas = await generateCompetitionImage(questionText, null, options);
+            const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+            const filePath = `${Date.now()}-competition.jpg`;
+            const { data, error: uploadError } = await supabase.storage.from('template-images').upload(filePath, imageBlob);
+
+            if (uploadError) {
+                console.error('Supabase storage upload error (create):', uploadError); // Log the detailed error
+                showToast(`فشل رفع الصورة: ${uploadError.message}`, 'error');
+                return;
+            }
+            imageUrl = supabase.storage.from('template-images').getPublicUrl(data.path).data.publicUrl;
+            console.log('[Template Create] 3. Image uploaded successfully. URL:', imageUrl);
+        }
+        console.log('[Template Create] 4. Preparing form data for insertion...');
+
         const formData = {
             question: document.getElementById('create-template-question').value.trim(),
             classification: document.getElementById('create-template-classification').value,
             content: document.getElementById('create-template-content').value.trim(),
             correct_answer: document.getElementById('create-template-correct-answer').value.trim(),
             usage_limit: document.getElementById('create-template-usage-limit').value ? parseInt(document.getElementById('create-template-usage-limit').value, 10) : null,
+            image_url: imageUrl,
+            is_archived: false
         };
+
+        console.log('[Template Create] 5. Sending data to Supabase:', formData);
 
         const { error } = await supabase.from('competition_templates').insert(formData);
         if (error) {
-            showToast('فشل حفظ القالب.', 'error');
+            console.error('Error inserting template:', error); // Log the detailed error
+            // تعديل: عرض رسالة خطأ أكثر تفصيلاً للمستخدم
+            showToast(`فشل حفظ القالب. السبب: ${error.details || error.message}`, 'error');
         } else {
             showToast('تم حفظ القالب بنجاح.', 'success');
             closeModal();
+            console.log('[Template Create] 6. Template saved successfully.');
             if (onSaveCallback) onSaveCallback();
         }
     });
@@ -1679,11 +1783,11 @@ function renderEditTemplateModal(template, onSaveCallback) {
             <form id="edit-template-form" class="form-layout">
                 <div class="form-group">
                     <label for="edit-template-question">السؤال</label>
-                    <input type="text" id="edit-template-question" value="${template.question}" required>
+                    <textarea id="edit-template-question" rows="3" required>${template.question}</textarea>
                 </div>
                 <div class="form-group">
                     <label for="edit-template-correct-answer">الإجابة الصحيحة</label>
-                    <input type="text" id="edit-template-correct-answer" value="${template.correct_answer || ''}" required>
+                    <textarea id="edit-template-correct-answer" rows="2" required>${template.correct_answer || ''}</textarea>
                 </div>
                 <div class="form-group">
                     <label for="edit-template-classification">التصنيف</label>
@@ -1696,11 +1800,19 @@ function renderEditTemplateModal(template, onSaveCallback) {
                     </select>
                 </div>
                 <div class="form-group">
+                    <!-- NEW: Image Preview Section (Generated Automatically) -->
+                    <label>معاينة الصورة التلقائية</label>
+                    <img id="edit-template-image-preview" src="images/competition_bg.jpg" alt="صورة القالب الثابتة" class="image-preview">
+                </div>
+                <div class="form-group">
                     <label for="edit-template-content">محتوى المسابقة</label>
                     <textarea id="edit-template-content" rows="8" required>${template.content}</textarea>
                 </div>
                 <div class="form-group">
-                    <label for="edit-template-usage-limit">عدد مرات الاستخدام (اتركه فارغاً للاستخدام غير المحدود)</label>
+                    <label for="edit-template-usage-limit">
+                        عدد مرات الاستخدام (اتركه فارغاً للاستخدام غير المحدود)
+                        <small style="display: block; color: var(--text-secondary-color);">المستخدم حالياً: ${template.usage_count || 0}</small>
+                    </label>
                     <input type="number" id="edit-template-usage-limit" min="1" placeholder="مثال: 5" value="${template.usage_limit || ''}">
                 </div>
                 <div class="form-actions">
@@ -1718,16 +1830,20 @@ function renderEditTemplateModal(template, onSaveCallback) {
 
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('cancel-edit-modal').addEventListener('click', closeModal);
-    
+
     document.getElementById('edit-template-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        // Use a fixed image URL for all templates
+        const fixedImageUrl = `${window.location.origin}/images/competition_bg.jpg`;
+
         const updatedData = {
             question: document.getElementById('edit-template-question').value.trim(),
             classification: document.getElementById('edit-template-classification').value,
             content: document.getElementById('edit-template-content').value.trim(),
             correct_answer: document.getElementById('edit-template-correct-answer').value.trim(),
             usage_limit: document.getElementById('edit-template-usage-limit').value ? parseInt(document.getElementById('edit-template-usage-limit').value, 10) : null,
+            image_url: fixedImageUrl
         };
 
         const { error } = await supabase.from('competition_templates').update(updatedData).eq('id', template.id);

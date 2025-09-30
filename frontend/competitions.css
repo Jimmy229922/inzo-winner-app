@@ -862,6 +862,62 @@
     padding: 0;
     min-height: 250px; /* Ensure a good minimum height */
 }
+/* NEW: Styles for image preview in Telegram box */
+.telegram-image-preview-container {
+    position: relative;
+    margin: 10px 15px 0 15px; /* تعديل: إضافة حشوة جانبية */
+    border-radius: 6px; /* تعديل: تقليل الانحناء */
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    width: 120px; /* تعديل: تحديد عرض ثابت */
+    height: 80px; /* تعديل: تحديد ارتفاع ثابت */
+    cursor: pointer; /* تعديل: إظهار مؤشر النقر */
+    transition: transform 0.2s;
+}
+
+.telegram-image-preview-container img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.telegram-image-preview-container .btn-icon-action {
+    position: absolute;
+    top: 5px;
+    left: 5px; /* RTL */
+    background-color: rgba(0,0,0,0.5);
+    color: white;
+}
+.telegram-image-preview-container:hover {
+    transform: scale(1.05);
+}
+
+/* NEW: Styles for the full-screen image modal */
+.image-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    cursor: pointer;
+    animation: fadeIn 0.3s;
+}
+
+.image-modal-content {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    animation: zoomIn 0.3s;
+}
+
 
 /* Navbar Dropdown - Added here as navbar.css is not in context */
 .nav-item.dropdown {
@@ -1169,9 +1225,49 @@
     color: #f39c12;
     font-weight: bold;
 }
+
+/* NEW: Styles for image upload in template modals */
+.template-form-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.image-upload-preview-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+}
+.image-upload-preview-wrapper .image-preview {
+    width: 100%; /* تعديل: جعل الصورة تملأ العرض */
+    max-height: 250px; /* تعديل: زيادة أقصى ارتفاع للصورة */
+    border-radius: 8px;
+    object-fit: cover; /* تعديل: ضمان ملاءمة الصورة بشكل جيد */
+}
 }
 .actions-cell .btn-danger {
     background-color: transparent;
     color: #e74c3c;
     border: 1px solid #e74c3c;
+}
+
+/* NEW: Keyframes for modal animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes zoomIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }

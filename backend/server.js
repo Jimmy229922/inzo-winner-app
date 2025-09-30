@@ -157,14 +157,14 @@ apiRouter.post('/post-winner', async (req, res) => {
 
 // NEW: Endpoint to post a generic announcement
 apiRouter.post('/post-announcement', async (req, res) => {
-    const { message, chatId } = req.body; // استقبال chatId من الطلب
+    const { message, chatId, imageUrl } = req.body; // استقبال chatId و imageUrl من الطلب
     // console.log(`[INFO] Received request to post announcement.`);
 
     if (!message) {
         console.warn('[WARN] Post announcement request received with no message.');
         return res.status(400).json({ message: 'Message content is required' });
     }
-    
+
     // تحديد chat_id الذي سيتم الإرسال إليه. الأولوية للـ chatId الخاص بالوكيل.
     const targetChatId = chatId || TELEGRAM_CHAT_ID;
     if (!TELEGRAM_BOT_TOKEN || !targetChatId) {
@@ -172,14 +172,25 @@ apiRouter.post('/post-announcement', async (req, res) => {
         console.error(errorMsg);
         return res.status(500).json({ message: 'Telegram integration is not configured on the server.' });
     }
+    
+    // --- NEW: Determine API method based on whether an image is present ---
+    const apiMethod = imageUrl ? 'sendPhoto' : 'sendMessage';
+    const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${apiMethod}`;
+    
+    const payload = {
+        chat_id: targetChatId,
+        parse_mode: 'HTML'
+    };
 
-    const telegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    if (imageUrl) {
+        payload.photo = imageUrl;
+        payload.caption = message;
+    } else {
+        payload.text = message;
+    }
+
     try {
-        await axios.post(telegramApiUrl, {
-            chat_id: targetChatId, // استخدام المعرف المستهدف
-            text: message, // تعديل: إضافة parse_mode
-            parse_mode: 'HTML' // تعديل: إضافة parse_mode
-        });
+        await axios.post(telegramApiUrl, payload);
         // console.log(`[SUCCESS] Announcement sent to Telegram.`);
         res.status(200).json({ message: 'Successfully posted announcement to Telegram' });
     } catch (error) {
@@ -201,11 +212,15 @@ apiRouter.post('/post-announcement', async (req, res) => {
                 console.log(`[AUTO-FIX] Successfully updated Chat ID for agent.`);
 
                 // 2. إعادة محاولة إرسال الرسالة بالمعرف الجديد
-                await axios.post(telegramApiUrl, {
-                    chat_id: newChatId,
-                    text: message,
-                    parse_mode: 'HTML'
-                });
+                const retryPayload = {
+                    ...payload,
+                    chat_id: newChatId
+                };
+                const retryApiMethod = imageUrl ? 'sendPhoto' : 'sendMessage';
+                const retryTelegramApiUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${retryApiMethod}`;
+
+                await axios.post(retryTelegramApiUrl, retryPayload);
+
                 console.log(`[AUTO-FIX] Successfully resent message to new Chat ID.`);
                 return res.status(200).json({ message: 'Successfully posted announcement after auto-fixing Chat ID.' });
 
