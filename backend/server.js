@@ -6,8 +6,6 @@ const path = require('path');
 const axios = require('axios');
 const { exec } = require('child_process');
 const cron = require('node-cron');
-
-const { Telegraf } = require('telegraf'); // NEW: Import Telegraf
 const app = express();
 const port = 30001; // تم تثبيت المنفذ بناءً على الطلب
 
@@ -20,7 +18,6 @@ let TELEGRAM_BOT_TOKEN = null;
 let TELEGRAM_CHAT_ID = null;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-let bot = null; // NEW: Variable to hold the bot instance
 
 // --- Supabase Admin Client ---
 // This client uses the SERVICE_ROLE key and bypasses all RLS policies.
@@ -57,13 +54,6 @@ async function loadSecureConfig() {
             TELEGRAM_BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
             TELEGRAM_CHAT_ID = config.TELEGRAM_CHAT_ID;
             console.log('[INFO] Secure configuration loaded successfully.');
-
-            // --- NEW: Initialize Telegram Bot after loading config ---
-            if (TELEGRAM_BOT_TOKEN) {
-                bot = new Telegraf(TELEGRAM_BOT_TOKEN);
-                console.log('[INFO] Telegraf bot initialized.');
-            }
-
             return; // Exit the function on success
         } catch (error) {
             console.error(`[CRITICAL] Failed to fetch secure configuration on attempt ${attempt}:`, error.message);
@@ -266,36 +256,6 @@ apiRouter.get('/get-chat-info', async (req, res) => {
         const errorDetails = error.response ? error.response.data.description : error.message;
         console.error(`[ERROR] Failed to get chat info for ${chatId}: ${errorDetails}`);
         res.status(500).json({ message: `فشل جلب بيانات المجموعة من تلجرام. تأكد من أن البوت عضو في المجموعة وأن المعرف صحيح.` });
-    }
-});
-
-// NEW: Endpoint to collect answers from a Telegram post
-apiRouter.post('/collect-answers', async (req, res) => {
-    const { postUrl } = req.body;
-
-    if (!postUrl) {
-        return res.status(400).json({ message: 'Post URL is required.' });
-    }
-
-    // --- NEW: Forward the request to the Python collector service ---
-    const collectorServiceUrl = 'http://localhost:8001/collect';
-    console.log(`[INFO] Forwarding answer collection request for ${postUrl} to Python service.`);
-
-    try {
-        const pythonResponse = await axios.post(collectorServiceUrl, { postUrl });
-
-        res.status(200).json({
-            message: 'Answers collected successfully from Python service.',
-            answers: pythonResponse.data.answers || []
-        });
-
-    } catch (error) {
-        const errorMessage = error.response?.data?.detail || 'فشل الاتصال بخدمة جمع الردود.';
-        console.error(`[ERROR] Failed to collect answers from Python service:`, errorMessage);
-        if (errorMessage.includes("Cannot access channel")) {
-            return res.status(500).json({ message: 'فشل الوصول للقناة. تأكد من أن حسابك عضو في القناة وأنها ليست خاصة.' });
-        }
-        res.status(500).json({ message: errorMessage });
     }
 });
 
