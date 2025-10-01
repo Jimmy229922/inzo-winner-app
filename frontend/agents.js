@@ -940,7 +940,7 @@ function renderAddAgentForm() {
                     <div class="form-group" style="margin-top: 20px;">
                         <label style="margin-bottom: 10px;">أيام التدقيق</label>
                         <div class="days-selector-v2">
-                            ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => `
+                            ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'].map((day, index) => `
                                 <div class="day-toggle-wrapper">
                                     <input type="checkbox" id="day-${index}" value="${index}" class="day-toggle-input">
                                     <label for="day-${index}" class="day-toggle-btn">${day}</label>
@@ -1818,18 +1818,6 @@ async function handleBulkSendBalances() {
                     modalOverlay.remove();
                 }
             }, 3000); // إغلاق بعد 3 ثوانٍ
-
-            // --- تعديل: إرسال إشعار بالنتيجة إلى المجموعة العامة ---
-            const summaryMessage = `✅ اكتملت عملية تعميم الأرصدة.\n\n- رسائل ناجحة: ${successCount}\n- رسائل فاشلة: ${errorCount}`;
-            try {
-                await fetch('/api/post-announcement', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: summaryMessage }) // لا نمرر chatId ليتم الإرسال للمجموعة العامة
-                });
-            } catch (e) {
-                console.warn('Could not send completion summary to Telegram:', e);
-            }
         }, {
             title: 'تعميم الأرصدة المتاحة',
             confirmText: 'إرسال الآن',
@@ -1906,12 +1894,18 @@ async function renderMiniCalendar() {
     
 }
 
-async function handleRenewAllBalances(agents) {
+async function handleRenewAllBalances() {
     showConfirmationModal(
         `هل أنت متأكد من تجديد رصيد جميع الوكلاء؟`,
         async () => {
-            // 1. جلب جميع الوكلاء من ذاكرة التخزين المؤقت
-            const agentsToRenew = agents;
+            // 1. جلب جميع الوكلاء من قاعدة البيانات
+            const { data: agentsToRenew, error: fetchError } = await supabase.from('agents').select('*');
+            if (fetchError) {
+                showToast('فشل جلب بيانات الوكلاء للتجديد.', 'error');
+                console.error('Failed to fetch agents for renewal:', fetchError);
+                return;
+            }
+
             const agentCount = agentsToRenew.length;
 
             if (agentCount === 0) {
@@ -2358,6 +2352,12 @@ async function renderTaskList() {
                 const groupDetails = card.closest('.task-group');
                 updateTaskGroupState(groupDetails);
                 updateOverallProgress();
+
+                // --- NEW: Log the activity ---
+                const action = isAuditedCheckbox ? 'التدقيق' : 'المسابقة';
+                const status = isChecked ? 'تفعيل' : 'إلغاء تفعيل';
+                const agentName = card.dataset.originalName;
+                logAgentActivity(agentId, 'TASK_UPDATE', `تم ${status} مهمة "${action}" للوكيل ${agentName}.`);
             }
         }
     });
@@ -2565,7 +2565,7 @@ function renderAddAgentForm() {
                     <div class="form-group" style="margin-top: 20px;">
                         <label style="margin-bottom: 10px;">أيام التدقيق</label>
                         <div class="days-selector-v2">
-                            ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => `
+                            ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'].map((day, index) => `
                                 <div class="day-toggle-wrapper">
                                     <input type="checkbox" id="day-${index}" value="${index}" class="day-toggle-input">
                                     <label for="day-${index}" class="day-toggle-btn">${day}</label>
@@ -3351,12 +3351,19 @@ async function handleMarkAllTasksComplete() {
     );
 }
 
-async function handleBulkSendBalances(agents) {
+async function handleBulkSendBalances() {
     // فلترة الوكلاء الذين لديهم معرف دردشة ورصيد أو بونص متبقي
-    const eligibleAgents = agents.filter(agent => 
-        agent.telegram_chat_id && 
-        ((agent.remaining_balance || 0) > 0 || (agent.remaining_deposit_bonus || 0) > 0)
-    );
+    const { data: eligibleAgents, error: fetchError } = await supabase
+        .from('agents')
+        .select('*')
+        .not('telegram_chat_id', 'is', null)
+        .or('remaining_balance.gt.0,remaining_deposit_bonus.gt.0');
+
+    if (fetchError) {
+        showToast('فشل جلب بيانات الوكلاء المؤهلين.', 'error');
+        return;
+    }
+
     const agentCount = eligibleAgents.length;
 
     if (agentCount === 0) {
@@ -3437,18 +3444,6 @@ async function handleBulkSendBalances(agents) {
                     modalOverlay.remove();
                 }
             }, 3000); // إغلاق بعد 3 ثوانٍ
-
-            // --- تعديل: إرسال إشعار بالنتيجة إلى المجموعة العامة ---
-            const summaryMessage = `✅ اكتملت عملية تعميم الأرصدة.\n\n- رسائل ناجحة: ${successCount}\n- رسائل فاشلة: ${errorCount}`;
-            try {
-                await fetch('/api/post-announcement', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: summaryMessage }) // لا نمرر chatId ليتم الإرسال للمجموعة العامة
-                });
-            } catch (e) {
-                console.warn('Could not send completion summary to Telegram:', e);
-            }
         }, {
             title: 'تعميم الأرصدة المتاحة',
             confirmText: 'إرسال الآن',

@@ -158,13 +158,13 @@ async function renderCalendarPage() {
         return acc;
     }, {});
 
-    const daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
     const calendarData = daysOfWeek.map(() => []);
 
     agents.forEach(agent => {
         if (agent.audit_days && agent.audit_days.length > 0) {
             agent.audit_days.forEach(dayIndex => {
-                if (dayIndex >= 0 && dayIndex < 7) {
+                if (dayIndex >= 0 && dayIndex < 6) {
                     calendarData[dayIndex].push(agent);
                 }
             });
@@ -315,6 +315,12 @@ async function renderCalendarPage() {
                 // Revert UI on error
                 checkbox.checked = !checkbox.checked;
                 tasksMap[taskKey][isAudited ? 'audited' : 'competition_sent'] = checkbox.checked;
+                // --- NEW: Log the action with the user's name ---
+                const action = isAudited ? 'التدقيق' : 'المسابقة';
+                const status = checkbox.checked ? 'تفعيل' : 'إلغاء تفعيل';
+                const agentName = agentItem.dataset.name;
+                logAgentActivity(agentId, 'TASK_UPDATE', `تم ${status} مهمة "${action}" للوكيل ${agentName}.`);
+                // --- End of new code ---
                 if (actionItem) actionItem.classList.toggle('done', checkbox.checked); // Revert individual item
                 agentItem.classList.toggle('complete', !isComplete);
                 updateDayProgressUI(dayIndex);

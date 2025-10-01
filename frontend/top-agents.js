@@ -375,36 +375,55 @@ function exportTopAgentsToCSV(agentStats) {
         return;
     }
 
-    const headers = ['الترتيب', 'الاسم', 'رقم الوكالة', 'المرتبة', 'التصنيف', 'إجمالي المشاهدات', 'إجمالي التفاعلات', 'إجمالي المشاركات', 'معدل النمو (%)'];
-    const rows = agentsToExport.map((agent, index) => [
-        index + 1,
-        agent.name,
-        agent.agent_id,
-        agent.rank,
-        agent.classification,
-        agent.total_views,
-        agent.total_reactions,
-        agent.total_participants,
-        agent.growth_rate.toFixed(2)
-    ]);
+    // --- NEW: Professional Excel Export ---
+    try {
+        const dataForSheet = agentsToExport.map((agent, index) => ({
+            'الترتيب': index + 1,
+            'الاسم': agent.name,
+            'رقم الوكالة': agent.agent_id,
+            'المرتبة': agent.rank,
+            'التصنيف': agent.classification,
+            'إجمالي المشاهدات': agent.total_views || 0,
+            'إجمالي التفاعلات': agent.total_reactions || 0,
+            'إجمالي المشاركات': agent.total_participants || 0,
+            'معدل النمو (%)': agent.growth_rate.toFixed(2)
+        }));
 
-    let csvContent = "\uFEFF"; // BOM for UTF-8 Excel compatibility
-    csvContent += headers.join(',') + '\r\n';
-    rows.forEach(rowArray => {
-        let row = rowArray.join(',');
-        csvContent += row + '\r\n';
-    });
+        const ws = XLSX.utils.json_to_sheet(dataForSheet);
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    const dateStr = new Date().toISOString().split('T')[0];
-    link.setAttribute("download", `Top_Agents_${dateStr}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+        // --- NEW: Styling ---
+        // Set column widths
+        ws['!cols'] = [
+            { wch: 8 },  // الترتيب
+            { wch: 25 }, // الاسم
+            { wch: 15 }, // رقم الوكالة
+            { wch: 15 }, // المرتبة
+            { wch: 10 }, // التصنيف
+            { wch: 20 }, // إجمالي المشاهدات
+            { wch: 20 }, // إجمالي التفاعلات
+            { wch: 20 }, // إجمالي المشاركات
+            { wch: 18 }  // معدل النمو
+        ];
+
+        // Style header
+        const headerRange = XLSX.utils.decode_range(ws['!ref']);
+        for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
+            const address = XLSX.utils.encode_cell({ r: 0, c: C });
+            if (!ws[address]) continue;
+            ws[address].s = {
+                font: { bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "4CAF50" } } // Green background
+            };
+        }
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'أبرز الوكلاء');
+        const dateStr = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `Top_Agents_${dateStr}.xlsx`);
+    } catch (err) {
+        console.error('Failed to export to Excel:', err);
+        showToast('فشل تصدير الملف. يرجى المحاولة مرة أخرى.', 'error');
+    }
 
     showToast('تم بدء تصدير البيانات بنجاح.', 'success');
 }
