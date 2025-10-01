@@ -34,20 +34,21 @@ async function renderTaskList() {
     const urlParams = new URLSearchParams(hash.split('?')[1]);
     const highlightedAgentId = urlParams.get('highlight');
 
-    // --- تعديل: استخدام الواجهة الخلفية الجديدة لجلب المهام والوكلاء ---
+    // --- FIX: Do not attempt to fetch tasks on Saturday (day 6) ---
+    if (new Date().getDay() === 6) {
+        wrapper.innerHTML = '<p class="no-results-message" style="margin-top: 20px;">لا توجد مهام مجدولة في أيام العطلات.</p>';
+        return;
+    }
+
     const response = await authedFetch('/api/tasks/today');
     if (!response.ok) {
-        console.error("Error fetching agents for tasks:", await response.text());
+        const errorText = await response.text();
+        console.error("Error fetching agents for tasks:", errorText);
         wrapper.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات المهام.</p>`;
         return;
     }
-    const { agents: filteredAgents, tasksMap, error } = await response.json();
-
-    if (error) { // This would be part of the JSON response if the backend sends it
-        console.error("Error fetching agents for tasks:", error);
-        wrapper.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات المهام.</p>`;
-        return;
-    }
+    const { agents: filteredAgents, tasksMap } = await response.json();
+    console.log('[Tasks Page] Received data from backend:', { agentCount: filteredAgents.length, tasksMap });
 
     const classifications = ['R', 'A', 'B', 'C'];
     const openGroups = JSON.parse(localStorage.getItem('openTaskGroups')) || ['R', 'A'];
@@ -60,7 +61,7 @@ async function renderTaskList() {
     const totalAgentsToday = filteredAgents.length;
     const completedAgentsToday = filteredAgents.filter(agent => {
         const task = tasksMap[agent._id] || {};
-        return task.audited && task.competition_sent;
+        return task.audited; // FIX: Completion is based on audit only
     }).length;
     const overallProgress = totalAgentsToday > 0 ? (completedAgentsToday / totalAgentsToday) * 100 : 0;
 
@@ -131,8 +132,8 @@ async function renderTaskList() {
                                 : `<div class="task-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
                             const isAudited = task.audited;
                             const isCompetitionSent = task.competition_sent;
-                            // Visual completion requires both
-                            const isComplete = isAudited && isCompetitionSent; 
+                            // FIX: Visual completion now only requires audit
+                            const isComplete = isAudited; 
                             const isHighlighted = highlightedAgentId && agent._id == highlightedAgentId;
                             const depositBonusText = (agent.remaining_deposit_bonus > 0 && agent.deposit_bonus_percentage > 0)
                                 ? `${agent.remaining_deposit_bonus} ${agent.remaining_deposit_bonus === 1 ? 'مرة' : 'مرات'} بنسبة ${agent.deposit_bonus_percentage}%`
@@ -220,9 +221,14 @@ async function renderTaskList() {
             }
 
             // --- تعديل: استخدام الواجهة الخلفية الجديدة لتحديث المهام ---
-            const response = await authedFetch('/api/tasks/daily', {
+            // FIX: The correct endpoint is /api/tasks. The controller is designed to handle both payload formats.
+            const response = await authedFetch('/api/tasks', {
                 method: 'POST',
-                body: JSON.stringify({ agent_id: agentId, task_date: todayStr, updates: updateData })
+                body: JSON.stringify({ 
+                    agentId: agentId, 
+                    taskType: isAuditedCheckbox ? 'audited' : 'competition_sent', 
+                    status: isChecked 
+                })
             });
 
             if (!response.ok) {
@@ -238,8 +244,8 @@ async function renderTaskList() {
                 auditCheck.closest('.action-item').classList.toggle('done', auditCheck.checked);
                 competitionCheck.closest('.action-item').classList.toggle('done', competitionCheck.checked);
 
-                // Visual completion requires both
-                const isComplete = auditCheck.checked && competitionCheck.checked; 
+                // FIX: Visual completion now only requires audit
+                const isComplete = auditCheck.checked; 
                 card.classList.toggle('complete', isComplete);
 
                 // NEW: Update the checkmark icon next to the name instantly
@@ -373,7 +379,8 @@ function setupTaskPageInteractions() {
                     const competitionCheck = card.querySelector('.competition-check');
                     auditCheck.closest('.action-item').classList.toggle('done', auditCheck.checked);
                     competitionCheck.closest('.action-item').classList.toggle('done', competitionCheck.checked);
-                    const isComplete = auditCheck.checked && competitionCheck.checked;
+                    // FIX: Visual completion now only requires audit
+                    const isComplete = auditCheck.checked;
                     card.classList.toggle('complete', isComplete);
                 });
                 updateTaskGroupState(group);

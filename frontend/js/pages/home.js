@@ -126,18 +126,18 @@ function updateHomePageUI(stats) {
         if (totalTodayTasks > 0) {
             // تعديل: استخدام بيانات المهام التي تم جلبها مسبقاً
             if (tasksForToday) {
-                const tasksMap = tasksForToday.reduce((acc, task) => {
-                    acc[task.agent_id] = task;
+                const tasksMap = (tasksForToday || []).reduce((acc, task) => {
+                    acc[task.agent_id.toString()] = task; // FIX: Use agent_id.toString() as key
                     return acc;
                 }, {});
 
                 const completedToday = agentsForToday.filter(agent => {
-                    const task = tasksMap[agent.id] || {};
+                    const task = tasksMap[agent._id] || {}; // FIX: Use _id instead of id
                     return task.audited && task.competition_sent; // Progress is based on both tasks
                 }).length;
 
                 const pendingAgents = agentsForToday.filter(agent => {
-                    const task = tasksMap[agent.id];
+                    const task = tasksMap[agent._id]; // FIX: Use _id instead of id
                     // Show agents who are missing either task
                     return !task || !task.audited || !task.competition_sent;
                 });
@@ -153,11 +153,11 @@ function updateHomePageUI(stats) {
                 if (pendingAgents.length > 0) {
                     // --- تعديل: عرض قائمة واحدة مبسطة ---
                     pendingHtml = pendingAgents.slice(0, 5).map(agent => {
-                        const task = tasksMap[agent.id] || {};
+                        const task = tasksMap[agent._id] || {}; // FIX: Use _id instead of id
                         const needsAudit = !task.audited;
                         const needsCompetition = !task.competition_sent;
                         return `
-                        <div class="pending-agent-card-v2" data-agent-id="${agent.id}" style="cursor: pointer;">
+                        <div class="pending-agent-card-v2" data-agent-id="${agent._id}" style="cursor: pointer;">
                             <div class="pending-agent-info">
                                 ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
                                 <div class="agent-name-wrapper">
@@ -170,7 +170,7 @@ function updateHomePageUI(stats) {
                             </div>
                             <div class="pending-agent-actions">
                                 <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
-                                <a href="#tasks?highlight=${agent.id}" class="go-to-task-icon" title="الذهاب للمهمة"><i class="fas fa-chevron-left"></i></a>
+                                <a href="#tasks?highlight=${agent._id}" class="go-to-task-icon" title="الذهاب للمهمة"><i class="fas fa-chevron-left"></i></a>
                             </div>
                         </div>
                         `;
@@ -243,7 +243,7 @@ function updateHomePageUI(stats) {
                 return { ...agent, totalViews, totalReactions, totalParticipants };
             }).sort((a, b) => b.totalViews - a.totalViews); // Sort by total views
 
-            topAgentsContainer.innerHTML = processedTopAgents.map((agent, index) => {
+            topAgentsContainer.innerHTML = (processedTopAgents || []).map((agent, index) => { // FIX: Add null check
                 const avatarHtml = agent.avatar_url
                     ? `<img src="${agent.avatar_url}" alt="Avatar" class="avatar-small" loading="lazy">`
                     : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`;

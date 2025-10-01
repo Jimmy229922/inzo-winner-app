@@ -300,7 +300,7 @@ async function saveAgent(newAgentData) {
 
         await logAgentActivity(insertedAgent._id, 'AGENT_CREATED', `تم إنشاء وكيل جديد: ${insertedAgent.name}.`);
         showToast('تمت إضافة الوكيل بنجاح!', 'success');
-        allAgentsData = []; // مسح ذاكرة التخزين المؤقت للوكلاء لإعادة جلبها عند العودة
+        window.allAgentsData = []; // مسح ذاكرة التخزين المؤقت للوكلاء لإعادة جلبها عند العودة
         // Use replace to avoid adding the 'add-agent' page to history
         const newUrl = window.location.pathname + window.location.search + `#profile/${insertedAgent._id}`; // Use _id from MongoDB
         window.location.replace(newUrl);
@@ -457,6 +457,7 @@ async function handleBulkAddAgents(data) {
             remaining_deposit_bonus: rankData.deposit_bonus_count,
             consumed_balance: 0,
             used_deposit_bonus: 0,
+            status: 'Active', // NEW: Set status to Active by default
             competition_duration: processed_competition_duration,
         };
         allParsedAgents.push(newAgent);

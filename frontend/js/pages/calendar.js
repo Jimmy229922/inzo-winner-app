@@ -55,7 +55,7 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
     const dayDiff = dayIndex - taskDate.getDay();
     taskDate.setDate(taskDate.getDate() + dayDiff);
     // --- تعديل: استخدام _id بدلاً من id ---
-    const task = tasksMap[agent._id] || {};
+    const task = tasksMap[agent._id.toString()] || {};
     // Visual completion requires both
     const isComplete = task.audited && task.competition_sent; 
     const avatarHtml = agent.avatar_url
@@ -137,6 +137,7 @@ async function renderCalendarPage() {
             throw new Error(errorResult.message || 'فشل جلب بيانات التقويم');
         }
         const { agents, tasks } = await response.json();
+        console.log('[Calendar Page] Received data from backend:', { agentCount: agents.length, taskCount: tasks.length });
 
         // --- تعديل: تحويل مصفوفة المهام إلى خريطة لسهولة الوصول ---
         const tasksMap = (tasks || []).reduce((map, task) => {
@@ -149,8 +150,7 @@ async function renderCalendarPage() {
 
         agents.forEach(agent => {
             // --- تعديل: قراءة الجدول الزمني من كائن schedule ---
-            const agentDays = agent.schedule?.days || [];
-            const dayIndices = agentDays.map(dayName => daysOfWeek.indexOf(dayName)).filter(i => i !== -1);
+            const dayIndices = agent.audit_days || [];
 
             dayIndices.forEach(dayIndex => {
                 if (dayIndex >= 0 && dayIndex < 6) {
@@ -167,7 +167,7 @@ async function renderCalendarPage() {
             // Calculate daily progress
             let completedTasks = 0;
             dailyAgents.forEach(agent => {
-                const task = tasksMap[agent._id] || {};
+                const task = tasksMap[agent._id.toString()] || {};
                 // Progress is based on audit only
                 if (task.audited) {
                     completedTasks++;
@@ -238,7 +238,7 @@ function setupCalendarEventListeners(container, tasksMap, calendarData) {
         let completedTasks = 0;
 
         agentsForDay.forEach(agent => {
-            const task = tasksMap[agent._id] || {};
+            const task = tasksMap[agent._id.toString()] || {};
             if (task.audited) { // Progress is based on audit only
                 completedTasks++;
             }

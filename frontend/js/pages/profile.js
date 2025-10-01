@@ -1,4 +1,5 @@
 let competitionCountdownIntervals = [];
+const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
 function stopCompetitionCountdowns() {
     competitionCountdownIntervals.forEach(clearInterval);
@@ -834,7 +835,7 @@ function renderDetailsView(agent) {
         let iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
 
         // إصلاح: منطق عرض أيقونة التعديل
-        if (!isEditable) { // This condition is now only for auto-calculated fields if any were to be added back
+        if (!isEditable && fieldName !== 'audit_days') { // Allow editing audit_days even if other fields are not editable
             iconHtml = `<span class="auto-calculated-indicator" title="يُحسب تلقائياً"><i class="fas fa-cogs"></i></span>`;
         }
 
@@ -845,6 +846,8 @@ function renderDetailsView(agent) {
             if (fieldName === 'prize_per_winner') displayValue = parseFloat(displayValue).toFixed(2);
             if (fieldName === 'deposit_bonus_percentage') displayValue = `${displayValue}%`;
             if (fieldName === 'competition_bonus') displayValue = `$${displayValue}`;
+        } else if (fieldName === 'audit_days') {
+            displayValue = value || 'غير محدد';
         } else if (fieldName.includes('_date')) {
             displayValue = value ? new Date(value).toLocaleDateString('ar-EG') : 'لم يحدد';
         } else {
@@ -952,6 +955,16 @@ async function renderInlineEditor(groupElement, agent) {
         case 'competition_duration': // تعديل: السماح بتعديل مدة المسابقة
             editorHtml = `<select id="inline-edit-input"><option value="24h" ${currentValue === '24h' ? 'selected' : ''}>24 ساعة</option><option value="48h" ${currentValue === '48h' ? 'selected' : ''}>48 ساعة</option></select>`;
             break;
+        case 'audit_days':
+            editorHtml = `
+                <div class="days-selector-v2" id="inline-edit-input">
+                    ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'].map((day, index) => `
+                        <div class="day-toggle-wrapper">
+                            <input type="checkbox" id="day-edit-inline-${index}" value="${index}" class="day-toggle-input" ${(currentValue || []).includes(index) ? 'checked' : ''}>
+                            <label for="day-edit-inline-${index}" class="day-toggle-btn">${day}</label>
+                        </div>`).join('')}
+                </div>`;
+            break;
         default: // for text/number inputs
             editorHtml = `<input type="number" id="inline-edit-input" value="${currentValue || ''}" placeholder="${label}">`;
             break;
@@ -1043,7 +1056,10 @@ async function renderInlineEditor(groupElement, agent) {
             updateData.remaining_deposit_bonus = (rankData.deposit_bonus_count || 0) - (currentAgent.used_deposit_bonus || 0);
         } else {
             let finalValue;
-            if (fieldName.includes('_date')) {
+            if (fieldName === 'audit_days') {
+                finalValue = Array.from(groupElement.querySelectorAll('.day-toggle-input:checked')).map(input => parseInt(input.value, 10));
+                newValue = finalValue.map(d => dayNames[d]).join(', ') || 'فارغ'; // For logging
+            } else if (fieldName.includes('_date')) {
                 finalValue = newValue === '' ? null : newValue;
             }else {
                 const parsedValue = parseFloat(newValue);

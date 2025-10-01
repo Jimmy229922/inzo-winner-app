@@ -5,10 +5,10 @@ const taskController = require('../controllers/task.controller');
 // GET /api/tasks/today - جلب جميع المهام لليوم الحالي
 router.get('/today', taskController.getTodayTasks);
 
+// GET /api/tasks/stats/today - جلب إحصائيات مهام اليوم
+router.get('/stats/today', taskController.getTodayTaskStats);
+
 // POST /api/tasks - إنشاء أو تحديث حالة مهمة لوكيل معين
 router.post('/', taskController.updateTaskStatus);
-
-// POST /api/tasks/daily - Legacy route from frontend, now points to the correct controller
-router.post('/daily', taskController.updateTaskStatus);
 
 module.exports = router;
