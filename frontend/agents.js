@@ -1759,26 +1759,27 @@ async function handleBulkSendBalances() {
             let errorCount = 0;
             const progressBar = document.getElementById('bulk-send-progress-bar-inner');
             const statusText = document.getElementById('bulk-send-status-text');
-            const renewalPeriodMap = {
-                'weekly': 'أسبوعي',
-                'biweekly': 'كل أسبوعين',
-                'monthly': 'شهري'
-            };
-
             for (let i = 0; i < eligibleAgents.length; i++) {
                 const agent = eligibleAgents[i];
                 
                 // بناء الرسالة الخاصة بكل وكيل
-                const renewalText = renewalPeriodMap[agent.renewal_period] || 'تداولي';
+                const baseLine = `يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع برصيد مسابقات:`;
+                const renewalPeriodMap = {
+                    'weekly': 'أسبوعي',
+                    'biweekly': 'كل أسبوعين',
+                    'monthly': 'شهري'
+                };
+                const renewalValue = (agent.renewal_period && agent.renewal_period !== 'none') 
+                    ? (renewalPeriodMap[agent.renewal_period] || '')
+                    : '';
                 let benefitsText = '';
                 if ((agent.remaining_balance || 0) > 0) {
-                    benefitsText += `💰 <b>رصيد مسابقات (${renewalText}):</b> <code>${agent.remaining_balance}$</code>\n`;
+                    benefitsText += `💰 <b>بونص تداولي:</b> <code>${agent.remaining_balance}$</code>\n`;
                 }
                 if ((agent.remaining_deposit_bonus || 0) > 0) {
                     benefitsText += `🎁 <b>بونص ايداع:</b> <code>${agent.remaining_deposit_bonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
                 }
-
-                const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...\n\nيسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع بالمميزات التالية:\n\n${benefitsText.trim()}\n\nبامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.\n\nهل ترغب بارسال مسابقة لحضرتك؟`;
+                const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...\n\n${baseLine}\n${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}\n\nبامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.\n\nهل ترغب بارسال مسابقة لحضرتك؟`;
 
                 try {
                     const response = await fetch('/api/post-announcement', {

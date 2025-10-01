@@ -274,26 +274,31 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     document.getElementById('send-bonus-cliche-btn').addEventListener('click', async () => {
         // 1. Construct the message
+        const baseLine = `يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع برصيد مسابقات:`;
+
+        // --- NEW: Add renewal period text ---
         const renewalPeriodMap = {
             'weekly': 'أسبوعي',
             'biweekly': 'كل أسبوعين',
             'monthly': 'شهري'
         };
-        const renewalText = renewalPeriodMap[agent.renewal_period] || 'تداولي';
+        const renewalValue = (agent.renewal_period && agent.renewal_period !== 'none') 
+            ? (renewalPeriodMap[agent.renewal_period] || '')
+            : '';
 
-        // --- NEW: Conditionally build the benefits text ---
+        // --- تعديل: بناء نص المميزات حسب الشكل الجديد ---
         let benefitsText = '';
         const remainingBalance = agent.remaining_balance || 0;
         const remainingDepositBonus = agent.remaining_deposit_bonus || 0;
 
         if (remainingBalance > 0) {
-            benefitsText += `💰 <b>رصيد مسابقات (${renewalText}):</b> <code>${remainingBalance}$</code>\n`;
+            benefitsText += `💰 <b>بونص تداولي:</b> <code>${remainingBalance}$</code>\n`;
         }
         if (remainingDepositBonus > 0) {
             benefitsText += `🎁 <b>بونص ايداع:</b> <code>${remainingDepositBonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
         }
 
-        // If there are no benefits to show, don't proceed.
+        // إذا لم تكن هناك أي مميزات، لا تقم بالإرسال
         if (!benefitsText.trim()) {
             showToast('لا توجد أرصدة متاحة لإرسال كليشة البونص لهذا الوكيل.', 'info');
             return;
@@ -301,9 +306,8 @@ async function renderAgentProfilePage(agentId, options = {}) {
         
         const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...
 
-يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع بالمميزات التالية:
-
-${benefitsText.trim()}
+${baseLine}
+${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
 
 بامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.
 
