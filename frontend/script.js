@@ -151,8 +151,7 @@ async function handleRouting() {
     '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
         '#users': { func: renderUsersPage, nav: 'nav-users', adminOnly: true }, // NEW: Users page, will be moved
         '#profile-settings': { func: renderProfileSettingsPage, nav: null }, // NEW: Profile settings page
-        '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' }
-        ,'#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' }
+        '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },'#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' }
     };
 
     const routeKey = hash.split('/')[0].split('?')[0]; // Get base route e.g., #profile from #profile/123 or #competitions from #competitions/new?agentId=1

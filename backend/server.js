@@ -577,11 +577,11 @@ apiRouter.use((req, res) => {
 // --- Static File Serving & SPA Fallback ---
 // This should come AFTER all API routes.
 
-// Serve static files from the frontend directory
-app.use(express.static(path.join(__dirname, '../frontend')));
-
 // Mount the main API router under the /api path
 app.use('/api', apiRouter);
+
+// Serve static files from the frontend directory
+app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Handle Chrome DevTools requests gracefully to prevent console noise.
 app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
