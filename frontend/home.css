@@ -1,7 +1,51 @@
 /* Home Page / Dashboard Styles */
-.page-header {
+.page-header:not(.dashboard-header-card) {
     margin-top: -20px; /* تعديل: إلغاء الحشوة العلوية لحاوية الصفحة الرئيسية */
     padding-top: 0;
+}
+
+/* --- NEW: Dashboard Header Card Style --- */
+.dashboard-header-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, var(--bg-color), var(--card-bg-color));
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px 25px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 15px -5px var(--shadow-color);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+.dashboard-header-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary-color) 20%, transparent), transparent);
+    transition: left 0.5s ease-in-out;
+}
+
+.dashboard-header-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px -8px var(--shadow-color);
+    border-color: var(--primary-color);
+}
+
+.dashboard-header-card:hover::before {
+    left: 100%;
+}
+
+.dashboard-header-card h1 {
+    border: none;
+    padding: 0;
+    margin: 0;
+    font-size: 1.8em;
 }
 
 .dashboard-grid-v2 {
@@ -31,8 +75,10 @@
 }
 
 .stat-card-v2:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+    border-color: color-mix(in srgb, currentColor 50%, transparent);
+    filter: brightness(1.1);
 }
 
 /* Color Themes */
@@ -61,6 +107,8 @@
 .info-tooltip-v2:hover .fa-info-circle {
     color: white;
 }
+
+
 
 .info-tooltip-v2::before {
     content: attr(data-tooltip);
@@ -95,6 +143,11 @@
     color: rgba(255, 255, 255, 0.15);
     transform: rotate(-20deg);
     z-index: 1;
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.stat-card-v2:hover .stat-card-v2-icon-bg {
+    transform: rotate(-10deg) scale(1.2);
 }
 
 .stat-card-v2-value {

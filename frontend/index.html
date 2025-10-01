@@ -49,6 +49,8 @@
                         <a href="#archived-competitions" id="nav-archived-competitions" class="dropdown-item"><i class="fas fa-archive"></i> المسابقات المنتهية</a>
                         <div class="dropdown-divider"></div>
                         <a href="#competition-templates" id="nav-competition-templates" class="dropdown-item"><i class="fas fa-file-alt"></i> إدارة القوالب</a>
+                        <div class="dropdown-divider"></div>
+                        <a href="#answers-collector" id="nav-answers-collector" class="dropdown-item"><i class="fas fa-magnet"></i> جامع الإجابات</a>
                         <a href="#archived-templates" id="nav-archived-templates" class="dropdown-item"><i class="fas fa-box-open"></i> أرشيف القوالب</a>
                     </div>
                 </div>
@@ -112,6 +114,8 @@
     <!-- Supabase Client -->
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- NEW: XLSX library for Excel export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Load all page-specific scripts first -->
     <script src="competitions.js"></script>
@@ -119,6 +123,7 @@
     <script src="agents.js"></script>
     <script src="calendar.js"></script>
     <script src="top-agents.js"></script>
+    <script src="answers.js"></script>
     <script src="profile.js"></script>
     <script src="users.js"></script>
     <!-- Load the main script last, as it depends on the others -->

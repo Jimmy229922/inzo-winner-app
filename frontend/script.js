@@ -151,7 +151,9 @@ async function handleRouting() {
     '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
         '#users': { func: renderUsersPage, nav: 'nav-users', adminOnly: true }, // NEW: Users page, will be moved
         '#profile-settings': { func: renderProfileSettingsPage, nav: null }, // NEW: Profile settings page
-        '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' }
+        '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
+        '#answers-collector': { func: renderAnswersCollectorPage, nav: 'nav-answers-collector' }
+        ,'#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' }
     };
 
     const routeKey = hash.split('/')[0].split('?')[0]; // Get base route e.g., #profile from #profile/123 or #competitions from #competitions/new?agentId=1
@@ -604,6 +606,7 @@ function setupNavbar() {
     const navArchivedTemplates = document.getElementById('nav-archived-templates');
     const navCalendar = document.getElementById('nav-calendar');
     const navActivityLog = document.getElementById('nav-activity-log');
+    const navAnswersCollector = document.getElementById('nav-answers-collector'); // NEW
     const navUsers = document.getElementById('nav-users'); // NEW
     const navProfileSettings = document.getElementById('nav-profile-settings');
 
@@ -620,6 +623,7 @@ function setupNavbar() {
     if (navArchivedTemplates) navArchivedTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-templates'; });
     if (navCompetitionTemplates) navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
     if (navActivityLog) navActivityLog.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'activity-log'; });
+    if (navAnswersCollector) navAnswersCollector.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'answers-collector'; }); // NEW
     if (navUsers) navUsers.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'users'; }); // NEW
 
     // Hide search results when clicking outside

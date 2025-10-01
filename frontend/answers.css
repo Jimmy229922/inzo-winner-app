@@ -61,6 +61,11 @@
     border: 1px solid var(--border-color);
 }
 
+.answer-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 8px var(--shadow-color);
+}
+
 .selected-competition-info {
     background-color: var(--card-bg-color);
     border: 1px solid var(--border-color);
@@ -120,6 +125,30 @@
     color: var(--primary-color);
 }
 
+.client-id-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.copy-id-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.copy-id-btn:hover {
+    color: var(--primary-color);
+    background-color: var(--hover-bg-color);
+}
+
 .answer-card-details {
     color: var(--text-secondary-color);
     font-style: italic;
@@ -127,6 +156,6 @@
 }
 
 .answer-card-info .client-name { font-weight: bold; }
-.answer-card-info .client-id { color: var(--text-secondary-color); font-size: 0.9em; margin-right: 8px; }
+.answer-card-info .client-id { color: var(--text-secondary-color); font-size: 0.9em; }
 
 .answer-card-actions .btn-small { padding: 5px 10px; font-size: 0.8em; }

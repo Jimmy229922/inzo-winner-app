@@ -15,7 +15,7 @@ async function main() {
     const supabaseUrl = 'https://xfnqbtrnqnjlwpwfoahu.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmbnFidHJucW5qbHdwd2ZvYWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1MzU4NDksImV4cCI6MjA3NDExMTg0OX0.SDGmikg8YVcLULfuiByJCYSaqyWsSU0YXEXwtRreb8o';
     // !! IMPORTANT !! You must add your real service key here for scheduled tasks to work.
-    const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmbnFidHJucW5qbHdwd2ZvYWh1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1ODUzNTg0OSwiZXhwIjoyMDc0MTExODQ5fQ.HwWyNma2esRzyr8_l4HggawjqKHJ_3n8lYUipUZU9xE'; 
+    const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmbnFidHJucW5qbHdwd2ZvYWh1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1ODUzNTg0OSwiZXhwIjoyMDc0MTExODQ5fQ.HwWyNma2esRzyr8_l4HggawjqKHJ_3n8lYUipUZU9xE';
 
     if (supabaseServiceKey === 'YOUR_REAL_SERVICE_KEY_HERE') {
         console.warn('\n[WARNING] The Supabase Service Key is a placeholder. Scheduled tasks might fail.');
@@ -102,8 +102,46 @@ async function ensureSuperAdmin() {
     }
 }
 
+async function updateTelegramConfig() {
+    console.log('\n--------------------------------------------------');
+    console.log('Updating Telegram Bot configuration...');
+    console.log('--------------------------------------------------');
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey || supabaseServiceKey === 'YOUR_REAL_SERVICE_KEY_HERE') {
+        console.warn('[WARN] Cannot update Telegram config. Supabase keys are not configured.');
+        return;
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const newBotToken = '8284290450:AAFFhQlAMWliCY0jGTAct50GTNtF5NzLIec';
+    const newChatId = '-4904232890';
+
+    try {
+        const { error: tokenError } = await supabaseAdmin
+            .from('app_config')
+            .upsert({ key: 'TELEGRAM_BOT_TOKEN', value: newBotToken }, { onConflict: 'key' });
+
+        if (tokenError) throw new Error(`Failed to update Bot Token: ${tokenError.message}`);
+        console.log('[OK] Telegram Bot Token updated successfully.');
+
+        const { error: chatIdError } = await supabaseAdmin
+            .from('app_config')
+            .upsert({ key: 'TELEGRAM_CHAT_ID', value: newChatId }, { onConflict: 'key' });
+
+        if (chatIdError) throw new Error(`Failed to update Chat ID: ${chatIdError.message}`);
+        console.log('[OK] Telegram Chat ID updated successfully.');
+
+    } catch (error) {
+        console.error(`[ERROR] Failed to update Telegram configuration: ${error.message}`);
+    }
+}
+
 (async () => {
     await main();
     await ensureSuperAdmin();
+    await updateTelegramConfig(); // NEW: Update Telegram config after setup
     console.log('\nSetup complete. You can now start the server.');
 })();

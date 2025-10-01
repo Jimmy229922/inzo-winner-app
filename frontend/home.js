@@ -15,7 +15,7 @@ async function renderHomePage() {
 
     // بمجرد توفر البيانات، قم ببناء وعرض المحتوى الكامل للصفحة دفعة واحدة
     appContent.innerHTML = `
-        <div class="page-header"><h1><i class="fas fa-tachometer-alt"></i> لوحة التحكم الرئيسية</h1></div>
+        <div class="page-header dashboard-header-card"><h1><i class="fas fa-tachometer-alt"></i> لوحة التحكم الرئيسية</h1><p class="welcome-message" id="welcome-message"></p></div>
 
         <div id="home-stats-container"></div>
         <div class="home-grid">
@@ -38,6 +38,10 @@ async function renderHomePage() {
 
                 <h2 style="margin-top: 30px;">نظرة سريعة على الوكلاء</h2>
                 <div id="agent-quick-stats" class="agent-quick-stats"></div>
+            </div>
+            <div class="home-side-column">
+                <h2 style="margin-top: 30px;"><i class="fas fa-star"></i> أبرز الوكلاء أداءً</h2>
+                <div id="top-agents-list" class="top-agents-list"></div>
             </div>
         </div>
  
@@ -81,7 +85,14 @@ function updateHomePageUI(stats) {
     if (!stats) return;
 
     // استخراج البيانات من نتيجة الـ RPC
-    const { total_agents: totalAgents, active_competitions: activeCompetitions, competitions_today_count: competitionsTodayCount, agents_for_today: agentsForToday, new_agents_this_month: newAgentsThisMonth, agents_by_classification: agentsByClassification, tasks_for_today: tasksForToday } = stats;
+    const { total_agents: totalAgents, active_competitions: activeCompetitions, competitions_today_count: competitionsTodayCount, agents_for_today: agentsForToday, new_agents_this_month: newAgentsThisMonth, agents_by_classification: agentsByClassification, tasks_for_today: tasksForToday, top_agents: topAgents } = stats;
+
+    // --- NEW: Welcome Message ---
+    const welcomeEl = document.getElementById('welcome-message');
+    if (welcomeEl && currentUserProfile) {
+        const userName = currentUserProfile.full_name || currentUserProfile.email.split('@')[0];
+        welcomeEl.textContent = `أهلاً بعودتك، ${userName}!`;
+    }
 
 
         // --- تحديث واجهة المستخدم بعد جلب جميع البيانات ---
@@ -209,6 +220,37 @@ function updateHomePageUI(stats) {
         
         // Render the new classification chart AFTER the container is in the DOM
         renderClassificationChart(classificationCounts);
+    }
+
+    // --- NEW: Render Top Agents Section ---
+    const topAgentsContainer = document.getElementById('top-agents-list');
+    if (topAgentsContainer) {
+        if (topAgents && topAgents.length > 0) {
+            const processedTopAgents = topAgents.map(agent => {
+                const totalViews = agent.competitions.reduce((sum, c) => sum + (c.views_count || 0), 0);
+                const totalReactions = agent.competitions.reduce((sum, c) => sum + (c.reactions_count || 0), 0);
+                const totalParticipants = agent.competitions.reduce((sum, c) => sum + (c.participants_count || 0), 0);
+                return { ...agent, totalViews, totalReactions, totalParticipants };
+            }).sort((a, b) => b.totalViews - a.totalViews); // Sort by total views
+
+            topAgentsContainer.innerHTML = processedTopAgents.map((agent, index) => {
+                const avatarHtml = agent.avatar_url
+                    ? `<img src="${agent.avatar_url}" alt="Avatar" class="avatar-small" loading="lazy">`
+                    : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`;
+                return `
+                    <a href="#profile/${agent.id}" class="top-agent-item">
+                        <span class="rank-number">${index + 1}</span>
+                        ${avatarHtml}
+                        <div class="agent-info">
+                            <span class="agent-name">${agent.name}</span>
+                            <span class="agent-stats"><i class="fas fa-eye"></i> ${formatNumber(agent.totalViews)}</span>
+                        </div>
+                    </a>
+                `;
+            }).join('');
+        } else {
+            topAgentsContainer.innerHTML = '<p class="no-results-message">لا توجد بيانات لأبرز الوكلاء.</p>';
+        }
     }
 }
 

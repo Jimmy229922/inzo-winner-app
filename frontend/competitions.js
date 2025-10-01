@@ -125,42 +125,6 @@ async function renderCompetitionManagementPage() {
                 });
         }
 
-        // Bulk Deactivate
-        if (e.target.closest('#bulk-deactivate-btn') && canEdit) {
-            showConfirmationModal(
-                `هل أنت متأكد من تعطيل ${selectedCompetitionIds.length} مسابقة؟`,
-                async () => {
-                    const { error } = await supabase.from('competitions').update({ is_active: false }).in('id', selectedCompetitionIds);
-                    if (error) {
-                        showToast('فشل تعطيل المسابقات المحددة.', 'error');
-                    } else {
-                        showToast('تم تعطيل المسابقات المحددة بنجاح.', 'success');
-                        await refreshCompetitionsList();
-                    }
-                }, { title: 'تأكيد التعطيل' }
-            );
-        }
-
-        // Bulk Delete
-        if (e.target.closest('#bulk-delete-btn') && canEdit) {
-            showConfirmationModal(
-                `هل أنت متأكد من حذف ${selectedCompetitionIds.length} مسابقة بشكل نهائي؟`,
-                async () => {
-                    const { error } = await supabase.from('competitions').delete().in('id', selectedCompetitionIds);
-                    if (error) {
-                        showToast('فشل حذف المسابقات المحددة.', 'error');
-                    } else {
-                        showToast('تم حذف المسابقات المحددة بنجاح.', 'success');
-                        await refreshCompetitionsList(true); // Pass true to refetch from DB
-                    }
-                }, {
-                    title: 'تأكيد الحذف',
-                    confirmText: 'حذف',
-                    confirmClass: 'btn-danger'
-                }
-            );
-        }
-
         // New: Handle competition status toggle
         const statusToggle = e.target.closest('.competition-status-toggle');
         if (statusToggle) {
@@ -194,6 +158,47 @@ async function renderCompetitionManagementPage() {
             }
         }
     });
+
+    // --- NEW: Attach bulk action listeners separately ---
+    const bulkDeactivateBtn = document.getElementById('bulk-deactivate-btn');
+    if (bulkDeactivateBtn && canEdit) {
+        bulkDeactivateBtn.addEventListener('click', () => {
+            showConfirmationModal(
+                `هل أنت متأكد من تعطيل ${selectedCompetitionIds.length} مسابقة؟`,
+                async () => {
+                    const { error } = await supabase.from('competitions').update({ is_active: false }).in('id', selectedCompetitionIds);
+                    if (error) {
+                        showToast('فشل تعطيل المسابقات المحددة.', 'error');
+                    } else {
+                        showToast('تم تعطيل المسابقات المحددة بنجاح.', 'success');
+                        await refreshCompetitionsList();
+                    }
+                }, { title: 'تأكيد التعطيل' }
+            );
+        });
+    }
+
+    const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+    if (bulkDeleteBtn && canEdit) {
+        bulkDeleteBtn.addEventListener('click', () => {
+            showConfirmationModal(
+                `هل أنت متأكد من حذف ${selectedCompetitionIds.length} مسابقة بشكل نهائي؟`,
+                async () => {
+                    const { error } = await supabase.from('competitions').delete().in('id', selectedCompetitionIds);
+                    if (error) {
+                        showToast('فشل حذف المسابقات المحددة.', 'error');
+                    } else {
+                        showToast('تم حذف المسابقات المحددة بنجاح.', 'success');
+                        await refreshCompetitionsList(true); // Pass true to refetch from DB
+                    }
+                }, {
+                    title: 'تأكيد الحذف',
+                    confirmText: 'حذف',
+                    confirmClass: 'btn-danger'
+                }
+            );
+        });
+    }
 
     // Caching: If we already have the data, don't fetch it again.
     if (allCompetitionsData.length > 0) {
@@ -623,23 +628,12 @@ async function renderCompetitionCreatePage(agentId) {
     });
 
     function updateDescriptionAndPreview(event = {}) {
-        console.log('[Debug] updateDescriptionAndPreview called.');
         const selectedId = templateSelect.value;
         const selectedTemplate = templates.find(t => t.id == selectedId);
-
-        if (!selectedTemplate) {
-            console.log('[Debug] No template selected or found.');
-            descInput.value = ''; // Clear preview if no template is selected
-            return;
-        }
 
         // NEW: Handle image preview
         const imagePreviewContainer = document.getElementById('telegram-image-preview-container');
         const imagePreview = document.getElementById('telegram-image-preview');
-        imagePreview.src = selectedTemplate.image_url || '';
-        imagePreviewContainer.style.display = selectedTemplate.image_url ? 'flex' : 'none';
-
-        console.log('[Debug] Selected Template:', selectedTemplate);
 
         // Show usage limit info only when the template is first selected
         if (event.target && event.target.id === 'competition-template-select') {
@@ -868,10 +862,6 @@ async function renderCompetitionCreatePage(agentId) {
         const totalCost = winnersCount * prizePerWinner;
         const sendBtn = e.target.querySelector('.btn-send-telegram');
         const originalBtnHtml = sendBtn.innerHTML;
-
-        console.log('[Submit Debug] --- Checking Balances ---');
-        console.log(`[Submit Debug] Agent Balance: Available = ${agent.remaining_balance || 0}, Cost = ${totalCost.toFixed(2)}`);
-        console.log(`[Submit Debug] Deposit Bonus: Available = ${agent.remaining_deposit_bonus || 0}, Required = ${depositWinnersCount}`);
         
         // Enhanced validation on submit
         if (totalCost > (agent.remaining_balance || 0) || depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
@@ -915,6 +905,34 @@ async function renderCompetitionCreatePage(agentId) {
         }
 
         try {
+            // --- FINAL ROBUST FIX for Image URL ---
+            // Always ensure the image URL is a public, accessible URL before sending.
+            let finalImageUrlForTelegram = selectedTemplate.image_url;
+
+            // A valid Supabase URL will contain "supabase.co". If not, it's likely a local/invalid URL.
+            const isPublicUrl = finalImageUrlForTelegram && finalImageUrlForTelegram.includes('supabase.co');
+
+            if (!isPublicUrl) {
+                console.warn('[FIX] Template image URL is not a public Supabase URL. Re-uploading...');
+                try {
+                    // Fetch the local static image file as a blob
+                    const response = await fetch('images/competition_bg.jpg');
+                    const imageBlob = await response.blob();
+                    const filePath = `static-backgrounds/competition_bg_fix_${Date.now()}.jpg`;
+
+                    // Upload to Supabase Storage
+                    const { data: uploadData, error: uploadError } = await supabase.storage.from('template-images').upload(filePath, imageBlob);
+                    if (uploadError) throw uploadError;
+
+                    // Get the public URL
+                    finalImageUrlForTelegram = supabase.storage.from('template-images').getPublicUrl(uploadData.path).data.publicUrl;
+
+                    // IMPORTANT: Update the template in the database with the new, correct URL for future use.
+                    await supabase.from('competition_templates').update({ image_url: finalImageUrlForTelegram }).eq('id', selectedTemplate.id);
+                } catch (uploadError) {
+                    throw new Error(`فشل تجهيز صورة المسابقة: ${uploadError.message}`);
+                }
+            }
             // 1. Save the competition
             const { data: newCompetition, error: competitionError } = await supabase
                 .from('competitions')
@@ -925,7 +943,7 @@ async function renderCompetitionCreatePage(agentId) {
                     status: 'sent', // Initial status
                     agent_id: agent.id,
                     total_cost: totalCost,
-                    ends_at: endsAtDate, // Save the end date
+                    ends_at: endsAtDate,
                     deposit_winners_count: depositWinnersCount,
                     correct_answer: selectedTemplate.correct_answer,
                     winners_count: winnersCount, // تعديل: إعادة تفعيل حفظ عدد الفائزين
@@ -992,7 +1010,7 @@ async function renderCompetitionCreatePage(agentId) {
                 body: JSON.stringify({ 
                     message: finalDescription,
                     chatId: agent.telegram_chat_id, // تعديل: إرسال المعرف الخاص بالوكيل
-                    imageUrl: finalImageUrl.startsWith('http') ? finalImageUrl : null // NEW: Send image URL
+                    imageUrl: finalImageUrlForTelegram // Use the guaranteed public URL
                 })
             });
 
@@ -1468,62 +1486,13 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('cancel-create-modal').addEventListener('click', closeModal);
     
-    // --- NEW: Live image generation on text input ---
-    const questionInput = document.getElementById('create-template-question');
-    const yPosInput = document.getElementById('text-y-position');
-    const xPosInput = document.getElementById('text-x-position');
-    const fontSizeInput = document.getElementById('text-font-size');
-    const imagePreview = document.getElementById('create-template-image-preview');
-    let debounceTimer;
-
-    const updateGeneratedImage = () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(async () => {
-            const questionText = questionInput.value.trim();
-            const options = {
-                yPercent: yPosInput.value,
-                xPercent: xPosInput.value,
-                fontSize: fontSizeInput.value
-            };
-            if (questionText) {
-                await generateCompetitionImage(questionText, imagePreview, options);
-            } else {
-                // If question is empty, show the base image
-                imagePreview.src = 'images/competition_bg.jpg';
-            }
-        }, 300); // Wait 300ms after user stops typing
-    };
-
-    [questionInput, yPosInput, xPosInput, fontSizeInput].forEach(input => input.addEventListener('input', updateGeneratedImage));
-
     document.getElementById('create-template-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        console.log('[Template Create] 1. Form submitted.');
-
-        const questionText = document.getElementById('create-template-question').value.trim();
-        let imageUrl = null;
-
-        if (questionText) {
-            console.log('[Template Create] 2. Generating final image for upload...');
-            const options = {
-                yPercent: document.getElementById('text-y-position').value,
-                xPercent: document.getElementById('text-x-position').value,
-                fontSize: document.getElementById('text-font-size').value
-            };
-            const canvas = await generateCompetitionImage(questionText, null, options);
-            const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-            const filePath = `${Date.now()}-competition.jpg`;
-            const { data, error: uploadError } = await supabase.storage.from('template-images').upload(filePath, imageBlob);
-
-            if (uploadError) {
-                console.error('Supabase storage upload error (create):', uploadError); // Log the detailed error
-                showToast(`فشل رفع الصورة: ${uploadError.message}`, 'error');
-                return;
-            }
-            imageUrl = supabase.storage.from('template-images').getPublicUrl(data.path).data.publicUrl;
-            console.log('[Template Create] 3. Image uploaded successfully. URL:', imageUrl);
+        const questionText = document.getElementById('create-template-question').value.trim();        
+        if (!questionText) {
+            showToast('حقل السؤال مطلوب.', 'error');
+            return;
         }
-        console.log('[Template Create] 4. Preparing form data for insertion...');
 
         const formData = {
             question: document.getElementById('create-template-question').value.trim(),
@@ -1531,11 +1500,9 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
             content: document.getElementById('create-template-content').value.trim(),
             correct_answer: document.getElementById('create-template-correct-answer').value.trim(),
             usage_limit: document.getElementById('create-template-usage-limit').value ? parseInt(document.getElementById('create-template-usage-limit').value, 10) : null,
-            image_url: imageUrl,
+            image_url: null, // FIX: Do not save image URL for new templates
             is_archived: false
         };
-
-        console.log('[Template Create] 5. Sending data to Supabase:', formData);
 
         const { error } = await supabase.from('competition_templates').insert(formData);
         if (error) {
@@ -1545,7 +1512,6 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
         } else {
             showToast('تم حفظ القالب بنجاح.', 'success');
             closeModal();
-            console.log('[Template Create] 6. Template saved successfully.');
             if (onSaveCallback) onSaveCallback();
         }
     });
