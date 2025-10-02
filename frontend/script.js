@@ -5,6 +5,25 @@ let currentUserProfile = null; // NEW: To store the current user's profile with 
 window.onlineUsers = new Map(); // NEW: Global map to track online users
 window.appContent = null; // NEW: Make appContent globally accessible
 
+// --- NEW: Centralized helper function for authenticated API calls ---
+async function authedFetch(url, options = {}) {
+    if (!supabase) throw new Error('Supabase client is not initialized.');
+
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+        throw new Error('User not authenticated.');
+    }
+
+    const newHeaders = new Headers(options.headers);
+    newHeaders.set('Authorization', `Bearer ${session.access_token}`);
+    if (options.body && !(options.body instanceof FormData)) { // Don't set for FormData
+        newHeaders.set('Content-Type', 'application/json');
+    }
+
+    return fetch(url, { ...options, headers: newHeaders });
+}
+
+
 // Global function to set the active navigation link
 function setActiveNav(activeLink) {
     // Deactivate all nav-links, dropdown-toggles, and dropdown-items

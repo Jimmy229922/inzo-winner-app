@@ -46,24 +46,6 @@ async function renderUsersPage() {
     fetchUsersData();
 }
 
-// --- NEW: Helper function for authenticated API calls ---
-async function authedFetch(url, options = {}) {
-    if (!supabase) throw new Error('Supabase client is not initialized.');
-
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
-        throw new Error('User not authenticated.');
-    }
-
-    const headers = {
-        ...options.headers,
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json'
-    };
-
-    return fetch(url, { ...options, headers });
-}
-
 async function fetchUsersData() {
     if (!supabase) {
         document.getElementById('users-list-container').innerHTML = '<p class="error">لا يمكن عرض المستخدمين، لم يتم الاتصال بقاعدة البيانات.</p>';
@@ -78,8 +60,22 @@ async function fetchUsersData() {
             throw new Error(result.message);
         }
         const responseData = await response.json();
-        const users = responseData.users || []; // Extract the array of users
-        setupUserPageFilters(users); // Re-setup filters with the fetched data
+        const authUsers = responseData.users || [];
+        const profiles = responseData.profiles || [];
+
+        // --- FIX: Merge auth users with their profiles ---
+        const profilesMap = profiles.reduce((map, profile) => {
+            map[profile.id] = profile;
+            return map;
+        }, {});
+
+        const mergedUsers = authUsers.map(user => {
+            const profile = profilesMap[user.id] || {};
+            // Combine data, giving profile data precedence for fields like 'full_name'
+            return { ...user, ...profile };
+        });
+
+        setupUserPageFilters(mergedUsers); // Re-setup filters with the complete data
     } catch (error) {
         document.getElementById('users-list-container').innerHTML = `<p class="error">فشل جلب المستخدمين: ${error.message}</p>`;
         return;

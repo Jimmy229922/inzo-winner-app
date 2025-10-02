@@ -984,10 +984,9 @@ async function renderCompetitionCreatePage(agentId) {
             }
 
             // 3. Send to Telegram
-            const telegramResponse = await fetch('/api/post-announcement', {
+            const telegramResponse = await authedFetch('/api/post-announcement', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     message: finalDescription,
                     chatId: agent.telegram_chat_id, // تعديل: إرسال المعرف الخاص بالوكيل
                     imageUrl: finalImageUrlForTelegram // Use the guaranteed public URL

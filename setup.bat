@@ -19,8 +19,7 @@ echo.
 echo [1/2] Installing backend dependencies...
 echo      (This may take a moment)...
 cd backend
-call npm install 
-call npm install @supabase/supabase-js
+call npm install
 if %errorlevel% neq 0 (
     echo [ERROR] 'npm install' failed. Check your internet connection, antivirus settings, or try running as Administrator.
     cd ..

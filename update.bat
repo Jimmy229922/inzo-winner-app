@@ -70,9 +70,10 @@ echo.
 
 echo [3/4] Installing/updating dependencies...
 cd backend
-npm install
+REM Using 'npm ci' for a clean and fast install based on package-lock.json
+npm ci
 if !errorlevel! neq 0 (
-    echo [ERROR] 'npm install' failed. Please check your internet connection or antivirus settings.
+    echo [ERROR] 'npm ci' failed. Please check your internet connection or antivirus settings.
     cd ..
     pause
     exit /b 1

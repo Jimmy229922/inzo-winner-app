@@ -318,7 +318,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
         if (agent.telegram_chat_id && agent.telegram_group_name) {
             try {
                 showToast('جاري التحقق من بيانات المجموعة...', 'info');
-                const response = await fetch(`/api/get-chat-info?chatId=${agent.telegram_chat_id}`);
+                const response = await authedFetch(`/api/get-chat-info?chatId=${agent.telegram_chat_id}`);
                 const data = await response.json();
 
                 if (!response.ok) throw new Error(data.message);
@@ -347,9 +347,8 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
              <textarea class="modal-textarea-preview" readonly>${clicheText}</textarea>`,
             async () => {
                 try {
-                    const response = await fetch('/api/post-announcement', {
+                    const response = await authedFetch('/api/post-announcement', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
                     });
                     if (!response.ok) {
@@ -392,9 +391,8 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
             async () => {
                 // Send to backend on confirmation
                 try {
-                    const response = await fetch('/api/post-announcement', {
+                    const response = await authedFetch('/api/post-announcement', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
                     });
                     const result = await response.json();
@@ -869,7 +867,9 @@ function renderDetailsView(agent) {
     const eventHandler = (e) => {
         const trigger = e.target.closest('.inline-edit-trigger');
         if (trigger) {
-            const group = trigger.closest('.details-group');
+            const group = trigger.closest('.details-group'); 
+            // FIX: Add a null check to prevent race condition errors after a save.
+            if (!group) return;
             renderInlineEditor(group, agent);
         }
     };

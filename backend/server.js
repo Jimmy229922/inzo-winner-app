@@ -12,7 +12,18 @@ const port = process.env.PORT || 30001; // NEW: Make port configurable
 
 // Middlewares
 app.use(cors()); // للسماح للـ Frontend بالتواصل مع الـ Backend
-app.use(helmet()); // NEW: Add security headers
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+                "script-src": ["'self'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"],
+                "connect-src": ["'self'", "*.supabase.co", "wss://*.supabase.co", "https://cdn.jsdelivr.net", "https://ui-avatars.com"], // Ensure ui-avatars.com is also allowed for connections if needed
+                "img-src": ["'self'", "data:", "lh3.googleusercontent.com", "*.supabase.co", "blob:", "https://ui-avatars.com"], // Ensure ui-avatars.com is allowed for images
+            },
+        },
+    })
+); // NEW: Add security headers with custom CSP
 app.use(express.json()); // لتحليل البيانات القادمة بصيغة JSON
 
 // --- متغيرات سيتم تحميلها من قاعدة البيانات ---
@@ -103,7 +114,11 @@ const authMiddleware = async (req, res, next) => {
 
 // --- NEW: Centralized API Router Setup ---
 const apiRoutes = require('./routes/api'); // Import the new router file
-apiRouter.use('/', apiRoutes({ supabaseAdmin, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID }));
+apiRouter.use('/', apiRoutes({
+    supabaseAdmin,
+    getTelegramBotToken: () => TELEGRAM_BOT_TOKEN,
+    getTelegramChatId: () => TELEGRAM_CHAT_ID
+}));
 
 // --- NEW: Central Error Handling Middleware ---
 // This should be placed after all other app.use() and routes calls
