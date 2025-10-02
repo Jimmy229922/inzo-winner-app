@@ -733,6 +733,12 @@ async function renderTaskList() {
                 const groupDetails = card.closest('.task-group');
                 updateTaskGroupState(groupDetails);
                 updateOverallProgress();
+
+                // --- NEW: Log the activity ---
+                const action = isAuditedCheckbox ? 'التدقيق' : 'المسابقة';
+                const status = isChecked ? 'تفعيل' : 'إلغاء تفعيل';
+                const agentName = card.dataset.originalName;
+                logAgentActivity(agentId, 'TASK_UPDATE', `تم ${status} مهمة "${action}" للوكيل ${agentName}.`);
             }
         }
     });
