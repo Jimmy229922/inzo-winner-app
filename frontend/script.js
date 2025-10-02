@@ -142,7 +142,7 @@ async function handleRouting() {
     // Basic routing
     const routes = {
         '#home': { func: renderHomePage, nav: 'nav-home' },
-        '#tasks': { func: renderTasksPage, nav: 'nav-tasks' }, // Re-added this route
+        '#tasks': { func: renderTasksPage, nav: 'nav-tasks' },
         '#add-agent': { func: renderAddAgentForm, nav: null }, // إصلاح: إضافة المسار المفقود
         '#top-agents': { func: renderTopAgentsPage, nav: 'nav-top-agents' }, // NEW: Top Agents page
         '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents', adminOnly: false },
