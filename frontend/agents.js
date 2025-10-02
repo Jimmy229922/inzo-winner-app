@@ -197,7 +197,7 @@ function displayAgentsPage(paginatedAgents, page, totalCount) {
                                 <div class="table-agent-cell">
                                     ${avatarHtml}
                                     <div class="agent-details">
-                                        <a href="#profile/${agent.id}" class="agent-name-link" onclick="event.stopPropagation()">${agent.name}</a>
+                                        <a href="#profile/${agent.id}" class="agent-name-link">${agent.name}</a>
                                     </div>
                                 </div>
                             </td>
@@ -205,9 +205,9 @@ function displayAgentsPage(paginatedAgents, page, totalCount) {
                             <td data-label="التصنيف"><span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span></td>
                             <td data-label="المرتبة">${agent.rank || 'غير محدد'}</td>
                             <td data-label="روابط التلجرام">
-                                ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank" onclick="event.stopPropagation()">القناة</a>` : ''}
+                                ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank" class="agent-table-link">القناة</a>` : ''}
                                 ${agent.telegram_channel_url && agent.telegram_group_url ? ' | ' : ''}
-                                ${agent.telegram_group_url ? `<a href="${agent.telegram_group_url}" target="_blank" onclick="event.stopPropagation()">الجروب</a>` : ''}
+                                ${agent.telegram_group_url ? `<a href="${agent.telegram_group_url}" target="_blank" class="agent-table-link">الجروب</a>` : ''}
                             </td>
                             <td class="actions-cell">
                                 <button class="btn-secondary edit-btn btn-small"><i class="fas fa-edit"></i> تعديل</button>
@@ -242,7 +242,13 @@ function attachCardEventListeners(currentPage) {
 
     container.querySelectorAll('tbody tr').forEach(row => {
         row.addEventListener('click', e => {
-            if (e.target.closest('.actions-cell, a')) return; // Do not navigate if clicking on actions or a link
+            // Do not navigate if clicking on actions or a link
+            if (e.target.closest('.actions-cell, a.agent-name-link, a.agent-table-link')) {
+                // If it's a link inside the row, we still want to stop the row's main navigation action.
+                // The link's default behavior (navigation) will proceed unless stopped.
+                // Here, we just prevent the row's own navigation logic.
+                return;
+            }
             window.location.hash = `profile/${row.dataset.agentId}`;
         });
     });

@@ -196,6 +196,9 @@ async function renderCompetitionManagementPage() {
     // Initial fetch and setup
     setupCompetitionFilters();
     await fetchAndDisplayCompetitions(1);
+
+    // FIX: Setup one-time global listener for this page
+    setupCompetitionListGlobalListeners();
 }
 
 async function fetchAndDisplayCompetitions(page) {
@@ -297,6 +300,19 @@ function displayCompetitionsPage(paginatedCompetitions, page, totalCount) {
     attachCompetitionListListeners(paginatedCompetitions, totalCount);
 }
 
+function setupCompetitionListGlobalListeners() {
+    const container = document.getElementById('app-content');
+    container.addEventListener('click', (e) => {
+        // Handle edit button clicks using event delegation
+        const editBtn = e.target.closest('.competitions-list-view .edit-btn');
+        if (editBtn) {
+            const compId = editBtn.dataset.id;
+            if (compId) window.location.hash = `#competitions/edit/${compId}`;
+        }
+    });
+}
+
+
 function generateCompetitionGridHtml(competitions) {
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const compsPerm = currentUserProfile?.permissions?.competitions?.manage_comps;
@@ -306,7 +322,7 @@ function generateCompetitionGridHtml(competitions) {
     return competitions.map(comp => {
         const isSelected = selectedCompetitionIds.includes(comp.id);
         const agent = comp.agents;
-        const agentInfoHtml = agent
+        const agentInfoHtml = agent // FIX: Add a class to the link for event delegation
             ? `<a href="#profile/${agent.id}" class="table-agent-cell">
                     ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy">` : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`}
                     <div class="agent-details">
@@ -333,7 +349,7 @@ function generateCompetitionGridHtml(competitions) {
             </div>
             ${agentInfoHtml}
             <div class="competition-card-footer">
-                <button class="btn-secondary edit-btn" title="تعديل" onclick="window.location.hash='#competitions/edit/${comp.id}'"><i class="fas fa-edit"></i></button>
+                <button class="btn-secondary edit-btn" title="تعديل" data-id="${comp.id}"><i class="fas fa-edit"></i></button>
                 <button class="btn-danger delete-competition-btn" title="حذف" data-id="${comp.id}"><i class="fas fa-trash-alt"></i></button>
             </div>
         </div>
