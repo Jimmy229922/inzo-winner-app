@@ -194,11 +194,9 @@ function displayAgentsPage(paginatedAgents, page, totalCount) {
                     return `
                         <tr data-agent-id="${agent.id}">
                             <td data-label="الوكيل">
-                                <div class="table-agent-cell">
+                                <div class="table-agent-cell" onclick="window.location.hash='#profile/${agent.id}'" style="cursor: pointer;">
                                     ${avatarHtml}
-                                    <div class="agent-details">
-                                        <a href="#profile/${agent.id}" class="agent-name-link">${agent.name}</a>
-                                    </div>
+                                    <div class="agent-details">${agent.name}</div>
                                 </div>
                             </td>
                             <td data-label="رقم الوكالة" class="agent-id-text" title="نسخ الرقم">${agent.agent_id}</td>
@@ -240,72 +238,65 @@ function attachCardEventListeners(currentPage) {
     const container = document.getElementById('agent-table-container');
     if (!container) return;
 
-    container.querySelectorAll('tbody tr').forEach(row => {
-        row.addEventListener('click', e => {
-            // Do not navigate if clicking on actions or a link
-            if (e.target.closest('.actions-cell, a.agent-name-link, a.agent-table-link')) {
-                // If it's a link inside the row, we still want to stop the row's main navigation action.
-                // The link's default behavior (navigation) will proceed unless stopped.
-                // Here, we just prevent the row's own navigation logic.
-                return;
-            }
-            window.location.hash = `profile/${row.dataset.agentId}`;
-        });
-    });
+    // --- تعديل: استخدام Event Delegation لتحسين الأداء وتوحيد السلوك وتجنب أخطاء CSP ---
+    container.addEventListener('click', (e) => {
+        const agentCell = e.target.closest('.table-agent-cell');
+        const agentIdText = e.target.closest('.agent-id-text');
+        const editBtn = e.target.closest('.edit-btn');
+        const deleteBtn = e.target.closest('.delete-btn');
+        const link = e.target.closest('a');
+        const paginationBtn = e.target.closest('.page-btn');
 
-    // Click to copy agent ID
-    container.querySelectorAll('.agent-id-text').forEach(idEl => {
-        idEl.addEventListener('click', (e) => {
+        // 1. نسخ رقم الوكالة
+        if (agentIdText) {
             e.stopPropagation();
-            const agentIdToCopy = idEl.textContent;
+            const agentIdToCopy = agentIdText.textContent;
             navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
-        });
+        }
+
+        // 2. الانتقال للملف الشخصي عند الضغط على خلية الوكيل (الاسم/الصورة)
+        else if (agentCell && !editBtn && !deleteBtn && !link) {
+            const row = agentCell.closest('tr');
+            if (row && row.dataset.agentId) {
+                window.location.hash = `profile/${row.dataset.agentId}`;
+            }
+        }
     });
 
-    container.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const card = e.currentTarget.closest('tr');
-            window.location.hash = `profile/${card.dataset.agentId}/edit`;
-        });
-    });
+    // Event delegation for edit, delete, and pagination buttons
+    document.getElementById('agent-table-container').addEventListener('click', (e) => {
+        const editBtn = e.target.closest('.edit-btn');
+        if (editBtn) {
+            const row = editBtn.closest('tr');
+            if (row) window.location.hash = `profile/${row.dataset.agentId}/edit`;
+            return;
+        }
 
-    container.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const card = e.currentTarget.closest('tr');
-            const agentId = card.dataset.agentId;
-            const agentName = card.querySelector('.agent-name-link').textContent;
-
+        const deleteBtn = e.target.closest('.delete-btn');
+        if (deleteBtn) {
+            const row = deleteBtn.closest('tr');
+            const agentId = row.dataset.agentId;
+            const agentName = row.querySelector('.agent-details').textContent;
             showConfirmationModal(
                 `هل أنت متأكد من حذف الوكيل "<strong>${agentName}</strong>"؟<br><small>سيتم حذف جميع بياناته المرتبطة بشكل دائم.</small>`,
                 async () => {
                     await logAgentActivity(agentId, 'AGENT_DELETED', `تم حذف الوكيل: ${agentName} (ID: ${agentId}).`);
                     const { error } = await supabase.from('agents').delete().eq('id', agentId);
-
                     if (error) {
-                        console.error('Error deleting agent:', JSON.stringify(error, null, 2));
                         showToast('فشل حذف الوكيل.', 'error');
                     } else {
                         showToast('تم حذف الوكيل بنجاح.', 'success');
-                        // After deleting, we need to refetch the current page
-                        // to see if it's now empty and we should move to the previous page.
-                        // For simplicity, we just refetch the current page. A more advanced
-                        // implementation would check if the current page becomes empty and
-                        // then fetch the previous one.
                         fetchAndDisplayAgents(currentPage);
                     }
-                }, {
-                    title: 'تأكيد حذف الوكيل',
-                    confirmText: 'حذف نهائي',
-                    confirmClass: 'btn-danger'
-                });
-        });
-    });
+                }, { title: 'تأكيد حذف الوكيل', confirmText: 'حذف نهائي', confirmClass: 'btn-danger' });
+            return;
+        }
 
-    container.querySelectorAll('.page-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const newPage = e.currentTarget.dataset.page;
+        const pageBtn = e.target.closest('.page-btn');
+        if (pageBtn && !pageBtn.disabled) {
+            const newPage = pageBtn.dataset.page;
             if (newPage) fetchAndDisplayAgents(parseInt(newPage));
-        });
+        }
     });
 }
 

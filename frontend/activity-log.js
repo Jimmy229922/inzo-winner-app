@@ -44,21 +44,16 @@ async function renderActivityLogPage() {
 
         logContainer.innerHTML = data.map(log => {
             const { icon, colorClass } = getLogIconDetails(log.action_type);
-            const agentName = log.agents ? `<a href="#profile/${log.agent_id}" class="agent-name-link">${log.agents.name}</a>` : '';
             let finalDescription = log.description.replace(/`([^`]+)`/g, '<strong>$1</strong>');
-            // This logic is a bit tricky. We want to replace the agent name in the description with a link,
-            // but only if the agent exists.
-            // A simpler approach is to just prepend the agent name if it exists.
-            const agentPrefix = agentName ? `<strong>${agentName}:</strong> ` : '';
             if (log.agents && log.agents.name) {
-                finalDescription = finalDescription.replace(log.agents.name, agentName);
+                finalDescription = finalDescription.replace(log.agents.name, `<a href="#profile/${log.agent_id}" class="agent-name-link">${log.agents.name}</a>`);
             }
 
             return `
                 <div class="activity-item-full">
                     <div class="activity-icon ${colorClass}"><i class="fas ${icon}"></i></div>
                     <div class="activity-content">
-                        <p class="activity-description">${agentPrefix}${finalDescription}</p>
+                        <p class="activity-description">${finalDescription}</p>
                         <p class="activity-timestamp">${new Date(log.created_at).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</p>
                     </div>
                 </div>

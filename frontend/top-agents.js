@@ -271,7 +271,7 @@ function displayTopAgents(sortedAgents, sortKey) {
             : `<div class="leaderboard-avatar-placeholder"><i class="fas fa-user"></i></div>`;
 
         return `
-            <div class="leaderboard-card ${isTopThree ? `top-rank ${rankClass}` : ''}" onclick="window.location.hash='#profile/${agent.id}'">
+            <div class="leaderboard-card ${isTopThree ? `top-rank ${rankClass}` : ''}" data-agent-id="${agent.id}" style="cursor: pointer;">
                 <div class="leaderboard-rank">
                     ${isTopThree ? `<div class="medal-badge ${rankClass}">${getRankIcon(rank)}</div>` : getRankIcon(rank)}
                 </div>
@@ -280,7 +280,7 @@ function displayTopAgents(sortedAgents, sortKey) {
                     ${avatarHtml}
                     <div class="leaderboard-agent-info">
                         <h3 class="leaderboard-agent-name">${agent.name} ${trendIcon}</h3>
-                        <div class="leaderboard-agent-meta">
+                        <div class="leaderboard-agent-meta" data-agent-id-copy="${agent.agent_id}" title="نسخ الرقم">
                             <span class="leaderboard-agent-id">#${agent.agent_id}</span>
                         </div>
                     </div>
@@ -310,12 +310,12 @@ function displayTopAgents(sortedAgents, sortKey) {
             : `<div class="leaderboard-avatar-placeholder-simple"><i class="fas fa-user"></i></div>`;
 
         return `
-            <div class="leaderboard-card-simple" onclick="window.location.hash='#profile/${agent.id}'">
+            <div class="leaderboard-card-simple" data-agent-id="${agent.id}" style="cursor: pointer;">
                 <span class="simple-rank">${rank}</span>
                 ${avatarHtml}
                 <div class="simple-agent-info">
                     <span class="simple-agent-name">${agent.name}</span>
-                    <span class="simple-agent-id">#${agent.agent_id}</span>
+                    <span class="simple-agent-id" data-agent-id-copy="${agent.agent_id}" title="نسخ الرقم">#${agent.agent_id}</span>
                 </div>
                 <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
             </div>
@@ -343,6 +343,22 @@ function displayTopAgents(sortedAgents, sortKey) {
             </div>
         ` : ''}
     `;
+
+    // --- NEW: Event Delegation for CSP Compliance ---
+    container.addEventListener('click', (e) => {
+        const copyIdTrigger = e.target.closest('[data-agent-id-copy]');
+        if (copyIdTrigger) {
+            e.stopPropagation();
+            const agentIdToCopy = copyIdTrigger.dataset.agentIdCopy;
+            navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
+            return;
+        }
+
+        const card = e.target.closest('[data-agent-id]');
+        if (card) {
+            window.location.hash = `#profile/${card.dataset.agentId}`;
+        }
+    });
 }
 
 // --- NEW: Export to CSV Functionality ---

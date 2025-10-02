@@ -189,11 +189,11 @@ function updateHomePageUI(stats) {
                         const needsAudit = !task.audited;
                         const needsCompetition = !task.competition_sent;
                         return `
-                        <div class="pending-agent-card-v2" data-agent-id="${agent.id}">
+                        <div class="pending-agent-card-v2" data-agent-id="${agent.id}" onclick="window.location.hash='#profile/${agent.id}'" style="cursor: pointer;">
                             <div class="pending-agent-info">
                                 ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
                                 <div class="agent-name-wrapper">
-                                    <a href="#profile/${agent.id}" class="agent-name-link">${agent.name}</a>
+                                    <span class="agent-name-link">${agent.name}</span>
                                     <div class="pending-task-actions">
                                         ${needsAudit ? '<button class="btn-icon-action home-task-action audit" data-task-type="audit" title="تمييز التدقيق كمكتمل"><i class="fas fa-clipboard-check"></i> <span>تدقيق</span></button>' : ''}
                                         ${needsCompetition ? '<button class="btn-icon-action home-task-action competition" data-task-type="competition" title="تمييز المسابقة كمكتملة"><i class="fas fa-pen-alt"></i> <span>مسابقة</span></button>' : ''}
@@ -217,7 +217,18 @@ function updateHomePageUI(stats) {
                 }
                 pendingList.innerHTML = pendingHtml;
 
-                pendingList.addEventListener('click', handleHomeTaskAction);
+                // --- NEW: Event Delegation for CSP Compliance ---
+                pendingList.addEventListener('click', (e) => {
+                    const taskAction = e.target.closest('.home-task-action');
+                    if (taskAction) {
+                        handleHomeTaskAction(e);
+                        return;
+                    }
+                    const card = e.target.closest('.pending-agent-card-v2');
+                    if (card && !e.target.closest('a')) {
+                        window.location.hash = `#profile/${card.dataset.agentId}`;
+                    }
+                });
             }
         } else {
             // NEW: Handle the case where there are no tasks scheduled for today at all
@@ -269,20 +280,40 @@ function updateHomePageUI(stats) {
                     ? `<img src="${agent.avatar_url}" alt="Avatar" class="avatar-small" loading="lazy">`
                     : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`;
                 return `
-                    <a href="#profile/${agent.id}" class="top-agent-item">
+                    <div class="top-agent-item" onclick="window.location.hash='#profile/${agent.id}'" style="cursor: pointer;">
                         <span class="rank-number">${index + 1}</span>
                         ${avatarHtml}
                         <div class="agent-info">
                             <span class="agent-name">${agent.name}</span>
-                            <span class="agent-stats"><i class="fas fa-eye"></i> ${formatNumber(agent.totalViews)}</span>
+                            <span class="agent-stats" onclick="event.stopPropagation(); navigator.clipboard.writeText('${agent.agent_id}').then(() => showToast('تم نسخ الرقم: ${agent.agent_id}', 'info'));" title="نسخ الرقم"><i class="fas fa-id-badge"></i> #${agent.agent_id}</span>
                         </div>
-                    </a>
+                    </div>
                 `;
             }).join('');
         } else {
             topAgentsContainer.innerHTML = '<p class="no-results-message">لا توجد بيانات لأبرز الوكلاء.</p>';
         }
     }
+}
+async function handleHomeTaskAction(event) {
+    const button = event.target.closest('.home-task-action');
+    if (!button) return;
+
+    // --- NEW: Event Delegation for CSP Compliance ---
+    topAgentsContainer.addEventListener('click', (e) => {
+        const copyIdTrigger = e.target.closest('[data-agent-id-copy]');
+        if (copyIdTrigger) {
+            e.stopPropagation();
+            const agentIdToCopy = copyIdTrigger.dataset.agentIdCopy;
+            navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
+            return;
+        }
+
+        const item = e.target.closest('.top-agent-item');
+        if (item) {
+            window.location.hash = `#profile/${item.dataset.agentId}`;
+        }
+    });
 }
 
 async function handleHomeTaskAction(event) {

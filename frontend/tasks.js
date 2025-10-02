@@ -155,7 +155,7 @@ async function renderTaskList() {
 
                             return `
                             <div class="task-card ${isComplete ? 'complete' : ''} ${isHighlighted ? 'highlighted' : ''}" data-agent-id="${agent.id}" data-name="${agent.name.toLowerCase()}" data-original-name="${agent.name}" data-agentid-str="${agent.agent_id}">
-                                <div class="task-card-header">
+                                <div class="task-card-header" style="cursor: pointer;">
                                     <div class="task-card-main">
                                         ${avatarHtml}
                                         <div class="task-agent-info">
@@ -215,21 +215,6 @@ async function renderTaskList() {
     }
 
     const container = document.getElementById('task-list-container');
-    // Use event delegation for better performance
-    container.addEventListener('click', (e) => {
-        const card = e.target.closest('.task-card');
-        if (card && !e.target.closest('.task-card-actions')) {
-            const agentId = card.dataset.agentId;
-            window.location.hash = `profile/${agentId}`;
-        }
-
-        const agentIdEl = e.target.closest('.task-agent-id');
-        if (agentIdEl) {
-            e.stopPropagation();
-            const agentIdToCopy = agentIdEl.textContent;
-            navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
-        }
-    });
 
     container.addEventListener('change', async (e) => {
         if (e.target.matches('.audit-check, .competition-check')) {

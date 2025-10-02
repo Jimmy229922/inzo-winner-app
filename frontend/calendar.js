@@ -73,12 +73,12 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
     }
 
     return `
-        <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent.id}" data-classification="${agent.classification}" data-name="${agent.name.toLowerCase()}" data-agentid-str="${agent.agent_id}">
+        <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent.id}" data-classification="${agent.classification}" data-name="${agent.name.toLowerCase()}" data-agentid-str="${agent.agent_id}" onclick="window.location.hash='#profile/${agent.id}'" style="cursor: pointer;">
             <div class="calendar-agent-main">
                 ${avatarHtml}
                 <div class="calendar-agent-info">
                     <span class="agent-name">${highlightedName} ${isComplete ? '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : ''}</span>
-                    <p class="calendar-agent-id" title="نسخ الرقم">${highlightedId}</p>
+                    <p class="calendar-agent-id" title="نسخ الرقم" onclick="event.stopPropagation(); navigator.clipboard.writeText('${agent.agent_id}').then(() => showToast('تم نسخ الرقم: ${agent.agent_id}', 'info'));">${highlightedId}</p>
                 </div>
             </div>
             <div class="calendar-agent-actions">
@@ -254,23 +254,6 @@ async function renderCalendarPage() {
 
     const container = document.getElementById('calendar-container');
     if (!container) return;
-
-    container.addEventListener('click', async (e) => {
-        const agentIdEl = e.target.closest('.calendar-agent-id');
-        const agentItem = e.target.closest('.calendar-agent-item');
-
-        if (agentIdEl) {
-            e.stopPropagation();
-            const agentId = agentIdEl.textContent.replace('#', '');
-            navigator.clipboard.writeText(agentId).then(() => showToast(`تم نسخ الرقم: ${agentId}`, 'info'));
-            return;
-        }
-
-        if (agentItem && !e.target.closest('.calendar-agent-actions')) {
-            const agentId = agentItem.dataset.agentId;
-            window.location.hash = `profile/${agentId}`;
-        }
-    });
 
     container.addEventListener('change', async (e) => {
         const checkbox = e.target;

@@ -309,6 +309,12 @@ function setupCompetitionListGlobalListeners() {
             const compId = editBtn.dataset.id;
             if (compId) window.location.hash = `#competitions/edit/${compId}`;
         }
+
+        const agentCell = e.target.closest('.table-agent-cell');
+        if (agentCell) {
+            const agentId = agentCell.dataset.agentId;
+            if (agentId) window.location.hash = `#profile/${agentId}`;
+        }
     });
 }
 
@@ -322,14 +328,14 @@ function generateCompetitionGridHtml(competitions) {
     return competitions.map(comp => {
         const isSelected = selectedCompetitionIds.includes(comp.id);
         const agent = comp.agents;
-        const agentInfoHtml = agent // FIX: Add a class to the link for event delegation
-            ? `<a href="#profile/${agent.id}" class="table-agent-cell">
+        const agentInfoHtml = agent
+            ? `<div class="table-agent-cell" onclick="window.location.hash='#profile/${agent.id}'" style="cursor: pointer;">
                     ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy">` : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`}
                     <div class="agent-details">
                         <span>${agent.name}</span>
                         ${agent.classification ? `<span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>` : ''}
                     </div>
-               </a>`
+               </div>`
             : `<div class="competition-card-agent-info"><span>(وكيل محذوف أو غير مرتبط)</span></div>`;
 
         return `
