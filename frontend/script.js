@@ -395,6 +395,28 @@ function setupAutoHidingNavbar() {
 }
 // --- New Functions for UI Enhancements ---
 
+// --- NEW: Function to create floating particles for the main app background ---
+function createFloatingParticles() {
+    const container = document.getElementById('main-animated-bg');
+    if (!container) return;
+    // Reduce particle count for better performance inside the app
+    const numParticles = 150; 
+    const colors = ['color-1', 'color-2', 'color-3'];
+    for (let i = 0; i < numParticles; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        const size = Math.random() * 2 + 1; // Smaller particles
+        particle.classList.add(colors[Math.floor(Math.random() * colors.length)]);
+        particle.style.width = `${size}px`;
+        particle.style.height = `${size}px`;
+        particle.style.left = `${Math.random() * 100}%`;
+        // Slower and longer animations
+        particle.style.animationDelay = `${Math.random() * 30}s`;
+        particle.style.animationDuration = `${Math.random() * 20 + 15}s`;
+        container.appendChild(particle);
+    }
+}
+
 // Apply theme from localStorage on page load
 function applyInitialTheme() {
     const savedTheme = localStorage.getItem('theme');
@@ -650,6 +672,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavbar();
     setupAutoHidingNavbar();
     initializeSupabase();
+    createFloatingParticles(); // --- NEW: Add animated background to the main app ---
 
     // --- NEW: Listen for browser online/offline events ---
     window.addEventListener('offline', () => {

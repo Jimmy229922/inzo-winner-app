@@ -27,8 +27,8 @@ function applyLoginTheme() {
 }
 
 // NEW: Function to create floating particles for the login background
-function createFloatingParticles() {
-    const container = document.getElementById('animated-bg');
+function createLoginFloatingParticles() {
+    const container = document.getElementById('login-animated-bg');
     if (!container) return;
     const numParticles = 500;
     const colors = ['color-1', 'color-2', 'color-3'];
@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.replace('/'); // Use replace to avoid back button issues
         return;
     }
-    createFloatingParticles(); // Create animated background particles
+    createLoginFloatingParticles(); // Create animated background particles
 
     const loginForm = document.getElementById('login-form');
     const loginBtn = document.getElementById('login-btn');
