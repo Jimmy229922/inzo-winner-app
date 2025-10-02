@@ -1,20 +1,20 @@
 const RANKS_DATA = {
     // الاعتيادية
-    'Beginning': { competition_bonus: 60, deposit_bonus_percentage: null, deposit_bonus_count: null },
-    'Growth': { competition_bonus: 100, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
-    'Pro': { competition_bonus: 150, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
-    'Elite': { competition_bonus: 200, deposit_bonus_percentage: 50, deposit_bonus_count: 4 },
+    'BEGINNING': { competition_bonus: 60, deposit_bonus_percentage: null, deposit_bonus_count: null },
+    'GROWTH': { competition_bonus: 100, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
+    'PRO': { competition_bonus: 150, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
+    'ELITE': { competition_bonus: 200, deposit_bonus_percentage: 50, deposit_bonus_count: 4 },
     // الحصرية
-    'Center': { competition_bonus: 300, deposit_bonus_percentage: null, deposit_bonus_count: null },
-    'Bronze': { competition_bonus: 150, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
-    'Silver': { competition_bonus: 230, deposit_bonus_percentage: 40, deposit_bonus_count: 3 },
-    'Gold': { competition_bonus: 300, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
-    'Platinum': { competition_bonus: 500, deposit_bonus_percentage: 60, deposit_bonus_count: 4 },
-    'Diamond': { competition_bonus: 800, deposit_bonus_percentage: 75, deposit_bonus_count: 4 },
-    'Sapphire': { competition_bonus: 1100, deposit_bonus_percentage: 85, deposit_bonus_count: 4 },
-    'Emerald': { competition_bonus: 2000, deposit_bonus_percentage: 90, deposit_bonus_count: 4 },
-    'King': { competition_bonus: 2500, deposit_bonus_percentage: 95, deposit_bonus_count: 4 },
-    'Legend': { competition_bonus: Infinity, deposit_bonus_percentage: 100, deposit_bonus_count: Infinity },
+    'CENTER': { competition_bonus: 300, deposit_bonus_percentage: null, deposit_bonus_count: null },
+    'BRONZE': { competition_bonus: 150, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
+    'SILVER': { competition_bonus: 230, deposit_bonus_percentage: 40, deposit_bonus_count: 3 },
+    'GOLD': { competition_bonus: 300, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
+    'PLATINUM': { competition_bonus: 500, deposit_bonus_percentage: 60, deposit_bonus_count: 4 },
+    'DIAMOND': { competition_bonus: 800, deposit_bonus_percentage: 75, deposit_bonus_count: 4 },
+    'SAPPHIRE': { competition_bonus: 1100, deposit_bonus_percentage: 85, deposit_bonus_count: 4 },
+    'EMERALD': { competition_bonus: 2000, deposit_bonus_percentage: 90, deposit_bonus_count: 4 },
+    'KING': { competition_bonus: 2500, deposit_bonus_percentage: 95, deposit_bonus_count: 4 },
+    'LEGEND': { competition_bonus: Infinity, deposit_bonus_percentage: 100, deposit_bonus_count: Infinity },
     'وكيل حصري بدون مرتبة': { competition_bonus: 60, deposit_bonus_percentage: null, deposit_bonus_count: null },
 };
 
@@ -67,15 +67,15 @@ function renderAddAgentForm() {
                             <label for="agent-rank">المرتبة</label>
                             <select id="agent-rank">
                                 <optgroup label="⁕ مراتب الوكلاء الاعتيادية ⁖">
-                                    ${Object.keys(RANKS_DATA).filter(r => ['Beginning', 'Growth', 'Pro', 'Elite'].includes(r)).map((rank, index) => `<option value="${rank}" ${index === 0 ? 'selected' : ''}>🔸 ${rank}</option>`).join('')}
+                                    ${Object.keys(RANKS_DATA).filter(r => ['BEGINNING', 'GROWTH', 'PRO', 'ELITE'].includes(r)).map((rank, index) => `<option value="${rank}" ${index === 0 ? 'selected' : ''}>🔸 ${rank}</option>`).join('')}
                                 </optgroup>
                                 <optgroup label="⁕ مراتب الوكالة الحصرية ⁖">
                                     <option value="وكيل حصري بدون مرتبة">⭐ وكيل حصري بدون مرتبة</option>
                                     <option disabled>──────────</option>
-                                    ${Object.keys(RANKS_DATA).filter(r => ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend'].includes(r)).map(rank => `<option value="${rank}">⭐ ${rank}</option>`).join('')}
+                                    ${Object.keys(RANKS_DATA).filter(r => ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND'].includes(r)).map(rank => `<option value="${rank}">⭐ ${rank}</option>`).join('')}
                                 </optgroup>
                                 <optgroup label="⁕ المراكز ⁖">
-                                    <option value="Center">🏢 Center</option>
+                                    <option value="CENTER">🏢 CENTER</option>
                                 </optgroup>
                             </select>
                             <div id="rank-hint" class="form-hint">
@@ -279,18 +279,23 @@ async function saveAgent(newAgentData) {
         // Check for uniqueness of agent_id
         const { data: existingAgents, error: checkError } = await supabase
             .from('agents')
-            .select('id')
-            .eq('agent_id', newAgentData.agent_id);
+            .select('id, name, agent_id')
+            .or(`agent_id.eq.${newAgentData.agent_id},name.eq.${newAgentData.name}`);
 
         if (checkError) {
             console.error('Error checking for existing agent on create:', checkError);
-            showToast('حدث خطأ أثناء التحقق من رقم الوكالة.', 'error');
+            showToast('حدث خطأ أثناء التحقق من بيانات الوكيل.', 'error');
             throw new Error('Check error');
         }
 
         if (existingAgents && existingAgents.length > 0) {
-            showToast('رقم الوكالة هذا مستخدم بالفعل لوكيل آخر.', 'error');
-            throw new Error('Duplicate agent ID');
+            const isDuplicateId = existingAgents.some(a => a.agent_id === newAgentData.agent_id);
+            const isDuplicateName = existingAgents.some(a => a.name === newAgentData.name);
+            let errorMessage = '';
+            if (isDuplicateId) errorMessage += 'رقم الوكالة هذا مستخدم بالفعل. ';
+            if (isDuplicateName) errorMessage += 'اسم الوكيل هذا مستخدم بالفعل.';
+            showToast(errorMessage.trim(), 'error');
+            throw new Error('Duplicate agent data');
         }
 
         // Insert agent data without avatar first to get an ID
@@ -325,7 +330,7 @@ async function saveAgent(newAgentData) {
 
     } catch (error) {
         console.error('Error saving agent:', error);
-        if (error.message !== 'Duplicate agent ID' && error.message !== 'Check error') {
+        if (error.message !== 'Duplicate agent data' && error.message !== 'Check error') {
             showToast(`فشل إضافة الوكيل: ${error.message}`, 'error');
         }
         saveBtn.disabled = false;
@@ -375,6 +380,11 @@ async function handleBulkAddAgents(data) {
     const errors = [];
     const validRenewalPeriods = ['none', 'weekly', 'biweekly', 'monthly'];
     
+    // --- NEW: Create a lowercase to correct-case map for ranks ---
+    const rankMap = Object.keys(RANKS_DATA).reduce((map, rank) => {
+        map[rank.toLowerCase()] = rank;
+        return map;
+    }, {});
     // --- NEW: Mappings for Arabic input ---
     const renewalPeriodMap = {
         'اسبوع': 'weekly', 'أسبوعي': 'weekly',
@@ -413,7 +423,8 @@ async function handleBulkAddAgents(data) {
             return;
         }
 
-        if (!RANKS_DATA[rank]) {
+        const correctRank = rankMap[rank.toLowerCase()];
+        if (!correctRank) {
             errors.push(`السطر ${index + 1}: المرتبة "${rank}" غير صالحة.`);
             return;
         }
@@ -431,12 +442,12 @@ async function handleBulkAddAgents(data) {
             .map(dayName => auditDayMap[dayName.trim()])
             .filter(dayIndex => dayIndex !== undefined && dayIndex >= 0 && dayIndex <= 6);
 
-        const rankData = RANKS_DATA[rank];
+        const rankData = RANKS_DATA[correctRank];
         const newAgent = {
             name,
             agent_id,
-            classification,
-            rank,
+            classification: classification.toUpperCase(),
+            rank: correctRank,
             renewal_period: processedRenewalPeriod,
             audit_days,
             telegram_channel_url: telegram_channel_url || null,
@@ -458,6 +469,40 @@ async function handleBulkAddAgents(data) {
         showToast(`تم العثور على ${errors.length} أخطاء في البيانات. يرجى تصحيحها والمحاولة مرة أخرى.`, 'error');
         console.error('Bulk Add Errors:', errors);
         // Optionally, show a modal with all errors
+        return;
+    }
+
+    // --- NEW: Bulk uniqueness check before insertion ---
+    const agentIds = agentsToInsert.map(a => a.agent_id);
+    const agentNames = agentsToInsert.map(a => a.name);
+
+    // Check for duplicates within the provided data
+    const duplicateIdsInInput = agentIds.filter((id, index) => agentIds.indexOf(id) !== index);
+    const duplicateNamesInInput = agentNames.filter((name, index) => agentNames.indexOf(name) !== index);
+
+    if (duplicateIdsInInput.length > 0) {
+        showToast(`توجد أرقام وكالات مكررة في البيانات المدخلة: ${duplicateIdsInInput.join(', ')}`, 'error');
+        return;
+    }
+    if (duplicateNamesInInput.length > 0) {
+        showToast(`توجد أسماء وكلاء مكررة في البيانات المدخلة: ${duplicateNamesInInput.join(', ')}`, 'error');
+        return;
+    }
+
+    // Check for duplicates in the database
+    const { data: existingAgents, error: checkError } = await supabase
+        .from('agents')
+        .select('name, agent_id')
+        .or(`agent_id.in.(${agentIds.join(',')}),name.in.(${agentNames.map(n => `"${n}"`).join(',')})`);
+
+    if (checkError) {
+        showToast('حدث خطأ أثناء التحقق من البيانات المكررة في قاعدة البيانات.', 'error');
+        return;
+    }
+    if (existingAgents && existingAgents.length > 0) {
+        const existingIds = existingAgents.map(a => a.agent_id).join(', ');
+        const existingNames = existingAgents.map(a => a.name).join(', ');
+        showToast(`البيانات التالية موجودة بالفعل: أرقام (${existingIds}), أسماء (${existingNames})`, 'error');
         return;
     }
 

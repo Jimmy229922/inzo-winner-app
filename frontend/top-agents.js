@@ -246,8 +246,8 @@ function displayTopAgents(sortedAgents, sortKey) {
     // --- تعديل: فصل الوكلاء الثلاثة الأوائل لعرضهم في منصة التتويج ---
     const topThree = sortedAgents.slice(0, 3);
     const runnersUp = sortedAgents.slice(3);
-    const exclusiveRanks = ['Center', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend', 'وكيل حصري بدون مرتبة'];
-    const regularRanks = ['Beginning', 'Growth', 'Pro', 'Elite'];
+    const exclusiveRanks = ['CENTER', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND', 'وكيل حصري بدون مرتبة'];
+    const regularRanks = ['BEGINNING', 'GROWTH', 'PRO', 'ELITE'];
     const exclusiveRunnersUp = runnersUp.filter(agent => exclusiveRanks.includes(agent.rank));
     const regularRunnersUp = runnersUp.filter(agent => regularRanks.includes(agent.rank));
 
