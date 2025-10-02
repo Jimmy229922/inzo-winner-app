@@ -104,7 +104,9 @@ async function fetchUserProfile() {
             }
 
             // NEW: Initialize presence tracking AFTER user profile is confirmed
-            initializePresenceTracking();
+            if (!window.presenceChannel) { // --- تعديل: تشغيل التتبع مرة واحدة فقط
+                initializePresenceTracking();
+            }
         }
         return currentUserProfile; // إصلاح: إعادة بيانات المستخدم بعد جلبها
     } else {
@@ -220,7 +222,7 @@ async function initializeSupabase() {
 
         // ⚠️ تحذير: لا تضع أبداً مفتاح "service_role" في كود الواجهة الأمامية!
         supabase = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
-        console.log('Supabase client configured.');
+        // console.log('Supabase client configured.');
         updateStatus('connected', 'متصل وجاهز');
 
         // --- إصلاح: ضمان جلب بيانات المستخدم بالكامل قبل بدء التوجيه وعرض الصفحات ---
@@ -257,7 +259,7 @@ async function initializeSupabase() {
                 }
             })
             .subscribe((status) => {
-                if (status === 'SUBSCRIBED') console.log('Subscribed to realtime notifications channel.');
+                if (status === 'SUBSCRIBED') {} // console.log('Subscribed to realtime notifications channel.');
                 else console.warn('Failed to subscribe to realtime notifications:', status);
             });
         }
@@ -303,7 +305,7 @@ function initializePresenceTracking() {
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 await window.presenceChannel.track({ online_at: new Date().toISOString() });
-                console.log('[Presence] Successfully subscribed and tracking online status.');
+                // console.log('[Presence] Successfully subscribed and tracking online status.');
             } else {
                 console.warn('[Presence] Failed to subscribe:', status);
             }

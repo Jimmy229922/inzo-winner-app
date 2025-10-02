@@ -1,5 +1,31 @@
 let agentStats = [];
 
+// --- NEW: Confetti Animation on Page Load ---
+function triggerConfettiAnimation() {
+    const container = document.getElementById('app-content');
+    if (!container) return;
+
+    const confettiContainer = document.createElement('div');
+    confettiContainer.className = 'confetti-container';
+    container.appendChild(confettiContainer);
+
+    const confettiCount = 150; // Number of confetti pieces
+    const colors = ['#FFD700', '#C0C0C0', '#CD7F32']; // Gold, Silver, Bronze
+
+    for (let i = 0; i < confettiCount; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.left = `${Math.random() * 100}vw`;
+        confetti.style.animationDuration = `${Math.random() * 3 + 4}s`; // Duration between 4 and 7 seconds
+        confetti.style.animationDelay = `${Math.random() * 2}s`;
+        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        confettiContainer.appendChild(confetti);
+    }
+
+    // Remove the confetti after the animation is done to keep the DOM clean
+    setTimeout(() => confettiContainer.remove(), 7000);
+}
+
 async function renderTopAgentsPage() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
@@ -10,20 +36,20 @@ async function renderTopAgentsPage() {
                     <button id="export-top-agents-btn" class="btn-secondary"><i class="fas fa-file-excel"></i> تصدير</button>
                 </div>
             </div>
-            <div class="leaderboard-filters">
+            <div class="leaderboard-filters-v2">
                 <div class="filter-group">
-                    <label class="filter-label">ترتيب حسب</label>
+                    <label class="filter-label"><i class="fas fa-sort-amount-down"></i> ترتيب حسب</label>
                     <div class="filter-buttons" data-filter-group="sort">
                         <button class="filter-btn active" data-sort="total_views"><i class="fas fa-eye"></i> المشاهدات</button>
                         <button class="filter-btn" data-sort="total_reactions"><i class="fas fa-heart"></i> التفاعلات</button>
                         <button class="filter-btn" data-sort="total_participants"><i class="fas fa-users"></i> المشاركات</button>
-                        <button class="filter-btn" data-sort="growth_rate"><i class="fas fa-chart-line"></i> النمو</button>
+                        <button class="filter-btn" data-sort="growth_rate"><i class="fas fa-rocket"></i> النمو</button>
                     </div>
                 </div>
                 <div class="filter-group">
-                    <label class="filter-label">فلترة حسب التصنيف</label>
+                    <label class="filter-label"><i class="fas fa-tags"></i> فلترة حسب التصنيف</label>
                     <div class="filter-buttons" data-filter-group="classification">
-                        <button class="filter-btn active" data-filter="all">الكل</button>
+                        <button class="filter-btn active" data-filter="all"><i class="fas fa-globe-asia"></i> الكل</button>
                         <button class="filter-btn classification-badge classification-r" data-filter="R">R</button>
                         <button class="filter-btn classification-badge classification-a" data-filter="A">A</button>
                         <button class="filter-btn classification-badge classification-b" data-filter="B">B</button>
@@ -31,9 +57,9 @@ async function renderTopAgentsPage() {
                     </div>
                 </div>
                 <div class="filter-group">
-                    <label class="filter-label">النطاق الزمني</label>
+                    <label class="filter-label"><i class="fas fa-clock"></i> النطاق الزمني</label>
                     <div class="filter-buttons" data-filter-group="date">
-                        <button class="filter-btn active" data-range="all">الكل</button>
+                        <button class="filter-btn active" data-range="all"><i class="fas fa-infinity"></i> الكل</button>
                         <button class="filter-btn" data-range="week"><i class="fas fa-calendar-week"></i> هذا الأسبوع</button>
                         <button class="filter-btn" data-range="month"><i class="fas fa-calendar-day"></i> هذا الشهر</button>
                     </div>
@@ -44,6 +70,9 @@ async function renderTopAgentsPage() {
         </div>
     `;
 
+    // --- NEW: Trigger the celebration animation ---
+    triggerConfettiAnimation();
+
     // Initial fetch for all time
     await fetchAndRenderTopAgents('all');
 
@@ -53,22 +82,32 @@ async function renderTopAgentsPage() {
         exportBtn.addEventListener('click', () => exportTopAgentsToCSV(agentStats));
     }
 
-    // --- NEW: Simplified Filter Listeners ---
+    // --- تعديل: ربط معالجات الأحداث مرة واحدة فقط لضمان الاستجابة الفورية ---
     const dateFilterGroup = document.querySelector('.filter-buttons[data-filter-group="date"]');
-    dateFilterGroup.addEventListener('click', (e) => {
+    const sortFilterGroup = document.querySelector('.filter-buttons[data-filter-group="sort"]');
+    const classificationFilterGroup = document.querySelector('.filter-buttons[data-filter-group="classification"]');
+
+    dateFilterGroup?.addEventListener('click', (e) => {
         if (e.target.matches('.filter-btn')) {
             dateFilterGroup.querySelector('.active').classList.remove('active');
             e.target.classList.add('active');
             fetchAndRenderTopAgents(e.target.dataset.range);
         }
     });
-
-    // Setup sort and classification filters to re-apply sorting/filtering on the current data
-    const sortFilterGroup = document.querySelector('.filter-buttons[data-filter-group="sort"]');
-    const classificationFilterGroup = document.querySelector('.filter-buttons[data-filter-group="classification"]');
-    if (sortFilterGroup && classificationFilterGroup) {
-        setupTopAgentsFilters();
-    }
+    sortFilterGroup?.addEventListener('click', (e) => {
+        if (e.target.matches('.filter-btn')) {
+            sortFilterGroup.querySelector('.active').classList.remove('active');
+            e.target.classList.add('active');
+            applyAndDisplay(); // إعادة الفرز والتصفية على البيانات الحالية
+        }
+    });
+    classificationFilterGroup?.addEventListener('click', (e) => {
+        if (e.target.matches('.filter-btn')) {
+            classificationFilterGroup.querySelector('.active').classList.remove('active');
+            e.target.classList.add('active');
+            applyAndDisplay(); // إعادة الفرز والتصفية على البيانات الحالية
+        }
+    });
 }
 
 async function fetchAndRenderTopAgents(dateRange = 'all') {
@@ -141,59 +180,6 @@ async function fetchAndRenderTopAgents(dateRange = 'all') {
     applyAndDisplay();
 }
 
-function setupTopAgentsFilters() {
-    const sortFilterGroup = document.querySelector('.filter-buttons[data-filter-group="sort"]');
-    const classificationFilterGroup = document.querySelector('.filter-buttons[data-filter-group="classification"]');
-
-    // --- NEW: Define classification order for secondary sorting ---
-    const classificationOrder = { 'R': 1, 'A': 2, 'B': 3, 'C': 4 };
-
-    const applyFilters = () => {
-        const sortKey = sortFilterGroup.querySelector('.active')?.dataset.sort || 'default';
-        const classification = classificationFilterGroup.querySelector('.active')?.dataset.filter || 'all';
-
-        let filteredAgents = window.currentAgentStats || [];
-
-        // Filter by classification first
-        if (classification !== 'all') {
-            filteredAgents = filteredAgents.filter(agent => agent.classification === classification);
-        }
-
-        // Sort by the selected metric (primary) and then by classification (secondary)
-        filteredAgents.sort((a, b) => {
-            if (sortKey === 'default') {
-                // Default sort by creation date
-                return new Date(b.created_at) - new Date(a.created_at);
-            }
-
-            const sortValue = b[sortKey] - a[sortKey];
-            if (sortValue !== 0) return sortValue;
-            // If metrics are equal, sort by classification order
-            const orderA = classificationOrder[a.classification] || 99;
-            const orderB = classificationOrder[b.classification] || 99;
-            return orderA - orderB;
-        });
-
-        displayTopAgents(filteredAgents, sortKey);
-    };
-
-    sortFilterGroup.addEventListener('click', (e) => {
-        if (e.target.matches('.filter-btn')) {
-            sortFilterGroup.querySelector('.active').classList.remove('active');
-            e.target.classList.add('active');
-            applyAndDisplay();
-        }
-    });
-
-    classificationFilterGroup.addEventListener('click', (e) => {
-        if (e.target.matches('.filter-btn')) {
-            classificationFilterGroup.querySelector('.active').classList.remove('active');
-            e.target.classList.add('active');
-            applyAndDisplay();
-        }
-    });
-}
-
 function applyAndDisplay() {
     const sortKey = document.querySelector('.filter-buttons[data-filter-group="sort"] .active')?.dataset.sort || 'total_views';
     const classification = document.querySelector('.filter-buttons[data-filter-group="classification"] .active')?.dataset.filter || 'all';
@@ -257,13 +243,23 @@ function displayTopAgents(sortedAgents, sortKey) {
         return `<span class="rank-number">${rank}</span>`;
     };
 
-    // --- NEW: Separate top 3 and the rest ---
+    // --- تعديل: فصل الوكلاء الثلاثة الأوائل لعرضهم في منصة التتويج ---
     const topThree = sortedAgents.slice(0, 3);
     const runnersUp = sortedAgents.slice(3);
     const exclusiveRanks = ['Center', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Sapphire', 'Emerald', 'King', 'Legend', 'وكيل حصري بدون مرتبة'];
     const regularRanks = ['Beginning', 'Growth', 'Pro', 'Elite'];
     const exclusiveRunnersUp = runnersUp.filter(agent => exclusiveRanks.includes(agent.rank));
     const regularRunnersUp = runnersUp.filter(agent => regularRanks.includes(agent.rank));
+
+    // --- NEW: Podium data preparation ---
+    const podiumData = {
+        first: topThree.find((_, i) => i === 0),
+        second: topThree.find((_, i) => i === 1),
+        third: topThree.find((_, i) => i === 2)
+    };
+    // Order for flexbox display: 2nd, 1st, 3rd
+    const podiumOrder = [podiumData.second, podiumData.first, podiumData.third].filter(Boolean);
+
     const topAgentBadge = dateRange === 'week' ? 'وكيل الأسبوع' : (dateRange === 'month' ? 'وكيل الشهر' : '');
 
     const renderCard = (agent, rank) => {
@@ -276,21 +272,20 @@ function displayTopAgents(sortedAgents, sortKey) {
 
         return `
             <div class="leaderboard-card ${isTopThree ? `top-rank ${rankClass}` : ''}" onclick="window.location.hash='#profile/${agent.id}'">
-                ${rank === 1 ? '<div class="glow-bar"></div>' : ''}
                 <div class="leaderboard-rank">
                     ${isTopThree ? `<div class="medal-badge ${rankClass}">${getRankIcon(rank)}</div>` : getRankIcon(rank)}
                 </div>
-                <div class="leaderboard-main">
+                ${rank === 1 ? '<div class="glow-bar"></div>' : ''}
+                <div class="leaderboard-agent-profile">
                     ${avatarHtml}
                     <div class="leaderboard-agent-info">
                         <h3 class="leaderboard-agent-name">${agent.name} ${trendIcon}</h3>
                         <div class="leaderboard-agent-meta">
                             <span class="leaderboard-agent-id">#${agent.agent_id}</span>
-                            <span class="leaderboard-rank-badge">${agent.rank}</span>
                         </div>
                     </div>
                 </div>
-                <div class="leaderboard-stats">
+                <div class="leaderboard-stats-grid">
                     <div class="stat-item">
                         <span class="stat-value">${formatNumber(agent.total_views)}</span>
                         <span class="stat-label"><i class="fas fa-eye"></i> مشاهدات</span>
@@ -328,12 +323,12 @@ function displayTopAgents(sortedAgents, sortKey) {
     };
 
     container.innerHTML = `
-        ${topThree.length > 0 ? `
-            <div class="leaderboard-top-three">
-                ${topThree.map((agent, index) => renderCard(agent, index + 1)).join('')}
+        ${podiumOrder.length > 0 ? `
+            <div class="leaderboard-podium">
+                ${podiumOrder.map(agent => renderCard(agent, sortedAgents.findIndex(a => a.id === agent.id) + 1)).join('')}
             </div>
         ` : ''}
-
+        
         ${runnersUp.length > 0 ? `
             <hr class="leaderboard-divider">
             <div class="leaderboard-bottom-sections">
@@ -411,9 +406,21 @@ function exportTopAgentsToCSV(agentStats) {
             const address = XLSX.utils.encode_cell({ r: 0, c: C });
             if (!ws[address]) continue;
             ws[address].s = {
-                font: { bold: true, color: { rgb: "FFFFFF" } },
-                fill: { fgColor: { rgb: "4CAF50" } } // Green background
+                font: { bold: true, color: { rgb: "FFFFFF" } }, // نص أبيض عريض
+                fill: { fgColor: { rgb: "4CAF50" } }, // خلفية خضراء
+                alignment: { horizontal: "center", vertical: "center" } // توسيط أفقي وعمودي
             };
+        }
+
+        // --- تعديل: التأكد من توسيط جميع خلايا البيانات ---
+        for (let R = headerRange.s.r + 1; R <= headerRange.e.r; ++R) {
+            for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
+                const address = XLSX.utils.encode_cell({ r: R, c: C });
+                if (!ws[address]) continue;
+                // Ensure the cell has a style object
+                if (!ws[address].s) ws[address].s = {};
+                ws[address].s.alignment = { horizontal: "center", vertical: "center" }; // توسيط أفقي وعمودي
+            }
         }
 
         const wb = XLSX.utils.book_new();

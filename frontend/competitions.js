@@ -1,6 +1,5 @@
 // --- Main Router for Competitions/Templates Section ---
-let allCompetitionsData = [];
-const COMPETITIONS_PER_PAGE = 9;
+const COMPETITIONS_PER_PAGE = 10; // Changed to 10 for consistency
 let selectedCompetitionIds = []; // For bulk actions
 
 
@@ -112,11 +111,10 @@ async function renderCompetitionManagementPage() {
                 async () => {
                     const { error } = await supabase.from('competitions').delete().eq('id', id);
                     if (error) {
-                        showToast('فشل حذف المسابقة.', 'error');
-                        console.error('Delete competition error:', error);
+                        showToast(`فشل حذف المسابقة: ${error.message}`, 'error');
                     } else {
                         showToast('تم حذف المسابقة بنجاح.', 'success');
-                        await refreshCompetitionsList(true);
+                        await fetchAndDisplayCompetitions(1); // Refetch from server
                     }
                 }, {
                     title: 'تأكيد حذف المسابقة',
@@ -144,17 +142,12 @@ async function renderCompetitionManagementPage() {
 
             if (error) {
                 showToast('فشل تحديث حالة المسابقة.', 'error');
-                console.error('Competition status update error:', error);
                 statusToggle.checked = !isActive; // Revert UI on error
             } else {
                 showToast(`تم تحديث حالة المسابقة إلى "${isActive ? 'نشطة' : 'غير نشطة'}".`, 'success');
-                // 2. Update local cache
-                const competitionInCache = allCompetitionsData.find(c => c.id === id);
-                if (competitionInCache) {
-                    competitionInCache.is_active = isActive;
-                }
-                // 3. Re-apply filters to reflect the change instantly
-                setupCompetitionFilters(allCompetitionsData);
+                // No need to re-fetch, the change is minor. But if filters are active, it might disappear.
+                // For simplicity, we can just leave it as is, or refetch. Let's refetch for consistency.
+                await fetchAndDisplayCompetitions(document.querySelector('.pagination-container .page-btn.active')?.dataset.page || 1);
             }
         }
     });
@@ -171,7 +164,7 @@ async function renderCompetitionManagementPage() {
                         showToast('فشل تعطيل المسابقات المحددة.', 'error');
                     } else {
                         showToast('تم تعطيل المسابقات المحددة بنجاح.', 'success');
-                        await refreshCompetitionsList();
+                        await fetchAndDisplayCompetitions(1);
                     }
                 }, { title: 'تأكيد التعطيل' }
             );
@@ -189,7 +182,7 @@ async function renderCompetitionManagementPage() {
                         showToast('فشل حذف المسابقات المحددة.', 'error');
                     } else {
                         showToast('تم حذف المسابقات المحددة بنجاح.', 'success');
-                        await refreshCompetitionsList(true); // Pass true to refetch from DB
+                        await fetchAndDisplayCompetitions(1);
                     }
                 }, {
                     title: 'تأكيد الحذف',
@@ -200,37 +193,70 @@ async function renderCompetitionManagementPage() {
         });
     }
 
-    // Caching: If we already have the data, don't fetch it again.
-    if (allCompetitionsData.length > 0) {
-        displayCompetitionsPage(allCompetitionsData, 1);
-        setupCompetitionFilters(allCompetitionsData);
-    } else {
-        const { data: competitions, error } = await supabase
-            .from('competitions')
-            .select('*, agents(id, name, classification, avatar_url)')
-            .not('status', 'eq', 'completed') // Exclude completed competitions
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error("Error fetching competitions:", error);
-            container.innerHTML = `<p class="error">حدث خطأ أثناء جلب المسابقات.</p>`;
-            return;
-        }
-        allCompetitionsData = competitions;
-        displayCompetitionsPage(allCompetitionsData, 1);
-        setupCompetitionFilters(allCompetitionsData);
-    }
+    // Initial fetch and setup
+    setupCompetitionFilters();
+    await fetchAndDisplayCompetitions(1);
 }
 
-function displayCompetitionsPage(competitionsList, page) {
+async function fetchAndDisplayCompetitions(page) {
+    const container = document.getElementById('competitions-list-container');
+    if (!container) return;
+    container.innerHTML = '<div class="loader-container"><div class="spinner"></div></div>';
+
+    // Get filter and sort values from the UI
+    const searchInput = document.getElementById('competition-search-input');
+    const sortSelect = document.getElementById('competition-sort-select');
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const statusFilter = document.querySelector('.filter-buttons[data-filter-group="status"] .filter-btn.active')?.dataset.filter || 'all';
+    const classificationFilter = document.querySelector('.filter-buttons[data-filter-group="classification"] .filter-btn.active')?.dataset.filter || 'all';
+    const sortValue = sortSelect ? sortSelect.value : 'newest';
+
+    if (document.getElementById('competition-search-clear')) {
+        document.getElementById('competition-search-clear').style.display = searchTerm ? 'block' : 'none';
+    }
+
+    let query = supabase.from('competitions').select('*, agents(id, name, classification, avatar_url)', { count: 'exact' });
+
+    // Always exclude completed
+    query = query.not('status', 'eq', 'completed');
+
+    // Apply filters
+    if (statusFilter !== 'all') {
+        query = query.eq('is_active', statusFilter === 'active');
+    }
+    if (classificationFilter !== 'all') {
+        query = query.eq('agents.classification', classificationFilter);
+    }
+    if (searchTerm) {
+        query = query.or(`name.ilike.%${searchTerm}%,agents.name.ilike.%${searchTerm}%`);
+    }
+
+    // Apply sorting
+    if (sortValue === 'name_asc') query = query.order('name', { ascending: true });
+    else if (sortValue === 'agent_asc') query = query.order('agents(name)', { ascending: true });
+    else query = query.order('created_at', { ascending: false });
+
+    // Apply pagination
+    const startIndex = (page - 1) * COMPETITIONS_PER_PAGE;
+    query = query.range(startIndex, startIndex + COMPETITIONS_PER_PAGE - 1);
+
+    const { data: competitions, error, count } = await query;
+
+    if (error) {
+        console.error("Error fetching competitions:", error);
+        container.innerHTML = `<p class="error">حدث خطأ أثناء جلب المسابقات.</p>`;
+        return;
+    }
+
+    displayCompetitionsPage(competitions, page, count);
+}
+
+function displayCompetitionsPage(paginatedCompetitions, page, totalCount) {
     const container = document.getElementById('competitions-list-container');
     if (!container) return;
 
     page = parseInt(page);
-    const totalPages = Math.ceil(competitionsList.length / COMPETITIONS_PER_PAGE);
-    const startIndex = (page - 1) * COMPETITIONS_PER_PAGE;
-    const endIndex = startIndex + COMPETITIONS_PER_PAGE;
-    const paginatedCompetitions = competitionsList.slice(startIndex, endIndex);
+    const totalPages = Math.ceil(totalCount / COMPETITIONS_PER_PAGE);
 
     const gridHtml = generateCompetitionGridHtml(paginatedCompetitions);
 
@@ -247,7 +273,7 @@ function displayCompetitionsPage(competitionsList, page) {
 
     // Improved empty state
     let finalHtml;
-    if (competitionsList.length > 0) {
+    if (paginatedCompetitions.length > 0) {
         const selectAllChecked = selectedCompetitionIds.length > 0 && paginatedCompetitions.every(c => selectedCompetitionIds.includes(c.id));
         const listHeader = `
             <div class="list-view-header">
@@ -263,16 +289,12 @@ function displayCompetitionsPage(competitionsList, page) {
         `;
         finalHtml = `${listHeader}<div class="competitions-list-view">${gridHtml}</div>${paginationHtml}`;
     } else {
-        if (allCompetitionsData.length === 0) {
-            finalHtml = '<p class="no-results-message">لا توجد مسابقات حالياً. يمكنك إنشاء واحدة من صفحة الوكيل.</p>';
-        } else {
-            finalHtml = '<p class="no-results-message">لا توجد نتائج تطابق بحثك أو الفلتر الحالي.</p>';
-        }
+        finalHtml = '<p class="no-results-message">لا توجد نتائج تطابق بحثك أو الفلتر الحالي.</p>';
     }
     container.innerHTML = finalHtml;
 
     // Attach event listeners for checkboxes and pagination
-    attachCompetitionListListeners(competitionsList, paginatedCompetitions);
+    attachCompetitionListListeners(paginatedCompetitions, totalCount);
 }
 
 function generateCompetitionGridHtml(competitions) {
@@ -319,69 +341,35 @@ function generateCompetitionGridHtml(competitions) {
     }).join('');
 }
 
-function setupCompetitionFilters(allCompetitions) {
+function setupCompetitionFilters() {
     const searchInput = document.getElementById('competition-search-input');
     const clearBtn = document.getElementById('competition-search-clear');
-    const filterButtons = document.querySelectorAll('.agent-filters .filter-btn');
-    const sortSelect = document.getElementById('competition-sort-select'); // New
+    const sortSelect = document.getElementById('competition-sort-select');
 
-    const applyFilters = () => {
-        if (!searchInput) return;
-        if (clearBtn) {
-            clearBtn.style.display = searchInput.value ? 'block' : 'none';
-        }
-        
-        const searchTerm = searchInput.value.toLowerCase().trim();
-        const statusFilter = document.querySelector('.filter-buttons[data-filter-group="status"] .filter-btn.active').dataset.filter;
-        const classificationFilter = document.querySelector('.filter-buttons[data-filter-group="classification"] .filter-btn.active').dataset.filter;
-        const sortValue = sortSelect.value; // New
-
-        let filteredCompetitions = allCompetitions.filter(comp => {
-            const name = comp.name.toLowerCase();
-            const agentName = comp.agents ? comp.agents.name.toLowerCase() : '';
-            const status = comp.is_active ? 'active' : 'inactive';
-            const classification = comp.agents?.classification;
-
-            const matchesSearch = searchTerm === '' || name.includes(searchTerm) || agentName.includes(searchTerm);
-            const matchesStatus = statusFilter === 'all' || status === statusFilter;
-            const matchesClassification = classificationFilter === 'all' || classification === classificationFilter;
-            return matchesSearch && matchesStatus && matchesClassification;
-        });
-        
-        // New Sorting Logic
-        filteredCompetitions.sort((a, b) => {
-            const nameA = a.name.toLowerCase();
-            const nameB = b.name.toLowerCase();
-            const agentNameA = a.agents?.name.toLowerCase() || '';
-            const agentNameB = b.agents?.name.toLowerCase() || '';
-
-            switch (sortValue) {
-                case 'name_asc':
-                    return nameA.localeCompare(nameB);
-                case 'agent_asc':
-                    return agentNameA.localeCompare(agentNameB);
-                case 'newest':
-                default:
-                    return new Date(b.created_at) - new Date(a.created_at);
-            }
-        });
-
-        displayCompetitionsPage(filteredCompetitions, 1);
+    const triggerFetch = () => {
+        fetchAndDisplayCompetitions(1); // Always go to page 1 when filters change
     };
 
     if (searchInput) {
-        searchInput.addEventListener('input', applyFilters);
+        // Use a debounce to avoid fetching on every keystroke
+        let searchTimeout;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(triggerFetch, 300); // 300ms delay
+        });
     }
     if (clearBtn) {
         clearBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            applyFilters();
-            searchInput.focus();
+            if (searchInput.value) {
+                searchInput.value = '';
+                triggerFetch();
+                searchInput.focus();
+            }
         });
     }
 
     if (sortSelect) {
-        sortSelect.addEventListener('change', applyFilters);
+        sortSelect.addEventListener('change', triggerFetch);
     }
 
     document.querySelectorAll('.filter-buttons').forEach(group => {
@@ -389,22 +377,22 @@ function setupCompetitionFilters(allCompetitions) {
             if (e.target.classList.contains('filter-btn')) {
                 group.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
                 e.target.classList.add('active');
-                applyFilters();
+                triggerFetch();
             }
         });
     });
 }
 
 // New helper functions for bulk actions
-function attachCompetitionListListeners(fullList, paginatedList) {
+function attachCompetitionListListeners(paginatedList, totalCount) {
     const container = document.getElementById('competitions-list-container');
     if (!container) return;
 
     // Pagination
     container.querySelectorAll('.page-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const newPage = e.currentTarget.dataset.page;
-            if (newPage) displayCompetitionsPage(fullList, newPage);
+            const newPage = parseInt(e.currentTarget.dataset.page);
+            if (newPage) fetchAndDisplayCompetitions(newPage);
         });
     });
 
@@ -441,8 +429,9 @@ function attachCompetitionListListeners(fullList, paginatedList) {
                 // Remove all from the current page
                 selectedCompetitionIds = selectedCompetitionIds.filter(id => !paginatedIds.includes(id));
             }
+            const currentPage = document.querySelector('.pagination-container .page-btn.active')?.dataset.page || 1;
             // Re-render the current page to update checkbox states
-            displayCompetitionsPage(fullList, document.querySelector('.pagination-container .page-btn.active')?.dataset.page || 1);
+            fetchAndDisplayCompetitions(currentPage);
             updateBulkActionBar(paginatedList.length);
         });
     }
@@ -465,15 +454,6 @@ function updateBulkActionBar(currentPageItemCount) {
         const allOnPageSelected = currentPageItemCount > 0 && paginatedIds.every(id => selectedCompetitionIds.includes(id));
         selectAllCheckbox.checked = allOnPageSelected;
     }
-}
-
-async function refreshCompetitionsList(forceRefetch = false) {
-    if (forceRefetch) {
-        allCompetitionsData = []; // Clear cache to force refetch
-    }
-    selectedCompetitionIds = []; // Clear selection
-    updateBulkActionBar(0);
-    await renderCompetitionManagementPage();
 }
 
 async function renderCompetitionCreatePage(agentId) {

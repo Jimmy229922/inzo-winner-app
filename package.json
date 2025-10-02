@@ -1,5 +1,0 @@
-{
-  "dependencies": {
-    "telegraf": "^4.16.3"
-  }
-}

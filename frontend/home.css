@@ -580,3 +580,17 @@
         transform: translateY(0);
     }
 }
+
+/* --- NEW: Small Loader for Skeleton UI --- */
+.loader-container.small-loader {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100px; /* Give it some space */
+}
+
+.loader-container.small-loader .spinner {
+    width: 30px;
+    height: 30px;
+    border-width: 3px;
+}

@@ -1,47 +1,100 @@
 async function renderHomePage() {
     const appContent = document.getElementById('app-content');
 
-    // جلب البيانات وانتظار اكتمالها أولاً
+    // 1. عرض هيكل الصفحة فوراً مع مؤشرات تحميل
+    renderHomePageSkeleton();
+
+    // 2. جلب البيانات (سيستخدم النسخة المخزنة مؤقتاً إن وجدت)
     const stats = await fetchHomePageData();
 
-    // إذا فشل جلب البيانات، اعرض رسالة خطأ واضحة
-    if (!stats) {
-        appContent.innerHTML = `
-            <div class="page-header"><h1><i class="fas fa-tachometer-alt"></i> لوحة التحكم الرئيسية</h1></div>
-            <p class="error" style="text-align: center; padding: 40px;">فشل تحميل بيانات لوحة التحكم. يرجى المحاولة مرة أخرى.</p>
-        `;
-        return;
+    // 3. تحديث الواجهة بالبيانات
+    if (stats) {
+        updateHomePageUI(stats);
+    } else {
+        // عرض رسالة خطأ في حاوية الإحصائيات إذا فشل كل شيء
+        const statsContainer = document.getElementById('home-stats-container');
+        if (statsContainer) {
+            statsContainer.innerHTML = `<p class="error" style="text-align: center; padding: 20px;">فشل تحميل بيانات لوحة التحكم.</p>`;
+        }
     }
 
-    // بمجرد توفر البيانات، قم ببناء وعرض المحتوى الكامل للصفحة دفعة واحدة
+    updateStatus('connected', 'متصل وجاهز'); // Ensure status is updated on home page load
+}
+
+async function fetchHomePageData() {
+    if (!supabase) {
+        console.error('Supabase client not initialized.');
+        return null;
+    }
+
+    const CACHE_KEY = 'homePageStats';
+    const CACHE_DURATION = 2 * 60 * 1000; // دقيقتان
+
+    // محاولة قراءة البيانات من ذاكرة التخزين المؤقت أولاً
+    const cachedData = sessionStorage.getItem(CACHE_KEY);
+    if (cachedData) {
+        const { timestamp, data } = JSON.parse(cachedData);
+        // إذا كانت البيانات المخزنة حديثة، استخدمها فوراً
+        if (Date.now() - timestamp < CACHE_DURATION) {
+            // console.log('[CACHE] Using cached data for home page.');
+            // جلب البيانات الجديدة في الخلفية لتحديث ذاكرة التخزين المؤقت
+            fetchAndCacheFreshData();
+            return data;
+        }
+    }
+
+    // إذا لم تكن هناك بيانات مخزنة أو كانت قديمة، قم بالجلب من الخادم مباشرة
+    return await fetchAndCacheFreshData();
+}
+
+async function fetchAndCacheFreshData() {
+    // console.log('[CACHE] Fetching fresh data for home page.');
+    try {
+        const { data, error } = await supabase.rpc('get_home_page_stats');
+        if (error) throw error;
+
+        // تخزين البيانات الجديدة مع الطابع الزمني
+        const cachePayload = {
+            timestamp: Date.now(),
+            data: data
+        };
+        sessionStorage.setItem('homePageStats', JSON.stringify(cachePayload));
+        return data;
+    } catch (rpcError) {
+        console.error('Error fetching and caching home page stats:', rpcError);
+        return null;
+    }
+}
+
+function renderHomePageSkeleton() {
+    const appContent = document.getElementById('app-content');
+    const loaderHtml = '<div class="loader-container small-loader"><div class="spinner"></div></div>';
+
     appContent.innerHTML = `
         <div class="page-header dashboard-header-card"><h1><i class="fas fa-tachometer-alt"></i> لوحة التحكم الرئيسية</h1><p class="welcome-message" id="welcome-message"></p></div>
 
-        <div id="home-stats-container"></div>
+        <div id="home-stats-container">${loaderHtml}</div>
         <div class="home-grid">
             <div class="home-main-column">
-                <h2>تقدم مهام اليوم (<span id="progress-percentage">0</span>%)</h2>
+                <h2>تقدم مهام اليوم (<span id="progress-percentage">...</span>%)</h2>
                 <div class="progress-bar-container">
                     <div id="tasks-progress-bar" class="progress-bar" style="width: 0%;"></div>
-                    <span id="progress-label" class="progress-label">0 / 0</span>
+                    <span id="progress-label" class="progress-label">... / ...</span>
                 </div>
  
                 <h2 style="margin-top: 30px;">المسابقات المرسلة خلال اليوم</h2>
-                <div class="chart-container">
-                    <canvas id="competitions-chart"></canvas>
-                </div>
+                <div id="competitions-chart-container" class="chart-container">${loaderHtml}</div>
             </div>
             <div class="home-side-column">
-                <h2 style="margin-top: 30px;">المهام المتبقية لليوم (<span id="pending-count">0</span>)</h2>
-                <div id="pending-tasks-list" class="pending-tasks-list">
-                </div>
+                <h2 style="margin-top: 30px;">المهام المتبقية لليوم (<span id="pending-count">...</span>)</h2>
+                <div id="pending-tasks-list" class="pending-tasks-list">${loaderHtml}</div>
 
                 <h2 style="margin-top: 30px;">نظرة سريعة على الوكلاء</h2>
-                <div id="agent-quick-stats" class="agent-quick-stats"></div>
+                <div id="agent-quick-stats" class="agent-quick-stats">${loaderHtml}</div>
             </div>
             <div class="home-side-column">
                 <h2 style="margin-top: 30px;"><i class="fas fa-star"></i> أبرز الوكلاء أداءً</h2>
-                <div id="top-agents-list" class="top-agents-list"></div>
+                <div id="top-agents-list" class="top-agents-list">${loaderHtml}</div>
             </div>
         </div>
  
@@ -51,33 +104,11 @@ async function renderHomePage() {
             <a href="#competition-templates" class="quick-action-card"><h3><i class="fas fa-file-alt"></i> إنشاء قالب مسابقة</h3><p>إضافة أو تعديل قوالب المسابقات الجاهزة.</p></a>
         </div>
 
-        <!-- NEW: Status bar moved here -->
         <div id="connection-status" class="status-bar status-connecting">
             <span id="status-text">جاري الاتصال...</span>
             <span id="last-check-time"></span>
         </div>
     `;
-
-    // الآن قم بتحديث الواجهة بالبيانات التي تم جلبها مسبقاً
-    updateHomePageUI(stats);
-    updateStatus('connected', 'متصل وجاهز'); // Ensure status is updated on home page load
-}
-
-async function fetchHomePageData() {
-    if (!supabase) {
-        console.error('Supabase client not initialized.');
-        return null;
-    }
-    
-    // --- التحسين: استخدام دالة RPC لجلب جميع الإحصائيات في طلب واحد فائق السرعة ---
-    const { data: stats, error: rpcError } = await supabase.rpc('get_home_page_stats');
-
-    if (rpcError) {
-        console.error('Error fetching home page stats via RPC:', rpcError);
-        return null; // إرجاع null في حالة الخطأ
-    }
-
-    return stats; // إرجاع كائن الإحصائيات
 }
 
 // --- NEW: Function to render the UI from data (cached or fresh) ---
@@ -97,7 +128,7 @@ function updateHomePageUI(stats) {
 
         // --- تحديث واجهة المستخدم بعد جلب جميع البيانات ---
 
-        // Update Stat Cards
+        // 1. Update Stat Cards
         const statsContainer = document.getElementById('home-stats-container');
         statsContainer.innerHTML = ` 
             <div class="dashboard-grid-v2">
@@ -119,7 +150,7 @@ function updateHomePageUI(stats) {
             </div>
         `;
 
-        // Update Tasks Progress
+        // 2. Update Tasks Progress
         const totalTodayTasks = agentsForToday?.length || 0;
         const pendingList = document.getElementById('pending-tasks-list');
         if (!pendingList) return; // Exit if the element is not on the page
@@ -195,16 +226,15 @@ function updateHomePageUI(stats) {
             document.getElementById('progress-label').textContent = `0 / 0`;
         }
 
-    // --- تصحيح: نقل كود عرض الرسوم البيانية هنا ليتم عرضه عند تحميل الصفحة ---
-
-    // Render Competitions Chart
-    const chartContainer = document.getElementById('competitions-chart')?.parentElement;
+    // 3. Render Competitions Chart
+    const chartContainer = document.getElementById('competitions-chart-container');
     if (chartContainer) {
-        chartContainer.innerHTML = '<canvas id="competitions-chart"></canvas>';
+        // Clear loader before rendering chart
+        chartContainer.innerHTML = '<canvas id="competitions-chart"></canvas>'; 
         renderCompetitionsChart(stats.competitions_today_hourly || []);
     }
 
-    // Render Agent Quick Stats
+    // 4. Render Agent Quick Stats
     const agentStatsContainer = document.getElementById('agent-quick-stats');
     if (agentStatsContainer) {
         const classificationCounts = (agentsByClassification || []).reduce((acc, agent) => {
@@ -213,6 +243,7 @@ function updateHomePageUI(stats) {
             return acc;
         }, {});
 
+        // Clear loader before rendering content
         agentStatsContainer.innerHTML = `
             <div class="quick-stat-item"><i class="fas fa-user-clock"></i><div class="quick-stat-info"><h4>${formatNumber(newAgentsThisMonth)}</h4><p>وكلاء جدد هذا الشهر</p></div></div>
             <div class="quick-stat-item"><div class="classification-chart-container"><canvas id="classification-chart"></canvas></div></div>
@@ -222,7 +253,7 @@ function updateHomePageUI(stats) {
         renderClassificationChart(classificationCounts);
     }
 
-    // --- NEW: Render Top Agents Section ---
+    // 5. Render Top Agents Section
     const topAgentsContainer = document.getElementById('top-agents-list');
     if (topAgentsContainer) {
         if (topAgents && topAgents.length > 0) {
