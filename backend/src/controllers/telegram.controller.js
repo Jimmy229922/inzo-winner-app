@@ -32,9 +32,7 @@ exports.postAnnouncement = async (req, res) => {
             formData.append('caption', message);
             formData.append('parse_mode', 'HTML');
 
-            const response = await axios.post(getApiUrl('sendPhoto'), formData, {
-                headers: formData.getHeaders()
-            });
+            const response = await axios.post(getApiUrl('sendPhoto'), formData);
             result = response.data;
         } else {
             // Handle remote image URL or text-only message

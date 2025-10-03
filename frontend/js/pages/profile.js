@@ -54,12 +54,20 @@ async function renderAgentProfilePage(agentId, options = {}) {
         error = e;
     }
 
-    // --- STEP 5: MIGRATION - Temporarily disable fetching competitions and logs ---
-    // These will be migrated in later steps.
-    const agentCompetitions = []; // Placeholder
+    // --- تعديل: جلب مسابقات الوكيل من الخادم الخلفي ---
+    let agentCompetitions = [];
+    try {
+        const compResponse = await authedFetch(`/api/competitions?agentId=${agentId}&limit=100&sort=newest`); // Fetch up to 100 competitions for the agent
+        if (compResponse.ok) {
+            const compResult = await compResponse.json();
+            agentCompetitions = compResult.data || [];
+        } else {
+            console.error("Error fetching agent competitions:", await compResponse.text());
+        }
+    } catch (compError) {
+        console.error("Error fetching agent competitions:", compError);
+    }
     const agentLogs = []; // Placeholder
-    // if (competitionsResult.error) console.error("Error fetching agent competitions:", competitionsResult.error);
-    // if (logsResult.error) console.error("Error fetching agent logs:", logsResult.error);
 
     if (error || !agent) {
         console.error('Error fetching agent profile:', error);
@@ -272,7 +280,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                     }
                     await logAgentActivity(agent._id, 'MANUAL_RENEWAL', 'تم تجديد الرصيد يدوياً.');
                     showToast('تم تجديد الرصيد بنجاح.', 'success');
-                    renderAgentProfilePage(agent.id, { activeTab: 'action' }); // Re-render the page
+                    renderAgentProfilePage(agent._id, { activeTab: 'action' }); // Re-render the page
                 } catch (error) {
                     showToast(`فشل تجديد الرصيد: ${error.message}`, 'error');
                 }
@@ -369,7 +377,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                         throw new Error(result.message || 'فشل الاتصال بالخادم.');
                     }
                     showToast('تم إرسال كليشة البونص إلى تلجرام بنجاح.', 'success');
-                    await logAgentActivity(agent.id, 'BONUS_CLICHE_SENT', 'تم إرسال كليشة تذكير البونص إلى تلجرام.');
+                    await logAgentActivity(agent._id, 'BONUS_CLICHE_SENT', 'تم إرسال كليشة تذكير البونص إلى تلجرام.');
                 } catch (error) {
                     showToast(`فشل إرسال الكليشة: ${error.message}`, 'error');
                 }
@@ -412,7 +420,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                     if (!response.ok) throw new Error(result.message || 'فشل الاتصال بالخادم.');
 
                     showToast('تم إرسال طلب اختيار الفائزين إلى تلجرام بنجاح.', 'success');
-                    await logAgentActivity(agent.id, 'WINNERS_SELECTION_REQUESTED', `تم إرسال طلب اختيار الفائزين لمسابقة الوكيل ${agent.name}.`);
+                    await logAgentActivity(agent._id, 'WINNERS_SELECTION_REQUESTED', `تم إرسال طلب اختيار الفائزين لمسابقة الوكيل ${agent.name}.`);
                 } catch (error) {
                     showToast(`فشل إرسال الطلب: ${error.message}`, 'error');
                 }
@@ -643,15 +651,15 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                             showToast('فشل إكمال المسابقة.', 'error');
                         } else {
                             showToast('تم إكمال المسابقة بنجاح.', 'success');
-                            await logAgentActivity(agent.id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}" مع تسجيل بيانات الأداء.`);
-                            renderAgentProfilePage(agent.id, { activeTab: 'agent-competitions' });
+                            await logAgentActivity(agent._id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}" مع تسجيل بيانات الأداء.`);
+                            renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });
                         }
                     }, {
                         title: 'إكمال المسابقة وتسجيل الأداء',
                         confirmText: 'نعم، اكتملت',
                         confirmClass: 'btn-primary',
                         onRender: (modal) => {
-                            const confirmBtn = modal.querySelector('#confirm-btn');
+                            const confirmBtn = modal.querySelector('#confirm-btn'); // This will be migrated later
                             const inputs = modal.querySelectorAll('.modal-input');
                             confirmBtn.disabled = true; // Disable by default
 
@@ -672,14 +680,19 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                 showConfirmationModal(
                     'هل أنت متأكد من حذف هذه المسابقة؟<br><small>لا يمكن التراجع عن هذا الإجراء.</small>',
                     async () => {
-                        const { error } = await supabase.from('competitions').delete().eq('id', id); // This will be migrated later
+                        const response = await authedFetch(`/api/competitions/${id}`, { method: 'DELETE' });
+                        if (!response.ok) {
+                            const result = await response.json();
+                            showToast(result.message || 'فشل حذف المسابقة.', 'error');
+                            return;
+                        }
                         if (error) {
                             showToast('فشل حذف المسابقة.', 'error');
                             console.error('Delete competition error:', error);
                         } else {
                             showToast('تم حذف المسابقة بنجاح.', 'success');
                             // Re-render the profile page, staying on the same tab
-                            renderAgentProfilePage(agent.id, { activeTab: 'agent-competitions' });
+                            renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });
                         }
                     }, {
                         title: 'تأكيد الحذف',

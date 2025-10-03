@@ -512,7 +512,7 @@ async function renderCompetitionCreatePage(agentId) {
     // New V2 Layout
     appContent.innerHTML = `
         <div class="page-header"><h1><i class="fas fa-magic"></i> إنشاء وإرسال مسابقة</h1></div>
-        <p class="page-subtitle">للعميل: <a href="#profile/${agent.id}" class="agent-name-link-subtitle"><strong>${agent.name}</strong></a>. قم بتعديل تفاصيل المسابقة أدناه وسيتم تحديث الكليشة تلقائياً.</p>
+        <p class="page-subtitle">للعميل: <a href="#profile/${agent._id}" class="agent-name-link-subtitle"><strong>${agent.name}</strong></a>. قم بتعديل تفاصيل المسابقة أدناه وسيتم تحديث الكليشة تلقائياً.</p>
         
         <div class="create-competition-layout-v3">
             <!-- Agent Info Column -->
@@ -984,11 +984,11 @@ async function renderCompetitionCreatePage(agentId) {
             }
 
             // 4. Log activity
-            await logAgentActivity(agent.id, 'COMPETITION_CREATED', `تم إنشاء وإرسال مسابقة "${selectedTemplate.question}" بتكلفة ${totalCost.toFixed(2)}$ و ${depositWinnersCount} بونص إيداع.`);
+            await logAgentActivity(agent._id, 'COMPETITION_CREATED', `تم إنشاء وإرسال مسابقة "${selectedTemplate.question}" بتكلفة ${totalCost.toFixed(2)}$ و ${depositWinnersCount} بونص إيداع.`);
             
             // 5. Success
             showToast('تم حفظ المسابقة وإرسالها وخصم الرصيد بنجاح.', 'success');
-            window.location.hash = `profile/${agent.id}`;
+            window.location.hash = `profile/${agent._id}`;
 
         } catch (error) {
             showToast(error.message, 'error');
