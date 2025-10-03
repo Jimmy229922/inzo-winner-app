@@ -30,15 +30,22 @@ echo.
 echo [OK] Backend dependencies installed.
 echo.
 
-REM Run the Node.js setup script to create the .env file automatically
 echo [2/2] Creating configuration file...
-node setup.js
-if %errorlevel% neq 0 (
-    echo [ERROR] The configuration script failed to run.
-    cd ..
-    pause
-    exit
-)
+
+REM Create the .env file directly from the batch script
+(
+    echo # MongoDB Connection String
+    echo MONGODB_URI=mongodb://127.0.0.1:27017/inzo-db
+    echo.
+    echo # Initial Super Admin Credentials
+    echo SUPER_ADMIN_EMAIL=admin@inzo.com
+    echo SUPER_ADMIN_PASSWORD=inzo123
+    echo.
+    echo # JWT Secret for authentication tokens
+    echo JWT_SECRET=your-super-secret-jwt-key-that-is-long-and-random-and-changed
+) > ".env"
+
+echo [OK] Configuration file (.env) created successfully.
 cd ..
 
 echo =================================================================

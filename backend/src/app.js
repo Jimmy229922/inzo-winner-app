@@ -1,0 +1,69 @@
+
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const helmet = require('helmet');
+
+const authRoutes = require('./routes/auth.routes');
+const agentRoutes = require('./routes/agent.routes');
+const logRoutes = require('./routes/log.routes');
+const taskRoutes = require('./routes/tasks.routes'); // تصحيح: اسم الملف هو tasks.routes.js
+const userRoutes = require('./routes/user.routes'); // إضافة: استيراد مسارات المستخدمين
+const statsRoutes = require('./routes/stats.routes'); // إضافة: استيراد مسارات الإحصائيات
+const calendarRoutes = require('./routes/calendar.routes'); // إضافة: استيراد مسارات التقويم
+const competitionRoutes = require('./routes/competition.routes'); // إضافة: استيراد مسارات المسابقات
+const templateRoutes = require('./routes/template.routes'); // إضافة: استيراد مسارات القوالب
+const telegramRoutes = require('./routes/telegram.routes'); // إضافة: استيراد مسارات تلجرام
+const errorRoutes = require('./routes/error.routes'); // إضافة: استيراد مسارات الأخطاء
+const authMiddleware = require('./middleware/auth.middleware');
+
+const app = express();
+
+// Middlewares
+app.use(cors());
+app.use(express.json());
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "script-src": ["'self'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+            "connect-src": ["'self'", "https:", "http://localhost:*"], // Keep existing connect-src
+            "img-src": ["'self'", "data:", "blob:", "https://ui-avatars.com", "https://via.placeholder.com"],
+        },
+    },
+}));
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/agents', authMiddleware, agentRoutes);
+app.use('/api/logs', authMiddleware, logRoutes);
+app.use('/api/tasks', authMiddleware, taskRoutes); // إضافة: استخدام مسارات المهام
+app.use('/api/users', authMiddleware, userRoutes); // إضافة: استخدام مسارات المستخدمين
+app.use('/api/stats', authMiddleware, statsRoutes); // إضافة: استخدام مسارات الإحصائيات
+app.use('/api/calendar', authMiddleware, calendarRoutes); // إضافة: استخدام مسارات التقويم
+app.use('/api/competitions', authMiddleware, competitionRoutes); // إضافة: استخدام مسارات المسابقات
+app.use('/api/templates', authMiddleware, templateRoutes); // إضافة: استخدام مسارات القوالب
+// --- إضافة: استخدام مسارات تلجرام ---
+// Note: These are not protected by authMiddleware to allow more flexibility if needed later.
+app.use('/api', telegramRoutes);
+app.use('/api/log-error', errorRoutes); // إضافة: استخدام مسارات الأخطاء
+
+// Catch-all for API routes that don't exist
+app.use('/api/*', (req, res) => {
+    res.status(404).json({ message: `API route not found: ${req.method} ${req.originalUrl}` });
+});
+
+// --- إضافة: جعل مجلد 'uploads' متاحاً للوصول العام ---
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+
+// Serve static files from the 'frontend' directory
+app.use(express.static(path.join(__dirname, '../../frontend')));
+
+// For any other GET request that is not an API route, serve the main index.html
+// app.get('/', (req, res) => { // This line was causing a duplicate route definition
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../frontend', 'index.html'));
+});
+
+module.exports = app;
+            

@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const app = require('./src/app');
 const connectDB = require('./src/config/db');
@@ -31,7 +30,7 @@ async function createSuperAdmin() {
             role: 'super_admin',
             permissions: {
                 agents: { view_financials: true, edit_profile: true, edit_financials: true, can_view_competitions_tab: true, can_renew_all_balances: true },
-                competitions: { manage_comps: 'full', manage_templates: 'full', can_create: true },
+                competitions: { manage_comps: 'full', manage_templates: 'full', can_create: true }
             }
         });
         await superAdmin.save();
@@ -51,4 +50,3 @@ async function startServer() {
 }
 
 startServer();
-        
