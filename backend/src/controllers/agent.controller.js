@@ -1,5 +1,6 @@
 
 const Agent = require('../models/Agent');
+const Log = require('../models/Log'); // Import Log model
 
 // Get all agents with pagination, search, and filtering
 exports.getAllAgents = async (req, res) => {
@@ -105,32 +106,41 @@ exports.createAgent = async (req, res) => {
 // Update an agent
 exports.updateAgent = async (req, res) => {
     try {
-        const updateData = { ...req.body };
-        const agent = await Agent.findById(req.params.id);
+        const agentId = req.params.id;
+        const updatePayload = req.body;
+        const user = req.user;
 
-        if (!agent) {
+        // 1. Find the agent before making changes to log the "before" state
+        const agentBeforeUpdate = await Agent.findById(agentId);
+        if (!agentBeforeUpdate) {
             return res.status(404).json({ message: 'Agent not found' });
         }
 
-        // --- إصلاح: التعامل مع القيم الرقمية التي قد تكون null ---
-        // إذا تم تحديث الرصيد المستهلك أو بونص الإيداع، أعد حساب الأرصدة المتبقية
-        const totalBonus = agent.competition_bonus || 0;
-        const totalDepositBonus = agent.deposit_bonus_count || 0;
+        // 2. Log the changes
+        const changedFields = Object.keys(updatePayload).filter(key => JSON.stringify(agentBeforeUpdate[key]) !== JSON.stringify(updatePayload[key]));
+        if (changedFields.length > 0) {
+            const changeDescriptions = changedFields.map(key => {
+                const oldValue = agentBeforeUpdate[key] || 'فارغ';
+                const newValue = updatePayload[key] || 'فارغ';
+                return `"${key}" from "${oldValue}" to "${newValue}"`;
+            }).join(', ');
 
-        // Check if consumed_balance is being updated
-        if (req.body.consumed_balance !== undefined && req.body.consumed_balance !== null) {
-            updateData.remaining_balance = totalBonus - req.body.consumed_balance;
+            const log = new Log({
+                user: user.userId,
+                agent_id: agentId,
+                action_type: 'DETAILS_UPDATE',
+                description: `قام المستخدم ${user.full_name || user.email} بتحديث: ${changeDescriptions}`
+            });
+            await log.save();
         }
 
-        // Check if used_deposit_bonus is being updated
-        if (req.body.used_deposit_bonus !== undefined && req.body.used_deposit_bonus !== null) {
-            updateData.remaining_deposit_bonus = totalDepositBonus - req.body.used_deposit_bonus;
-        }
+        // 3. Perform the update
+        const updatedAgent = await Agent.findByIdAndUpdate(agentId, updatePayload, { new: true });
 
-        const updatedAgent = await Agent.findByIdAndUpdate(req.params.id, { $set: updateData }, { new: true });
         res.json({ data: updatedAgent });
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+        console.error("Error updating agent:", error);
+        res.status(500).json({ message: 'Server error while updating agent.', error: error.message });
     }
 };
 

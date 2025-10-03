@@ -12,10 +12,9 @@ exports.getTodayTasks = async (req, res) => {
 
         // 1. Find all agents who are scheduled for today
         const dayOfWeek = today.toLocaleString('en-US', { weekday: 'long' });
-        const agentsForToday = await Agent.find({
-            'schedule.days': dayOfWeek,
-            'status': 'Active' // Only include active agents
-        }).select('name agent_id classification avatar_url').lean();
+        const agentsForToday = await Agent.find({ 'schedule.days': dayOfWeek, 'status': 'Active' })
+            .select('name agent_id classification avatar_url remaining_balance remaining_deposit_bonus deposit_bonus_percentage')
+            .lean();
 
         // 2. Find all existing tasks for these agents for today
         const agentIds = agentsForToday.map(a => a._id);

@@ -225,11 +225,11 @@ async function logAgentActivity(agentId, actionType, description, metadata = {})
 
 async function logAgentActivity(agentId, actionType, description, metadata = {}) {
     // This function will be reimplemented later using our own backend.
-    // For now, it just logs to the console.
     try {
-        // In the future, this will be a POST request to a logging endpoint.
-        // await authedFetch('/api/logs', { method: 'POST', body: JSON.stringify({ agentId, actionType, description, metadata }) });
-        console.log(`[LOG] Action: ${actionType}, Agent: ${agentId}, Desc: ${description}`);
+        await authedFetch('/api/logs', {
+            method: 'POST',
+            body: JSON.stringify({ agent_id: agentId, action_type: actionType, description, metadata })
+        });
     } catch (error) {
         console.error('Failed to log agent activity:', error);
     }

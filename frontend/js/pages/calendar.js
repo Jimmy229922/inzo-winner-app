@@ -139,10 +139,9 @@ async function renderCalendarPage() {
         const { agents, tasks } = await response.json();
 
         // --- تعديل: تحويل مصفوفة المهام إلى خريطة لسهولة الوصول ---
-        const tasksMap = (tasks || []).reduce((acc, task) => {
-            // استخدم agent_id مباشرة لأنه ObjectId
-            acc[task.agent_id] = task;
-            return acc;
+        const tasksMap = (tasks || []).reduce((map, task) => {
+            map[task.agent_id.toString()] = task;
+            return map;
         }, {});
 
         const daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];

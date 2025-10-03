@@ -4,9 +4,13 @@ const Template = require('../models/Template');
 
 exports.getAllCompetitions = async (req, res) => {
     try {
-        const { page = 1, limit = 10, search, status, classification, sort, excludeStatus } = req.query;
+        const { page = 1, limit = 10, search, status, classification, sort, excludeStatus, agentId } = req.query;
 
         let query = {};
+
+        if (agentId) {
+            query.agent_id = agentId;
+        }
 
         if (search) {
             const agents = await Agent.find({ name: { $regex: search, $options: 'i' } }).select('_id');
@@ -78,19 +82,8 @@ exports.createCompetition = async (req, res) => {
 
 exports.updateCompetition = async (req, res) => {
     try {
-        const updateData = { ...req.body };
-
-        // If completing a competition, ensure is_active is set to false
-        if (updateData.status === 'completed') {
-            updateData.is_active = false;
-        }
-
-        const updatedCompetition = await Competition.findByIdAndUpdate(req.params.id, updateData, { new: true });
+        const updatedCompetition = await Competition.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!updatedCompetition) return res.status(404).json({ message: 'Competition not found.' });
-
-        // To match frontend expectations, populate agent data on single update as well
-        await updatedCompetition.populate('agent_id', 'name avatar_url classification');
-
         res.json({ data: updatedCompetition });
     } catch (error) {
         res.status(400).json({ message: 'Failed to update competition.', error: error.message });

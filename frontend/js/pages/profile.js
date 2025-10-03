@@ -54,21 +54,23 @@ async function renderAgentProfilePage(agentId, options = {}) {
         error = e;
     }
 
-    // --- تعديل: جلب مسابقات الوكيل من الخادم الخلفي ---
-    let agentCompetitions = [];
     try {
         const compResponse = await authedFetch(`/api/competitions?agentId=${agentId}&limit=100&sort=newest`); // Fetch up to 100 competitions for the agent
+        const logResponse = await authedFetch(`/api/logs?agent_id=${agentId}&limit=50`); // Fetch latest 50 logs for the agent
+
         if (compResponse.ok) {
             const compResult = await compResponse.json();
-            agentCompetitions = compResult.data || [];
+            var agentCompetitions = compResult.data || [];
+        }
+        if (logResponse.ok) {
+            const logResult = await logResponse.json();
+            var agentLogs = logResult.data || [];
         } else {
-            console.error("Error fetching agent competitions:", await compResponse.text());
+            console.error("Error fetching agent logs:", await logResponse.text());
         }
     } catch (compError) {
         console.error("Error fetching agent competitions:", compError);
     }
-    const agentLogs = []; // Placeholder
-
     if (error || !agent) {
         console.error('Error fetching agent profile:', error);
         appContent.innerHTML = `<p class="error">فشل العثور على الوكيل المطلوب.</p>`;
@@ -476,7 +478,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
 
     // --- NEW: Render tab content based on permissions ---
     if (detailsTabContent) {
-        if (!canViewFinancials) { // This will be migrated later
+        if (!canViewFinancials) {
             detailsTabContent.innerHTML = `
                 <div class="access-denied-container">
                     <i class="fas fa-lock"></i>
@@ -489,9 +491,8 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
     }
 
     if (logTabContent) {
-        if (agentLogs && agentLogs.length > 0) { // This will be migrated later
-            updateManualRenewButtonState(agent);
-            logTabContent.innerHTML = generateActivityLogHTML(agentLogs);
+        if (agentLogs && agentLogs.length > 0) {
+            logTabContent.innerHTML = generateActivityLogHTML(agentLogs, true); // Pass true to indicate it's for a single agent
         }
     }
     // This will be migrated later
@@ -707,7 +708,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
     startCompetitionCountdowns(); // This will be migrated later
 
     // Display the next renewal date, which is now fully independent
-    displayNextRenewalDate(agent);
+    displayNextRenewalDate(agent); // This will be migrated later
 }
 
 function startCompetitionCountdowns() {
@@ -746,7 +747,7 @@ function startCompetitionCountdowns() {
     competitionCountdownIntervals.push(intervalId);
 }
 
-function generateActivityLogHTML(logs) {
+function generateActivityLogHTML(logs, isAgentProfile = false) {
     const getLogIconDetails = (actionType) => {
         if (actionType.includes('CREATED')) return { icon: 'fa-user-plus', colorClass: 'log-icon-create' };
         if (actionType.includes('DELETED')) return { icon: 'fa-user-slash', colorClass: 'log-icon-delete' }
@@ -797,7 +798,11 @@ function generateActivityLogHTML(logs) {
                             <div class="log-item-icon-v2 ${colorClass}"><i class="fas ${icon}"></i></div>
                             <div class="log-item-content-v2">
                                 <p class="log-description">${log.description}</p>
-                                <p class="log-timestamp">${new Date(log.created_at).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                                <p class="log-timestamp">
+                                    <i class="fas fa-user"></i> ${log.user_name || 'نظام'}
+                                    <span class="log-separator">|</span>
+                                    <i class="fas fa-clock"></i> ${new Date(log.createdAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+                                </p>
                             </div>
                         </div>
                     `;
@@ -826,12 +831,10 @@ function renderDetailsView(agent) {
                 const isFinancial = financialFields.includes(fieldName);
 
         let displayValue;
-        let iconHtml = '';
+        let iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
 
         // إصلاح: منطق عرض أيقونة التعديل
-        if (isSuperAdmin || (isEditable && (!isFinancial || (isFinancial && canEditFinancials)))) {
-            iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
-        } else if (!isEditable) {
+        if (!isEditable) { // This condition is now only for auto-calculated fields if any were to be added back
             iconHtml = `<span class="auto-calculated-indicator" title="يُحسب تلقائياً"><i class="fas fa-cogs"></i></span>`;
         }
 
@@ -859,28 +862,28 @@ function renderDetailsView(agent) {
     const htmlContent = `
         <div class="details-grid">
             <h3 class="details-section-title">المرتبة والمكافآت</h3>
-            ${createFieldHTML('المرتبة', agent.rank, 'rank', true)}
-            ${createFieldHTML('بونص المسابقات (تداولي)', agent.competition_bonus, 'competition_bonus', false)}
-            ${createFieldHTML('مرات بونص الإيداع', agent.deposit_bonus_count, 'deposit_bonus_count', false)}
-            ${createFieldHTML('نسبة بونص الإيداع', agent.deposit_bonus_percentage, 'deposit_bonus_percentage', false)}
+            ${createFieldHTML('المرتبة', agent.rank, 'rank')}
+            ${createFieldHTML('بونص المسابقات (تداولي)', agent.competition_bonus, 'competition_bonus')}
+            ${createFieldHTML('مرات بونص الإيداع', agent.deposit_bonus_count, 'deposit_bonus_count')}
+            ${createFieldHTML('نسبة بونص الإيداع', agent.deposit_bonus_percentage, 'deposit_bonus_percentage')}
             
             <h3 class="details-section-title">الأرصدة</h3>
-            ${createFieldHTML('رصيد مستهلك', agent.consumed_balance, 'consumed_balance', true)}
-            ${createFieldHTML('رصيد متبقي', agent.remaining_balance, 'remaining_balance', false)}            
-            ${createFieldHTML('بونص إيداع مستخدم', agent.used_deposit_bonus, 'used_deposit_bonus', true)}
-            ${createFieldHTML('بونص إيداع متبقي', agent.remaining_deposit_bonus, 'remaining_deposit_bonus', false)}
+            ${createFieldHTML('رصيد مستهلك', agent.consumed_balance, 'consumed_balance')}
+            ${createFieldHTML('رصيد متبقي', agent.remaining_balance, 'remaining_balance')}
+            ${createFieldHTML('بونص إيداع مستخدم', agent.used_deposit_bonus, 'used_deposit_bonus')}
+            ${createFieldHTML('بونص إيداع متبقي', agent.remaining_deposit_bonus, 'remaining_deposit_bonus')}
 
             <h3 class="details-section-title">إعدادات المسابقة الواحدة</h3>
-            ${createFieldHTML('رصيد المسابقة الواحدة', agent.single_competition_balance, 'single_competition_balance', true)}
-            ${createFieldHTML('عدد الفائزين', agent.winners_count, 'winners_count', true)}
-            ${createFieldHTML('جائزة كل فائز', agent.prize_per_winner, 'prize_per_winner', false)}
+            ${createFieldHTML('رصيد المسابقة الواحدة', agent.single_competition_balance, 'single_competition_balance')}
+            ${createFieldHTML('عدد الفائزين', agent.winners_count, 'winners_count')}
+            ${createFieldHTML('جائزة كل فائز', agent.prize_per_winner, 'prize_per_winner')}
             
             <h3 class="details-section-title">التجديد والمدة</h3>
-            ${createFieldHTML('يجدد كل', agent.renewal_period, 'renewal_period', true)}
-            ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week', true)}
-            ${createFieldHTML('مدة المسابقة', agent.competition_duration, 'competition_duration', true)}
-            ${createFieldHTML('تاريخ آخر مسابقة', agent.last_competition_date, 'last_competition_date', false)}
-            ${createFieldHTML('تاريخ اختيار الفائز', agent.winner_selection_date, 'winner_selection_date', false)}
+            ${createFieldHTML('يجدد كل', agent.renewal_period, 'renewal_period')}
+            ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week')}
+            ${createFieldHTML('مدة المسابقة', agent.competition_duration, 'competition_duration')}
+            ${createFieldHTML('تاريخ آخر مسابقة', agent.last_competition_date, 'last_competition_date')}
+            ${createFieldHTML('تاريخ اختيار الفائز', agent.winner_selection_date, 'winner_selection_date')}
         </div>
     `;
 
@@ -912,15 +915,7 @@ async function renderInlineEditor(groupElement, agent) {
     const originalContent = groupElement.innerHTML;
     const currentValue = agent[fieldName];
     const label = groupElement.querySelector('label').textContent;
-
     let editorHtml = '';
-
-    // --- إصلاح: السماح للمدير العام بتعديل الحقول المحسوبة، مع إظهار تنبيه ---
-    const calculatedFields = ['competition_bonus', 'deposit_bonus_percentage', 'deposit_bonus_count', 'remaining_balance', 'remaining_deposit_bonus', 'winner_selection_date', 'prize_per_winner', 'competition_duration', 'last_competition_date'];
-    if (calculatedFields.includes(fieldName) && !isSuperAdmin) {
-        showToast('يتم حساب هذا الحقل تلقائياً ولا يمكن تعديله مباشرة.', 'info');
-        return; // منع التعديل لغير المدير العام
-    }
 
     switch (fieldName) {
         case 'rank':
@@ -1055,52 +1050,9 @@ async function renderInlineEditor(groupElement, agent) {
                 finalValue = newValue === '' ? null : (isNaN(parsedValue) ? newValue : parsedValue);
             }
 
-            // --- إصلاح: منطق الحفظ للمدير العام والحسابات التلقائية ---
-            // إذا كان المدير العام يعدل حقلاً محسوباً، احفظ قيمته مباشرة وتوقف.
-            if (isSuperAdmin && calculatedFields.includes(fieldName)) {
-                updateData[fieldName] = finalValue;
-            } else {
-                // إذا لم يكن المدير العام أو كان يعدل حقلاً عادياً، قم بتطبيق المنطق المترابط.
-                updateData[fieldName] = finalValue;
-
-                if (fieldName === 'renewal_period' || fieldName === 'competition_duration') {
-                    updateData.last_renewal_date = new Date().toISOString();
-                }
-                else if (fieldName === 'consumed_balance') {
-                    updateData.remaining_balance = (currentAgent.competition_bonus || 0) - (finalValue || 0);
-                } else if (fieldName === 'used_deposit_bonus') {
-                    updateData.remaining_deposit_bonus = (currentAgent.deposit_bonus_count || 0) - (finalValue || 0);
-                } else if (fieldName === 'last_competition_date' || fieldName === 'competition_duration' || fieldName === 'competitions_per_week') {
-                    // --- إصلاح: جلب القيم الحالية من الصفحة عند الحفظ ---
-                    const lastDate = (fieldName === 'last_competition_date') ? finalValue : currentAgent.last_competition_date;
-                    let duration = (fieldName === 'competition_duration') ? finalValue : currentAgent.competition_duration;
-                    
-                    // إذا تم تغيير عدد المسابقات، قم بتحديث المدة أولاً
-                    if (fieldName === 'competitions_per_week') {
-                        duration = (finalValue == 1) ? '48h' : '24h';
-                        updateData.competition_duration = duration;
-                    }
-
-                    if (lastDate && duration) {
-                        const durationMap = { '24h': 1, '48h': 2 };
-                        const durationDays = durationMap[duration] || 0;
-                        const newDate = new Date(lastDate);
-                        newDate.setDate(newDate.getDate() + durationDays);
-                        updateData.winner_selection_date = newDate.toISOString().split('T')[0];
-                    }
-                } else if (fieldName === 'competitions_per_week') {
-                    const compsPerWeek = finalValue;
-                    updateData.competition_duration = (compsPerWeek == 1) ? '48h' : '24h';
-                } else if (fieldName === 'single_competition_balance' || fieldName === 'winners_count') {
-                    const balance = (fieldName === 'single_competition_balance' ? finalValue : currentAgent.single_competition_balance) || 0;
-                    const winners = (fieldName === 'winners_count' ? finalValue : currentAgent.winners_count) || 0;
-                    if (balance && winners > 0) {
-                        updateData.prize_per_winner = (balance / winners).toFixed(2);
-                    } else {
-                        updateData.prize_per_winner = 0;
-                    }
-                }
-            }
+            // Direct update: The user is now responsible for all values.
+            // The backend will simply save what it's given.
+            updateData[fieldName] = finalValue;
         }
 
         try {

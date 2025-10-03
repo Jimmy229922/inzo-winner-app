@@ -11,7 +11,7 @@ exports.getCalendarData = async (req, res) => {
         // We can fetch in parallel for better performance
         const [agents, tasks] = await Promise.all([
             Agent.find({ status: 'Active' })
-                .select('name agent_id avatar_url schedule classification')
+                .select('name agent_id avatar_url schedule classification remaining_balance remaining_deposit_bonus deposit_bonus_percentage')
                 .lean(),
             Task.find({}).lean()
         ]);
