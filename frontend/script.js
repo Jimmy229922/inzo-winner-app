@@ -392,6 +392,31 @@ function showConfirmationModal(message, onConfirm, options = {}) {
     if (onRender) onRender(modal);
 }
 
+// --- NEW: Dedicated function for progress modals ---
+function showProgressModal(title, content) {
+    const existingOverlay = document.querySelector('.modal-overlay');
+    if (existingOverlay) {
+        console.warn('[showProgressModal] A modal is already open. Removing it.');
+        existingOverlay.remove();
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal modal-no-actions'; // Use the class for modals without buttons
+    modal.innerHTML = `
+        ${title ? `<h3 class="modal-title">${title}</h3>` : ''}
+        <div class="modal-message">${content}</div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    console.log('[showProgressModal] Progress modal has been appended to the body.');
+
+    return overlay; // Return the overlay so it can be closed later
+}
+
 function setupAutoHidingNavbar() {
     let lastScrollTop = 0;
     const navbar = document.querySelector('.navbar');

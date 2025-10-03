@@ -852,7 +852,7 @@ function renderDetailsView(agent) {
             <h3 class="details-section-title">التجديد والمدة</h3>
             ${createFieldHTML('يجدد كل', agent.renewal_period, 'renewal_period', true)}
             ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week', true)}
-            ${createFieldHTML('مدة المسابقة', agent.competition_duration, 'competition_duration', false)}
+            ${createFieldHTML('مدة المسابقة', agent.competition_duration, 'competition_duration', true)}
             ${createFieldHTML('تاريخ آخر مسابقة', agent.last_competition_date, 'last_competition_date', false)}
             ${createFieldHTML('تاريخ اختيار الفائز', agent.winner_selection_date, 'winner_selection_date', false)}
         </div>
@@ -1031,10 +1031,10 @@ async function renderInlineEditor(groupElement, agent) {
                 // إذا لم يكن المدير العام أو كان يعدل حقلاً عادياً، قم بتطبيق المنطق المترابط.
                 updateData[fieldName] = finalValue;
 
-                if (fieldName === 'renewal_period') {
+                if (fieldName === 'renewal_period' || fieldName === 'competition_duration') {
                     updateData.last_renewal_date = new Date().toISOString();
                 }
-                if (fieldName === 'consumed_balance') {
+                else if (fieldName === 'consumed_balance') {
                     updateData.remaining_balance = (currentAgent.competition_bonus || 0) - (finalValue || 0);
                 } else if (fieldName === 'used_deposit_bonus') {
                     updateData.remaining_deposit_bonus = (currentAgent.deposit_bonus_count || 0) - (finalValue || 0);

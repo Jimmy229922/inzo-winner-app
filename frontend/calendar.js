@@ -73,12 +73,12 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
     }
 
     return `
-        <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent.id}" data-classification="${agent.classification}" data-name="${agent.name.toLowerCase()}" data-agentid-str="${agent.agent_id}" onclick="window.location.hash='#profile/${agent.id}'" style="cursor: pointer;">
+        <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent.id}" data-classification="${agent.classification}" data-name="${agent.name.toLowerCase()}" data-agentid-str="${agent.agent_id}" style="cursor: pointer;">
             <div class="calendar-agent-main">
                 ${avatarHtml}
                 <div class="calendar-agent-info">
                     <span class="agent-name">${highlightedName} ${isComplete ? '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : ''}</span>
-                    <p class="calendar-agent-id" title="نسخ الرقم" onclick="event.stopPropagation(); navigator.clipboard.writeText('${agent.agent_id}').then(() => showToast('تم نسخ الرقم: ${agent.agent_id}', 'info'));">${highlightedId}</p>
+                    <p class="calendar-agent-id" title="نسخ الرقم" data-agent-id-copy="${agent.agent_id}">${highlightedId}</p>
                 </div>
             </div>
             <div class="calendar-agent-actions">
@@ -254,6 +254,21 @@ async function renderCalendarPage() {
 
     const container = document.getElementById('calendar-container');
     if (!container) return;
+
+    // --- NEW: Event Delegation for CSP Compliance ---
+    container.addEventListener('click', (e) => {
+        const copyIdTrigger = e.target.closest('.calendar-agent-id[data-agent-id-copy]');
+        if (copyIdTrigger) {
+            e.stopPropagation();
+            const agentIdToCopy = copyIdTrigger.dataset.agentIdCopy;
+            navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
+            return;
+        }
+        const card = e.target.closest('.calendar-agent-item[data-agent-id]');
+        if (card && !e.target.closest('.calendar-agent-actions')) { // Don't navigate if clicking on toggles
+            window.location.hash = `#profile/${card.dataset.agentId}`;
+        }
+    });
 
     container.addEventListener('change', async (e) => {
         const checkbox = e.target;

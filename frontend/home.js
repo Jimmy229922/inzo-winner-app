@@ -189,7 +189,7 @@ function updateHomePageUI(stats) {
                         const needsAudit = !task.audited;
                         const needsCompetition = !task.competition_sent;
                         return `
-                        <div class="pending-agent-card-v2" data-agent-id="${agent.id}" onclick="window.location.hash='#profile/${agent.id}'" style="cursor: pointer;">
+                        <div class="pending-agent-card-v2" data-agent-id="${agent.id}" style="cursor: pointer;">
                             <div class="pending-agent-info">
                                 ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar" loading="lazy">` : `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`}
                                 <div class="agent-name-wrapper">
@@ -280,12 +280,12 @@ function updateHomePageUI(stats) {
                     ? `<img src="${agent.avatar_url}" alt="Avatar" class="avatar-small" loading="lazy">`
                     : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`;
                 return `
-                    <div class="top-agent-item" onclick="window.location.hash='#profile/${agent.id}'" style="cursor: pointer;">
+                    <div class="top-agent-item" data-agent-id="${agent.id}" style="cursor: pointer;">
                         <span class="rank-number">${index + 1}</span>
                         ${avatarHtml}
                         <div class="agent-info">
                             <span class="agent-name">${agent.name}</span>
-                            <span class="agent-stats" onclick="event.stopPropagation(); navigator.clipboard.writeText('${agent.agent_id}').then(() => showToast('تم نسخ الرقم: ${agent.agent_id}', 'info'));" title="نسخ الرقم"><i class="fas fa-id-badge"></i> #${agent.agent_id}</span>
+                            <span class="agent-stats" data-agent-id-copy="${agent.agent_id}" title="نسخ الرقم"><i class="fas fa-id-badge"></i> #${agent.agent_id}</span>
                         </div>
                     </div>
                 `;

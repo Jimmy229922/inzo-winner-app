@@ -194,7 +194,7 @@ function displayAgentsPage(paginatedAgents, page, totalCount) {
                     return `
                         <tr data-agent-id="${agent.id}">
                             <td data-label="الوكيل">
-                                <div class="table-agent-cell" onclick="window.location.hash='#profile/${agent.id}'" style="cursor: pointer;">
+                                <div class="table-agent-cell" style="cursor: pointer;">
                                     ${avatarHtml}
                                     <div class="agent-details">${agent.name}</div>
                                 </div>

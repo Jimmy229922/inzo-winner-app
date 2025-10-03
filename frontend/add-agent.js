@@ -347,9 +347,9 @@ function renderBulkAddAgentsModal() {
                 </label>
                 <p class="form-hint">
                     يجب أن تكون البيانات مفصولة بمسافة Tab (يمكنك نسخها من جدول Excel).<br>
-                    الترتيب المطلوب للأعمدة: <strong>الاسم، رقم الوكالة، التصنيف، المرتبة، فترة التجديد، أيام التدقيق، رابط القناة، رابط الجروب، معرف الدردشة، اسم المجموعة</strong>
+                    الترتيب المطلوب للأعمدة: <strong>الاسم، رقم الوكالة، التصنيف، المرتبة، فترة التجديد، أيام التدقيق، رابط القناة، رابط الجروب، معرف الدردشة، اسم المجموعة، مدة المسابقة (24h أو 48h)</strong>
                 </p>
-                <textarea id="bulk-agents-data" rows="15" placeholder="مثال:\nأحمد علي\t12345\tR\tGrowth\tweekly\t1,3,5\thttps://t.me/channel\thttps://t.me/group\t-100123\tGroup Name"></textarea>
+                <textarea id="bulk-agents-data" rows="15" placeholder="مثال:\nأحمد علي\t12345\tR\tGrowth\tweekly\t1,3,5\thttps://t.me/channel\thttps://t.me/group\t-100123\tGroup Name\t48h"></textarea>
             </div>
         </div>
     `;
@@ -376,7 +376,7 @@ async function handleBulkAddAgents(data) {
         return;
     }
 
-    const agentsToInsert = [];
+    const allParsedAgents = [];
     const errors = [];
     const validRenewalPeriods = ['none', 'weekly', 'biweekly', 'monthly'];
     
@@ -403,6 +403,11 @@ async function handleBulkAddAgents(data) {
     };
 
     lines.forEach((line, index) => {
+        // --- NEW: Skip empty lines ---
+        if (!line.trim()) {
+            return;
+        }
+
         const fields = line.split('\t').map(f => f.trim());
         if (fields.length < 4) { // At least Name, ID, Classification, Rank are required
             errors.push(`السطر ${index + 1}: عدد الحقول غير كافٍ.`);
@@ -416,7 +421,8 @@ async function handleBulkAddAgents(data) {
             telegram_channel_url = '', 
             telegram_group_url = '', 
             telegram_chat_id = '', 
-            telegram_group_name = ''] = fields;
+            telegram_group_name = '',
+            competition_duration = null] = fields;
 
         if (!name || !agent_id || !classification || !rank) {
             errors.push(`السطر ${index + 1}: الحقول الأساسية (الاسم، الرقم، التصنيف، المرتبة) مطلوبة.`);
@@ -442,6 +448,21 @@ async function handleBulkAddAgents(data) {
             .map(dayName => auditDayMap[dayName.trim()])
             .filter(dayIndex => dayIndex !== undefined && dayIndex >= 0 && dayIndex <= 6);
 
+        // --- MODIFIED: Validate and normalize competition_duration ---
+        let processed_competition_duration = null;
+        if (competition_duration) {
+            // Normalize input: "24 h" -> "24h", "24" -> "24"
+            const normalized = competition_duration.trim().replace(/\s/g, ''); 
+            if (normalized.startsWith('24')) {
+                processed_competition_duration = '24h';
+            } else if (normalized.startsWith('48')) {
+                processed_competition_duration = '48h';
+            } else {
+                errors.push(`السطر ${index + 1}: مدة المسابقة "${competition_duration}" غير صالحة. يجب أن تكون '24h' أو '48h'.`);
+                return;
+            }
+        }
+
         const rankData = RANKS_DATA[correctRank];
         const newAgent = {
             name,
@@ -461,8 +482,9 @@ async function handleBulkAddAgents(data) {
             remaining_deposit_bonus: rankData.deposit_bonus_count,
             consumed_balance: 0,
             used_deposit_bonus: 0,
+            competition_duration: processed_competition_duration,
         };
-        agentsToInsert.push(newAgent);
+        allParsedAgents.push(newAgent);
     });
 
     if (errors.length > 0) {
@@ -472,85 +494,150 @@ async function handleBulkAddAgents(data) {
         return;
     }
 
-    // --- NEW: Bulk uniqueness check before insertion ---
-    const agentIds = agentsToInsert.map(a => a.agent_id);
-    const agentNames = agentsToInsert.map(a => a.name);
+    // --- NEW: Logic to separate agents for insertion and update ---
+    const uniqueAgentsMap = new Map();
+    allParsedAgents.forEach(agent => {
+        // Keep only the last entry for any given agent_id or name to avoid self-conflicts
+        uniqueAgentsMap.set(agent.agent_id, agent);
+        uniqueAgentsMap.set(agent.name, agent);
+    });
+    const uniqueAgents = Array.from(uniqueAgentsMap.values());
+    const ignoredForInputDuplication = allParsedAgents.length - uniqueAgents.length;
 
-    // Check for duplicates within the provided data
-    const duplicateIdsInInput = agentIds.filter((id, index) => agentIds.indexOf(id) !== index);
-    const duplicateNamesInInput = agentNames.filter((name, index) => agentNames.indexOf(name) !== index);
-
-    if (duplicateIdsInInput.length > 0) {
-        showToast(`توجد أرقام وكالات مكررة في البيانات المدخلة: ${duplicateIdsInInput.join(', ')}`, 'error');
+    if (uniqueAgents.length === 0) {
+        showToast('لا توجد بيانات صالحة للإضافة أو التحديث.', 'info');
         return;
     }
-    if (duplicateNamesInInput.length > 0) {
-        showToast(`توجد أسماء وكلاء مكررة في البيانات المدخلة: ${duplicateNamesInInput.join(', ')}`, 'error');
-        return;
-    }
 
-    // Check for duplicates in the database
-    const { data: existingAgents, error: checkError } = await supabase
-        .from('agents')
-        .select('name, agent_id')
-        .or(`agent_id.in.(${agentIds.join(',')}),name.in.(${agentNames.map(n => `"${n}"`).join(',')})`);
+    // --- MODIFIED: Process in chunks to avoid overly long URLs ---
+    const CHUNK_SIZE = 100; // Process 100 agents at a time
+    let allExistingAgents = [];
+    let checkError = null;
+
+    for (let i = 0; i < uniqueAgents.length; i += CHUNK_SIZE) {
+        const chunk = uniqueAgents.slice(i, i + CHUNK_SIZE);
+        const chunkIds = chunk.map(a => a.agent_id);
+        const chunkNames = chunk.map(a => a.name);
+
+        const { data: existingAgentsInChunk, error: chunkError } = await supabase
+            .from('agents')
+            .select('id, name, agent_id')
+            .or(`agent_id.in.(${chunkIds.join(',')}),name.in.(${chunkNames.map(n => `"${n}"`).join(',')})`);
+
+        if (chunkError) {
+            checkError = chunkError;
+            break; // Stop on the first error
+        }
+        if (existingAgentsInChunk) {
+            allExistingAgents.push(...existingAgentsInChunk);
+        }
+    }
 
     if (checkError) {
         showToast('حدث خطأ أثناء التحقق من البيانات المكررة في قاعدة البيانات.', 'error');
         return;
     }
-    if (existingAgents && existingAgents.length > 0) {
-        const existingIds = existingAgents.map(a => a.agent_id).join(', ');
-        const existingNames = existingAgents.map(a => a.name).join(', ');
-        showToast(`البيانات التالية موجودة بالفعل: أرقام (${existingIds}), أسماء (${existingNames})`, 'error');
+    
+    const existingAgentsMap = new Map();
+    allExistingAgents.forEach(agent => {
+        // --- FIX: Use a composite key to uniquely identify an existing agent by both ID and Name ---
+        // This prevents incorrect matches where a new agent has the same name as an old one but a different ID.
+        const compositeKey = `${agent.agent_id}::${agent.name}`;
+        existingAgentsMap.set(compositeKey, agent);
+    });
+
+    const agentsToInsert = [];
+    const agentsToUpdate = [];
+
+    uniqueAgents.forEach(agent => {
+        const existing = existingAgentsMap.get(`${agent.agent_id}::${agent.name}`);
+        if (existing) {
+            // Add to update list, including the database ID
+            agentsToUpdate.push({ ...agent, id: existing.id });
+        } else {
+            // Add to insert list
+            agentsToInsert.push(agent);
+        }
+    });
+
+    const totalOperations = agentsToInsert.length + agentsToUpdate.length;
+    if (totalOperations === 0) {
+        showToast(`تم تجاهل جميع الوكلاء (${allParsedAgents.length}) لوجودهم مسبقاً أو للتكرار.`, 'warning');
         return;
     }
 
-    if (agentsToInsert.length === 0) {
-        showToast('لا توجد بيانات صالحة للإضافة.', 'info');
-        return;
-    }
+    let successCount = 0;
+    let errorCount = 0;
+    let processedCount = 0;
 
     // Show progress modal
-    showBulkSendProgressModal(agentsToInsert.length);
+    console.log('[handleBulkAddAgents] Preparing to show progress modal for', totalOperations, 'operations.');
+    const modalContent = `
+        <div class="update-progress-container">
+            <i class="fas fa-users-cog update-icon"></i>
+            <h3 id="bulk-send-status-text">جاري التهيئة...</h3>
+            <div class="progress-bar-outer">
+                <div id="bulk-send-progress-bar-inner" class="progress-bar-inner"></div>
+            </div>
+        </div>
+    `;
+    const progressModalOverlay = showProgressModal('إضافة وتحديث الوكلاء', modalContent);
+
     const progressBar = document.getElementById('bulk-send-progress-bar-inner');
     const statusText = document.getElementById('bulk-send-status-text');
-    statusText.innerHTML = `جاري إضافة ${agentsToInsert.length} وكيل...`;
+    // --- MODIFIED: Process agents one by one to show progress ---
+    const allOperations = [
+        ...agentsToInsert.map(agent => ({ type: 'insert', data: agent })),
+        ...agentsToUpdate.map(agent => ({ type: 'update', data: agent }))
+    ];
 
-    const { data: insertedAgents, error: insertError } = await supabase
-        .from('agents')
-        .insert(agentsToInsert)
-        .select('name');
+    for (const op of allOperations) {
+        processedCount++;
+        const progress = Math.round((processedCount / totalOperations) * 100);
+        progressBar.style.width = `${progress}%`;
+        statusText.innerHTML = `جاري معالجة الوكيل ${processedCount} / ${totalOperations}<br>نجح: ${successCount} | فشل: ${errorCount}`;
 
-    if (insertError) {
-        progressBar.style.width = '100%';
-        progressBar.style.backgroundColor = 'var(--danger-color)';
-        statusText.innerHTML = `فشل إضافة الوكلاء.<br><small>${insertError.message}</small>`;
-        document.querySelector('.modal-no-actions .update-icon').className = 'fas fa-times-circle update-icon';
-        showToast('فشل إضافة الوكلاء بشكل جماعي.', 'error');
-        console.error('Bulk insert error:', insertError);
-    } else {
-        const successCount = insertedAgents.length;
-        const errorCount = agentsToInsert.length - successCount;
+        try {
+            if (op.type === 'insert') {
+                const { error } = await supabase.from('agents').insert(op.data);
+                if (error) throw error;
+            } else if (op.type === 'update') {
+                const { id, ...updateData } = op.data;
+                const { error } = await supabase.from('agents').update(updateData).eq('id', id);
+                if (error) throw error;
+            }
+            successCount++;
+        } catch (error) {
+            errorCount++;
+            console.error(`Bulk processing error for agent ${op.data.name}:`, error);
+        }
 
-        progressBar.style.width = '100%';
-        progressBar.style.backgroundColor = errorCount > 0 ? 'var(--warning-color)' : 'var(--success-color)';
-        statusText.innerHTML = `اكتملت العملية.<br><strong>${successCount}</strong> وكيل بنجاح | <strong>${errorCount}</strong> فشل.`;
-        document.querySelector('.modal-no-actions .update-icon').className = 'fas fa-check-circle update-icon';
-        
-        await logAgentActivity(null, 'BULK_AGENT_CREATED', `تمت إضافة ${successCount} وكيل بشكل جماعي.`);
-        showToast('اكتملت عملية الإضافة الجماعية.', 'success');
-
-        // Refresh the agents list
-        allAgentsData = []; // Clear cache
-        await renderManageAgentsPage();
+        // Add a small delay to prevent overwhelming the server and to make progress visible
+        await new Promise(resolve => setTimeout(resolve, 50));
     }
+
+    progressBar.style.width = '100%';
+    progressBar.style.backgroundColor = errorCount > 0 ? 'var(--warning-color)' : 'var(--success-color)';
+    
+    let finalMessage = `اكتملت العملية.<br>`;
+    finalMessage += `<strong>${successCount}</strong> عملية ناجحة | <strong>${errorCount}</strong> عملية فاشلة.`;
+    const totalIgnored = ignoredForInputDuplication;
+    if (totalIgnored > 0) finalMessage += ` | <strong>${totalIgnored}</strong> تم تجاهلهم للتكرار.`;
+
+    statusText.innerHTML = finalMessage;
+    document.querySelector('.modal-no-actions .update-icon').className = 'fas fa-check-circle update-icon';
+    
+    await logAgentActivity(null, 'BULK_AGENT_UPSERT', `إضافة جماعية: ${agentsToInsert.length} جديد, ${agentsToUpdate.length} تحديث, ${totalIgnored} تجاهل.`);
+    showToast('اكتملت العملية الجماعية.', 'success');
+
+    // Refresh the agents list
+    allAgentsData = []; // Clear cache
+    await renderManageAgentsPage();
 
     // Auto-close progress modal
     setTimeout(() => {
-        const modalOverlay = document.querySelector('.modal-overlay');
-        if (modalOverlay) {
-            modalOverlay.remove();
+        if (progressModalOverlay) {
+            progressModalOverlay.remove();
         }
     }, 4000);
 }
