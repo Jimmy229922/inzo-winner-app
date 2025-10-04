@@ -50,13 +50,10 @@ class VirtualScroller {
     }
 }
 
-function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
-    const taskDate = new Date();
-    const dayDiff = dayIndex - taskDate.getDay();
-    taskDate.setDate(taskDate.getDate() + dayDiff);    
-    // --- إصلاح: استخدام مفتاح مركب من معرف الوكيل ورقم اليوم لجلب المهمة الصحيحة ---
-    const taskKey = `${agent._id}-${dayIndex}`;
-    const task = tasksMap[taskKey] || {};
+function createAgentItemHtml(agent, dayIndex, isToday, tasksState) {
+    // Read state directly from the centralized store's state
+    const agentTasks = tasksState.tasks[agent._id] || {};
+    const task = agentTasks[dayIndex] || { audited: false, competition_sent: false };
 
     // Visual completion requires both
     const isComplete = task.audited && task.competition_sent; 
@@ -141,24 +138,11 @@ async function renderCalendarPage() {
             throw new Error(errorResult.message || 'فشل جلب بيانات التقويم');
         }
         const { agents, tasks } = await response.json();
-        
-        // --- تشخيص: طباعة البيانات الفعلية المستلمة من الخادم ---
-        // هذا السطر سيساعدنا على رؤية شكل البيانات التي تصل من الخادم بالضبط.
-        console.log('[Calendar Page] Received data from backend. Agents:', agents, 'Tasks:', tasks);
 
-        // --- تعديل: تحويل مصفوفة المهام إلى خريطة لسهولة الوصول ---
-        const tasksMap = (tasks || []).reduce((map, task) => {
-            // --- إصلاح: استخدام مفتاح مركب لضمان حفظ حالة كل يوم على حدة ---
-            const taskDate = new Date(task.task_date);
-            const dayIndex = taskDate.getUTCDay(); // Use getUTCDay to match server timezone
-            
-            // --- إصلاح حاسم: التأكد من أن معرف الوكيل هو سلسلة نصية (string) ---
-            // هذا يضمن تطابق المفاتيح بين بيانات الوكلاء وبيانات المهام.
-            const agentIdStr = typeof task.agent_id === 'object' ? task.agent_id.toString() : task.agent_id;
-            const taskKey = `${agentIdStr}-${dayIndex}`;
-            map[taskKey] = task;
-            return map;
-        }, {});
+        // ARCHITECTURAL FIX: The store is now guaranteed to be ready.
+        // We can safely access its state.
+        const tasksState = window.taskStore.state;
+        console.log('[Calendar Page] Rendering with initial data. Agents:', agents.length, 'Tasks in Store:', Object.keys(tasksState.tasks).length);
 
         const daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
         const calendarData = daysOfWeek.map(() => []);
@@ -179,11 +163,10 @@ async function renderCalendarPage() {
             const isToday = new Date().getDay() === index;
             const dailyAgents = calendarData[index];
 
-            // --- إصلاح: حساب التقدم اليومي باستخدام المفتاح المركب الصحيح ---
             let completedTasks = 0;
             dailyAgents.forEach(agent => {
-                const taskKey = `${agent._id}-${index}`;
-                const task = tasksMap[taskKey] || {};
+                const agentTasks = tasksState.tasks[agent._id] || {};
+                const task = agentTasks[index] || {};
                 // Progress is based on audit only
                 if (task.audited) {
                     completedTasks++;
@@ -223,13 +206,13 @@ async function renderCalendarPage() {
                 return;
             }
 
-            const itemRenderer = (agent) => createAgentItemHtml(agent, dayIndex, isToday, tasksMap);
+            const itemRenderer = (agent) => createAgentItemHtml(agent, dayIndex, isToday, window.taskStore.state);
             const scroller = new VirtualScroller(contentContainer, agentsForDay, itemRenderer);
             scrollers.push({ dayIndex: dayIndex, instance: scroller, allAgents: agentsForDay });
         });
 
-        setupCalendarEventListeners(container, tasksMap, calendarData);
-        setupCalendarFilters(scrollers, calendarData);
+        setupCalendarEventListeners(container, calendarData);
+        setupCalendarFilters(scrollers, calendarData, window.taskStore.state);
 
     } catch (error) {
         console.error("Error rendering calendar page:", error);
@@ -241,7 +224,7 @@ async function renderCalendarPage() {
 }
 
 // --- NEW: Function to handle event listeners for the calendar page ---
-function setupCalendarEventListeners(container, tasksMap, calendarData) {
+function setupCalendarEventListeners(container, calendarData) {
     function updateDayProgressUI(dayIndex) {
         const column = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
         if (!column) return;
@@ -254,8 +237,8 @@ function setupCalendarEventListeners(container, tasksMap, calendarData) {
         let completedTasks = 0;
 
         agentsForDay.forEach(agent => {
-            const taskKey = `${agent._id}-${dayIndex}`;
-            const task = tasksMap[taskKey] || {};
+            const agentTasks = window.taskStore.state.tasks[agent._id] || {};
+            const task = agentTasks[dayIndex] || {};
             if (task.audited) { // Progress is based on audit only
                 completedTasks++;
             }
@@ -289,14 +272,8 @@ function setupCalendarEventListeners(container, tasksMap, calendarData) {
             const taskType = checkbox.classList.contains('audit-check') ? 'audited' : 'competition_sent';
             const status = checkbox.checked;
 
-            // Update local tasksMap for optimistic UI
-            // --- تعديل: استخدام مفتاح مركب من agentId و dayIndex لضمان حفظ حالة كل يوم على حدة ---
-            const taskKey = `${agentId.toString()}-${dayIndex}`;
-            if (!tasksMap[taskKey]) {
-                tasksMap[taskKey] = { agent_id: agentId, audited: false, competition_sent: false };
-            }
-            tasksMap[taskKey][taskType] = status;
-
+            // Dispatch the update to the central store.
+            window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, status);
             // Optimistic UI update
             const agentItem = checkbox.closest('.calendar-agent-item');
             const actionItem = checkbox.closest('.action-item');
@@ -320,18 +297,9 @@ function setupCalendarEventListeners(container, tasksMap, calendarData) {
             updateDayProgressUI(dayIndex);
 
             try {
-                // --- تعديل: حساب التاريخ الصحيح للمهمة وإرساله للخادم ---
-                const taskDate = new Date();
-                const dayDiff = dayIndex - taskDate.getDay();
-                taskDate.setDate(taskDate.getDate() + dayDiff);
-                const taskDateString = taskDate.toISOString().split('T')[0];
-
-                // --- تشخيص: طباعة البيانات التي سيتم إرسالها للخادم ---
-                const payload = { agentId, taskType, status, taskDate: taskDateString };
+                const payload = { agentId, taskType, status, dayIndex }; // Send dayIndex to backend
                 console.log('[Calendar] Sending update to backend:', payload);
-
-                // --- إصلاح: استخدام المسار الصحيح للخادم الخلفي ---
-                const response = await authedFetch('/api/calendar/tasks', {
+                const response = await authedFetch('/api/tasks', {
                     method: 'POST',
                     body: JSON.stringify(payload)
                 });
@@ -345,19 +313,14 @@ function setupCalendarEventListeners(container, tasksMap, calendarData) {
                 const statusText = status ? 'تفعيل' : 'إلغاء تفعيل';
                 const agentName = agentItem.dataset.name; // Use the original name from the dataset
                 logAgentActivity(agentId, 'TASK_UPDATE', `تم ${statusText} مهمة "${actionText}" للوكيل ${agentName}.`);
-                
-                // --- إصلاح: تحديث الخريطة المحلية بالبيانات الجديدة من الخادم ---
-                // هذا يضمن أن أي إعادة عرض للصفحة (بدون إعادة تحميل كاملة) ستستخدم البيانات الصحيحة
-                if (responseData && responseData.data) {
-                    tasksMap[taskKey] = responseData.data;
-                }
 
             } catch (error) {
                 console.error(`[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`, error);
                 showToast('فشل تحديث حالة المهمة.', 'error');
                 // Revert UI on error
                 checkbox.checked = !checkbox.checked;
-                tasksMap[taskKey][taskType] = checkbox.checked; // Revert local map as well
+                // Revert state in the store
+                window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, checkbox.checked);
                 if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
                 const isCompleteAfterRevert = auditCheck.checked && competitionCheck.checked;
                 agentItem.classList.toggle('complete', isCompleteAfterRevert);
@@ -373,7 +336,7 @@ function setupCalendarEventListeners(container, tasksMap, calendarData) {
     });
 }
 
-function setupCalendarFilters(scrollers, calendarData) {
+function setupCalendarFilters(scrollers, calendarData, tasksState) {
     const searchInput = document.getElementById('calendar-search-input');
     const clearBtn = document.getElementById('calendar-search-clear');
     const filterButtons = document.querySelectorAll('.filter-btn');

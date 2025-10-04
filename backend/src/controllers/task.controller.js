@@ -1,5 +1,6 @@
 const Task = require('../models/Task');
 const Agent = require('../models/Agent');
+const { logActivity } = require('../utils/logActivity');
 
 /**
  * Fetches all agents scheduled for today and their task statuses.
@@ -37,7 +38,7 @@ exports.getTodayTasks = async (req, res) => {
         const agentIds = agentsForToday.map(a => a._id);
         const tasks = await Task.find({
             agent_id: { $in: agentIds },
-            date: { $gte: startOfToday, $lt: endOfToday } // Find tasks within the 24-hour range of today
+            task_date: { $gte: startOfToday, $lt: endOfToday } // FIX: Use 'task_date' to match the schema
         }).lean();
 
         // 3. Combine the data
@@ -80,7 +81,7 @@ exports.getTodayTaskStats = async (req, res) => {
 
         const completed = await Task.countDocuments({
             agent_id: { $in: agentIdsForToday },
-            date: { $gte: startOfToday, $lt: endOfToday },
+            task_date: { $gte: startOfToday, $lt: endOfToday }, // FIX: Use 'task_date' to match the schema
             audited: true // FIX: Completion is based on audit only
         });
 
@@ -95,45 +96,49 @@ exports.getTodayTaskStats = async (req, res) => {
  * Creates or updates a task's status (audited or competition_sent).
  */
 exports.updateTaskStatus = async (req, res) => {
-    // --- FIX: Handle both new and legacy request formats more robustly ---
-    let { agentId, taskType, status } = req.body;
-    const userId = req.user.userId;
-
-    // Compatibility for older request format
-    // This format is sent from the calendar page
-    if (req.body.agentId && req.body.taskType && typeof req.body.status === 'boolean') {
-        agentId = req.body.agentId;
-        taskType = req.body.taskType;
-        status = req.body.status;
-    } else if (req.body.agent_id && req.body.updates) { // Legacy format from older tasks.js
-        agentId = req.body.agent_id;
-        const updateKey = Object.keys(req.body.updates)[0];
-        if (updateKey) {
-            taskType = updateKey;
-            status = req.body.updates[updateKey];
-        }
-    }
+    const { agentId, taskType, status, dayIndex } = req.body; // Use dayIndex from calendar
+    const userId = req.user._id; // FIX: Use _id from auth middleware
 
     if (!agentId || !taskType || typeof status !== 'boolean') {
         return res.status(400).json({ message: 'Missing required fields: agentId, taskType, status.' });
     }
-
     try {
-        // --- FIX: Use a date range to avoid timezone issues ---
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
+        // --- ARCHITECTURAL FIX: Robustly determine the date to update ---
+        // If dayIndex is provided (from calendar), calculate the date within the current week.
+        // Otherwise (from daily tasks page or other sources), default to today.
+        let dateToUpdate = new Date();
+        if (typeof dayIndex === 'number' && dayIndex >= 0 && dayIndex <= 6) {
+            const today = new Date();
+            const currentDayIndex = today.getDay();
+            // Calculate the difference and set the date correctly for the current week
+            dateToUpdate.setDate(today.getDate() + (dayIndex - currentDayIndex));
+        }
+        dateToUpdate.setUTCHours(0, 0, 0, 0);
 
         const update = {
             [taskType]: status,
-            [`${taskType}_by`]: userId
+            updated_by: userId // Use a single field for who updated it
         };
 
-        // When upserting, always set the date to the start of today
-        const upsertUpdate = { ...update, date: startOfToday };
+        const task = await Task.findOneAndUpdate(
+            { agent_id: agentId, task_date: dateToUpdate }, // Use the correct field name 'task_date'
+            { $set: update },
+            { new: true, upsert: true, lean: true }
+        );
 
-        const task = await Task.findOneAndUpdate({ agent_id: agentId, date: startOfToday }, { $set: upsertUpdate }, { new: true, upsert: true });
-        res.json({ message: 'Task updated successfully', task });
+        // --- FIX: Log the activity after a successful update ---
+        const agent = await Agent.findById(agentId).select('name').lean();
+        if (agent) {
+            const actionText = taskType === 'audited' ? 'التدقيق' : 'المسابقة';
+            const statusText = status ? 'تفعيل' : 'إلغاء تفعيل';
+            const description = `تم ${statusText} مهمة "${actionText}" للوكيل ${agent.name}.`;
+            await logActivity(userId, agentId, 'TASK_UPDATE', description);
+        }
+        // --- End of fix ---
+
+        res.json({ message: 'Task updated successfully', data: task });
     } catch (error) {
+        console.error('Error in updateTaskStatus:', error); // More detailed logging
         res.status(500).json({ message: 'Server error while updating task.', error: error.message });
     }
 };

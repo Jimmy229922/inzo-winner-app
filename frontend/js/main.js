@@ -216,7 +216,7 @@ async function logAgentActivity(agentId, actionType, description, metadata = {})
     try {
         await authedFetch('/api/logs', {
             method: 'POST',
-            body: JSON.stringify({ agentId, action_type: actionType, description, metadata })
+            body: JSON.stringify({ agentId: agentId, action_type: actionType, description, metadata })
         });
     } catch (error) {
         console.error('Failed to log agent activity:', error);
@@ -227,6 +227,12 @@ async function logAgentActivity(agentId, actionType, description, metadata = {})
 async function initializeApp() {
     updateStatus('connected', 'متصل وجاهز');
     showLoader(); // إظهار شاشة التحميل هنا لضمان تغطية عملية التحقق الأولية
+
+    // ARCHITECTURAL FIX: Wait for the central store to be ready before proceeding.
+    await new Promise(resolve => {
+        window.addEventListener('storeReady', resolve, { once: true });
+    });
+
     const userProfile = await fetchUserProfile();
     if (userProfile) {
         window.addEventListener('hashchange', handleRouting);

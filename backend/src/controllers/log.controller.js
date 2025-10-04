@@ -50,7 +50,7 @@ exports.createLog = async (req, res) => {
 
         const logEntry = new Log({
             user: req.user._id, // إصلاح: استخدام _id بدلاً من id لجلب هوية المستخدم
-            agent_id: agentId,
+            agent_id: agentId, // إصلاح: استخدام agentId بدلاً من agent_id
             action_type: action_type,
             description: description,
             details: metadata || {}
