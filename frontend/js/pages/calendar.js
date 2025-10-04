@@ -30,7 +30,7 @@ class VirtualScroller {
     }
 
     onScroll() {
-        requestAnimationFrame(() => this.render());
+        window.requestAnimationFrame(() => this.render());
     }
 
     render() {
@@ -53,9 +53,11 @@ class VirtualScroller {
 function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
     const taskDate = new Date();
     const dayDiff = dayIndex - taskDate.getDay();
-    taskDate.setDate(taskDate.getDate() + dayDiff);
-    // --- تعديل: استخدام _id بدلاً من id ---
-    const task = tasksMap[agent._id.toString()] || {};
+    taskDate.setDate(taskDate.getDate() + dayDiff);    
+    // --- إصلاح: استخدام مفتاح مركب من معرف الوكيل ورقم اليوم لجلب المهمة الصحيحة ---
+    const taskKey = `${agent._id}-${dayIndex}`;
+    const task = tasksMap[taskKey] || {};
+
     // Visual completion requires both
     const isComplete = task.audited && task.competition_sent; 
     const avatarHtml = agent.avatar_url
@@ -72,12 +74,14 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksMap) {
         highlightedId = ('#' + agent.agent_id).replace(regex, '<mark>$&</mark>');
     }
 
+    const completeIconHtml = isComplete ? '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
+
     return `
-        <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent._id}" data-classification="${agent.classification}" data-name="${agent.name.toLowerCase()}" data-agentid-str="${agent.agent_id}" style="cursor: pointer;">
+        <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent._id}" data-classification="${agent.classification}" data-name="${agent.name}" data-agentid-str="${agent.agent_id}" style="cursor: pointer;">
             <div class="calendar-agent-main">
                 ${avatarHtml}
                 <div class="calendar-agent-info">
-                    <span class="agent-name">${highlightedName} ${isComplete ? '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : ''}</span>
+                    <span class="agent-name">${highlightedName} ${completeIconHtml}</span>
                     <p class="calendar-agent-id" title="نسخ الرقم" data-agent-id-copy="${agent.agent_id}">${highlightedId}</p>
                 </div>
             </div>
@@ -137,11 +141,22 @@ async function renderCalendarPage() {
             throw new Error(errorResult.message || 'فشل جلب بيانات التقويم');
         }
         const { agents, tasks } = await response.json();
-        console.log('[Calendar Page] Received data from backend:', { agentCount: agents.length, taskCount: tasks.length });
+        
+        // --- تشخيص: طباعة البيانات الفعلية المستلمة من الخادم ---
+        // هذا السطر سيساعدنا على رؤية شكل البيانات التي تصل من الخادم بالضبط.
+        console.log('[Calendar Page] Received data from backend. Agents:', agents, 'Tasks:', tasks);
 
         // --- تعديل: تحويل مصفوفة المهام إلى خريطة لسهولة الوصول ---
         const tasksMap = (tasks || []).reduce((map, task) => {
-            map[task.agent_id.toString()] = task;
+            // --- إصلاح: استخدام مفتاح مركب لضمان حفظ حالة كل يوم على حدة ---
+            const taskDate = new Date(task.task_date);
+            const dayIndex = taskDate.getUTCDay(); // Use getUTCDay to match server timezone
+            
+            // --- إصلاح حاسم: التأكد من أن معرف الوكيل هو سلسلة نصية (string) ---
+            // هذا يضمن تطابق المفاتيح بين بيانات الوكلاء وبيانات المهام.
+            const agentIdStr = typeof task.agent_id === 'object' ? task.agent_id.toString() : task.agent_id;
+            const taskKey = `${agentIdStr}-${dayIndex}`;
+            map[taskKey] = task;
             return map;
         }, {});
 
@@ -164,10 +179,11 @@ async function renderCalendarPage() {
             const isToday = new Date().getDay() === index;
             const dailyAgents = calendarData[index];
 
-            // Calculate daily progress
+            // --- إصلاح: حساب التقدم اليومي باستخدام المفتاح المركب الصحيح ---
             let completedTasks = 0;
             dailyAgents.forEach(agent => {
-                const task = tasksMap[agent._id.toString()] || {};
+                const taskKey = `${agent._id}-${index}`;
+                const task = tasksMap[taskKey] || {};
                 // Progress is based on audit only
                 if (task.audited) {
                     completedTasks++;
@@ -238,7 +254,8 @@ function setupCalendarEventListeners(container, tasksMap, calendarData) {
         let completedTasks = 0;
 
         agentsForDay.forEach(agent => {
-            const task = tasksMap[agent._id.toString()] || {};
+            const taskKey = `${agent._id}-${dayIndex}`;
+            const task = tasksMap[taskKey] || {};
             if (task.audited) { // Progress is based on audit only
                 completedTasks++;
             }
@@ -273,10 +290,12 @@ function setupCalendarEventListeners(container, tasksMap, calendarData) {
             const status = checkbox.checked;
 
             // Update local tasksMap for optimistic UI
-            if (!tasksMap[agentId]) {
-                tasksMap[agentId] = { agent_id: agentId, audited: false, competition_sent: false };
+            // --- تعديل: استخدام مفتاح مركب من agentId و dayIndex لضمان حفظ حالة كل يوم على حدة ---
+            const taskKey = `${agentId.toString()}-${dayIndex}`;
+            if (!tasksMap[taskKey]) {
+                tasksMap[taskKey] = { agent_id: agentId, audited: false, competition_sent: false };
             }
-            tasksMap[agentId][taskType] = status;
+            tasksMap[taskKey][taskType] = status;
 
             // Optimistic UI update
             const agentItem = checkbox.closest('.calendar-agent-item');
@@ -286,38 +305,68 @@ function setupCalendarEventListeners(container, tasksMap, calendarData) {
             const auditCheck = agentItem.querySelector('.audit-check');
             const competitionCheck = agentItem.querySelector('.competition-check');
             // Visual completion requires both
-            const isComplete = auditCheck.checked && competitionCheck.checked; 
+            const isComplete = auditCheck.checked && competitionCheck.checked;
             agentItem.classList.toggle('complete', isComplete);
 
             // NEW: Update the checkmark icon next to the name instantly
             const nameEl = agentItem.querySelector('.agent-name');
-            const originalName = agentItem.dataset.name; // We stored the original name in the dataset
+            // Re-apply search highlight if it exists
+            const searchTerm = document.getElementById('calendar-search-input')?.value.toLowerCase().trim() || '';
+            let agentNameForDisplay = agentItem.dataset.name;
+            if (searchTerm) agentNameForDisplay = agentNameForDisplay.replace(new RegExp(searchTerm, 'gi'), '<mark>$&</mark>');
             const iconHtml = isComplete ? ' <i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
-            nameEl.innerHTML = `${originalName}${iconHtml}`;
+            nameEl.innerHTML = `${agentNameForDisplay}${iconHtml}`;
 
             updateDayProgressUI(dayIndex);
 
             try {
-                // --- تعديل: إرسال التحديث إلى الخادم الخلفي ---
-                const response = await authedFetch('/api/tasks', {
+                // --- تعديل: حساب التاريخ الصحيح للمهمة وإرساله للخادم ---
+                const taskDate = new Date();
+                const dayDiff = dayIndex - taskDate.getDay();
+                taskDate.setDate(taskDate.getDate() + dayDiff);
+                const taskDateString = taskDate.toISOString().split('T')[0];
+
+                // --- تشخيص: طباعة البيانات التي سيتم إرسالها للخادم ---
+                const payload = { agentId, taskType, status, taskDate: taskDateString };
+                console.log('[Calendar] Sending update to backend:', payload);
+
+                // --- إصلاح: استخدام المسار الصحيح للخادم الخلفي ---
+                const response = await authedFetch('/api/calendar/tasks', {
                     method: 'POST',
-                    body: JSON.stringify({ agentId, taskType, status })
+                    body: JSON.stringify(payload)
                 });
-                if (!response.ok) throw new Error('Server responded with an error.');
+
+                const responseData = await response.json();
+                console.log('[Calendar] Received response from backend:', responseData);
+                if (!response.ok) throw new Error(responseData.message || 'Server responded with an error.');
 
                 // --- Log the action ---
                 const actionText = taskType === 'audited' ? 'التدقيق' : 'المسابقة';
                 const statusText = status ? 'تفعيل' : 'إلغاء تفعيل';
-                const agentName = agentItem.dataset.name;
+                const agentName = agentItem.dataset.name; // Use the original name from the dataset
                 logAgentActivity(agentId, 'TASK_UPDATE', `تم ${statusText} مهمة "${actionText}" للوكيل ${agentName}.`);
+                
+                // --- إصلاح: تحديث الخريطة المحلية بالبيانات الجديدة من الخادم ---
+                // هذا يضمن أن أي إعادة عرض للصفحة (بدون إعادة تحميل كاملة) ستستخدم البيانات الصحيحة
+                if (responseData && responseData.data) {
+                    tasksMap[taskKey] = responseData.data;
+                }
 
             } catch (error) {
-                console.error('Error updating task from calendar:', error);
+                console.error(`[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`, error);
                 showToast('فشل تحديث حالة المهمة.', 'error');
                 // Revert UI on error
                 checkbox.checked = !checkbox.checked;
-                tasksMap[agentId][taskType] = checkbox.checked;
-                if (actionItem) actionItem.classList.toggle('done', checkbox.checked); // Revert individual item
+                tasksMap[taskKey][taskType] = checkbox.checked; // Revert local map as well
+                if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
+                const isCompleteAfterRevert = auditCheck.checked && competitionCheck.checked;
+                agentItem.classList.toggle('complete', isCompleteAfterRevert);
+                
+                let agentNameForDisplayAfterRevert = agentItem.dataset.name;
+                if (searchTerm) agentNameForDisplayAfterRevert = agentNameForDisplayAfterRevert.replace(new RegExp(searchTerm, 'gi'), '<mark>$&</mark>');
+                const iconHtmlAfterRevert = isCompleteAfterRevert ? ' <i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
+                nameEl.innerHTML = `${agentNameForDisplayAfterRevert}${iconHtmlAfterRevert}`;
+
                 updateDayProgressUI(dayIndex);
             }
         }

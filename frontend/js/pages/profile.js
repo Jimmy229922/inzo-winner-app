@@ -66,6 +66,9 @@ async function renderAgentProfilePage(agentId, options = {}) {
         if (logResponse.ok) {
             const logResult = await logResponse.json();
             var agentLogs = logResult.data || [];
+            
+            // تشخيص: طباعة السجلات التي تم جلبها في الكونسول للتأكد من وصولها
+            console.log('[Profile Page] Fetched logs for agent:', agentLogs);
         } else {
             console.error("Error fetching agent logs:", await logResponse.text());
         }
@@ -494,6 +497,8 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
     if (logTabContent) {
         if (agentLogs && agentLogs.length > 0) {
             logTabContent.innerHTML = generateActivityLogHTML(agentLogs, true); // Pass true to indicate it's for a single agent
+        } else {
+            logTabContent.innerHTML = '<h2>سجل النشاط</h2><p>لا توجد سجلات حالياً لهذا الوكيل.</p>';
         }
     }
     // This will be migrated later
@@ -786,7 +791,7 @@ function generateActivityLogHTML(logs, isAgentProfile = false) {
     };
 
     const groupedLogs = groupLogsByDate(logs);
-    let html = '<h2>سجل النشاط</h2><div class="log-timeline-v2">';
+    let html = '<h2>سجل النشاط</h2><div class="log-timeline-v2" id="agent-log-timeline">';
 
     for (const date in groupedLogs) {
         html += `
@@ -1131,7 +1136,9 @@ function displayNextRenewalDate(agent) {
         return;
     }
 
-    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.created_at);
+    // --- إصلاح: استخدام تاريخ إنشاء الوكيل كقيمة احتياطية إذا لم يكن هناك تاريخ تجديد سابق ---
+    // هذا يمنع ظهور "Invalid Date" للوكلاء الجدد.
+    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.createdAt);
     let nextRenewalDate = new Date(lastRenewal);
 
     if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);

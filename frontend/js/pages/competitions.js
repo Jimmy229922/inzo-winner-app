@@ -961,7 +961,8 @@ async function renderCompetitionCreatePage(agentId) {
                 body: JSON.stringify({
                     agentId: agent._id,
                     taskType: 'competition_sent',
-                    status: true
+                    status: true,
+                    taskDate: new Date().toISOString().split('T')[0] // إصلاح: إضافة تاريخ اليوم
                 })
             });
             if (!taskResponse.ok) {

@@ -4,30 +4,27 @@ const taskSchema = new mongoose.Schema({
     agent_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Agent',
-        required: true
+        required: true,
     },
-    date: {
+    // --- إصلاح: إضافة حقل تاريخ المهمة إلى المخطط ---
+    task_date: {
         type: Date,
-        required: true
+        required: true,
     },
     audited: {
         type: Boolean,
-        default: false
+        default: false,
     },
     competition_sent: {
         type: Boolean,
-        default: false
+        default: false,
     },
-    audited_by: {
+    updated_by: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
-    competition_sent_by: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'User',
     }
 }, {
-    timestamps: true
+    timestamps: true, // يضيف حقلي createdAt و updatedAt تلقائياً
 });
 
 module.exports = mongoose.model('Task', taskSchema);

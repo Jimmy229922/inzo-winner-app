@@ -1,6 +1,7 @@
 
 const Agent = require('../models/Agent');
 const Log = require('../models/Log'); // Import Log model
+const { logActivity } = require('../utils/logActivity');
 
 // Get all agents with pagination, search, and filtering
 exports.getAllAgents = async (req, res) => {
@@ -77,10 +78,51 @@ exports.getAllAgents = async (req, res) => {
 // Get a single agent by ID
 exports.getAgentById = async (req, res) => {
     try {
-        const agent = await Agent.findById(req.params.id);
+        let agent = await Agent.findById(req.params.id);
         if (!agent) {
             return res.status(404).json({ message: 'Agent not found' });
         }
+
+        // --- الحل: منطق التجديد التلقائي للرصيد ---
+        const now = new Date();
+        const renewalPeriod = agent.renewal_period;
+        const lastRenewal = agent.last_renewal_date || agent.createdAt;
+
+        if (renewalPeriod && renewalPeriod !== 'none') {
+            let nextRenewalDate = new Date(lastRenewal);
+
+            if (renewalPeriod === 'weekly') {
+                nextRenewalDate.setDate(nextRenewalDate.getDate() + 7);
+            } else if (renewalPeriod === 'biweekly') {
+                nextRenewalDate.setDate(nextRenewalDate.getDate() + 14);
+            } else if (renewalPeriod === 'monthly') {
+                nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 1);
+            }
+
+            // التحقق إذا كان تاريخ اليوم قد تجاوز تاريخ التجديد المستحق
+            if (now >= nextRenewalDate) {
+                // إعادة تعيين الأرصدة بناءً على مرتبة الوكيل
+                agent.remaining_balance = agent.competition_bonus;
+                agent.remaining_deposit_bonus = agent.deposit_bonus_count;
+                agent.consumed_balance = 0;
+                agent.used_deposit_bonus = 0;
+                agent.last_renewal_date = now;
+
+                // حفظ التغييرات في قاعدة البيانات
+                await agent.save();
+
+                // تسجيل هذا الإجراء في سجل الأنشطة
+                await logActivity(
+                    req.user ? req.user.id : null, // المستخدم الذي تسبب في التجديد (أو null إذا كان النظام)
+                    agent._id,
+                    'AUTO_RENEWAL',
+                    `تم تجديد رصيد الوكيل تلقائياً.`
+                );
+
+                console.log(`[Auto Renew] Balance renewed for agent: ${agent.name}`);
+            }
+        }
+        // --- نهاية الحل ---
         res.json({ data: agent });
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
