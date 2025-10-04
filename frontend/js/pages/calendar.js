@@ -55,8 +55,7 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksState) {
     const agentTasks = tasksState.tasks[agent._id] || {};
     const task = agentTasks[dayIndex] || { audited: false, competition_sent: false };
 
-    // Visual completion requires both
-    const isComplete = task.audited && task.competition_sent; 
+    const isComplete = task.audited; // Visual completion now only requires audit
     const avatarHtml = agent.avatar_url
         ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar" loading="lazy">`
         : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
@@ -211,8 +210,15 @@ async function renderCalendarPage() {
             scrollers.push({ dayIndex: dayIndex, instance: scroller, allAgents: agentsForDay });
         });
 
+        // --- FIX: Make calendarData globally available for progress UI updates ---
+        window.calendarPageData = { calendarData };
+
         setupCalendarEventListeners(container, calendarData);
         setupCalendarFilters(scrollers, calendarData, window.taskStore.state);
+
+        // --- NEW: Subscribe to store changes to keep the UI in sync ---
+        // This ensures that if a task is updated on another page (like the tasks page), this page reflects the change.
+        window.taskStore.subscribe(updateCalendarUIFromState);
 
     } catch (error) {
         console.error("Error rendering calendar page:", error);
@@ -223,32 +229,80 @@ async function renderCalendarPage() {
     }
 }
 
+/**
+ * NEW: Updates the calendar UI based on the current state from the taskStore.
+ * This function is called by the store's subscription mechanism.
+ * @param {object} state The latest state from taskStore.
+ */
+function updateCalendarUIFromState(state) {
+    const container = document.getElementById('calendar-container');
+    if (!container) return; // Only run if the calendar page is active
+
+    const allItems = container.querySelectorAll('.calendar-agent-item');
+    const updatedDayIndexes = new Set();
+
+    allItems.forEach(item => {
+        const agentId = item.dataset.agentId;
+        const dayIndex = parseInt(item.querySelector('.audit-check')?.dataset.dayIndex, 10);
+        if (isNaN(dayIndex)) return;
+
+        const taskState = state.tasks[agentId]?.[dayIndex] || { audited: false, competition_sent: false };
+
+        const auditCheck = item.querySelector('.audit-check');
+        const competitionCheck = item.querySelector('.competition-check');
+
+        // Update checkbox state without triggering a 'change' event
+        if (auditCheck) auditCheck.checked = taskState.audited;
+        if (competitionCheck) competitionCheck.checked = taskState.competition_sent;
+
+        // Update visual styles
+        auditCheck?.closest('.action-item').classList.toggle('done', taskState.audited);
+        competitionCheck?.closest('.action-item').classList.toggle('done', taskState.competition_sent);
+
+        const isComplete = taskState.audited; // Completion is based on audit only
+        item.classList.toggle('complete', isComplete);
+
+        // Update the checkmark icon next to the name
+        const nameEl = item.querySelector('.agent-name');
+        const iconHtml = isComplete ? ' <i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
+        // This is a bit tricky because of search highlighting. We'll just append/remove the icon.
+        nameEl.querySelector('.task-complete-icon')?.remove();
+        if (isComplete) nameEl.insertAdjacentHTML('beforeend', iconHtml);
+
+        updatedDayIndexes.add(dayIndex);
+    });
+
+    // Update progress bars for all affected days
+    updatedDayIndexes.forEach(dayIndex => updateDayProgressUI(dayIndex));
+}
+
+function updateDayProgressUI(dayIndex) {
+    const column = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
+    if (!column) return;
+
+    const progressBar = column.querySelector('.progress-bar');
+    const progressLabel = column.querySelector('.progress-label');
+    
+    // We need the original data to know which agents belong to this day
+    const allAgentsForDay = window.calendarPageData?.calendarData?.[dayIndex] || [];
+    const totalTasks = allAgentsForDay.length;
+    let completedTasks = 0;
+
+    allAgentsForDay.forEach(agent => {
+        const agentTasks = window.taskStore.state.tasks[agent._id] || {};
+        const task = agentTasks[dayIndex] || {};
+        if (task.audited) { // Progress is based on audit only
+            completedTasks++;
+        }
+    });
+
+    const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+    progressBar.style.width = `${progressPercent}%`;
+    progressLabel.textContent = `${completedTasks} / ${totalTasks} مكتمل`;
+}
+
 // --- NEW: Function to handle event listeners for the calendar page ---
 function setupCalendarEventListeners(container, calendarData) {
-    function updateDayProgressUI(dayIndex) {
-        const column = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
-        if (!column) return;
-
-        const progressBar = column.querySelector('.progress-bar');
-        const progressLabel = column.querySelector('.progress-label');
-        
-        const agentsForDay = calendarData[dayIndex];
-        const totalTasks = agentsForDay.length;
-        let completedTasks = 0;
-
-        agentsForDay.forEach(agent => {
-            const agentTasks = window.taskStore.state.tasks[agent._id] || {};
-            const task = agentTasks[dayIndex] || {};
-            if (task.audited) { // Progress is based on audit only
-                completedTasks++;
-            }
-        });
-
-        const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-        progressBar.style.width = `${progressPercent}%`;
-        progressLabel.textContent = `${completedTasks} / ${totalTasks} مكتمل`;
-    }
-
     // --- NEW: Event Delegation for CSP Compliance ---
     container.addEventListener('click', (e) => {
         const copyIdTrigger = e.target.closest('.calendar-agent-id[data-agent-id-copy]');
@@ -281,8 +335,7 @@ function setupCalendarEventListeners(container, calendarData) {
             
             const auditCheck = agentItem.querySelector('.audit-check');
             const competitionCheck = agentItem.querySelector('.competition-check');
-            // Visual completion requires both
-            const isComplete = auditCheck.checked && competitionCheck.checked;
+            const isComplete = auditCheck.checked; // Completion is based on audit only
             agentItem.classList.toggle('complete', isComplete);
 
             // NEW: Update the checkmark icon next to the name instantly
@@ -322,7 +375,7 @@ function setupCalendarEventListeners(container, calendarData) {
                 // Revert state in the store
                 window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, checkbox.checked);
                 if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
-                const isCompleteAfterRevert = auditCheck.checked && competitionCheck.checked;
+                const isCompleteAfterRevert = auditCheck.checked; // Completion is based on audit only
                 agentItem.classList.toggle('complete', isCompleteAfterRevert);
                 
                 let agentNameForDisplayAfterRevert = agentItem.dataset.name;

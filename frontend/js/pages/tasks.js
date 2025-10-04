@@ -24,6 +24,7 @@ async function renderTasksPage() {
     if (markAllCompleteBtn) {
         markAllCompleteBtn.addEventListener('click', handleMarkAllTasksComplete);
     }
+
 }
 
 async function renderTaskList() {
@@ -61,7 +62,7 @@ async function renderTaskList() {
     const totalAgentsToday = filteredAgents.length;
     const completedAgentsToday = filteredAgents.filter(agent => {
         const task = tasksMap[agent._id] || {};
-        return task.audited; // FIX: Completion is based on audit only
+        return task.audited; // Completion is based on audit only
     }).length;
     const overallProgress = totalAgentsToday > 0 ? (completedAgentsToday / totalAgentsToday) * 100 : 0;
 
@@ -132,8 +133,7 @@ async function renderTaskList() {
                                 : `<div class="task-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
                             const isAudited = task.audited;
                             const isCompetitionSent = task.competition_sent;
-                            // FIX: Visual completion now only requires audit
-                            const isComplete = isAudited; 
+                            const isComplete = isAudited; // Visual completion now only requires audit
                             const isHighlighted = highlightedAgentId && agent._id == highlightedAgentId;
                             const depositBonusText = (agent.remaining_deposit_bonus > 0 && agent.deposit_bonus_percentage > 0)
                                 ? `${agent.remaining_deposit_bonus} ${agent.remaining_deposit_bonus === 1 ? 'مرة' : 'مرات'} بنسبة ${agent.deposit_bonus_percentage}%`
@@ -202,40 +202,50 @@ async function renderTaskList() {
 
     const container = document.getElementById('task-list-container');
 
+    // --- FIX: Use event delegation for card header clicks ---
+    container.addEventListener('click', (e) => {
+        const cardHeader = e.target.closest('.task-card-header');
+        if (cardHeader) {
+            const agentId = cardHeader.closest('.task-card').dataset.agentId;
+            window.location.hash = `#profile/${agentId}`;
+        }
+    });
     container.addEventListener('change', async (e) => {
         if (e.target.matches('.audit-check, .competition-check')) {
             const checkbox = e.target;
             const card = checkbox.closest('.task-card');
             const agentId = checkbox.dataset.agentId;
-            
             const isAuditedCheckbox = checkbox.classList.contains('audit-check');
             const isChecked = checkbox.checked;
             
-            const updateData = {};
-            const todayStr = new Date().toISOString().split('T')[0];
+            // Disable checkbox to prevent rapid clicks
+            checkbox.disabled = true;
 
-            if (isAuditedCheckbox) {
-                updateData.audited = isChecked;
-            } else {
-                updateData.competition_sent = isChecked;
-            }
-
-            // --- تعديل: استخدام الواجهة الخلفية الجديدة لتحديث المهام ---
-            // FIX: The correct endpoint is /api/tasks. The controller is designed to handle both payload formats.
+            // The backend controller at /api/tasks is designed to handle this payload format
+            // It correctly determines the date on the server side.
+            const dayIndex = new Date().getDay(); // Get today's day index
+            const taskType = isAuditedCheckbox ? 'audited' : 'competition_sent';
+            
+            // تحديث السيرفر
             const response = await authedFetch('/api/tasks', {
                 method: 'POST',
                 body: JSON.stringify({ 
-                    agentId: agentId, 
-                    taskType: isAuditedCheckbox ? 'audited' : 'competition_sent', 
-                    status: isChecked 
+                    agentId: agentId,
+                    taskType: taskType,
+                    status: isChecked,
+                    dayIndex: dayIndex
                 })
             });
+            
+            // تحديث taskStore للتزامن مع التقويم
+            window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, isChecked);
 
             if (!response.ok) {
                 const result = await response.json();
                 console.error('Error updating agent status:', result.message);
                 showToast('فشل تحديث حالة الوكيل.', 'error');
                 checkbox.checked = !isChecked; // Revert UI on error
+                checkbox.disabled = false; // Re-enable on error
             } else {
                 // Update UI on success
                 const auditCheck = card.querySelector('.audit-check');
@@ -244,8 +254,7 @@ async function renderTaskList() {
                 auditCheck.closest('.action-item').classList.toggle('done', auditCheck.checked);
                 competitionCheck.closest('.action-item').classList.toggle('done', competitionCheck.checked);
 
-                // FIX: Visual completion now only requires audit
-                const isComplete = auditCheck.checked; 
+                const isComplete = auditCheck.checked; // Visual completion now only requires audit
                 card.classList.toggle('complete', isComplete);
 
                 // NEW: Update the checkmark icon next to the name instantly
@@ -257,14 +266,13 @@ async function renderTaskList() {
                 
                 // Update the progress counter for the group
                 const groupDetails = card.closest('.task-group');
-                updateTaskGroupState(groupDetails);
-                updateOverallProgress();
+                updateUIAfterTaskChange(card);
 
-                // --- NEW: Log the activity ---
-                const action = isAuditedCheckbox ? 'التدقيق' : 'المسابقة';
-                const status = isChecked ? 'تفعيل' : 'إلغاء تفعيل';
-                const agentName = card.dataset.originalName;
-                logAgentActivity(agentId, 'TASK_UPDATE', `تم ${status} مهمة "${action}" للوكيل ${agentName}.`);
+                // --- FIX: Update the central store only AFTER a successful backend update ---
+                const dayIndex = new Date().getUTCDay();
+                window.taskStore.updateTaskStatus(agentId, dayIndex, isAuditedCheckbox ? 'audited' : 'competition_sent', isChecked);
+
+                checkbox.disabled = false; // Re-enable after success
             }
         }
     });
@@ -380,7 +388,7 @@ function setupTaskPageInteractions() {
                     auditCheck.closest('.action-item').classList.toggle('done', auditCheck.checked);
                     competitionCheck.closest('.action-item').classList.toggle('done', competitionCheck.checked);
                     // FIX: Visual completion now only requires audit
-                    const isComplete = auditCheck.checked;
+                    const isComplete = auditCheck.checked; // Completion is based on audit only
                     card.classList.toggle('complete', isComplete);
                 });
                 updateTaskGroupState(group);
@@ -392,30 +400,88 @@ function setupTaskPageInteractions() {
     });
 }
 
+/**
+ * NEW: Updates the tasks UI based on the current state from the taskStore.
+ * This function is called by the store's subscription mechanism.
+ * @param {object} state The latest state from taskStore.
+ */
+function updateTasksUIFromState(state) {
+    const container = document.getElementById('task-list-container');
+    if (!container) return; // Only run if the tasks page is active
+
+    const allCards = container.querySelectorAll('.task-card');    const dayIndex = new Date().getUTCDay(); // --- FIX: Use getUTCDay for consistency ---
+    allCards.forEach(card => {
+        const agentId = card.dataset.agentId;
+        const taskState = state.tasks[agentId]?.[dayIndex] || { audited: false, competition_sent: false };
+
+        const auditCheck = card.querySelector('.audit-check');
+        const competitionCheck = card.querySelector('.competition-check');
+
+        // Update checkbox state without triggering a 'change' event
+        if (auditCheck) auditCheck.checked = taskState.audited;
+        if (competitionCheck) competitionCheck.checked = taskState.competition_sent;
+
+        // Update visual styles
+        auditCheck?.closest('.action-item').classList.toggle('done', taskState.audited);
+        competitionCheck?.closest('.action-item').classList.toggle('done', taskState.competition_sent);
+
+        const isComplete = taskState.audited; // Completion is based on audit only
+        card.classList.toggle('complete', isComplete);
+
+        // Update the checkmark icon next to the name
+        const nameEl = card.querySelector('.task-agent-info h3');
+        const originalName = card.dataset.originalName;
+        const iconHtml = isComplete ? ' <i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
+        if (nameEl) nameEl.innerHTML = `${originalName}${iconHtml}`;
+    });
+    
+    // --- FIX: After updating cards, also update the group state (progress and completion status) ---
+    const allGroups = container.querySelectorAll('.task-group');
+    allGroups.forEach(group => {
+        updateTaskGroupState(group);
+    });
+
+    updateOverallProgress();
+}
+
+/**
+ * NEW: Centralized function to update all relevant UI parts after a task change.
+ * This avoids making extra network requests to the backend.
+ * @param {HTMLElement} changedCard The card element that was just updated.
+ */
+function updateUIAfterTaskChange(changedCard) {
+    if (!changedCard) return;
+
+    // 1. Update the group this card belongs to
+    const groupDetails = changedCard.closest('.task-group');
+    updateTaskGroupState(groupDetails);
+
+    // 2. Update the overall progress stats at the top of the page
+    updateOverallProgress();
+}
+
 async function updateOverallProgress() {
     const overviewContainer = document.getElementById('tasks-overview');
     if (!overviewContainer) return;
     
-    // --- تعديل: استخدام الواجهة الخلفية الجديدة لجلب الإحصائيات ---
-    const response = await authedFetch('/api/tasks/stats/today');
-    if (!response.ok) {
-        console.error('Failed to fetch task stats');
-        return;
-    }
-    const { total: totalAgentsToday, completed: completedAgentsToday } = await response.json();
-
-    const overallProgress = totalAgentsToday > 0 ? (completedAgentsToday / totalAgentsToday) * 100 : 0;
+    // --- FIX: Calculate stats from the DOM to avoid network requests ---
+    const allCards = document.querySelectorAll('#task-list-container .task-card');
+    const total = allCards.length;
+    const completed = document.querySelectorAll('#task-list-container .task-card.complete').length;
+    const overallProgress = total > 0 ? (completed / total) * 100 : 0;
 
     const donutChart = overviewContainer.querySelector('.progress-donut-chart');
     const totalEl = overviewContainer.querySelector('[data-stat="total"]');
     const completedEl = overviewContainer.querySelector('[data-stat="completed"]');
     const pendingEl = overviewContainer.querySelector('[data-stat="pending"]');
-
-    if (donutChart) donutChart.style.setProperty('--p', overallProgress);
-    if (donutChart) donutChart.querySelector('span').textContent = `${Math.round(overallProgress)}%`;
-    if (totalEl) totalEl.textContent = totalAgentsToday;
-    if (completedEl) completedEl.textContent = completedAgentsToday;
-    if (pendingEl) pendingEl.textContent = totalAgentsToday - completedAgentsToday;
+    
+    if (donutChart) {
+        donutChart.style.setProperty('--p', overallProgress);
+        donutChart.querySelector('span').textContent = `${Math.round(overallProgress)}%`;
+    }
+    if (totalEl) totalEl.textContent = total;
+    if (completedEl) completedEl.textContent = completed;
+    if (pendingEl) pendingEl.textContent = total - completed;
 }
 
 function updateTaskGroupState(groupDetailsElement) {

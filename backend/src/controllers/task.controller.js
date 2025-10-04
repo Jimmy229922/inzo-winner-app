@@ -8,15 +8,15 @@ const { logActivity } = require('../utils/logActivity');
 exports.getTodayTasks = async (req, res) => {
     try {
         // --- FIX: Use a date range to avoid timezone issues ---
-        // Get the start of today (midnight) in the server's timezone
+        // --- FIX: Revert to using server's local time for consistency with other parts of the app ---
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
-        // Get the end of today
+
         const endOfToday = new Date(startOfToday);
         endOfToday.setDate(startOfToday.getDate() + 1);
 
         // 1. Find all agents who are scheduled for today
-        const dayOfWeekIndex = startOfToday.getDay();
+        const dayOfWeekIndex = startOfToday.getDay(); // Use getDay() for server's local timezone day index
         // Ensure we don't fetch on Saturday (day 6)
         if (dayOfWeekIndex === 6) {
             return res.json({ agents: [], tasksMap: {} });
@@ -38,7 +38,7 @@ exports.getTodayTasks = async (req, res) => {
         const agentIds = agentsForToday.map(a => a._id);
         const tasks = await Task.find({
             agent_id: { $in: agentIds },
-            task_date: { $gte: startOfToday, $lt: endOfToday } // FIX: Use 'task_date' to match the schema
+            task_date: { $gte: startOfToday, $lt: endOfToday } // FIX: Query using local timezone date range
         }).lean();
 
         // 3. Combine the data
@@ -96,24 +96,31 @@ exports.getTodayTaskStats = async (req, res) => {
  * Creates or updates a task's status (audited or competition_sent).
  */
 exports.updateTaskStatus = async (req, res) => {
-    const { agentId, taskType, status, dayIndex } = req.body; // Use dayIndex from calendar
-    const userId = req.user._id; // FIX: Use _id from auth middleware
+    const { agentId, taskType, status, dayIndex } = req.body;
+    const userId = req.user._id;
 
     if (!agentId || !taskType || typeof status !== 'boolean') {
         return res.status(400).json({ message: 'Missing required fields: agentId, taskType, status.' });
     }
+
     try {
-        // --- ARCHITECTURAL FIX: Robustly determine the date to update ---
-        // If dayIndex is provided (from calendar), calculate the date within the current week.
-        // Otherwise (from daily tasks page or other sources), default to today.
-        let dateToUpdate = new Date();
-        if (typeof dayIndex === 'number' && dayIndex >= 0 && dayIndex <= 6) {
-            const today = new Date();
-            const currentDayIndex = today.getDay();
-            // Calculate the difference and set the date correctly for the current week
-            dateToUpdate.setDate(today.getDate() + (dayIndex - currentDayIndex));
+        // حساب التاريخ المطلوب تحديثه
+        const now = new Date();
+        let dateToUpdate;
+
+        if (typeof dayIndex === 'number' && dayIndex >= 0 && dayIndex < 7) {
+            // إذا كان dayIndex محدد (من التقويم)، نحسب التاريخ في الأسبوع الحالي
+            const currentDay = now.getDay();
+            const diff = dayIndex - currentDay;
+            dateToUpdate = new Date(now);
+            dateToUpdate.setDate(now.getDate() + diff);
+        } else {
+            // إذا لم يكن dayIndex محدد (من صفحة المهام اليومية)، نستخدم تاريخ اليوم
+            dateToUpdate = now;
         }
-        dateToUpdate.setUTCHours(0, 0, 0, 0);
+
+        // تعيين الوقت إلى بداية اليوم
+        dateToUpdate.setHours(0, 0, 0, 0);
 
         const update = {
             [taskType]: status,

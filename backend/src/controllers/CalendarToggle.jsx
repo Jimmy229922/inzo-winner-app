@@ -29,11 +29,3 @@ const CalendarToggle = ({ agentId, dayIndex, taskType }) => {
 };
 
 export default React.memo(CalendarToggle);
-
-const express = require('express');
-const path = require('path');
-const app = express();
-
-app.use(express.static(path.join(__dirname, 'frontend')));
-
-// ...existing code...
