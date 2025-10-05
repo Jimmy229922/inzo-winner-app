@@ -15,7 +15,6 @@ async function getSuperAdmin() {
 module.exports = async (req, res, next) => {
     // --- DEVELOPMENT ONLY: Bypass authentication for ease of development ---
     if (process.env.NODE_ENV === 'development') {
-        console.log('[AUTH] Bypassing token check. Granting Super Admin access.');
         const admin = await getSuperAdmin();
         if (!admin) {
             return res.status(500).json({ message: 'Super Admin account not found. Please run setup.' });

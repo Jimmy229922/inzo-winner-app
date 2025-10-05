@@ -1,10 +1,9 @@
-
 require('dotenv').config();
 const app = require('./src/app');
 const connectDB = require('./src/config/db');
 const User = require('./src/models/User');
 const bcrypt = require('bcryptjs');
-const { startScheduler } = require('./src/utils/scheduler'); // Import the scheduler
+const { startScheduler } = require('./src/utils/scheduler');
 
 const port = process.env.PORT || 30001;
 
@@ -32,7 +31,7 @@ async function createSuperAdmin() {
             role: 'super_admin',
             permissions: {
                 agents: { view_financials: true, edit_profile: true, edit_financials: true, can_view_competitions_tab: true, can_renew_all_balances: true },
-                competitions: { manage_comps: 'full', manage_templates: 'full', can_create: true },
+                competitions: { manage_comps: 'full', manage_templates: 'full', can_create: true }
             }
         });
         await superAdmin.save();
@@ -46,13 +45,12 @@ async function createSuperAdmin() {
 async function startServer() {
     await connectDB();
     await createSuperAdmin();
+
+    startScheduler();
+
     app.listen(port, () => {
         console.log(`Backend server is running at http://localhost:${port}`);
     });
-
-    // Start the background scheduler to handle automated tasks
-    startScheduler();
 }
 
 startServer();
-        

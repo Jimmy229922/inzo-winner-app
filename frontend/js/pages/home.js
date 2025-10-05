@@ -236,8 +236,17 @@ function updateHomePageUI(stats) {
     // 4. Render Agent Quick Stats
     const agentStatsContainer = document.getElementById('agent-quick-stats');
     if (agentStatsContainer) {
-        const classificationCounts = agentsByClassification || {}; // FIX: The backend now sends an object of counts directly.
-        agentStatsContainer.innerHTML = `...`; // The rest of the function is correct
+        const classificationCounts = agentsByClassification || {};
+        agentStatsContainer.innerHTML = `
+            <div class="quick-stat-item">
+                <div class="stat-info">
+                    <h4>وكلاء جدد هذا الشهر</h4>
+                    <p>${formatNumber(newAgentsThisMonth)}</p>
+                </div>
+                <div class="stat-icon"><i class="fas fa-user-plus"></i></div>
+            </div>
+            <div class="classification-chart-container"><canvas id="classification-chart"></canvas></div>
+        `;
         
         // Render the new classification chart AFTER the container is in the DOM
         renderClassificationChart(classificationCounts);
@@ -355,7 +364,7 @@ function renderCompetitionsChart(competitions) {
     // Group competitions by hour
     const hourlyData = Array(24).fill(0);
     competitions.forEach(comp => {
-        const hour = new Date(comp.created_at).getHours();
+        const hour = new Date(comp.createdAt).getHours();
         hourlyData[hour]++;
     });
 

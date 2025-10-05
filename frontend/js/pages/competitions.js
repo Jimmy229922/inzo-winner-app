@@ -1086,6 +1086,36 @@ async function renderArchivedCompetitionsPage() {
         applyFiltersAndSort();
     });
 
+    // --- NEW: Add event listener for delete buttons ---
+    const container = document.getElementById('archived-competitions-list-container');
+    container.addEventListener('click', async (e) => {
+        const deleteBtn = e.target.closest('.delete-competition-btn');
+        if (deleteBtn) {
+            const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+            const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
+            const compsPerm = currentUserProfile?.permissions?.competitions?.manage_comps || 'none';
+            const canEdit = isAdmin || compsPerm === 'full';
+
+            if (!canEdit) {
+                showToast('ليس لديك صلاحية لحذف المسابقات.', 'error');
+                return;
+            }
+
+            const id = deleteBtn.dataset.id;
+            showConfirmationModal(
+                'هل أنت متأكد من حذف هذه المسابقة نهائياً؟',
+                async () => {
+                    const response = await authedFetch(`/api/competitions/${id}`, { method: 'DELETE' });
+                    if (!response.ok) {
+                        showToast('فشل حذف المسابقة.', 'error');
+                    } else {
+                        showToast('تم حذف المسابقة بنجاح.', 'success');
+                        await loadArchivedCompetitions(); // Refresh the list
+                    }
+                }, { title: 'تأكيد الحذف', confirmText: 'حذف', confirmClass: 'btn-danger' });
+        }
+    });
+
     await loadArchivedCompetitions();
 }
 
