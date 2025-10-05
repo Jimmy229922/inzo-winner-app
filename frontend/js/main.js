@@ -140,8 +140,8 @@ async function handleRouting() {
         '#competitions': { func: renderCompetitionsPage, nav: 'nav-manage-competitions' },
         '#archived-competitions': { func: renderCompetitionsPage, nav: 'nav-archived-competitions' },
         '#competition-templates': { func: renderCompetitionTemplatesPage, nav: 'nav-competition-templates' },
-    '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
-        '#users': { func: renderUsersPage, nav: 'nav-users', adminOnly: true }, // NEW: Users page, will be moved
+        '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
+        '#users': { func: renderUsersPage, nav: 'nav-users', adminOnly: true },
         '#profile-settings': { func: renderProfileSettingsPage, nav: null }, // NEW: Profile settings page
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },'#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' }
     };
@@ -216,7 +216,8 @@ async function logAgentActivity(agentId, actionType, description, metadata = {})
     try {
         await authedFetch('/api/logs', {
             method: 'POST',
-            body: JSON.stringify({ agentId: agentId, action_type: actionType, description, metadata })
+            // FIX: The backend expects 'agent_id', not 'agentId'.
+            body: JSON.stringify({ agent_id: agentId, action_type: actionType, description, metadata })
         });
     } catch (error) {
         console.error('Failed to log agent activity:', error);

@@ -19,8 +19,10 @@ function calculateEndsAtUTC(duration, tzOffsetHours = 3) {
     const durationDays = durationMap[duration];
     if (durationDays === undefined) return null;
 
-    // Winner selection starts at the beginning of the day *after* the competition duration ends.
-    const winnerLocalStartMs = localDayStartMs + (1 + durationDays) * msDay;
+    // The competition ends at the start of the day *after* the duration ends.
+    // The winner selection date is the day *after* the competition's actual end date.
+    // So, winner_selection_date = creation_date + duration_days + 1.
+    const winnerLocalStartMs = localDayStartMs + (durationDays + 1) * msDay;
     const winnerUtcMs = winnerLocalStartMs - tzMs;
     return new Date(winnerUtcMs).toISOString();
 }

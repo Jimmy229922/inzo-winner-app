@@ -345,6 +345,7 @@ async function handleBulkRenewBalances() {
     showConfirmationModal(
         'هل أنت متأكد من رغبتك في تجديد أرصدة جميع الوكلاء؟<br><small>سيتم تحويل <strong>الرصيد المستهلك</strong> إلى <strong>الرصيد المتبقي</strong> لكل وكيل.</small>',
         async () => {
+            console.log('[Bulk Renew] Starting bulk renewal process from frontend.');
             // Show a progress modal
             const progressModalOverlay = showProgressModal(
                 'تجديد الأرصدة الجماعي',
@@ -366,10 +367,12 @@ async function handleBulkRenewBalances() {
             try {
                 statusText.textContent = 'جاري معالجة طلب التجديد...';
                 progressBar.style.width = '50%';
+                console.log('[Bulk Renew] Sending request to /api/agents/bulk-renew');
 
                 const response = await authedFetch('/api/agents/bulk-renew', { method: 'POST' });
                 const result = await response.json();
 
+                console.log('[Bulk Renew] Received response from backend:', result);
                 if (!response.ok) {
                     throw new Error(result.message || 'فشل تجديد الأرصدة.');
                 }
@@ -379,13 +382,20 @@ async function handleBulkRenewBalances() {
                 updateIcon.className = 'fas fa-check-circle update-icon';
                 progressBar.style.backgroundColor = 'var(--success-color)';
 
+                console.log(`[Bulk Renew] Success. ${result.processedCount} agents renewed.`);
                 await logAgentActivity(null, 'BULK_RENEWAL', `تم تجديد أرصدة ${result.processedCount} وكيل.`);
                 await fetchAndDisplayAgents(1); // Refresh the agents list
 
             } catch (error) {
+                console.error('[Bulk Renew] Frontend error during renewal:', error);
                 statusText.innerHTML = `فشل التجديد.<br><small>${error.message}</small>`;
                 updateIcon.className = 'fas fa-times-circle update-icon';
                 progressBar.style.backgroundColor = 'var(--danger-color)';
+            } finally {
+                // --- NEW: Automatically close the progress modal after 4 seconds ---
+                setTimeout(() => {
+                    if (progressModalOverlay) progressModalOverlay.remove();
+                }, 4000);
             }
         }, { title: 'تأكيد تجديد الأرصدة', confirmText: 'نعم، جدد الآن', confirmClass: 'btn-renewal' }
     );

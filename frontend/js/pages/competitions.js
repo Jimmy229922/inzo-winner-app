@@ -557,10 +557,6 @@ async function renderCompetitionCreatePage(agentId) {
                     <label for="override-correct-answer">الإجابة الصحيحة للمسابقة</label>
                     <input type="text" id="override-correct-answer" placeholder="اكتب الإجابة الصحيحة هنا" required>
                 </div>
-                <div class="form-group" style="margin-top: 15px; background-color: var(--bg-color); padding: 10px; border-radius: 6px;">
-                    <label for="winner-selection-date-preview" style="color: var(--primary-color);"><i class="fas fa-calendar-alt"></i> تاريخ اختيار الفائز المتوقع</label>
-                    <p id="winner-selection-date-preview" class="summary-preview-text"></p>
-                </div>
                 <div class="form-group" style="margin-top: 15px; background-color: var(--bg-color); padding: 10px; border-radius: 6px; display: none;">
                     <label style="color: var(--primary-color);"><i class="fas fa-key"></i> الإجابة الصحيحة</label>
                     <p id="correct-answer-display" class="summary-preview-text" style="color: var(--text-color);"></p>
@@ -568,6 +564,12 @@ async function renderCompetitionCreatePage(agentId) {
                 <div id="validation-messages" class="validation-messages" style="margin-top: 20px;"></div>
             </div>
 
+            <!-- Preview Column -->
+            <div class="preview-v3 card-style-container">
+                <div class="form-group" style="margin-top: 15px; background-color: var(--bg-color); padding: 10px; border-radius: 6px;">
+                    <label for="winner-selection-date-preview" style="color: var(--primary-color);"><i class="fas fa-calendar-alt"></i> تاريخ اختيار الفائز المتوقع</label>
+                    <p id="winner-selection-date-preview" class="summary-preview-text"></p>
+                </div>
             <!-- Preview Column -->
             <div class="preview-v3 card-style-container">
                 <form id="competition-form">
@@ -779,7 +781,7 @@ async function renderCompetitionCreatePage(agentId) {
             const localToday = new Date();
             // Set time to 00:00:00 to get the start of the local day
             localToday.setHours(0, 0, 0, 0);
-            // Add the duration + 1 day to find the start of the winner selection day
+            // The winner selection day is the day *after* the duration ends. So, duration + 1.
             localToday.setDate(localToday.getDate() + daysToAdd + 1);
             
             winnerDatePreview.innerHTML = `
@@ -1763,4 +1765,54 @@ function renderEditTemplateModal(template, onSaveCallback) {
             if (onSaveCallback) onSaveCallback();
         }
     });
+}
+
+// New function to display competition details in a dedicated section
+function displayCompetitionDetails(competition) {
+    const detailsContainer = document.getElementById('competition-details-container');
+    if (!detailsContainer) return;
+
+    // Basic info
+    detailsContainer.innerHTML = `
+        <h2>تفاصيل المسابقة: ${competition.name}</h2>
+        <p><strong>الوصف:</strong> ${competition.description || 'لا يوجد وصف متاح.'}</p>
+        <p><strong>الحالة:</strong> ${competition.is_active ? 'نشطة' : 'غير نشطة'}</p>
+        <p><strong>تاريخ البدء:</strong> ${new Date(competition.starts_at).toLocaleString('ar-EG')}</p>
+        <p><strong>تاريخ الانتهاء:</strong> ${new Date(competition.ends_at).toLocaleString('ar-EG')}</p>
+    `;
+
+    // Agent info
+    if (competition.agents) {
+        const agent = competition.agents;
+        detailsContainer.innerHTML += `
+            <div class="agent-info-card">
+                <h3>بيانات الوكيل</h3>
+                <p><strong>الاسم:</strong> ${agent.name}</p>
+                <p><strong>التصنيف:</strong> ${agent.classification || 'غير محدد'}</p>
+                <p><strong>الرصيد المتبقي:</strong> $${agent.remaining_balance || 0}</p>
+            </div>
+        `;
+    }
+
+    // --- FIX: Display the actual winner selection request date from `processed_at` ---
+    const winnerDateElement = document.querySelector('.competition-winner-date');
+    if (winnerDateElement) {
+        let winnerDateHtml = '<strong>تاريخ إرسال طلب اختيار الفائز:</strong> ';
+        if (competition.processed_at) {
+            const formattedWinnerDate = new Intl.DateTimeFormat('ar-EG', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            }).format(new Date(competition.processed_at));
+            winnerDateHtml += `<span class="date-value">${formattedWinnerDate}</span>`;
+        } else {
+            winnerDateHtml += `<span class="date-value" style="color: var(--warning-color);">لم يتم الإرسال بعد</span>`;
+        }
+        winnerDateElement.innerHTML = winnerDateHtml;
+    }
+    
+    console.log('Competition Processed At:', competition.processed_at);
+    
+    // ...existing code...
 }

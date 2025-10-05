@@ -58,7 +58,9 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     try {
         const compResponse = await authedFetch(`/api/competitions?agentId=${agentId}&limit=100&sort=newest`); // Fetch up to 100 competitions for the agent
-        const logResponse = await authedFetch(`/api/logs?agent_id=${agentId}&limit=50`); // Fetch latest 50 logs for the agent
+        const logUrl = `/api/logs?agent_id=${agentId}&limit=50&populate=user`;
+        console.log(`[Profile Page] Fetching logs with URL: ${logUrl}`);
+        const logResponse = await authedFetch(logUrl); // Fetch latest 50 logs for the agent
 
         if (compResponse.ok) {
             const compResult = await compResponse.json();
@@ -66,6 +68,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
         }
         if (logResponse.ok) {
             const logResult = await logResponse.json();
+            console.log('[Profile Page] Received raw log response from backend:', logResult);
             var agentLogs = logResult.data || [];
             
             // تشخيص: طباعة السجلات التي تم جلبها في الكونسول للتأكد من وصولها
@@ -573,7 +576,11 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                             <div class="competition-details-grid">
                                 <p class="competition-detail-item"><i class="fas fa-users"></i><strong>عدد الفائزين:</strong> ${comp.winners_count || 0}</p>
                                 <p class="competition-detail-item"><i class="fas fa-dollar-sign"></i><strong>الجائزة للفائز:</strong> ${comp.prize_per_winner ? comp.prize_per_winner.toFixed(2) : '0.00'}</p>
-                                <p class="competition-detail-item"><i class="fas fa-calendar-alt"></i><strong>تاريخ الاختيار:</strong> ${endDate ? endDate.toLocaleDateString('ar-EG') : 'غير محدد'}</p>
+                                <!-- NEW: Display both expected and actual winner selection dates -->
+                                <p class="competition-detail-item"><i class="fas fa-calendar-alt"></i><strong>تاريخ اختيار الفائز:</strong> ${comp.ends_at ? new Date(comp.ends_at).toLocaleDateString('ar-EG', { dateStyle: 'medium' }) : '<em>غير محدد</em>'}</p>
+                                ${comp.processed_at ? `
+                                    <p class="competition-detail-item"><i class="fas fa-calendar-check"></i><strong>تاريخ المعالجة الفعلي:</strong> ${new Date(comp.processed_at).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                                ` : ''}
                                 <p class="competition-detail-item"><i class="fas fa-eye"></i><strong>المشاهدات:</strong> ${formatNumber(comp.views_count)}</p>
                                 <p class="competition-detail-item"><i class="fas fa-heart"></i><strong>التفاعلات:</strong> ${formatNumber(comp.reactions_count)}</p>
                                 <p class="competition-detail-item"><i class="fas fa-user-check"></i><strong>المشاركات:</strong> ${formatNumber(comp.participants_count)}</p>
@@ -730,11 +737,7 @@ function startCompetitionCountdowns() {
             }
 
             const endDate = new Date(endDateStr);
-            // FIX V2: Get current time and end time in UTC milliseconds to ensure correct calculation
-            const now = new Date();
-            const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds());
-            const endUTC = endDate.getTime();
-            const diffTime = endUTC - nowUTC;
+            const diffTime = endDate.getTime() - Date.now();
 
             if (diffTime <= 0) {
                 el.innerHTML = `<i class="fas fa-hourglass-end"></i> في انتظار المعالجة...`;
@@ -900,8 +903,12 @@ function renderDetailsView(agent) {
             ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week')}
             ${createFieldHTML('مدة المسابقة', agent.competition_duration, 'competition_duration')}
             ${createFieldHTML('تاريخ آخر مسابقة', agent.last_competition_date, 'last_competition_date')}
-            ${createFieldHTML('تاريخ اختيار الفائز', agent.winner_selection_date, 'winner_selection_date')}
         </div>
+        ${isSuperAdmin ? `
+            <div class="details-actions" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                <button id="trigger-renewal-test-btn" class="btn-danger"><i class="fas fa-history"></i> تجربة التجديد (20 ثانية)</button>
+            </div>
+        ` : ''}
     `;
 
 
@@ -919,6 +926,31 @@ function renderDetailsView(agent) {
             renderInlineEditor(group, agent);
         }
     };
+
+    // --- NEW: Add listener for the test renewal button ---
+    const testRenewalBtn = document.getElementById('trigger-renewal-test-btn');
+    if (testRenewalBtn) {
+        testRenewalBtn.addEventListener('click', async () => {
+            testRenewalBtn.disabled = true;
+            testRenewalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> سيتم التجديد بعد 20 ثانية...';
+
+            setTimeout(async () => {
+                try {
+                    const response = await authedFetch(`/api/agents/${agent._id}/renew`, { method: 'POST' });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.message || 'فشل تجديد رصيد الوكيل.');
+                    
+                    showToast(`تم تجديد رصيد الوكيل ${agent.name} بنجاح.`, 'success');
+                    renderAgentProfilePage(agent._id, { activeTab: 'details' }); // Refresh to see changes
+                } catch (error) {
+                    showToast(`خطأ: ${error.message}`, 'error');
+                    testRenewalBtn.disabled = false;
+                    testRenewalBtn.innerHTML = '<i class="fas fa-history"></i> تجربة التجديد (20 ثانية)';
+                }
+            }, 20000); // 20 seconds delay
+        });
+    }
+
     container.addEventListener('click', eventHandler);
 }
 
@@ -1147,7 +1179,7 @@ function displayNextRenewalDate(agent) {
 
     // --- إصلاح: استخدام تاريخ إنشاء الوكيل كقيمة احتياطية إذا لم يكن هناك تاريخ تجديد سابق ---
     // هذا يمنع ظهور "Invalid Date" للوكلاء الجدد.
-    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.created_at);
+    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.createdAt);
     let nextRenewalDate = new Date(lastRenewal);
 
     if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
@@ -1355,497 +1387,6 @@ async function renderAgentAnalytics(agent, container, dateRange = 'all') {
             },
             plugins: { legend: { position: 'top' } },
             interaction: { mode: 'index', intersect: false }
-        }
-    });
-}
-
-function renderEditProfileHeader(agent, parentElement) {
-    const headerV2 = parentElement.querySelector('.profile-header-v2');
-    if (!headerV2) return;
-
-    const originalHeaderHTML = headerV2.innerHTML;
-
-    headerV2.innerHTML = `
-        <form id="edit-profile-form" class="profile-header-edit-form">
-            <div class="profile-avatar-edit">
-                <img src="${agent.avatar_url || 'https://via.placeholder.com/80/8A2BE2/FFFFFF?text=inzo'}" alt="Avatar" id="avatar-preview">
-                <label for="avatar-upload" class="btn-secondary" style="cursor: pointer;">
-                    <i class="fas fa-upload"></i> تغيير الصورة
-                </label>
-                <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
-            </div>
-            <div style="flex-grow: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                <div class="form-group"><label for="edit-agent-name">اسم الوكيل</label><input type="text" id="edit-agent-name" value="${agent.name}" required></div>
-                <div class="form-group"><label for="edit-agent-id">رقم الوكالة</label><input type="text" id="edit-agent-id" value="${agent.agent_id}" required></div>
-                <div class="form-group">
-                    <label for="edit-agent-classification">التصنيف</label>
-                    <select id="edit-agent-classification">
-                        <option value="R" ${agent.classification === 'R' ? 'selected' : ''}>R</option>
-                        <option value="A" ${agent.classification === 'A' ? 'selected' : ''}>A</option>
-                        <option value="B" ${agent.classification === 'B' ? 'selected' : ''}>B</option>
-                        <option value="C" ${agent.classification === 'C' ? 'selected' : ''}>C</option>
-                    </select>
-                </div>
-                <div class="form-group"><label for="telegram-channel-url">رابط قناة التلجرام</label><input type="text" id="telegram-channel-url" value="${agent.telegram_channel_url || ''}"></div>
-                <div class="form-group"><label for="telegram-group-url">رابط جروب التلجرام</label><input type="text" id="telegram-group-url" value="${agent.telegram_group_url || ''}"></div>
-                <div class="form-group"><label for="edit-telegram-chat-id">معرف الدردشة (Chat ID)</label><input type="text" id="edit-telegram-chat-id" value="${agent.telegram_chat_id || ''}" placeholder="مثال: -100123456789"></div>
-                <div class="form-group"><label for="edit-telegram-group-name">اسم مجموعة التلجرام</label><input type="text" id="edit-telegram-group-name" value="${agent.telegram_group_name || ''}"></div>
-                <div class="form-group" style="grid-column: 1 / -1;">
-                    <label style="margin-bottom: 10px;">أيام التدقيق</label>
-                    <div class="days-selector-v2">
-                        ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => `
-                            <div class="day-toggle-wrapper">
-                                <input type="checkbox" id="day-edit-${index}" value="${index}" class="day-toggle-input" ${(agent.audit_days || []).includes(index) ? 'checked' : ''}>
-                                <label for="day-edit-${index}" class="day-toggle-btn">${day}</label>
-                            </div>`).join('')}
-                    </div>
-                </div>
-            </div>
-            <div class="form-actions" style="align-self: flex-start;">
-                <button type="submit" id="save-profile-btn" class="btn-primary"><i class="fas fa-save"></i> حفظ</button>
-                <button type="button" id="cancel-edit-btn" class="btn-secondary">إلغاء</button>
-            </div>
-        </form>
-    `;
-
-    // Preview avatar URL change
-    const avatarUploadInput = headerV2.querySelector('#avatar-upload');
-    const avatarPreview = headerV2.querySelector('#avatar-preview');
-    avatarUploadInput.addEventListener('change', () => {
-        const file = avatarUploadInput.files[0];
-        if (file) {
-            avatarPreview.src = URL.createObjectURL(file);
-        }
-    });
-
-    headerV2.querySelector('#cancel-edit-btn').addEventListener('click', () => {
-        headerV2.innerHTML = originalHeaderHTML;
-        // Re-attach the original edit button listener
-        headerV2.querySelector('#edit-profile-btn').addEventListener('click', () => {
-            renderEditProfileHeader(agent, parentElement);
-        });
-    });
-
-    headerV2.querySelector('#edit-profile-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const saveBtn = headerV2.querySelector('#save-profile-btn');
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
-
-        const newAgentId = headerV2.querySelector('#edit-agent-id').value; // This will be migrated later
-
-        // NEW: Check for agent_id uniqueness on update
-        if (newAgentId !== agent.agent_id) { // This will be migrated later
-            const response = await authedFetch(`/api/agents/check-uniqueness?agent_id=${newAgentId}`);
-            const { exists, error: checkError } = await response.json();
-
-            if (checkError) {
-                console.error('Error checking for existing agent on update:', checkError);
-                showToast('حدث خطأ أثناء التحقق من رقم الوكالة.', 'error');
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ';
-                return;
-            }
-
-            if (exists) {
-                showToast('رقم الوكالة هذا مستخدم بالفعل لوكيل آخر.', 'error');
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ';
-                return;
-            }
-        }
-
-        const avatarFile = headerV2.querySelector('#avatar-upload').files[0];
-        let newAvatarUrl = agent.avatar_url;
-
-        // --- STEP 5: MIGRATION - Temporarily disable avatar upload ---
-        // This will require a separate endpoint on the backend that handles file uploads
-        // (e.g., using multer) and saves them to a folder or a cloud service like S3.
-        // if (avatarFile) {
-        //     const filePath = `${agent.id}-${Date.now()}`;
-        //     const { data: uploadData, error: uploadError } = await supabase.storage
-        //         .from('avatars')
-        //         .upload(filePath, avatarFile);
-
-        //     if (uploadError) {
-        //         showToast('فشل رفع الصورة. يرجى المحاولة مرة أخرى.', 'error');
-        //         console.error('Avatar upload error:', uploadError);
-        //         saveBtn.disabled = false;
-        //         saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ';
-        //         return; // Stop the process
-        //     }
-        //     const { data: urlData } = supabase.storage
-        //         .from('avatars')
-        //         .getPublicUrl(filePath);
-        //     newAvatarUrl = urlData.publicUrl;
-        // }
-
-        const selectedDays = Array.from(headerV2.querySelectorAll('.days-selector-v2 input:checked')).map(input => parseInt(input.value, 10));
-
-        // 3. Prepare the data to update in the 'agents' table
-        const updatedData = {
-            name: headerV2.querySelector('#edit-agent-name').value,
-            agent_id: newAgentId,
-            classification: headerV2.querySelector('#edit-agent-classification').value,
-            audit_days: selectedDays,
-            telegram_channel_url: headerV2.querySelector('#telegram-channel-url').value || null,
-            telegram_group_url: headerV2.querySelector('#telegram-group-url').value || null,
-            telegram_chat_id: headerV2.querySelector('#edit-telegram-chat-id').value || null,
-            telegram_group_name: headerV2.querySelector('#edit-telegram-group-name').value || null,
-            avatar_url: newAvatarUrl,
-        };
-
-        // --- STEP 5: MIGRATION TO CUSTOM BACKEND ---
-        try {
-            const response = await authedFetch(`/api/agents/${agent._id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updatedData)
-            });
-            if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.message || 'فشل تحديث بيانات الوكيل.');
-            }
-        } catch (error) {
-            console.error('Error updating agent:', error);
-            showToast(`فشل تحديث بيانات الوكيل: ${error.message}`, 'error');
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ'; // Re-enable button on error
-            return; // Stop execution on failure
-        }
-
-        // This code now runs only if the try block succeeded
-        // Log the activity
-        const changedKeys = Object.keys(updatedData)
-            .filter(key => JSON.stringify(updatedData[key]) !== JSON.stringify(agent[key]));
-
-        if (changedKeys.length > 0) {
-            const fieldLabels = {
-                name: 'الاسم',
-                agent_id: 'رقم الوكالة',
-                classification: 'التصنيف',
-                audit_days: 'أيام التدقيق',
-                telegram_channel_url: 'رابط قناة التلجرام',
-                telegram_group_url: 'رابط جروب التلجرام',
-                telegram_chat_id: 'معرف الدردشة',
-                telegram_group_name: 'اسم مجموعة التلجرام',
-                avatar_url: 'الصورة الشخصية'
-            };
-            const changeDescriptions = changedKeys.map(key => {
-                const label = fieldLabels[key] || key;
-                const oldValue = agent[key] || 'فارغ';
-                const newValue = updatedData[key] || 'فارغ';
-                // For arrays like audit_days, make them readable
-                const oldDisplay = Array.isArray(oldValue) ? oldValue.join(', ') : oldValue;
-                const newDisplay = Array.isArray(newValue) ? newValue.join(', ') : newValue;
-                return `"${label}" من "${oldDisplay}" إلى "${newDisplay}"`;
-            }).join('، ');
-            await logAgentActivity(agent._id, 'PROFILE_UPDATE', `تم تحديث الملف الشخصي: ${changeDescriptions}.`);
-        }
-
-        showToast('تم تحديث بيانات الوكيل بنجاح.', 'success');
-        history.replaceState(null, '', `#profile/${agent._id}`);
-        renderAgentProfilePage(agent._id);
-    });
-}
-
-// NEW: Function to render the user's own profile settings page
-async function renderProfileSettingsPage() {
-    const appContent = document.getElementById('app-content');
-
-    if (!currentUserProfile) {
-        appContent.innerHTML = `<p class="error">يجب تسجيل الدخول لعرض هذه الصفحة.</p>`;
-        return;
-    }
-
-    // We need the user's email, which is in `supabase.auth.user()` not our profile table.
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const isSuperAdmin = currentUserProfile.role === 'super_admin';
-    const isAdmin = currentUserProfile.role === 'admin';
-    const roleBadge = isSuperAdmin ? '<span class="admin-badge super-admin">مدير عام</span>' : (isAdmin ? '<span class="admin-badge">مسؤول</span>' : '<span class="employee-badge">موظف</span>');
-
-    appContent.innerHTML = `
-        <div class="page-header">
-            <h1><i class="fas fa-user-cog"></i> إعدادات الملف الشخصي</h1>
-        </div>
-
-        <!-- NEW: Profile Header Section for display -->
-        <div class="profile-settings-header">
-            <div class="profile-avatar-edit large-avatar">
-                <img src="${currentUserProfile.avatar_url || `https://ui-avatars.com/api/?name=${currentUserProfile.full_name || user?.email}&background=8A2BE2&color=fff&size=128`}" alt="Avatar" id="avatar-preview">
-                <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
-            </div>
-            <div class="profile-header-info">
-                <h2 class="profile-name-display">${currentUserProfile.full_name || 'مستخدم'} ${roleBadge}</h2>
-                <p class="profile-email-display">${user?.email || ''}</p>
-            </div>
-        </div>
-
-        <div class="form-container" style="max-width: 800px;">
-            <form id="profile-settings-form">
-                ${currentUserProfile.role === 'admin' ? `
-                    <h3 class="details-section-title">المعلومات الأساسية</h3>
-                    <div class="details-grid" style="grid-template-columns: 1fr; gap: 20px;"><div class="form-group"><label for="profile-full-name">الاسم الكامل</label><input type="text" id="profile-full-name" class="profile-name-input" value="${currentUserProfile.full_name || ''}" required></div></div>
-                ` : ''}
-                
-                <h3 class="details-section-title">تغيير كلمة المرور</h3>
-                <div class="details-grid" style="grid-template-columns: 1fr; gap: 20px;">
-                    <div class="form-group">
-                        <label for="profile-current-password">كلمة المرور الحالية</label>
-                        <div class="password-input-wrapper">
-                            <input type="password" id="profile-current-password" placeholder="أدخل كلمة المرور الحالية للتغيير">
-                            <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
-                            <div id="current-password-validation-msg" class="validation-status-inline"></div>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="profile-new-password">كلمة المرور الجديدة</label>
-                        <div class="password-input-wrapper">
-                            <input type="password" id="profile-new-password" placeholder="اتركه فارغاً لعدم التغيير">
-                            <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
-                        </div>
-                        <div class="password-strength-meter"><div class="strength-bar"></div></div>
-                        <div class="password-actions">
-                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small">إنشاء كلمة مرور قوية</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="profile-confirm-password">تأكيد كلمة المرور الجديدة</label>
-                        <div class="password-input-wrapper">
-                            <input type="password" id="profile-confirm-password">
-                            <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
-                            <div id="password-match-error" class="validation-error-inline" style="display: none;">كلمتا المرور غير متطابقتين.</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" id="save-profile-settings-btn" class="btn-primary">
-                        <i class="fas fa-save"></i> حفظ التغييرات
-                    </button>
-                </div>
-            </form>
-        </div>
-    `;
-
-    const form = document.getElementById('profile-settings-form');
-    const saveBtn = form.querySelector('#save-profile-settings-btn');
-    const newPasswordInput = form.querySelector('#profile-new-password');
-    const confirmPasswordInput = form.querySelector('#profile-confirm-password');
-    const currentPasswordInput = form.querySelector('#profile-current-password');
-    const validationMsgEl = form.querySelector('#current-password-validation-msg');
-
-    // --- NEW: Real-time current password validation on blur ---
-    currentPasswordInput.addEventListener('blur', async () => {
-        const password = currentPasswordInput.value;
-
-        // Clear previous message if input is empty
-        if (!password) {
-            validationMsgEl.innerHTML = '';
-            validationMsgEl.className = 'validation-status-inline';
-            return;
-        }
-
-        // Show a loading indicator
-        validationMsgEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>جاري التحقق...</span>';
-        validationMsgEl.className = 'validation-status-inline checking';
-
-        try {
-            // TODO: Implement a backend endpoint to verify current password
-            // For now, this will always fail or succeed based on a placeholder
-            const response = await authedFetch('/api/auth/verify-password', {
-                method: 'POST',
-                body: JSON.stringify({ password: password })
-            });
-            if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.message || 'كلمة المرور الحالية غير صحيحة.');
-                validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>كلمة المرور الحالية غير صحيحة.</span>';
-                validationMsgEl.className = 'validation-status-inline error';
-            } else {
-                validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
-                validationMsgEl.className = 'validation-status-inline success';
-            }
-        } catch (e) {
-            validationMsgEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>حدث خطأ أثناء التحقق.</span>';
-            validationMsgEl.className = 'validation-status-inline error';
-        }
-    });
-
-    // --- Avatar Logic ---
-    const avatarUploadInput = document.getElementById('avatar-upload');
-    const avatarPreview = document.getElementById('avatar-preview');
-    const avatarEditContainer = document.querySelector('.profile-settings-header .profile-avatar-edit');
-
-    if (avatarEditContainer) {
-        avatarEditContainer.addEventListener('click', () => {
-            if (currentUserProfile.role === 'admin') {
-                avatarUploadInput.click();
-            }
-        });
-    }
-    if (avatarUploadInput) {
-        avatarUploadInput.addEventListener('change', () => {
-            const file = avatarUploadInput.files[0];
-            if (file) avatarPreview.src = URL.createObjectURL(file);
-        });
-    }
-
-    // --- Password Toggles & Strength Meter ---
-    form.querySelectorAll('.password-toggle-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const input = btn.closest('.password-input-wrapper').querySelector('input');
-            const isPassword = input.type === 'password';
-            input.type = isPassword ? 'text' : 'password';
-            btn.querySelector('i').className = `fas ${isPassword ? 'fa-eye-slash' : 'fa-eye'}`;
-        });
-    });
-    const strengthBar = form.querySelector('.strength-bar');
-    newPasswordInput.addEventListener('input', () => {
-        const password = newPasswordInput.value;
-        let strength = 0;
-        if (password.length >= 8) strength++;
-        if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength++;
-        if (password.match(/\d/)) strength++;
-        if (password.match(/[^a-zA-Z\d]/)) strength++;
-        strengthBar.className = 'strength-bar';
-        if (strength > 0) strengthBar.classList.add(`strength-${strength}`);
-    });
-
-    // --- Generate Password Button ---
-    const generatePasswordBtn = form.querySelector('#generate-password-btn');
-    if (generatePasswordBtn) {
-        generatePasswordBtn.addEventListener('click', () => {
-            const lower = 'abcdefghijklmnopqrstuvwxyz';
-            const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-            const numbers = '0123456789';
-            const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-            const all = lower + upper + numbers + symbols;
-            let newPassword = '';
-            newPassword += lower.charAt(Math.floor(Math.random() * lower.length));
-            newPassword += upper.charAt(Math.floor(Math.random() * upper.length));
-            newPassword += numbers.charAt(Math.floor(Math.random() * numbers.length));
-            newPassword += symbols.charAt(Math.floor(Math.random() * symbols.length));
-            for (let i = newPassword.length; i < 14; i++) {
-                newPassword += all.charAt(Math.floor(Math.random() * all.length));
-            }
-            newPassword = newPassword.split('').sort(() => 0.5 - Math.random()).join('');
-            newPasswordInput.value = newPassword;
-            confirmPasswordInput.value = newPassword;
-            newPasswordInput.dispatchEvent(new Event('input')); // Trigger strength check
-            navigator.clipboard.writeText(newPassword).then(() => {
-                showToast('تم إنشاء ونسخ كلمة مرور قوية.', 'success');
-            });
-        });
-    }
-
-    // --- Real-time password match validation ---
-    const passwordMatchError = form.querySelector('#password-match-error');
-    const validatePasswordMatch = () => {
-        if (newPasswordInput.value && confirmPasswordInput.value && newPasswordInput.value !== confirmPasswordInput.value) {
-            passwordMatchError.style.display = 'block';
-            saveBtn.disabled = true;
-        } else {
-            passwordMatchError.style.display = 'none';
-            saveBtn.disabled = false;
-        }
-    };
-    newPasswordInput.addEventListener('input', validatePasswordMatch);
-    confirmPasswordInput.addEventListener('input', validatePasswordMatch);
-
-    // --- Disable form elements for non-admins ---
-    if (currentUserProfile.role !== 'admin') {
-        const fullNameInput = form.querySelector('#profile-full-name');
-        if (fullNameInput) fullNameInput.disabled = true;
-        avatarEditContainer.style.cursor = 'not-allowed';
-        avatarEditContainer.title = 'لا يمكنك تغيير الصورة الشخصية.';
-    }
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        // --- Submission Logic ---
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
-
-        const fullNameInput = document.getElementById('profile-full-name');
-        const fullName = fullNameInput ? fullNameInput.value : currentUserProfile.full_name;
-        const newPassword = newPasswordInput.value; // FIX: Define newPassword variable
-        const confirmPassword = document.getElementById('profile-confirm-password').value;
-        const currentPassword = document.getElementById('profile-current-password').value;
-
-        try {
-            // --- Password Validation ---
-            if (newPassword && !currentPassword) {
-                throw new Error('يجب إدخال كلمة المرور الحالية لتغييرها.');
-            }
-            if (newPassword !== confirmPassword) {
-                throw new Error('كلمتا المرور الجديدتان غير متطابقتين.');
-            }
-
-            // 1. Handle avatar upload if a new file is selected
-            const avatarFile = document.getElementById('avatar-upload').files[0];
-            let newAvatarUrl = currentUserProfile.avatar_url;
-
-            if (avatarFile) {
-                // TODO: Implement backend endpoint for avatar upload
-                // For now, this will be a placeholder
-                console.warn('Avatar upload is not yet implemented in the new backend.');
-                if (true) { // Simulate an error for now
-                    throw new Error('فشل رفع الصورة. يرجى المحاولة مرة أخرى.');
-                }
-
-                const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-                newAvatarUrl = urlData.publicUrl;
-            }
-
-            // 2. Update public profile table (users)
-            const profileUpdateData = { avatar_url: newAvatarUrl };
-            if (currentUserProfile.role === 'admin' && fullNameInput) {
-                profileUpdateData.full_name = fullName;
-            }
-
-            // TODO: Implement backend endpoint for updating user profile
-            const response = await authedFetch(`/api/users/${currentUserProfile._id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(profileUpdateData)
-            });
-            if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.message || 'فشل تحديث الملف الشخصي.');
-            }
-
-
-            // 3. If a new password is provided, verify old and update in auth
-            if (newPassword && currentPassword) {
-                // TODO: Implement backend endpoint for changing password
-                console.warn('Password change is not yet implemented in the new backend.');
-                if (true) throw new Error('تغيير كلمة المرور غير متاح حالياً.'); // Simulate error
-            }
-
-            // 4. Refresh local user profile data to reflect changes
-            await fetchUserProfile();
-
-            showToast('تم تحديث الملف الشخصي بنجاح.', 'success');
-
-            // NEW: If password was changed, clear fields and hide the section
-            if (newPassword) {
-                currentPasswordInput.value = '';
-                newPasswordInput.value = '';
-                confirmPasswordInput.value = '';
-                validationMsgEl.innerHTML = '';
-                validationMsgEl.className = 'validation-status-inline';
-                form.querySelector('#password-match-error').style.display = 'none';
-                form.querySelector('.strength-bar').className = 'strength-bar';
-            }
-        } catch (error) {
-            console.error('Error updating profile:', error);
-            showToast(`فشل تحديث الملف الشخصي: ${error.message}`, 'error');
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التغييرات';
         }
     });
 }

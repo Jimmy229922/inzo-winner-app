@@ -3,6 +3,9 @@ const app = require('./src/app');
 const connectDB = require('./src/config/db');
 const User = require('./src/models/User');
 const bcrypt = require('bcryptjs');
+const { startCompetitionScheduler } = require('./src/jobs/competitionScheduler');
+const { startAgentRenewalJob } = require('./src/jobs/agentRenewal.job');
+const { startAgentRenewalTestJob } = require('./src/jobs/agentRenewal.test.job');
 
 const port = process.env.PORT || 30001;
 
@@ -44,6 +47,16 @@ async function createSuperAdmin() {
 async function startServer() {
     await connectDB();
     await createSuperAdmin();
+
+    // --- FIX: Initialize and start all background schedulers ---
+    console.log('[Scheduler] Starting background jobs...');
+    startCompetitionScheduler();
+
+    // For testing, the 20-second job is enabled by default.
+    // Comment out the line below and uncomment the next one for production.
+    startAgentRenewalTestJob(); // Runs every 20 seconds for testing
+    // startAgentRenewalJob(); // Runs every hour for production
+
     app.listen(port, () => {
         console.log(`Backend server is running at http://localhost:${port}`);
     });

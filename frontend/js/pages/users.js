@@ -835,3 +835,304 @@ function renderPermissionsModal(user) {
         }
     });
 }
+
+// NEW: Function to render the user's own profile settings page
+async function renderProfileSettingsPage() {
+    const appContent = document.getElementById('app-content');
+
+    if (!currentUserProfile) {
+        appContent.innerHTML = `<p class="error">يجب تسجيل الدخول لعرض هذه الصفحة.</p>`;
+        return;
+    }
+
+    // We need the user's email, which is in `supabase.auth.user()` not our profile table.
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const isSuperAdmin = currentUserProfile.role === 'super_admin';
+    const isAdmin = currentUserProfile.role === 'admin';
+    const roleBadge = isSuperAdmin ? '<span class="admin-badge super-admin">مدير عام</span>' : (isAdmin ? '<span class="admin-badge">مسؤول</span>' : '<span class="employee-badge">موظف</span>');
+
+    appContent.innerHTML = `
+        <div class="page-header">
+            <h1><i class="fas fa-user-cog"></i> إعدادات الملف الشخصي</h1>
+        </div>
+
+        <!-- NEW: Profile Header Section for display -->
+        <div class="profile-settings-header">
+            <div class="profile-avatar-edit large-avatar">
+                <img src="${currentUserProfile.avatar_url || `https://ui-avatars.com/api/?name=${currentUserProfile.full_name || user?.email}&background=8A2BE2&color=fff&size=128`}" alt="Avatar" id="avatar-preview">
+                <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
+            </div>
+            <div class="profile-header-info">
+                <h2 class="profile-name-display">${currentUserProfile.full_name || 'مستخدم'} ${roleBadge}</h2>
+                <p class="profile-email-display">${user?.email || ''}</p>
+            </div>
+        </div>
+
+        <div class="form-container" style="max-width: 800px;">
+            <form id="profile-settings-form">
+                ${currentUserProfile.role === 'admin' ? `
+                    <h3 class="details-section-title">المعلومات الأساسية</h3>
+                    <div class="details-grid" style="grid-template-columns: 1fr; gap: 20px;"><div class="form-group"><label for="profile-full-name">الاسم الكامل</label><input type="text" id="profile-full-name" class="profile-name-input" value="${currentUserProfile.full_name || ''}" required></div></div>
+                ` : ''}
+                
+                <h3 class="details-section-title">تغيير كلمة المرور</h3>
+                <div class="details-grid" style="grid-template-columns: 1fr; gap: 20px;">
+                    <div class="form-group">
+                        <label for="profile-current-password">كلمة المرور الحالية</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="profile-current-password" placeholder="أدخل كلمة المرور الحالية للتغيير">
+                            <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
+                            <div id="current-password-validation-msg" class="validation-status-inline"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="profile-new-password">كلمة المرور الجديدة</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="profile-new-password" placeholder="اتركه فارغاً لعدم التغيير">
+                            <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
+                        </div>
+                        <div class="password-strength-meter"><div class="strength-bar"></div></div>
+                        <div class="password-actions">
+                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small">إنشاء كلمة مرور قوية</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="profile-confirm-password">تأكيد كلمة المرور الجديدة</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="profile-confirm-password">
+                            <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
+                            <div id="password-match-error" class="validation-error-inline" style="display: none;">كلمتا المرور غير متطابقتين.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" id="save-profile-settings-btn" class="btn-primary">
+                        <i class="fas fa-save"></i> حفظ التغييرات
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    const form = document.getElementById('profile-settings-form');
+    const saveBtn = form.querySelector('#save-profile-settings-btn');
+    const newPasswordInput = form.querySelector('#profile-new-password');
+    const confirmPasswordInput = form.querySelector('#profile-confirm-password');
+    const currentPasswordInput = form.querySelector('#profile-current-password');
+    const validationMsgEl = form.querySelector('#current-password-validation-msg');
+
+    // --- NEW: Real-time current password validation on blur ---
+    currentPasswordInput.addEventListener('blur', async () => {
+        const password = currentPasswordInput.value;
+
+        // Clear previous message if input is empty
+        if (!password) {
+            validationMsgEl.innerHTML = '';
+            validationMsgEl.className = 'validation-status-inline';
+            return;
+        }
+
+        // Show a loading indicator
+        validationMsgEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>جاري التحقق...</span>';
+        validationMsgEl.className = 'validation-status-inline checking';
+
+        try {
+            // TODO: Implement a backend endpoint to verify current password
+            // For now, this will always fail or succeed based on a placeholder
+            const response = await authedFetch('/api/auth/verify-password', {
+                method: 'POST',
+                body: JSON.stringify({ password: password })
+            });
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.message || 'كلمة المرور الحالية غير صحيحة.');
+                validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>كلمة المرور الحالية غير صحيحة.</span>';
+                validationMsgEl.className = 'validation-status-inline error';
+            } else {
+                validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
+                validationMsgEl.className = 'validation-status-inline success';
+            }
+        } catch (e) {
+            validationMsgEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>حدث خطأ أثناء التحقق.</span>';
+            validationMsgEl.className = 'validation-status-inline error';
+        }
+    });
+
+    // --- Avatar Logic ---
+    const avatarUploadInput = document.getElementById('avatar-upload');
+    const avatarPreview = document.getElementById('avatar-preview');
+    const avatarEditContainer = document.querySelector('.profile-settings-header .profile-avatar-edit');
+
+    if (avatarEditContainer) {
+        avatarEditContainer.addEventListener('click', () => {
+            if (currentUserProfile.role === 'admin') {
+                avatarUploadInput.click();
+            }
+        });
+    }
+    if (avatarUploadInput) {
+        avatarUploadInput.addEventListener('change', () => {
+            const file = avatarUploadInput.files[0];
+            if (file) avatarPreview.src = URL.createObjectURL(file);
+        });
+    }
+
+    // --- Password Toggles & Strength Meter ---
+    form.querySelectorAll('.password-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const input = btn.closest('.password-input-wrapper').querySelector('input');
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            btn.querySelector('i').className = `fas ${isPassword ? 'fa-eye-slash' : 'fa-eye'}`;
+        });
+    });
+    const strengthBar = form.querySelector('.strength-bar');
+    newPasswordInput.addEventListener('input', () => {
+        const password = newPasswordInput.value;
+        let strength = 0;
+        if (password.length >= 8) strength++;
+        if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength++;
+        if (password.match(/\d/)) strength++;
+        if (password.match(/[^a-zA-Z\d]/)) strength++;
+        strengthBar.className = 'strength-bar';
+        if (strength > 0) strengthBar.classList.add(`strength-${strength}`);
+    });
+
+    // --- Generate Password Button ---
+    const generatePasswordBtn = form.querySelector('#generate-password-btn');
+    if (generatePasswordBtn) {
+        generatePasswordBtn.addEventListener('click', () => {
+            const lower = 'abcdefghijklmnopqrstuvwxyz';
+            const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const numbers = '0123456789';
+            const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+            const all = lower + upper + numbers + symbols;
+            let newPassword = '';
+            newPassword += lower.charAt(Math.floor(Math.random() * lower.length));
+            newPassword += upper.charAt(Math.floor(Math.random() * upper.length));
+            newPassword += numbers.charAt(Math.floor(Math.random() * numbers.length));
+            newPassword += symbols.charAt(Math.floor(Math.random() * symbols.length));
+            for (let i = newPassword.length; i < 14; i++) {
+                newPassword += all.charAt(Math.floor(Math.random() * all.length));
+            }
+            newPassword = newPassword.split('').sort(() => 0.5 - Math.random()).join('');
+            newPasswordInput.value = newPassword;
+            confirmPasswordInput.value = newPassword;
+            newPasswordInput.dispatchEvent(new Event('input')); // Trigger strength check
+            navigator.clipboard.writeText(newPassword).then(() => {
+                showToast('تم إنشاء ونسخ كلمة مرور قوية.', 'success');
+            });
+        });
+    }
+
+    // --- Real-time password match validation ---
+    const passwordMatchError = form.querySelector('#password-match-error');
+    const validatePasswordMatch = () => {
+        if (newPasswordInput.value && confirmPasswordInput.value && newPasswordInput.value !== confirmPasswordInput.value) {
+            passwordMatchError.style.display = 'block';
+            saveBtn.disabled = true;
+        } else {
+            passwordMatchError.style.display = 'none';
+            saveBtn.disabled = false;
+        }
+    };
+    newPasswordInput.addEventListener('input', validatePasswordMatch);
+    confirmPasswordInput.addEventListener('input', validatePasswordMatch);
+
+    // --- Disable form elements for non-admins ---
+    if (currentUserProfile.role !== 'admin') {
+        const fullNameInput = form.querySelector('#profile-full-name');
+        if (fullNameInput) fullNameInput.disabled = true;
+        avatarEditContainer.style.cursor = 'not-allowed';
+        avatarEditContainer.title = 'لا يمكنك تغيير الصورة الشخصية.';
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // --- Submission Logic ---
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+
+        const fullNameInput = document.getElementById('profile-full-name');
+        const fullName = fullNameInput ? fullNameInput.value : currentUserProfile.full_name;
+        const newPassword = newPasswordInput.value; // FIX: Define newPassword variable
+        const confirmPassword = document.getElementById('profile-confirm-password').value;
+        const currentPassword = document.getElementById('profile-current-password').value;
+
+        try {
+            // --- Password Validation ---
+            if (newPassword && !currentPassword) {
+                throw new Error('يجب إدخال كلمة المرور الحالية لتغييرها.');
+            }
+            if (newPassword !== confirmPassword) {
+                throw new Error('كلمتا المرور الجديدتان غير متطابقتين.');
+            }
+
+            // 1. Handle avatar upload if a new file is selected
+            const avatarFile = document.getElementById('avatar-upload').files[0];
+            let newAvatarUrl = currentUserProfile.avatar_url;
+
+            if (avatarFile) {
+                // TODO: Implement backend endpoint for avatar upload
+                // For now, this will be a placeholder
+                console.warn('Avatar upload is not yet implemented in the new backend.');
+                if (true) { // Simulate an error for now
+                    throw new Error('فشل رفع الصورة. يرجى المحاولة مرة أخرى.');
+                }
+
+                const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+                newAvatarUrl = urlData.publicUrl;
+            }
+
+            // 2. Update public profile table (users)
+            const profileUpdateData = { avatar_url: newAvatarUrl };
+            if (currentUserProfile.role === 'admin' && fullNameInput) {
+                profileUpdateData.full_name = fullName;
+            }
+
+            // TODO: Implement backend endpoint for updating user profile
+            const response = await authedFetch(`/api/users/${currentUserProfile._id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(profileUpdateData)
+            });
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.message || 'فشل تحديث الملف الشخصي.');
+            }
+
+
+            // 3. If a new password is provided, verify old and update in auth
+            if (newPassword && currentPassword) {
+                // TODO: Implement backend endpoint for changing password
+                console.warn('Password change is not yet implemented in the new backend.');
+                if (true) throw new Error('تغيير كلمة المرور غير متاح حالياً.'); // Simulate error
+            }
+
+            // 4. Refresh local user profile data to reflect changes
+            await fetchUserProfile();
+
+            showToast('تم تحديث الملف الشخصي بنجاح.', 'success');
+
+            // NEW: If password was changed, clear fields and hide the section
+            if (newPassword) {
+                currentPasswordInput.value = '';
+                newPasswordInput.value = '';
+                confirmPasswordInput.value = '';
+                validationMsgEl.innerHTML = '';
+                validationMsgEl.className = 'validation-status-inline';
+                form.querySelector('#password-match-error').style.display = 'none';
+                form.querySelector('.strength-bar').className = 'strength-bar';
+            }
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            showToast(`فشل تحديث الملف الشخصي: ${error.message}`, 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التغييرات';
+        }
+    });
+}
