@@ -477,7 +477,7 @@ async function handleBulkAddAgents(data) {
     // --- NEW: Logic to separate agents for insertion and update ---
     const uniqueAgentsMap = new Map();
     for (const agent of allParsedAgents) {
-        // Use agent_id as the unique key to de-duplicate the input list.
+        // Use agent_id as the unique key to de-duplicate the input list, ensuring the last entry wins.
         uniqueAgentsMap.set(agent.agent_id, agent);
     }
     const uniqueAgents = Array.from(uniqueAgentsMap.values());
@@ -496,8 +496,8 @@ async function handleBulkAddAgents(data) {
     // --- NEW: Check for existing agents against the database ---
     for (let i = 0; i < uniqueAgents.length; i += CHUNK_SIZE) {
         const chunk = uniqueAgents.slice(i, i + CHUNK_SIZE);
-        const agentIdsQuery = chunk.map(a => a.agent_id).join(',');
-        const query = `agent_ids=${agentIdsQuery}&select=_id,name,agent_id&limit=${CHUNK_SIZE}`;
+        const agentIds = chunk.map(a => a.agent_id);
+        const query = `agent_ids=${agentIds.join(',')}&select=_id,name,agent_id&limit=${CHUNK_SIZE}`;
         const response = await authedFetch(`/api/agents?${query}`);
         const result = await response.json();
 
@@ -517,15 +517,16 @@ async function handleBulkAddAgents(data) {
     
     const existingAgentsMap = new Map();
     allExistingAgents.forEach(agent => {
-        // Use agent_id as the definitive key for checking existence.
+        // --- IMPROVEMENT: Map by both agent_id and name for more robust checking ---
         existingAgentsMap.set(agent.agent_id, agent);
+        existingAgentsMap.set(agent.name, agent);
     });
 
     const agentsToInsert = [];
     const agentsToUpdate = [];
 
     uniqueAgents.forEach(agent => {
-        const existing = existingAgentsMap.get(agent.agent_id);
+        const existing = existingAgentsMap.get(agent.agent_id) || existingAgentsMap.get(agent.name);
         if (existing) {
             // Agent exists, add to update list with its database _id
             agentsToUpdate.push({ ...agent, id: existing._id });
@@ -573,6 +574,7 @@ async function handleBulkAddAgents(data) {
             errorCount++;
         }
         progressBar.style.width = `${(processedCount / totalOperations) * 100}%`;
+        await new Promise(resolve => setTimeout(resolve, 500)); // --- NEW: Add 500ms delay ---
     }
 
     for (const agent of agentsToUpdate) {
@@ -588,6 +590,7 @@ async function handleBulkAddAgents(data) {
             errorCount++;
         }
         progressBar.style.width = `${(processedCount / totalOperations) * 100}%`;
+        await new Promise(resolve => setTimeout(resolve, 500)); // --- NEW: Add 500ms delay ---
     }
 
     progressBar.style.backgroundColor = errorCount > 0 ? 'var(--warning-color)' : 'var(--success-color)';

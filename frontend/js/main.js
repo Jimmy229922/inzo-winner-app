@@ -536,7 +536,7 @@ function setupNavbar() {
                         ? `<img src="${agent.avatar_url}" alt="Avatar" class="search-result-avatar">`
                         : `<div class="search-result-avatar-placeholder"><i class="fas fa-user"></i></div>`;
                     return `
-                    <div class="search-result-item" data-agent-id="${agent.id}">
+                    <div class="search-result-item" data-agent-id="${agent._id}">
                         ${avatarHtml}
                         <div class="search-result-info">
                             <p class="agent-name">${agent.name}</p>
