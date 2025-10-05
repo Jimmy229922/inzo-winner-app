@@ -92,13 +92,10 @@ async function renderTaskList() {
 
     const response = await authedFetch('/api/tasks/today');
     if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error fetching agents for tasks:", errorText);
         wrapper.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات المهام.</p>`;
         return;
     }
     const { agents: filteredAgents, tasksMap } = await response.json();
-    console.log('[Tasks Page] Received data from backend:', { agentCount: filteredAgents.length, tasksMap });
 
     const classifications = ['R', 'A', 'B', 'C'];
     const openGroups = JSON.parse(localStorage.getItem('openTaskGroups')) || ['R', 'A'];

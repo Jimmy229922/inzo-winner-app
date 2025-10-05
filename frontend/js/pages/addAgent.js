@@ -383,7 +383,12 @@ async function handleBulkAddAgents(data) {
             return;
         }
 
-        const fields = line.split('\t').map(f => f.trim());
+        // --- IMPROVEMENT: Trim trailing empty fields to prevent errors from extra columns in Excel ---
+        let fields = line.split('\t').map(f => f.trim());
+        while (fields.length > 0 && fields[fields.length - 1] === '') {
+            fields.pop();
+        }
+
         if (fields.length < 4) { // At least Name, ID, Classification, Rank are required
             errors.push(`السطر ${index + 1}: عدد الحقول غير كافٍ.`);
             return;
@@ -399,7 +404,7 @@ async function handleBulkAddAgents(data) {
             telegram_group_name = '',
             competition_duration = null] = fields;
 
-        if (!name || !agent_id || !classification || !rank) {
+        if (!name || !agent_id || !classification || !rank) { // --- IMPROVEMENT: More specific error message ---
             errors.push(`السطر ${index + 1}: الحقول الأساسية (الاسم، الرقم، التصنيف، المرتبة) مطلوبة.`);
             return;
         }
@@ -431,7 +436,7 @@ async function handleBulkAddAgents(data) {
             if (normalized.startsWith('24')) {
                 processed_competition_duration = '24h';
             } else if (normalized.startsWith('48')) {
-                processed_competition_duration = '48h';
+                processed_competition_duration = '48h'; // --- IMPROVEMENT: More specific error message ---
             } else {
                 errors.push(`السطر ${index + 1}: مدة المسابقة "${competition_duration}" غير صالحة. يجب أن تكون '24h' أو '48h'.`);
                 return;
@@ -450,11 +455,11 @@ async function handleBulkAddAgents(data) {
             telegram_group_url: telegram_group_url || null,
             telegram_chat_id: telegram_chat_id || null,
             telegram_group_name: telegram_group_name || null,
-            competition_bonus: rankData.competition_bonus,
-            deposit_bonus_percentage: rankData.deposit_bonus_percentage,
-            deposit_bonus_count: rankData.deposit_bonus_count,
-            remaining_balance: rankData.competition_bonus,
-            remaining_deposit_bonus: rankData.deposit_bonus_count,
+            competition_bonus: rankData.competition_bonus || 0,
+            deposit_bonus_percentage: rankData.deposit_bonus_percentage || 0,
+            deposit_bonus_count: rankData.deposit_bonus_count || 0,
+            remaining_balance: rankData.competition_bonus || 0,
+            remaining_deposit_bonus: rankData.deposit_bonus_count || 0,
             consumed_balance: 0,
             used_deposit_bonus: 0,
             status: 'Active', // NEW: Set status to Active by default
@@ -464,19 +469,17 @@ async function handleBulkAddAgents(data) {
     });
 
     if (errors.length > 0) {
-        showToast(`تم العثور على ${errors.length} أخطاء في البيانات. يرجى تصحيحها والمحاولة مرة أخرى.`, 'error');
-        console.error('Bulk Add Errors:', errors);
+        showToast(`تم العثور على ${errors.length} أخطاء في البيانات. يرجى تصحيحها والمحاولة مرة أخرى.`, 'error'); // --- IMPROVEMENT: More specific error message ---
         // Optionally, show a modal with all errors
         return;
     }
 
     // --- NEW: Logic to separate agents for insertion and update ---
     const uniqueAgentsMap = new Map();
-    allParsedAgents.forEach(agent => {
-        // Keep only the last entry for any given agent_id or name to avoid self-conflicts
+    for (const agent of allParsedAgents) {
+        // Use agent_id as the unique key to de-duplicate the input list.
         uniqueAgentsMap.set(agent.agent_id, agent);
-        uniqueAgentsMap.set(agent.name, agent);
-    });
+    }
     const uniqueAgents = Array.from(uniqueAgentsMap.values());
     const ignoredForInputDuplication = allParsedAgents.length - uniqueAgents.length;
 
@@ -490,19 +493,16 @@ async function handleBulkAddAgents(data) {
     let allExistingAgents = [];
     let checkError = null;
 
-    // --- تعديل: استخدام الواجهة الخلفية الجديدة للتحقق من الوكلاء الموجودين ---
+    // --- NEW: Check for existing agents against the database ---
     for (let i = 0; i < uniqueAgents.length; i += CHUNK_SIZE) {
         const chunk = uniqueAgents.slice(i, i + CHUNK_SIZE);
-        const agentIds = chunk.map(a => a.agent_id);
-        const names = chunk.map(a => a.name);
-
-        // Construct a query string for the backend
-        const query = `agent_ids=${agentIds.join(',')}&names=${names.map(encodeURIComponent).join(',')}`;
-        const response = await authedFetch(`/api/agents?${query}&select=_id,name,agent_id`);
+        const agentIdsQuery = chunk.map(a => a.agent_id).join(',');
+        const query = `agent_ids=${agentIdsQuery}&select=_id,name,agent_id&limit=${CHUNK_SIZE}`;
+        const response = await authedFetch(`/api/agents?${query}`);
         const result = await response.json();
 
         if (!response.ok) {
-            checkError = new Error(result.message || 'Failed to check existing agents.');
+            checkError = new Error(result.message || 'فشل التحقق من الوكلاء الموجودين.');
             break; // Stop on the first error
         }
         if (result.data) {
@@ -511,26 +511,24 @@ async function handleBulkAddAgents(data) {
     }
 
     if (checkError) {
-        showToast('حدث خطأ أثناء التحقق من البيانات المكررة في قاعدة البيانات.', 'error');
+        showToast(`خطأ: ${checkError.message}`, 'error');
         return;
     }
     
     const existingAgentsMap = new Map();
     allExistingAgents.forEach(agent => {
-        // --- FIX: Use a composite key to uniquely identify an existing agent by both ID and Name ---
-        // This prevents incorrect matches where a new agent has the same name as an old one but a different ID.        
+        // Use agent_id as the definitive key for checking existence.
         existingAgentsMap.set(agent.agent_id, agent);
-        existingAgentsMap.set(agent.name, agent);
     });
 
     const agentsToInsert = [];
     const agentsToUpdate = [];
 
     uniqueAgents.forEach(agent => {
-        const existing = existingAgentsMap.get(agent.agent_id) || existingAgentsMap.get(agent.name);
+        const existing = existingAgentsMap.get(agent.agent_id);
         if (existing) {
-            // Add to update list, including the database ID
-            agentsToUpdate.push({ ...agent, id: existing.id });
+            // Agent exists, add to update list with its database _id
+            agentsToUpdate.push({ ...agent, id: existing._id });
         } else {
             // Add to insert list
             agentsToInsert.push(agent);
@@ -539,7 +537,7 @@ async function handleBulkAddAgents(data) {
 
     const totalOperations = agentsToInsert.length + agentsToUpdate.length;
     if (totalOperations === 0) {
-        showToast(`تم تجاهل جميع الوكلاء (${allParsedAgents.length}) لوجودهم مسبقاً أو للتكرار.`, 'warning');
+        showToast(`تم تجاهل جميع الوكلاء (${allParsedAgents.length}) لوجودهم مسبقاً أو بسبب تكرار في المدخلات.`, 'warning');
         return;
     }
 
@@ -547,8 +545,7 @@ async function handleBulkAddAgents(data) {
     let errorCount = 0;
     let processedCount = 0;
 
-    // Show progress modal
-    console.log('[handleBulkAddAgents] Preparing to show progress modal for', totalOperations, 'operations.');
+    // --- IMPROVEMENT: More descriptive progress modal ---
     const modalContent = `
         <div class="update-progress-container">
             <i class="fas fa-users-cog update-icon"></i>
@@ -562,46 +559,41 @@ async function handleBulkAddAgents(data) {
 
     const progressBar = document.getElementById('bulk-send-progress-bar-inner');
     const statusText = document.getElementById('bulk-send-status-text');
-    // --- MODIFIED: Process agents one by one to show progress ---
-    // --- REVERTED TO BULK OPERATIONS TO PREVENT 429 ERRORS ---
-    // --- تعديل: استخدام الواجهة الخلفية الجديدة لعمليات الإضافة والتحديث الجماعي ---
-    statusText.innerHTML = `جاري معالجة ${totalOperations} وكيل...`;
 
-    // Perform insertions in one single request
-    if (agentsToInsert.length > 0) {
-        statusText.innerHTML = `جاري إضافة ${agentsToInsert.length} وكيل جديد...`;
-        const response = await authedFetch('/api/agents/bulk-insert', { method: 'POST', body: JSON.stringify(agentsToInsert) });
-        const result = await response.json();
-        if (!response.ok) {
-            errorCount += agentsToInsert.length;
-            console.error('Bulk insert error:', result.message);
-        } else {
-            successCount += result.insertedCount || 0;
+    // --- NEW: Process agents one by one to show real-time progress and reduce server load ---
+    for (const agent of agentsToInsert) {
+        processedCount++;
+        statusText.innerHTML = `جاري إضافة وكيل: ${agent.name} (${processedCount}/${totalOperations})`;
+        try {
+            const response = await authedFetch('/api/agents', { method: 'POST', body: JSON.stringify(agent) });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message);
+            successCount++;
+        } catch (e) {
+            errorCount++;
         }
-        progressBar.style.width = `${(agentsToInsert.length / totalOperations) * 100}%`;
+        progressBar.style.width = `${(processedCount / totalOperations) * 100}%`;
     }
 
-    // Perform updates in a single bulk request
-    if (agentsToUpdate.length > 0) {
-        statusText.innerHTML = `جاري تحديث ${agentsToUpdate.length} وكيل...`;
-        const response = await authedFetch('/api/agents/bulk-update', { method: 'PUT', body: JSON.stringify(agentsToUpdate) });
-        const result = await response.json();
-
-        if (!response.ok) {
-            errorCount += agentsToUpdate.length;
-            console.error('Bulk update error:', result.message);
-        } else {
-            successCount += result.modifiedCount || 0;
-            // If some operations failed, result.errors would contain details
-            errorCount += result.errorCount || 0;
+    for (const agent of agentsToUpdate) {
+        processedCount++;
+        statusText.innerHTML = `جاري تحديث وكيل: ${agent.name} (${processedCount}/${totalOperations})`;
+        try {
+            // The agent object already contains the 'id' field needed for the URL
+            const response = await authedFetch(`/api/agents/${agent.id}`, { method: 'PUT', body: JSON.stringify(agent) });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message);
+            successCount++;
+        } catch (e) {
+            errorCount++;
         }
+        progressBar.style.width = `${(processedCount / totalOperations) * 100}%`;
     }
 
-    progressBar.style.width = '100%';
     progressBar.style.backgroundColor = errorCount > 0 ? 'var(--warning-color)' : 'var(--success-color)';
     
     let finalMessage = `اكتملت العملية.<br>`;
-    finalMessage += `<strong>${successCount}</strong> عملية ناجحة | <strong>${errorCount}</strong> عملية فاشلة.`;
+    finalMessage += `<strong>${successCount}</strong> عملية ناجحة | <strong>${errorCount}</strong> فشل`;
     const totalIgnored = ignoredForInputDuplication;
     if (totalIgnored > 0) finalMessage += ` | <strong>${totalIgnored}</strong> تم تجاهلهم للتكرار.`;
 

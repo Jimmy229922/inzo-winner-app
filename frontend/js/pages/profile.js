@@ -59,7 +59,6 @@ async function renderAgentProfilePage(agentId, options = {}) {
     try {
         const compResponse = await authedFetch(`/api/competitions?agentId=${agentId}&limit=100&sort=newest`); // Fetch up to 100 competitions for the agent
         const logUrl = `/api/logs?agent_id=${agentId}&limit=50&populate=user`;
-        console.log(`[Profile Page] Fetching logs with URL: ${logUrl}`);
         const logResponse = await authedFetch(logUrl); // Fetch latest 50 logs for the agent
 
         if (compResponse.ok) {
@@ -68,19 +67,11 @@ async function renderAgentProfilePage(agentId, options = {}) {
         }
         if (logResponse.ok) {
             const logResult = await logResponse.json();
-            console.log('[Profile Page] Received raw log response from backend:', logResult);
             var agentLogs = logResult.data || [];
-            
-            // تشخيص: طباعة السجلات التي تم جلبها في الكونسول للتأكد من وصولها
-            console.log('[Profile Page] Fetched logs for agent:', agentLogs);
-        } else {
-            console.error("Error fetching agent logs:", await logResponse.text());
         }
     } catch (compError) {
-        console.error("Error fetching agent competitions:", compError);
     }
     if (error || !agent) {
-        console.error('Error fetching agent profile:', error);
         appContent.innerHTML = `<p class="error">فشل العثور على الوكيل المطلوب.</p>`;
         return;
     }
@@ -229,7 +220,6 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const agentIdEl = appContent.querySelector('.profile-main-info .agent-id-text');
     if (agentIdEl) {
         agentIdEl.addEventListener('click', () => {
-            e.stopPropagation();
             navigator.clipboard.writeText(agent.agent_id).then(() => showToast(`تم نسخ الرقم: ${agent.agent_id}`, 'info'));
         });
     }
@@ -447,7 +437,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
     const editBtn = document.getElementById('edit-profile-btn');
     if (editBtn) {
         if (canEditProfile) { // This will be migrated later
-            editBtn.addEventListener('click', () => renderEditProfileHeader(agent, appContent));
+            editBtn.addEventListener('click', () => renderEditProfileHeader(agent));
         } else {
             editBtn.addEventListener('click', () => showToast('ليس لديك صلاحية لتعديل بيانات الوكيل.', 'error'));
         }
@@ -718,6 +708,81 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
     // Display the next renewal date, which is now fully independent
     displayNextRenewalDate(agent); // This will be migrated later
 }
+
+/**
+ * NEW: Renders an editor for the main profile header fields.
+ * @param {object} agent The agent object to edit.
+ */
+function renderEditProfileHeader(agent) {
+    const headerContainer = document.querySelector('.profile-main-info');
+    const actionsContainer = document.querySelector('.profile-header-actions');
+    if (!headerContainer || !actionsContainer) return;
+
+    const originalHeaderHtml = headerContainer.innerHTML;
+    const originalActionsHtml = actionsContainer.innerHTML;
+
+    headerContainer.innerHTML = `
+        <div class="form-layout-grid" style="gap: 10px;">
+            <div class="form-group"><label>اسم الوكيل</label><input type="text" id="header-edit-name" value="${agent.name || ''}"></div>
+            <div class="form-group"><label>رابط القناة</label><input type="text" id="header-edit-channel" value="${agent.telegram_channel_url || ''}"></div>
+            <div class="form-group"><label>رابط الجروب</label><input type="text" id="header-edit-group" value="${agent.telegram_group_url || ''}"></div>
+            <div class="form-group"><label>معرف الدردشة</label><input type="text" id="header-edit-chatid" value="${agent.telegram_chat_id || ''}"></div>
+            <div class="form-group"><label>اسم المجموعة</label><input type="text" id="header-edit-groupname" value="${agent.telegram_group_name || ''}"></div>
+        </div>
+    `;
+
+    actionsContainer.innerHTML = `
+        <button id="header-save-btn" class="btn-primary"><i class="fas fa-check"></i> حفظ</button>
+        <button id="header-cancel-btn" class="btn-secondary"><i class="fas fa-times"></i> إلغاء</button>
+    `;
+
+    const saveBtn = document.getElementById('header-save-btn');
+    const cancelBtn = document.getElementById('header-cancel-btn');
+
+    cancelBtn.addEventListener('click', () => {
+        // Restore original content without a full page reload
+        headerContainer.innerHTML = originalHeaderHtml;
+        actionsContainer.innerHTML = originalActionsHtml;
+        // Re-attach the edit button listener
+        document.getElementById('edit-profile-btn').addEventListener('click', () => renderEditProfileHeader(agent));
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        const updatedData = {
+            name: document.getElementById('header-edit-name').value,
+            telegram_channel_url: document.getElementById('header-edit-channel').value,
+            telegram_group_url: document.getElementById('header-edit-group').value,
+            telegram_chat_id: document.getElementById('header-edit-chatid').value,
+            telegram_group_name: document.getElementById('header-edit-groupname').value,
+        };
+
+        try {
+            const response = await authedFetch(`/api/agents/${agent._id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updatedData)
+            });
+
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.message || 'فشل تحديث البيانات.');
+            }
+
+            showToast('تم تحديث بيانات الوكيل بنجاح.', 'success');
+            await logAgentActivity(agent._id, 'PROFILE_UPDATE', 'تم تحديث بيانات الملف الشخصي للوكيل.');
+            // Re-render the entire page to reflect changes everywhere
+            renderAgentProfilePage(agent._id);
+
+        } catch (error) {
+            showToast(`فشل الحفظ: ${error.message}`, 'error');
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-check"></i> حفظ';
+        }
+    });
+}
+
 
 function startCompetitionCountdowns() {
     const countdownElements = document.querySelectorAll('.competition-countdown, .competition-countdown-header');

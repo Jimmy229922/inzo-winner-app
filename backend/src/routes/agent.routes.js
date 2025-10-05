@@ -1,25 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const agentController = require('../controllers/agent.controller');
-const authMiddleware = require('../middleware/auth.middleware');
 
+// GET /api/agents - Get all agents with filtering and pagination
 router.get('/', agentController.getAllAgents);
-router.post('/', agentController.createAgent);
 
-// --- FIX: Add the missing route for checking agent_id uniqueness ---
+// GET /api/agents/check-uniqueness - Check if an agent ID is unique
 router.get('/check-uniqueness', agentController.checkUniqueness);
 
-router.get('/:id', agentController.getAgentById);
-router.put('/:id', agentController.updateAgent);
-router.delete('/:id', agentController.deleteAgent);
+// POST /api/agents - Create a new agent
+router.post('/', agentController.createAgent);
 
-// --- NEW: Special route for bulk renewal ---
-router.post('/bulk-renew', agentController.bulkRenewBalances);
+// POST /api/agents/bulk-insert - Create multiple agents
+router.post('/bulk-insert', agentController.bulkInsertAgents);
 
-// --- FIX: The test route was missing from the previous commit ---
-router.post('/trigger-renewal-test', agentController.triggerRenewalJob);
+// PUT /api/agents/bulk-update - Update multiple agents
+router.put('/bulk-update', agentController.bulkUpdateAgents);
 
-// --- NEW: Route to renew a single agent's balance ---
-router.post('/:id/renew', agentController.renewSingleAgentBalance);
+// DELETE /api/agents/delete-all - Delete all agents
+router.delete('/delete-all', agentController.deleteAllAgents);
+
+// GET, PUT, DELETE for a single agent by ID
+router.route('/:id')
+    .get(agentController.getAgentById)
+    .put(agentController.updateAgent)
+    .delete(agentController.deleteAgent);
 
 module.exports = router;

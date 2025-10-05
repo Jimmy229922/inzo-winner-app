@@ -72,9 +72,7 @@ async function renderManageAgentsPage() {
     // --- NEW: Add listener for bulk add agents button ---
     const bulkAddBtn = document.getElementById('bulk-add-agents-btn');
     if (bulkAddBtn) {
-        bulkAddBtn.addEventListener('click', () => {
-            renderBulkAddAgentsModal();
-        });
+        bulkAddBtn.addEventListener('click', renderBulkAddAgentsModal);
     }
 
     setupAgentFilters();

@@ -3,7 +3,7 @@ const { logActivity } = require('../utils/logActivity');
 
 exports.getAllAgents = async (req, res) => {
     try {
-        const { page = 1, limit = 10, search, classification, sort, eligibleForBalance, for_tasks, select } = req.query;
+        const { page = 1, limit = 10, search, classification, sort, eligibleForBalance, for_tasks, select, agent_ids } = req.query;
 
         let query = {};
 
@@ -26,6 +26,11 @@ exports.getAllAgents = async (req, res) => {
         if (for_tasks === 'today') {
             const dayOfWeekIndex = new Date().getDay();
             query.audit_days = { $in: [dayOfWeekIndex] };
+        }
+
+        // --- NEW: Handle bulk checking for existing agents ---
+        if (agent_ids) {
+            query.agent_id = { $in: agent_ids.split(',').map(id => id.trim()) };
         }
 
         let sortOptions = { createdAt: -1 };
@@ -103,6 +108,20 @@ exports.updateAgent = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Delete ALL agents from the database
+ * @route   DELETE /api/agents/delete-all
+ * @access  Private (Super Admin only)
+ */
+exports.deleteAllAgents = async (req, res) => {
+    try {
+        await Agent.deleteMany({});
+        res.json({ message: 'All agents have been deleted successfully.' });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to delete all agents.', error: error.message });
+    }
+};
+
 exports.deleteAgent = async (req, res) => {
     try {
         const agent = await Agent.findByIdAndDelete(req.params.id);
@@ -118,7 +137,6 @@ exports.deleteAgent = async (req, res) => {
  * @returns {Promise<number>} Count of renewed agents.
  */
 exports.renewEligibleAgentBalances = async () => {
-    console.log('[Renewal Job] Checking for agents eligible for automatic balance renewal...');
     // Find agents with a renewal period set
     const agentsToRenew = await Agent.find({ renewal_period: { $in: ['weekly', 'biweekly', 'monthly'] } });
 
@@ -142,7 +160,6 @@ exports.renewEligibleAgentBalances = async () => {
         }
 
         if (now >= nextRenewalDate) {
-            console.log(`[Renewal Job] Renewing balance for agent: ${agent.name} (ID: ${agent._id})`);
             // This is the full renewal logic
             agent.remaining_balance = agent.competition_bonus;
             agent.consumed_balance = 0;
@@ -154,32 +171,24 @@ exports.renewEligibleAgentBalances = async () => {
             renewedCount++;
         }
     }
-    console.log(`[Renewal Job] Finished. Renewed ${renewedCount} agents.`);
     return renewedCount;
 };
 
 // --- NEW: Bulk renew balances for all agents ---
 exports.bulkRenewBalances = async (req, res) => {
     try {
-        console.log('[Bulk Renew] Received request to renew all agent balances.');
         // FIX: Find all agents that are NOT explicitly inactive. This includes new agents ('Active') and old agents (status is undefined).
         const agents = await Agent.find({ status: { $ne: 'inactive' } });
-        console.log(`[Bulk Renew] Found ${agents.length} active agents to process.`);
         let processedCount = 0;
 
         if (!agents || agents.length === 0) {
-            console.log('[Bulk Renew] No active agents found. Exiting.');
             return res.json({ message: 'No active agents found to renew.', processedCount: 0 });
         }
 
         for (const agent of agents) {
-            console.log(`[Bulk Renew] Processing agent: ${agent.name} (ID: ${agent._id})`);
-            console.log(`  - Before - Remaining: ${agent.remaining_balance}, Consumed: ${agent.consumed_balance}`);
-
             // --- FIX: Sanitize old/invalid enum values before saving ---
             // This prevents validation errors on agents with legacy data like '1d' or '2d'.
             if (agent.competition_duration && !['24h', '48h'].includes(agent.competition_duration)) {
-                console.log(`  - Sanitizing invalid competition_duration: '${agent.competition_duration}'`);
                 agent.competition_duration = null; // Set to null or a valid default
             }
 
@@ -191,17 +200,67 @@ exports.bulkRenewBalances = async (req, res) => {
             
             // Save each agent individually for better reliability over bulkWrite
             await agent.save();
-            console.log(`  - After - Remaining: ${agent.remaining_balance}, Consumed: ${agent.consumed_balance}`);
             
             processedCount++;
         }
 
-        console.log(`[Bulk Renew] Process completed. Total agents renewed: ${processedCount}`);
         res.json({ message: 'Bulk renewal process completed successfully.', processedCount });
     } catch (error) {
-        console.error('[Bulk Renew] An error occurred during the process:', error);
         res.status(500).json({ message: 'Server error during bulk balance renewal.', error: error.message });
     }
+};
+
+/**
+ * @desc    Bulk insert new agents
+ * @route   POST /api/agents/bulk-insert
+ * @access  Private
+ */
+exports.bulkInsertAgents = async (req, res) => {
+    const agentsData = req.body;
+    if (!Array.isArray(agentsData) || agentsData.length === 0) {
+        return res.status(400).json({ message: 'Request body must be a non-empty array of agents.' });
+    }
+
+    try {
+        const result = await Agent.insertMany(agentsData, { ordered: false }); // ordered: false continues on error
+        res.status(201).json({
+            message: `${result.length} agents inserted successfully.`,
+            insertedCount: result.length,
+        });
+    } catch (error) {
+        // insertMany throws a BulkWriteError which contains more details
+        // FIX: The 'result' property might not exist on all error types.
+        // Default to 0 if it's missing to prevent a crash.
+        const insertedCount = error.result?.nInserted ?? 0;
+        res.status(500).json({
+            message: `فشل الإدراج الجماعي. قد تكون بعض أرقام الوكالات مكررة. تم إدراج ${insertedCount} وكيل قبل حدوث الخطأ.`,
+            error: error.message,
+            insertedCount: insertedCount,
+            writeErrors: error.writeErrors
+        });
+    }
+};
+
+/**
+ * @desc    Bulk update existing agents
+ * @route   PUT /api/agents/bulk-update
+ * @access  Private
+ */
+exports.bulkUpdateAgents = async (req, res) => {
+    const agentsToUpdate = req.body;
+    if (!Array.isArray(agentsToUpdate) || agentsToUpdate.length === 0) {
+        return res.status(400).json({ message: 'Request body must be a non-empty array of agents to update.' });
+    }
+
+    const bulkOps = agentsToUpdate.map(agent => ({
+        updateOne: {
+            filter: { _id: agent.id },
+            update: { $set: agent }
+        }
+    }));
+
+    const result = await Agent.bulkWrite(bulkOps);
+    res.json({ message: 'Bulk update completed.', modifiedCount: result.modifiedCount });
 };
 
 exports.checkUniqueness = async (req, res) => {
@@ -213,7 +272,6 @@ exports.checkUniqueness = async (req, res) => {
         const existingAgent = await Agent.findOne({ agent_id });
         res.json({ exists: !!existingAgent });
     } catch (error) {
-        console.error('Error checking agent uniqueness:', error);
         res.status(500).json({ message: 'Server error while checking uniqueness.', error: error.message });
     }
 };
@@ -250,7 +308,6 @@ exports.renewSingleAgentBalance = async (req, res) => {
             agent.competition_duration = null; // Set to null or a valid default to pass validation
         }
 
-        console.log(`[Manual Renew] Renewing balance for single agent: ${agent.name}`);
         agent.remaining_balance = agent.competition_bonus;
         agent.consumed_balance = 0;
         agent.remaining_deposit_bonus = agent.deposit_bonus_count;
