@@ -21,15 +21,20 @@ const competitionSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['sent', 'active', 'completed', 'archived'],
+        enum: ['sent', 'active', 'awaiting_winners', 'completed', 'archived'],
         default: 'sent'
+    },
+    duration: {
+        type: String,
+        enum: ['1d', '2d', '1w']
     },
     total_cost: {
         type: Number,
         default: 0
     },
     ends_at: {
-        type: Date
+        type: Date,
+        required: true
     },
     winners_count: {
         type: Number,
@@ -57,9 +62,24 @@ const competitionSchema = new mongoose.Schema({
     participants_count: {
         type: Number,
         default: 0
+    },
+    processed_at: {
+        type: Date,
+        default: null
+    },
+    template_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Template'
     }
 }, {
     timestamps: true
 });
+
+// إضافة دالة مساعدة للتحقق من حالة المسابقة
+competitionSchema.methods.isExpired = function() {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return this.ends_at < now;
+};
 
 module.exports = mongoose.model('Competition', competitionSchema);

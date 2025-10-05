@@ -4,6 +4,7 @@ const app = require('./src/app');
 const connectDB = require('./src/config/db');
 const User = require('./src/models/User');
 const bcrypt = require('bcryptjs');
+const { startScheduler } = require('./src/utils/scheduler'); // Import the scheduler
 
 const port = process.env.PORT || 30001;
 
@@ -48,6 +49,9 @@ async function startServer() {
     app.listen(port, () => {
         console.log(`Backend server is running at http://localhost:${port}`);
     });
+
+    // Start the background scheduler to handle automated tasks
+    startScheduler();
 }
 
 startServer();

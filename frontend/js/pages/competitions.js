@@ -97,7 +97,7 @@ async function renderCompetitionManagementPage() {
     const container = document.getElementById('competitions-list-container');
 
     // Use event delegation for delete buttons
-    appContent.addEventListener('click', async (e) => { // Listen on a parent that persists
+    container.addEventListener('click', async (e) => { // Listen on a parent that persists
         if (!canEdit && (e.target.closest('.delete-competition-btn') || e.target.closest('#bulk-deactivate-btn') || e.target.closest('#bulk-delete-btn'))) {
             showToast('ليس لديك صلاحية للقيام بهذا الإجراء.', 'error');
             return;
@@ -123,8 +123,10 @@ async function renderCompetitionManagementPage() {
                     confirmClass: 'btn-danger'
                 });
         }
+    });
 
-        // New: Handle competition status toggle
+    // Separate listener for status toggle to avoid complexity
+    container.addEventListener('change', async (e) => {
         const statusToggle = e.target.closest('.competition-status-toggle');
         if (statusToggle) {
             if (!canEdit) {
@@ -132,7 +134,7 @@ async function renderCompetitionManagementPage() {
                 statusToggle.checked = !statusToggle.checked; // Revert UI
                 return;
             }
-            const id = parseInt(statusToggle.dataset.id, 10);
+            const id = statusToggle.dataset.id;
             const isActive = statusToggle.checked;
 
             const response = await authedFetch(`/api/competitions/${id}`, {
@@ -144,13 +146,10 @@ async function renderCompetitionManagementPage() {
                 statusToggle.checked = !isActive; // Revert UI on error
             } else {
                 showToast(`تم تحديث حالة المسابقة إلى "${isActive ? 'نشطة' : 'غير نشطة'}".`, 'success');
-                // No need to re-fetch, the change is minor. But if filters are active, it might disappear.
-                // For simplicity, we can just leave it as is, or refetch. Let's refetch for consistency.
-                await fetchAndDisplayCompetitions(document.querySelector('.pagination-container .page-btn.active')?.dataset.page || 1);
+                // No need to refetch, UI is already updated.
             }
         }
     });
-
     // --- NEW: Attach bulk action listeners separately ---
     const bulkDeactivateBtn = document.getElementById('bulk-deactivate-btn');
     if (bulkDeactivateBtn && canEdit) {
@@ -296,14 +295,7 @@ function displayCompetitionsPage(paginatedCompetitions, page, totalCount) {
 
 function setupCompetitionListGlobalListeners() {
     const container = document.getElementById('app-content');
-    container.addEventListener('click', (e) => {
-        // Handle edit button clicks using event delegation
-        const editBtn = e.target.closest('.competitions-list-view .edit-btn');
-        if (editBtn) {
-            const compId = editBtn.dataset.id;
-            if (compId) window.location.hash = `#competitions/edit/${compId}`;
-        }
-
+    container.addEventListener('click', (e) => { // Handle edit button clicks using event delegation
         const agentCell = e.target.closest('.table-agent-cell');
         if (agentCell) {
             const agentId = agentCell.dataset.agentId;
@@ -321,16 +313,16 @@ function generateCompetitionGridHtml(competitions) {
     if (competitions.length === 0) return ''; // Let displayCompetitionsPage handle the empty message
     return competitions.map(comp => { // The agent object is now nested under 'agent' not 'agents'
         const isSelected = selectedCompetitionIds.includes(comp.id);
-        const agent = comp.agent; // FIX: The agent object is nested under 'agent'
+        const agent = comp.agents;
         const agentInfoHtml = agent
-            ? `<div class="table-agent-cell" onclick="window.location.hash='#profile/${agent._id}'" style="cursor: pointer;">
+            ? `<div class="table-agent-cell" data-agent-id="${agent._id}" style="cursor: pointer;">
                     ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy">` : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`}
                     <div class="agent-details">
                         <span>${agent.name}</span>
                         ${agent.classification ? `<span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>` : ''}
                     </div>
                </div>`
-            : `<div class="competition-card-agent-info"><span>(وكيل محذوف أو غير مرتبط)</span></div>`;
+            : `<div class="table-agent-cell"><span>(وكيل محذوف أو غير مرتبط)</span></div>`;
 
         return `
         <div class="competition-card ${isSelected ? 'selected' : ''}" data-id="${comp.id}">
@@ -349,7 +341,6 @@ function generateCompetitionGridHtml(competitions) {
             </div>
             ${agentInfoHtml}
             <div class="competition-card-footer">
-                <button class="btn-secondary edit-btn" title="تعديل" data-id="${comp.id}"><i class="fas fa-edit"></i></button>
                 <button class="btn-danger delete-competition-btn" title="حذف" data-id="${comp.id}"><i class="fas fa-trash-alt"></i></button>
             </div>
         </div>
@@ -626,6 +617,12 @@ async function renderCompetitionCreatePage(agentId) {
         const selectedId = templateSelect.value;
         const selectedTemplate = templates.find(t => t.id == selectedId);
 
+        // FIX: If no template is selected, do not proceed. This prevents errors on focusout.
+        if (!selectedTemplate) {
+            descInput.value = 'الرجاء اختيار قالب مسابقة أولاً لعرض المعاينة.';
+            return;
+        }
+
         // NEW: Handle image preview
         const imagePreviewContainer = document.getElementById('telegram-image-preview-container');
         const imagePreview = document.getElementById('telegram-image-preview');
@@ -767,43 +764,32 @@ async function renderCompetitionCreatePage(agentId) {
         // --- NEW: Update Winner Selection Date Preview ---
         if (duration) {
             const today = new Date();
-            const newDate = new Date(today);
+            const newDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
             // Set to the beginning of the day to avoid time-of-day issues
-            newDate.setHours(0, 0, 0, 0); 
             
             let daysToAdd = 0;
             switch (duration) {
-                case '1d': daysToAdd = 2; break; // Day 1 (today), Day 2 (runs), Day 3 (selection)
-                case '2d': daysToAdd = 3; break; // Day 1 (today), Day 2,3 (runs), Day 4 (selection)
-                case '1w': daysToAdd = 8; break; // Day 1 (today), Day 2-8 (runs), Day 9 (selection)
+                case '1d': daysToAdd = 1; break; // Ends at the start of the day after 1 full day
+                case '2d': daysToAdd = 2; break; // Ends at the start of the day after 2 full days
+                case '1w': daysToAdd = 7; break; // Ends at the start of the day after 7 full days
             }
-            newDate.setDate(newDate.getDate() + daysToAdd);
+
+            // Simulate the backend logic for preview purposes.
+            // Get today's date in the local timezone (e.g., Egypt time)
+            const localToday = new Date();
+            // Set time to 00:00:00 to get the start of the local day
+            localToday.setHours(0, 0, 0, 0);
+            // Add the duration + 1 day to find the start of the winner selection day
+            localToday.setDate(localToday.getDate() + daysToAdd + 1);
             
             winnerDatePreview.innerHTML = `
-                سيتم إرسال طلب اختيار الفائزين في بداية يوم <br><strong>${newDate.toLocaleDateString('ar-EG', {
+                سيتم إرسال طلب اختيار الفائزين في بداية يوم <br><strong>${localToday.toLocaleDateString('ar-EG', {
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
             })}</strong>
             `;
             winnerDatePreview.parentElement.style.display = 'block';
         } else {
             winnerDatePreview.parentElement.style.display = 'none';
-        }
-
-        // --- NEW: Update Cost Summary Preview ---
-        if (costSummaryContainer && costSummaryText) {
-            const summaryParts = [];
-            if (totalCost > 0) {
-                summaryParts.push(`سيتم خصم <strong>${totalCost.toFixed(2)}$</strong> من رصيد المسابقات`);
-            }
-            if (depositWinners > 0) {
-                summaryParts.push(`سيتم خصم <strong>${depositWinners}</strong> من بونص الإيداع`);
-            }
-
-            if (summaryParts.length > 0) {
-                costSummaryText.innerHTML = summaryParts.join(' و ');
-            } else {
-                costSummaryText.innerHTML = 'لم يتم تحديد تكلفة بعد.';
-            }
         }
     }
 
@@ -857,6 +843,8 @@ async function renderCompetitionCreatePage(agentId) {
         const totalCost = winnersCount * prizePerWinner;
         const sendBtn = e.target.querySelector('.btn-send-telegram');
         const originalBtnHtml = sendBtn.innerHTML;
+        // FIX: Define selectedDuration which is used later in the agent update payload.
+        const selectedDuration = durationInput.value;
         
         // Enhanced validation on submit
         if (totalCost > (agent.remaining_balance || 0) || depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
@@ -880,25 +868,6 @@ async function renderCompetitionCreatePage(agentId) {
         sendBtn.disabled = true;
         sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
 
-        // Calculate ends_at date
-        const selectedDuration = durationInput.value;
-        let endsAtDate = null;
-        let winnerSelectionDate = null;
-        if (selectedDuration) {
-            const newDate = new Date(); // Start from today
-            newDate.setHours(0, 0, 0, 0);
-            let daysToAdd = 0;
-            switch (selectedDuration) {
-                case '1d': daysToAdd = 2; break;
-                case '2d': daysToAdd = 3; break;
-                case '1w': daysToAdd = 8; break;
-            }
-            if (daysToAdd > 0) {
-                newDate.setDate(newDate.getDate() + daysToAdd);
-                endsAtDate = newDate.toISOString();
-            }
-        }
-
         try {
             // The backend will handle the image URL logic. We just send the template ID.
             const finalImageUrlForTelegram = `${window.location.origin}/images/competition_bg.jpg`;
@@ -910,8 +879,8 @@ async function renderCompetitionCreatePage(agentId) {
                 is_active: true,
                 status: 'sent',
                 agent_id: agent._id, // Use MongoDB _id
-                total_cost: totalCost,
-                ends_at: endsAtDate,
+                duration: durationInput.value, // Send duration for backend calculation
+                total_cost: totalCost, // ends_at is now calculated by the backend
                 deposit_winners_count: depositWinnersCount,
                 correct_answer: selectedTemplate.correct_answer,
                 winners_count: winnersCount,
@@ -1384,7 +1353,7 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
     
     const modal = document.createElement('div');
     // I need to add a function to create the modal for archived templates
-    modal.className = 'form-modal-content modal-wide'; // Use existing style from components.css
+    modal.className = 'form-modal-content modal-fullscreen'; // Use existing style from components.css
     
     modal.innerHTML = `
         <div class="form-modal-header">
@@ -1552,7 +1521,7 @@ async function renderArchivedTemplatesPage() {
     const canView = isAdmin || templatesPerm === 'full' || templatesPerm === 'view';
 
     if (!canView) {
-        appContent.innerHTML = ` d
+        appContent.innerHTML = ` <div class="access-denied-container">
                 <i class="fas fa-lock"></i>
                 <h2>ليس لديك صلاحية وصول</h2>
                 <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
@@ -1788,7 +1757,7 @@ function renderEditTemplateModal(template, onSaveCallback) {
         if (!response.ok) {
             const result = await response.json();
             showToast(result.message || 'فشل حفظ التعديلات.', 'error');
-        } else {
+            } else { 
             showToast('تم حفظ التعديلات بنجاح.', 'success');
             closeModal();
             if (onSaveCallback) onSaveCallback();

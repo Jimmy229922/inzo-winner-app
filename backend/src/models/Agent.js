@@ -31,5 +31,31 @@ const AgentSchema = new mongoose.Schema({
     telegram_group_name: { type: String, default: null },
 }, { timestamps: true });
 
+/**
+ * Checks if the agent is ready for balance renewal based on their renewal period.
+ * @returns {boolean} True if the agent is ready for renewal, false otherwise.
+ */
+AgentSchema.methods.isReadyForRenewal = function() {
+    if (!this.renewal_period || this.renewal_period === 'none') {
+        return false;
+    }
+
+    const now = new Date();
+    const lastRenewal = this.last_renewal_date || this.createdAt;
+    if (!lastRenewal) {
+        return true; // If no last renewal or creation date, allow renewal.
+    }
+
+    const nextRenewalDate = new Date(lastRenewal);
+    switch (this.renewal_period) {
+        case 'weekly': nextRenewalDate.setDate(lastRenewal.getDate() + 7); break;
+        case 'biweekly': nextRenewalDate.setDate(lastRenewal.getDate() + 14); break;
+        case 'monthly': nextRenewalDate.setMonth(lastRenewal.getMonth() + 1); break;
+        default: return false;
+    }
+
+    return now >= nextRenewalDate;
+};
+
 module.exports = mongoose.model('Agent', AgentSchema);
                 

@@ -411,3 +411,115 @@ function renderCompetitionsChart(competitions) {
         }
     });
 }
+
+async function renderTopAgentsSection() {
+    const appContent = document.getElementById('app-content');
+    
+    appContent.innerHTML = `
+        <div class="page-header">
+            <h1><i class="fas fa-trophy"></i> أبرز الوكلاء</h1>
+        </div>
+        
+        <div class="top-agents-container">
+            <!-- Top 3 Agents Section -->
+            <div class="top-3-agents">
+                <h2 class="section-title">أفضل 3 وكلاء</h2>
+                <div class="top-3-grid" id="top-3-agents-grid">
+                    <div class="loader-container"><div class="spinner"></div></div>
+                </div>
+            </div>
+            
+            <!-- Other Agents Sections -->
+            <div class="other-agents">
+                <h2 class="section-title">الوكلاء الحصريين</h2>
+                <div class="agents-grid" id="exclusive-agents-grid">
+                    <div class="loader-container"><div class="spinner"></div></div>
+                </div>
+                
+                <h2 class="section-title">الوكلاء الاعتياديين</h2>
+                <div class="agents-grid" id="regular-agents-grid">
+                    <div class="loader-container"><div class="spinner"></div></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    try {
+        const response = await authedFetch('/api/agents?sort=performance');
+        if (!response.ok) {
+            throw new Error('Failed to fetch agents data');
+        }
+
+        const { data: agents } = await response.json();
+        
+        // Split agents into categories
+        const top3Agents = agents.slice(0, 3);
+        const exclusiveAgents = agents.filter(agent => 
+            agent.is_exclusive && !top3Agents.includes(agent)
+        );
+        const regularAgents = agents.filter(agent => 
+            !agent.is_exclusive && !top3Agents.includes(agent)
+        );
+
+        // Render top 3 agents
+        document.getElementById('top-3-agents-grid').innerHTML = `
+            ${top3Agents.map((agent, index) => `
+                <div class="top-agent-card rank-${index + 1}">
+                    <div class="rank-badge">${index + 1}</div>
+                    <div class="agent-avatar">
+                        ${agent.avatar_url ? 
+                            `<img src="${agent.avatar_url}" alt="${agent.name}">` : 
+                            `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`
+                        }
+                    </div>
+                    <div class="agent-info">
+                        <h3>${agent.name}</h3>
+                        <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
+                        <div class="stats">
+                            <div class="stat"><i class="fas fa-users"></i> ${agent.clients_count} عميل</div>
+                            <div class="stat"><i class="fas fa-trophy"></i> ${agent.competitions_count} مسابقة</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        `;
+
+        // Render exclusive agents
+        document.getElementById('exclusive-agents-grid').innerHTML = 
+            exclusiveAgents.length ? 
+            exclusiveAgents.map(agent => generateAgentCard(agent)).join('') :
+            '<p class="no-results">لا يوجد وكلاء حصريين حالياً</p>';
+
+        // Render regular agents
+        document.getElementById('regular-agents-grid').innerHTML = 
+            regularAgents.length ?
+            regularAgents.map(agent => generateAgentCard(agent)).join('') :
+            '<p class="no-results">لا يوجد وكلاء اعتياديين حالياً</p>';
+
+    } catch (error) {
+        console.error('Error loading agents:', error);
+        showToast('حدث خطأ أثناء تحميل بيانات الوكلاء', 'error');
+    }
+}
+
+function generateAgentCard(agent) {
+    return `
+        <div class="agent-card">
+            <div class="agent-avatar">
+                ${agent.avatar_url ? 
+                    `<img src="${agent.avatar_url}" alt="${agent.name}">` : 
+                    `<div class="avatar-placeholder"><i class="fas fa-user"></i></div>`
+                }
+            </div>
+            <div class="agent-info">
+                <h3>${agent.name}</h3>
+                <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
+                <div class="stats">
+                    <div class="stat"><i class="fas fa-users"></i> ${agent.clients_count} عميل</div>
+                    <div class="stat"><i class="fas fa-trophy"></i> ${agent.competitions_count} مسابقة</div>
+                    ${agent.is_exclusive ? '<div class="exclusive-badge"><i class="fas fa-star"></i> حصري</div>' : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}

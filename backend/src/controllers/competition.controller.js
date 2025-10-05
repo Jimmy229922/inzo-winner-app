@@ -2,6 +2,29 @@ const Competition = require('../models/Competition');
 const Agent = require('../models/Agent');
 const Template = require('../models/Template');
 
+/**
+ * Calculates the UTC end date for a competition based on local timezone logic.
+ * @param {string} duration - The duration string (e.g., '1d', '2d', '1w').
+ * @param {number} tzOffsetHours - The timezone offset in hours (e.g., 3 for Egypt).
+ * @returns {string|null} The ISO string of the calculated end date in UTC, or null.
+ */
+function calculateEndsAtUTC(duration, tzOffsetHours = 3) {
+    const msDay = 86400000;
+    const tzMs = tzOffsetHours * 3600000;
+    const nowUtcMs = Date.now();
+    const nowLocalMs = nowUtcMs + tzMs;
+    const localDayStartMs = Math.floor(nowLocalMs / msDay) * msDay;
+
+    const durationMap = { '1d': 1, '2d': 2, '1w': 7 };
+    const durationDays = durationMap[duration];
+    if (durationDays === undefined) return null;
+
+    // Winner selection starts at the beginning of the day *after* the competition duration ends.
+    const winnerLocalStartMs = localDayStartMs + (1 + durationDays) * msDay;
+    const winnerUtcMs = winnerLocalStartMs - tzMs;
+    return new Date(winnerUtcMs).toISOString();
+}
+
 exports.getAllCompetitions = async (req, res) => {
     try {
         const { page = 1, limit = 10, search, status, classification, sort, excludeStatus, agentId } = req.query;
@@ -44,7 +67,7 @@ exports.getAllCompetitions = async (req, res) => {
             const { agent_id, ...rest } = comp;
             return {
                 ...rest,
-                agents: agent_id ? agent_id : {
+                agents: agent_id || {
                     name: 'وكيل محذوف',
                     classification: 'غير متاح',
                     avatar_url: null
@@ -74,15 +97,20 @@ exports.getAllCompetitions = async (req, res) => {
 
 exports.createCompetition = async (req, res) => {
     try {
-        const { template_id, ...rest } = req.body;
-        const newCompetition = new Competition(rest);
-        await newCompetition.save();
-
-        if (template_id) {
-            await Template.findByIdAndUpdate(template_id, { $inc: { usage_count: 1 } });
+        const competitionData = req.body;
+        
+        // Calculate ends_at on the backend for consistency and accuracy.
+        const endsAtUTC = calculateEndsAtUTC(competitionData.duration);
+        if (!endsAtUTC) {
+            return res.status(400).json({ message: 'Invalid competition duration provided.' });
         }
+        competitionData.ends_at = endsAtUTC;
+        const competition = new Competition(competitionData);
 
-        res.status(201).json({ data: newCompetition });
+        await competition.save();
+
+        // TODO: Increment usage_count on the template
+        res.status(201).json({ data: competition });
     } catch (error) {
         res.status(400).json({ message: 'Failed to create competition.', error: error.message });
     }

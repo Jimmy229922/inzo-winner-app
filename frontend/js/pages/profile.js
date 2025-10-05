@@ -34,6 +34,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const canEditFinancials = isSuperAdmin || isAdmin; // تعديل: السماح للمسؤول بتعديل البيانات المالية دائماً
     const canViewAgentComps = isAdmin || agentPerms.can_view_competitions_tab; // المسؤولون لديهم صلاحية عرض المسابقات دائماً
     const canCreateComp = isAdmin || compsPerms.can_create; // المسؤولون لديهم صلاحية إنشاء المسابقات دائماً
+    const canEditComps = isAdmin || compsPerms.manage_comps === 'full'; // FIX: Define the missing permission variable
 
     // Check for edit mode in hash, e.g., #profile/123/edit
     const hashParts = window.location.hash.split('/');
@@ -526,28 +527,28 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                 return competitions.map(comp => {
                     const endDate = comp.ends_at ? new Date(comp.ends_at) : null;
                     let countdownHtml = '';
-                    if (endDate && comp.status !== 'completed') {
+                    if (endDate && comp.status !== 'completed' && comp.status !== 'awaiting_winners') {
                         const diffTime = endDate.getTime() - new Date().getTime();
                         if (diffTime > 0) {
-                            countdownHtml = `<div class="competition-countdown" data-end-date="${comp.ends_at}"><i class="fas fa-clock"></i> <span>جاري حساب الوقت...</span></div>`;
+                            countdownHtml = `<div class="competition-countdown" data-end-date="${comp.ends_at}"><i class="fas fa-hourglass-half"></i> <span>جاري حساب الوقت...</span></div>`;
                         } else {
-                            countdownHtml = `<div class="competition-countdown expired"><i class="fas fa-hourglass-end"></i> انتهى الوقت</div>`;
+                            countdownHtml = `<div class="competition-countdown expired"><i class="fas fa-hourglass-end"></i> في انتظار المعالجة...</div>`;
                         }
                     }
 
                     const statusSteps = {
-                        'sent': { text: 'تم الإرسال', step: 1 },
-                        'awaiting_winners': { text: 'في انتظار الفائزين', step: 2 },
-                        'completed': { text: 'مكتملة', step: 3 }
+                        'sent': { text: 'تم الإرسال', step: 1, icon: 'fa-paper-plane' },
+                        'awaiting_winners': { text: 'في انتظار الفائزين', step: 2, icon: 'fa-user-clock' },
+                        'completed': { text: 'مكتملة', step: 3, icon: 'fa-check-double' }
                     };
                     const currentStatus = statusSteps[comp.status] || statusSteps['sent'];
 
                     const progressBarHtml = `
                         <div class="stepper-wrapper step-${currentStatus.step}">
                             ${Object.values(statusSteps).map((s, index) => {
-                                const isLineCompleted = currentStatus.step > index + 1;
+                                const isLineCompleted = currentStatus.step > index + 1; // Line is complete if the next step is reached
                                 return `
-                                <div class="stepper-item ${currentStatus.step >= s.step ? 'completed' : ''}">
+                                <div class="stepper-item ${currentStatus.step >= s.step ? 'completed' : ''}" title="${s.text}">
                                     <div class="step-counter">
                                         ${currentStatus.step > s.step ? '<i class="fas fa-check"></i>' : s.step}
                                     </div>
@@ -581,7 +582,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                         </div>
                         <div class="competition-card-footer">
                             ${comp.status === 'awaiting_winners' ? `<button class="btn-primary complete-competition-btn" data-id="${comp.id}" data-name="${comp.name}"><i class="fas fa-check-double"></i> تم اختيار الفائزين</button>` : ''}
-                            <button class="btn-danger delete-competition-btn" data-id="${comp.id}"><i class="fas fa-trash-alt"></i> حذف</button>
+                            ${canEditComps ? `<button class="btn-danger delete-competition-btn" data-id="${comp._id}"><i class="fas fa-trash-alt"></i> حذف</button>` : ''}
                         </div>
                     </div>
                 `}).join('');
@@ -652,9 +653,9 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                             participants_count: parseInt(participants, 10)
                         };
 
-                        const { error } = await supabase.from('competitions').update(updateData).eq('id', id); // This will be migrated later
+                        const response = await authedFetch(`/api/competitions/${id}`, { method: 'PUT', body: JSON.stringify(updateData) });
 
-                        if (error) {
+                        if (!response.ok) {
                             showToast('فشل إكمال المسابقة.', 'error');
                         } else {
                             showToast('تم إكمال المسابقة بنجاح.', 'success');
@@ -665,7 +666,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                         title: 'إكمال المسابقة وتسجيل الأداء',
                         confirmText: 'نعم، اكتملت',
                         confirmClass: 'btn-primary',
-                        onRender: (modal) => {
+                        onRender: (modal) => { // This will be migrated later
                             const confirmBtn = modal.querySelector('#confirm-btn'); // This will be migrated later
                             const inputs = modal.querySelectorAll('.modal-input');
                             confirmBtn.disabled = true; // Disable by default
@@ -693,14 +694,8 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                             showToast(result.message || 'فشل حذف المسابقة.', 'error');
                             return;
                         }
-                        if (error) {
-                            showToast('فشل حذف المسابقة.', 'error');
-                            console.error('Delete competition error:', error);
-                        } else {
-                            showToast('تم حذف المسابقة بنجاح.', 'success');
-                            // Re-render the profile page, staying on the same tab
-                            renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });
-                        }
+                        showToast('تم حذف المسابقة بنجاح.', 'success');
+                        renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });
                     }, {
                         title: 'تأكيد الحذف',
                         confirmText: 'حذف',
@@ -721,28 +716,42 @@ function startCompetitionCountdowns() {
     const countdownElements = document.querySelectorAll('.competition-countdown, .competition-countdown-header');
     if (countdownElements.length === 0) return;
 
+    stopCompetitionCountdowns(); // Clear any existing intervals before starting new ones
+
     const updateElements = () => {
         let activeTimers = false;
         countdownElements.forEach(el => {
             if (!document.body.contains(el)) return;
 
             const endDateStr = el.dataset.endDate;
-            if (!endDateStr) return;
+            if (!endDateStr) {
+                el.innerHTML = ''; // Clear if no date
+                return;
+            }
 
             const endDate = new Date(endDateStr);
-            const diffTime = endDate.getTime() - new Date().getTime();
+            // FIX V2: Get current time and end time in UTC milliseconds to ensure correct calculation
+            const now = new Date();
+            const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds());
+            const endUTC = endDate.getTime();
+            const diffTime = endUTC - nowUTC;
 
             if (diffTime <= 0) {
-                el.innerHTML = `<i class="fas fa-hourglass-end"></i> انتهى الوقت`;
+                el.innerHTML = `<i class="fas fa-hourglass-end"></i> في انتظار المعالجة...`;
                 el.classList.add('expired');
             } else {
                 activeTimers = true;
-                const days = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                if (days > 0) {
-                    el.innerHTML = `<i class="fas fa-clock"></i> <span>متبقي: ${days} يوم</span>`;
-                } else {
-                    el.innerHTML = `<i class="fas fa-clock"></i> <span>ينتهي اليوم</span>`;
+                // FIX: Display remaining time in days only.
+                const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                let daysText = '';
+                if (days > 1) {
+                    daysText = `${days} أيام`;
+                } else if (days === 1) {
+                    daysText = `يوم واحد`;
+                } else { // Should not happen with ceil, but as a fallback
+                    daysText = 'أقل من يوم';
                 }
+                el.innerHTML = `<i class="fas fa-hourglass-half"></i> <span>متبقي: ${daysText}</span>`;
             }
         });
         if (!activeTimers) stopCompetitionCountdowns();
@@ -1138,7 +1147,7 @@ function displayNextRenewalDate(agent) {
 
     // --- إصلاح: استخدام تاريخ إنشاء الوكيل كقيمة احتياطية إذا لم يكن هناك تاريخ تجديد سابق ---
     // هذا يمنع ظهور "Invalid Date" للوكلاء الجدد.
-    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.createdAt);
+    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.created_at);
     let nextRenewalDate = new Date(lastRenewal);
 
     if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
