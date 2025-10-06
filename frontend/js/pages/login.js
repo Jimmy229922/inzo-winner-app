@@ -79,20 +79,22 @@ async function handleLogin(e) {
         return;
     }
 
+    // --- FIX: Clear old user profile before attempting a new login ---
+    localStorage.removeItem('userProfile');
+
     // --- NEW: Call the dedicated API function ---
     try {
-        const { token, user } = await loginUser(email, password);
-
-        // Store the token and user info
-        localStorage.setItem('authToken', token);
-        localStorage.setItem('userProfile', JSON.stringify(user));
+        // The loginUser function now handles token and profile storage
+        const userProfile = await loginUser(email, password);
 
         if (rememberMeCheckbox.checked) {
             localStorage.setItem('rememberedEmail', email);
         } else {
             localStorage.removeItem('rememberedEmail');
         }
-        window.location.replace('/'); // Redirect to the main app
+        // --- FIX: Use location.reload() after setting the hash to force a clean state read ---
+        // This is more robust than location.replace() for clearing cached states.
+        window.location.href = '/';
     } catch (error) {
         console.error('[Login] Login attempt failed:', error.message);
         showLoginError(error.message);
@@ -120,8 +122,24 @@ async function loginUser(email, password) {
         throw new Error(result.message || 'فشل تسجيل الدخول.');
     }
 
-    // On success, return the token and user data
-    return { token: result.token, user: result.user };
+    // --- FIX: On success, store token, fetch full profile, then return ---
+    const token = result.token;
+    localStorage.setItem('authToken', token);
+
+    // Now, fetch the user profile to ensure it's cached correctly before the app initializes
+    const profileResponse = await fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!profileResponse.ok) {
+        throw new Error('تم تسجيل الدخول ولكن فشل جلب بيانات الملف الشخصي.');
+    }
+
+    const userProfile = await profileResponse.json();
+    localStorage.setItem('userProfile', JSON.stringify(userProfile));
+
+    // Return the profile so the caller can use it if needed
+    return userProfile;
 }
 
 function showLoginError(message) {

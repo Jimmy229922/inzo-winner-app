@@ -26,12 +26,25 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-            "script-src": ["'self'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+            // FIX: Add the hash of the inline script in index.html to allow cache-busting script to run
+            "script-src": [
+                "'self'", 
+                "https://cdn.jsdelivr.net", 
+                "https://cdnjs.cloudflare.com",
+                // "'sha256-8wRuEDii/8OrjKP+SkrGmAiY6dnp1/j/6JdNr8TjXtY='", // Old hash
+                "'sha256-C+UNglKutB8VZOyHLy9MTyAC11AaepJoYdvIp21CZXY='", // New hash for the updated script loader
+            ],
             "connect-src": ["'self'", "https:", "http://localhost:*"], // Keep existing connect-src
             "img-src": ["'self'", "data:", "blob:", "https://ui-avatars.com", "https://via.placeholder.com"],
         },
     },
 }));
+
+// --- FIX: Serve static files BEFORE API routes to avoid conflicts ---
+// Serve static files from the 'frontend' directory. This must come before the API catch-all.
+app.use(express.static(path.join(__dirname, '../../frontend')));
+// --- إضافة: جعل مجلد 'uploads' متاحاً للوصول العام ---
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -52,12 +65,6 @@ app.use('/api/log-error', errorRoutes); // إضافة: استخدام مسارا
 app.use('/api/*', (req, res) => {
     res.status(404).json({ message: `API route not found: ${req.method} ${req.originalUrl}` });
 });
-
-// --- إضافة: جعل مجلد 'uploads' متاحاً للوصول العام ---
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-
-// Serve static files from the 'frontend' directory
-app.use(express.static(path.join(__dirname, '../../frontend')));
 
 // For any other GET request that is not an API route, serve the main index.html
 // app.get('/', (req, res) => { // This line was causing a duplicate route definition

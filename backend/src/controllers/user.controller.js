@@ -66,14 +66,24 @@ const userController = {
         if (full_name) updateData.full_name = full_name;
         if (permissions) updateData.permissions = permissions;
         if (status) updateData.status = status;
-
-        // --- SECURITY FIX: Only super_admin can change permissions ---
+        
+        // --- SECURITY: Only the user themselves or an admin can change their own full_name ---
+        if (full_name && req.user.role !== 'super_admin' && req.user.role !== 'admin' && req.user.id !== req.params.id) {
+             return res.status(403).json({ message: 'Forbidden: You can only change your own name.' });
+        }
+ 
+        // --- SECURITY FIX: Only super_admin can change permissions or status ---
         if (permissions && req.user.role !== 'super_admin') {
             return res.status(403).json({ message: 'Forbidden: You do not have permission to change user permissions.' });
         }
 
         try {
             const userToUpdate = await User.findById(req.params.id);
+            // --- SECURITY FIX: Prevent any modification to a super_admin account via API ---
+            if (userToUpdate && userToUpdate.role === 'super_admin' && req.user.id !== req.params.id) {
+                return res.status(403).json({ message: 'Forbidden: Super Admin accounts cannot be modified by others.' });
+            }
+
             if (userToUpdate && userToUpdate.role === 'super_admin') {
                 return res.status(403).json({ message: 'Cannot modify a Super Admin account.' });
             }

@@ -25,10 +25,18 @@ const isSuperAdmin = (req, res, next) => {
     next();
 };
 
+// --- NEW: Middleware to check if the user is an Admin or Super Admin ---
+const isAdminOrSuperAdmin = (req, res, next) => {
+    if (!req.user || (req.user.role !== 'super_admin' && req.user.role !== 'admin')) {
+        return res.status(403).json({ message: 'Forbidden: Access is restricted to Admins.' });
+    }
+    next();
+};
+
 // Basic CRUD routes
 router.route('/')
-    .get(authenticate, isSuperAdmin, userController.getAllUsers)
-    .post(authenticate, userController.createUser);
+    .get(authenticate, isSuperAdmin, userController.getAllUsers) // FIX: Allow only super admins to get all users
+    .post(authenticate, isSuperAdmin, userController.createUser); // FIX: Only super admins can create users
 
 router.route('/:id')
     .get(authenticate, userController.getUserById)

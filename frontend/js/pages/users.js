@@ -144,15 +144,16 @@ function renderUserRow(user) {
                 if (!isAdmin) return ''; // لا تعرض عمود الإجراءات لغير المسؤولين
 
                 // --- تعديل: عرض خلية فارغة للمدير العام لمنع أي إجراء ---
-                if (isTargetSuperAdmin) {
-                    return `<td class="actions-cell"><span class="no-actions-text">لا يمكن التعديل</span></td>`;
+                // --- NEW: Admins cannot edit other admins or super admins ---
+                if (isTargetSuperAdmin || (isCurrentUserAdmin && isTargetAdmin)) {
+                    return `<td class="actions-cell"><span class="no-actions-text">${isCurrentUserSuperAdmin ? 'لا يمكن التعديل' : 'صلاحية للمدير العام'}</span></td>`;
                 }
 
                 // عرض الأزرار للمستخدمين العاديين والمسؤولين الآخرين
                 return `<td class="actions-cell">
                     <button class="btn-secondary edit-user-btn" data-user-id="${user._id}" title="تعديل بيانات المستخدم"><i class="fas fa-edit"></i> تعديل</button>
-                    <button class="btn-primary permissions-user-btn" data-user-id="${user._id}" title="إدارة الصلاحيات"><i class="fas fa-shield-alt"></i> الصلاحيات</button>
-                    <button class="btn-danger delete-user-btn" data-user-id="${user._id}" title="حذف المستخدم نهائياً" ${!isCurrentUserSuperAdmin ? 'disabled' : ''}><i class="fas fa-trash-alt"></i> حذف</button>
+                    <button class="btn-primary permissions-user-btn" data-user-id="${user._id}" title="إدارة الصلاحيات" ${!isCurrentUserSuperAdmin ? 'disabled' : ''}><i class="fas fa-shield-alt"></i> الصلاحيات</button>
+                    <button class="btn-danger delete-user-btn" data-user-id="${user._id}" title="حذف المستخدم نهائياً" ${!isCurrentUserSuperAdmin ? 'disabled' : ''}><i class="fas fa-trash-alt"></i></button>
                     <label class="custom-checkbox toggle-switch small-toggle" title="${isInactive ? 'تفعيل الحساب' : 'تعطيل الحساب'}" ${!isCurrentUserSuperAdmin ? 'style="display:none;"' : ''}>
                         <input type="checkbox" class="status-toggle" data-user-id="${user._id}" ${!isInactive ? 'checked' : ''}><span class="slider round"></span>
                     </label>
@@ -705,7 +706,7 @@ function renderPermissionsModal(user) {
     
     const modal = document.createElement('div');
     modal.className = 'form-modal-content modal-fullscreen'; // تعديل: استخدام حجم ملء الشاشة
-
+    
     const p = user.permissions || {}; // Short alias for permissions
     // Set defaults for any missing permission structures
     p.agents = p.agents || { view_financials: false, edit_profile: false, edit_financials: false, can_view_competitions_tab: false, can_renew_all_balances: false };
@@ -713,10 +714,10 @@ function renderPermissionsModal(user) {
 
     modal.innerHTML = `
         <div class="form-modal-header">
-            <h2><i class="fas fa-shield-alt"></i> إدارة صلاحيات: ${user.full_name}</h2>
+            <h2><i class="fas fa-shield-alt"></i> إدارة صلاحيات: ${user.full_name} ${user.role === 'super_admin' ? '<span class="admin-badge super-admin" style="font-size: 1rem; vertical-align: middle; margin-right: 10px;">مدير عام</span>' : ''}</h2>
             <button id="close-modal-btn" class="btn-icon-action" title="إغلاق">&times;</button>
         </div>
-        <div class="form-modal-body">
+        <div class="form-modal-body" ${user.role === 'super_admin' ? 'style="pointer-events: none; opacity: 0.7;"' : ''}>
             <form id="permissions-form">
                 <div class="table-responsive-container">
                     <table class="permissions-table">
@@ -735,9 +736,9 @@ function renderPermissionsModal(user) {
                                     <strong>إدارة المسابقات</strong>
                                     <small>التحكم في عرض وتعديل وحذف المسابقات.</small>
                                 </td>
-                                <td><label class="custom-radio"><input type="radio" name="perm_manage_comps" value="none" ${p.competitions.manage_comps === 'none' || !p.competitions.manage_comps ? 'checked' : ''}><span></span></label></td>
-                                <td><label class="custom-radio"><input type="radio" name="perm_manage_comps" value="view" ${p.competitions.manage_comps === 'view' ? 'checked' : ''}><span></span></label></td>
-                                <td><label class="custom-radio"><input type="radio" name="perm_manage_comps" value="full" ${p.competitions.manage_comps === 'full' ? 'checked' : ''}><span></span></label></td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_comps" value="none" ${p.competitions.manage_comps === 'none' || !p.competitions.manage_comps || user.role === 'super_admin' ? 'checked' : ''}><span></span></label></td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_comps" value="view" ${p.competitions.manage_comps === 'view' && user.role !== 'super_admin' ? 'checked' : ''}><span></span></label></td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_comps" value="full" ${p.competitions.manage_comps === 'full' || user.role === 'super_admin' ? 'checked' : ''}><span></span></label></td>
                             </tr>
                             <tr>
                                 <td class="permission-name">
@@ -745,9 +746,9 @@ function renderPermissionsModal(user) {
                                     <strong>إدارة القوالب</strong>
                                     <small>التحكم في عرض وتعديل وحذف قوالب المسابقات.</small>
                                 </td>
-                                <td><label class="custom-radio"><input type="radio" name="perm_manage_templates" value="none" ${p.competitions.manage_templates === 'none' || !p.competitions.manage_templates ? 'checked' : ''}><span></span></label></td>
-                                <td><label class="custom-radio"><input type="radio" name="perm_manage_templates" value="view" ${p.competitions.manage_templates === 'view' ? 'checked' : ''}><span></span></label></td>
-                                <td><label class="custom-radio"><input type="radio" name="perm_manage_templates" value="full" ${p.competitions.manage_templates === 'full' ? 'checked' : ''}><span></span></label></td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_templates" value="none" ${p.competitions.manage_templates === 'none' || !p.competitions.manage_templates || user.role === 'super_admin' ? 'checked' : ''}><span></span></label></td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_templates" value="view" ${p.competitions.manage_templates === 'view' && user.role !== 'super_admin' ? 'checked' : ''}><span></span></label></td>
+                                <td><label class="custom-radio"><input type="radio" name="perm_manage_templates" value="full" ${p.competitions.manage_templates === 'full' || user.role === 'super_admin' ? 'checked' : ''}><span></span></label></td>
                             </tr>
                         </tbody>
                     </table>
@@ -765,36 +766,36 @@ function renderPermissionsModal(user) {
                                     <strong>تجديد رصيد جميع الوكلاء</strong>
                                     <small>السماح للموظف باستخدام زر "تجديد رصيد الوكلاء" في صفحة إدارة الوكلاء.</small>
                                 </td>
-                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-agents-renew-all" ${p.agents.can_renew_all_balances ? 'checked' : ''}><span class="slider round"></span></label></td>
+                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-agents-renew-all" ${p.agents.can_renew_all_balances || user.role === 'super_admin' ? 'checked' : ''}><span class="slider round"></span></label></td>
                             </tr>
                              <tr>
                                 <td class="permission-name">
                                     <i class="fas fa-magic"></i>
                                     <strong>إنشاء مسابقة للوكيل</strong>
-                                    <small>السماح للموظف باستخدام زر "إنشاء مسابقة" من داخل صفحة ملف الوكيل.</small>
+                                    <small>السماح للموظف بإنشاء مسابقات جديدة للوكلاء.</small>
                                 </td>
-                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-competitions-can-create" ${p.competitions.can_create ? 'checked' : ''}><span class="slider round"></span></label></td>
+                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-competitions-can-create" ${p.competitions.can_create || user.role === 'super_admin' ? 'checked' : ''}><span class="slider round"></span></label></td>
                             </tr>
                             <tr>
                                 <td class="permission-name">
                                     <i class="fas fa-list-alt"></i>
                                     <strong>عرض تبويب مسابقات الوكيل</strong>
-                                    <small>السماح للموظف برؤية تبويب "المسابقات" وسجلها داخل صفحة ملف الوكيل.</small>
+                                    <small>السماح للموظف برؤية تبويب "المسابقات" داخل صفحة ملف الوكيل.</small>
                                 </td>
-                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-agents-view-competitions" ${p.agents.can_view_competitions_tab ? 'checked' : ''}><span class="slider round"></span></label></td>
+                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-agents-view-competitions" ${p.agents.can_view_competitions_tab || user.role === 'super_admin' ? 'checked' : ''}><span class="slider round"></span></label></td>
                             </tr>
                             <tr>
                                 <td class="permission-name">
                                     <i class="fas fa-eye"></i>
                                     <strong>عرض التفاصيل المالية للوكيل</strong>
-                                    <small>السماح للموظف برؤية تبويب "تفاصيل" الذي يحتوي على البيانات المالية الحساسة للوكيل.</small>
+                                    <small>السماح للموظف برؤية تبويب "تفاصيل" المالي للوكيل.</small>
                                 </td>
-                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-agents-view-financials" ${p.agents.view_financials ? 'checked' : ''}><span class="slider round"></span></label></td>
+                                <td><label class="custom-checkbox toggle-switch"><input type="checkbox" id="perm-agents-view-financials" ${p.agents.view_financials || user.role === 'super_admin' ? 'checked' : ''}><span class="slider round"></span></label></td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
-                <div class="form-actions" style="margin-top: 20px;">
+                <div class="form-actions" style="margin-top: 20px;" ${user.role === 'super_admin' ? 'hidden' : ''}>
                     <button type="submit" id="save-permissions-btn" class="btn-primary"><i class="fas fa-save"></i> حفظ الصلاحيات</button>
                     <button type="button" id="cancel-permissions-modal" class="btn-secondary">إلغاء</button>
                 </div>
@@ -812,6 +813,11 @@ function renderPermissionsModal(user) {
     modal.querySelector('#permissions-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const submitBtn = modal.querySelector('#save-permissions-btn');
+        if (!submitBtn) return;
+
+        // Get original permissions for logging
+        const originalPermissions = user.permissions || {};
+
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
 
@@ -819,7 +825,7 @@ function renderPermissionsModal(user) {
             agents: {
                 view_financials: modal.querySelector('#perm-agents-view-financials')?.checked || false,
                 edit_profile: false, 
-                edit_financials: false, 
+                edit_financials: false, // This permission is not implemented in the UI yet
                 can_view_competitions_tab: modal.querySelector('#perm-agents-view-competitions')?.checked || false, // This will be read from the new toggle
                 can_renew_all_balances: modal.querySelector('#perm-agents-renew-all')?.checked || false,
             },
@@ -831,14 +837,23 @@ function renderPermissionsModal(user) {
         };
 
         try {
-            const response = await authedFetch(`/api/users/${user.id}`, {
+            // The backend will log the change, including old and new values.
+            const response = await authedFetch(`/api/users/${user._id}`, {
                 method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ permissions: permissionsData })
             });
-            if (!response.ok) throw new Error((await response.json()).message);
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.message || 'فشل تحديث الصلاحيات.');
+            }
 
             showToast('تم تحديث صلاحيات المستخدم بنجاح.', 'success');
             closeModal();
+            
+            // Important: We must refetch the entire user list so the local cache (`allUsersCache`)
+            // is updated with the new permissions. This ensures that if we open the modal
+            // again for the same user, it shows the correct, most recent data.
             await fetchUsersData(); // Refresh the user list to reflect changes
         } catch (error) {
             showToast(`فشل تحديث الصلاحيات: ${error.message}`, 'error');
@@ -857,9 +872,6 @@ async function renderProfileSettingsPage() {
         return;
     }
 
-    // We need the user's email, which is in `supabase.auth.user()` not our profile table.
-    const { data: { user } } = await supabase.auth.getUser();
-
     const isSuperAdmin = currentUserProfile.role === 'super_admin';
     const isAdmin = currentUserProfile.role === 'admin';
     const roleBadge = isSuperAdmin ? '<span class="admin-badge super-admin">مدير عام</span>' : (isAdmin ? '<span class="admin-badge">مسؤول</span>' : '<span class="employee-badge">موظف</span>');
@@ -872,12 +884,12 @@ async function renderProfileSettingsPage() {
         <!-- NEW: Profile Header Section for display -->
         <div class="profile-settings-header">
             <div class="profile-avatar-edit large-avatar">
-                <img src="${currentUserProfile.avatar_url || `https://ui-avatars.com/api/?name=${currentUserProfile.full_name || user?.email}&background=8A2BE2&color=fff&size=128`}" alt="Avatar" id="avatar-preview">
+                <img src="${currentUserProfile.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUserProfile.full_name || currentUserProfile.email)}&background=8A2BE2&color=fff&size=128`}" alt="Avatar" id="avatar-preview">
                 <input type="file" id="avatar-upload" accept="image/*" style="display: none;">
             </div>
             <div class="profile-header-info">
                 <h2 class="profile-name-display">${currentUserProfile.full_name || 'مستخدم'} ${roleBadge}</h2>
-                <p class="profile-email-display">${user?.email || ''}</p>
+                <p class="profile-email-display">${currentUserProfile.email || ''}</p>
             </div>
         </div>
 

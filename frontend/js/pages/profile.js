@@ -122,6 +122,16 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const auditDaysHtml = (agent.audit_days && agent.audit_days.length > 0)
         ? `<div class="audit-days-display">${agent.audit_days.sort().map(dayIndex => `<span class="day-tag">${dayNames[dayIndex]}</span>`).join('')}</div>`
         : '<span class="day-tag-none">لا توجد أيام محددة</span>';
+
+    // --- NEW: Add a clear indicator that an admin is viewing another user's profile ---
+    const viewingAsAdminBar = `
+        <div class="viewing-as-admin-bar">
+            <i class="fas fa-user-shield"></i>
+            <span><strong>${currentUserProfile.full_name || 'المدير'}</strong> يقوم بعرض ملف:</span>
+            <span class="viewed-user-name">${agent.name}</span>
+        </div>
+    `;
+
     appContent.innerHTML = `
         <div class="profile-page-top-bar">
             <button id="back-btn" class="btn-secondary">&larr; عودة</button>
@@ -129,6 +139,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
         </div>
         
         <div class="profile-header-v2">
+            ${isSuperAdmin || isAdmin ? viewingAsAdminBar : ''}
             <div class="profile-avatar">
                 ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar">` : '<i class="fas fa-user-astronaut"></i>'}
             </div>
@@ -941,7 +952,7 @@ function renderDetailsView(agent) {
     // --- NEW: Permission Check ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const isAdmin = currentUserProfile?.role === 'admin';
-    const canEditFinancials = isSuperAdmin || isAdmin;
+    const canEditFinancials = isSuperAdmin || isAdmin; // In a real scenario, this would be a specific permission like `userPerms.agents.edit_financials`
 
     const container = document.getElementById('tab-details');
     if (!container) return;
@@ -950,14 +961,14 @@ function renderDetailsView(agent) {
         const numericFields = ['competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'competitions_per_week'];
         // --- NEW: Define which fields are financial ---
         const financialFields = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period'];
-                const isFinancial = financialFields.includes(fieldName);
+        const isFinancial = financialFields.includes(fieldName);
 
         let displayValue;
-        let iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
+        let iconHtml = '';
 
-        // إصلاح: منطق عرض أيقونة التعديل
-        if (!isEditable && fieldName !== 'audit_days') { // Allow editing audit_days even if other fields are not editable
-            iconHtml = `<span class="auto-calculated-indicator" title="يُحسب تلقائياً"><i class="fas fa-cogs"></i></span>`;
+        // Only show the edit icon if the user has permission
+        if (canEditFinancials) {
+            iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
         }
 
 
@@ -1023,7 +1034,7 @@ function renderDetailsView(agent) {
     container.innerHTML = htmlContent;
     const eventHandler = (e) => {
         const trigger = e.target.closest('.inline-edit-trigger');
-        if (trigger) {
+        if (trigger && canEditFinancials) { // Double-check permission on click
             const group = trigger.closest('.details-group'); 
             // FIX: Add a null check to prevent race condition errors after a save.
             if (!group) return;

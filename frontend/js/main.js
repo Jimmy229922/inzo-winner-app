@@ -89,9 +89,14 @@ async function fetchUserProfile() {
 }
 
 // --- NEW: Function to update UI elements after successful login ---
-function updateUIAfterLogin() {
-    const user = currentUserProfile;
+function updateUIAfterLogin(user) {
     if (!user) return;
+
+    // --- DEBUG: Log the user profile being used to update the UI ---
+    console.log(
+        `%c[UI Update] Updating interface for user: "${user.full_name}" with role: "${user.role}"`,
+        'color: #28a745; font-weight: bold; border: 1px solid #28a745; padding: 2px 5px; border-radius: 3px;'
+    );
 
     const settingsMenu = document.getElementById('settings-menu');
     const userNameDisplay = document.getElementById('user-name');
@@ -106,7 +111,7 @@ function updateUIAfterLogin() {
         userAvatar.src = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.full_name)}&background=random`;
     }
 
-    // Show admin-only links if the user is a super_admin
+    // Show admin-only links if the user is a super_admin or admin
     if (usersNavItem && user.role === 'super_admin') {
         usersNavItem.style.display = 'block';
     }
@@ -290,7 +295,7 @@ async function initializeApp() {
     const userProfile = await fetchUserProfile();
     if (userProfile) {
         window.addEventListener('hashchange', handleRouting);
-        updateUIAfterLogin(); // NEW: Update the UI with user info
+        updateUIAfterLogin(userProfile); // FIX: Pass the fetched user profile to the UI update function
         handleRouting(); // Initial route handling
     } else {
         // --- تعديل: التعامل مع فشل المصادقة الأولية ---
