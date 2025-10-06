@@ -53,8 +53,9 @@ exports.getAllLogs = async (req, res) => {
 
 exports.createLog = async (req, res) => {
     try {
-        const { agent_id, action_type, description, metadata } = req.body;
-        const userId = req.user ? req.user._id : null;
+        // --- FIX: Prioritize user_id from body for frontend-initiated logs ---
+        const { agent_id, action_type, description, metadata, user_id } = req.body;
+        const userId = user_id || (req.user ? req.user._id : null);
 
         const log = new Log({
             user: userId,

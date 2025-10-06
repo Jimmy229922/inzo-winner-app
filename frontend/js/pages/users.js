@@ -1,5 +1,17 @@
 async function renderUsersPage() {
     const appContent = document.getElementById('app-content');
+
+    // --- FIX: Add permission check at the start of the function ---
+    if (currentUserProfile?.role !== 'super_admin') {
+        appContent.innerHTML = `
+            <div class="access-denied-container">
+                <i class="fas fa-lock"></i>
+                <h2>ليس لديك صلاحية وصول</h2>
+                <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
+            </div>`;
+        return;
+    }
+
     appContent.innerHTML = `
         <!-- NEW: Stats Cards Section -->
         <div class="dashboard-grid-v2" id="user-stats-container" style="margin-bottom: 20px;">
