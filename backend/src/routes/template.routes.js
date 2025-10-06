@@ -9,7 +9,8 @@ router.get('/available', templateController.getAvailableTemplates);
 router.post('/', templateController.createTemplate);
 router.get('/:id', templateController.getTemplateById);
 router.put('/:id', templateController.updateTemplate);
-router.delete('/:id', templateController.deleteTemplate); // This archives the template
+router.patch('/:id/archive', templateController.deleteTemplate); // This archives the template
+router.delete('/:id', templateController.permanentlyDeleteTemplate); // This permanently deletes the template
 router.put('/:id/reactivate', templateController.reactivateTemplate);
 
 module.exports = router;

@@ -893,15 +893,15 @@ async function renderCompetitionCreatePage(agentId) {
                 deposit_winners_count: depositWinnersCount,
                 correct_answer: selectedTemplate.correct_answer,
                 winners_count: winnersCount,
-                prize_per_winner: prizePerWinner
+                prize_per_winner: prizePerWinner,
                 // template_id: selectedTemplate.id // This is now handled by the backend
+                template_id: selectedTemplate._id // NEW: Send the template ID to the backend
             };
 
             const compResponse = await authedFetch('/api/competitions', {
                 method: 'POST',
                 body: JSON.stringify(competitionPayload)
             });
-
             if (!compResponse.ok) {
                 const result = await compResponse.json();
                 throw new Error(`فشل حفظ المسابقة: ${result.message}`);
@@ -1369,7 +1369,7 @@ async function renderCompetitionTemplatesPage() {
             showConfirmationModal(
                 'هل أنت متأكد من حذف هذا القالب؟<br><small>لا يمكن التراجع عن هذا الإجراء.</small>',
                 async () => {
-                    const response = await authedFetch(`/api/templates/${templateId}`, { method: 'DELETE' });
+                    const response = await authedFetch(`/api/templates/${templateId}/archive`, { method: 'PATCH' });
                     if (!response.ok) {
                         const result = await response.json();
                         showToast(result.message || 'فشل حذف القالب.', 'error');
@@ -1623,8 +1623,8 @@ async function renderArchivedTemplatesPage() {
                     </thead>
                     <tbody>
                         ${templatesToDisplay.map(template => `
-                            <tr data-question="${template.name.toLowerCase()}" data-classification="${template.classification || 'All'}">
-                                <td data-label="اسم القالب">${template.name}</td>
+                            <tr data-question="${(template.name || '').toLowerCase()}" data-classification="${template.classification || 'All'}">
+                                <td data-label="اسم القالب">${template.name || 'قالب بدون اسم'}</td>
                                 <td data-label="التصنيف"><span class="classification-badge classification-${(template.classification || 'all').toLowerCase()}">${template.classification || 'الكل'}</span></td>
                                 <td data-label="مرات الاستخدام">${template.usage_count} / ${template.usage_limit}</td>
                                 <td class="actions-cell">

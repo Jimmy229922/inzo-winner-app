@@ -2,8 +2,7 @@ const Log = require('../models/Log');
 
 exports.getAllLogs = async (req, res) => {
     try {
-        const { page = 1, limit = 20, sort = 'newest', agent_id, populate } = req.query;
-        console.log('[Logs] Received request with query:', req.query);
+        const { page = 1, limit = 20, sort = 'newest', agent_id, populate } = req.query; 
 
         let query = {};
         if (agent_id) {
@@ -16,7 +15,6 @@ exports.getAllLogs = async (req, res) => {
             sortOptions = { createdAt: 1 };
         }
 
-        console.log('[Logs] Executing find with query:', JSON.stringify(query));
         let logQuery = Log.find(query)
             .sort(sortOptions)
             .limit(limit * 1)
@@ -28,7 +26,6 @@ exports.getAllLogs = async (req, res) => {
         }
 
         const logs = await logQuery;
-        console.log(`[Logs] Found ${logs.length} logs.`);
 
         const count = await Log.countDocuments(query);
 

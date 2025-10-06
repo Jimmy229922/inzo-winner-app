@@ -108,6 +108,23 @@ exports.deleteTemplate = async (req, res) => {
     }
 };
 
+// --- NEW: Permanently delete a template ---
+exports.permanentlyDeleteTemplate = async (req, res) => {
+    try {
+        const template = await CompetitionTemplate.findByIdAndDelete(req.params.id);
+        if (!template) {
+            return res.status(404).json({ message: 'Template not found.' });
+        }
+        // FIX: Ensure req.user._id is passed for logging
+        if (req.user && req.user._id) {
+            await logActivity(req.user._id, null, 'TEMPLATE_PERMANENTLY_DELETED', `تم حذف القالب نهائياً: ${template.question}`);
+        }
+        res.json({ message: 'Template permanently deleted successfully.' });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to permanently delete template.', error: error.message });
+    }
+};
+
 // Reactivate template
 exports.reactivateTemplate = async (req, res) => {
     try {
