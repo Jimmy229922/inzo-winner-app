@@ -4,12 +4,6 @@ const cors = require('cors');
 const path = require('path');
 const helmet = require('helmet');
 
-// --- NEW: Environment Variable Check ---
-if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.error('\x1b[31m%s\x1b[0m', 'FATAL ERROR: TELEGRAM_BOT_TOKEN is not defined in the .env file.');
-    process.exit(1); // Stop the server from starting
-}
-
 const authRoutes = require('./routes/auth.routes');
 const agentRoutes = require('./routes/agent.routes');
 const logRoutes = require('./routes/log.routes');
@@ -61,7 +55,9 @@ app.use('/api/stats', authMiddleware.authenticate, statsRoutes); // إضافة: 
 app.use('/api/calendar', authMiddleware.authenticate, calendarRoutes); // إضافة: استخدام مسارات التقويم
 app.use('/api/competitions', authMiddleware.authenticate, competitionRoutes); // إضافة: استخدام مسارات المسابقات
 app.use('/api/templates', authMiddleware.authenticate, templateRoutes); // إضافة: استخدام مسارات القوالب
-app.use('/api', authMiddleware.authenticate, telegramRoutes); // FIX: Protect all telegram routes
+// --- إضافة: استخدام مسارات تلجرام ---
+// Note: These are not protected by authMiddleware to allow more flexibility if needed later.
+app.use('/api', telegramRoutes);
 app.use('/api/log-error', errorRoutes); // إضافة: استخدام مسارات الأخطاء
 
 // Catch-all for API routes that don't exist
