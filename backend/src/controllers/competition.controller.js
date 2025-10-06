@@ -39,10 +39,18 @@ exports.getAllCompetitions = async (req, res) => {
             .skip((page - 1) * limit)
             .lean();
 
-        // Rename agent_id to agents to match frontend expectations
+        // Rename agent_id to agents and handle deleted agents
         const formattedCompetitions = competitions.map(comp => {
             const { agent_id, ...rest } = comp;
-            return { ...rest, agents: agent_id, id: comp._id };
+            return {
+                ...rest,
+                agents: agent_id ? agent_id : {
+                    name: 'وكيل محذوف',
+                    classification: 'غير متاح',
+                    avatar_url: null
+                },
+                id: comp._id
+            };
         });
 
         // Filter by classification after populating

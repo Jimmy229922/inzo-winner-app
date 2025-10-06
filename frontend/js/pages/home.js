@@ -133,13 +133,18 @@ function updateHomePageUI(stats) {
 
                 const completedToday = agentsForToday.filter(agent => {
                     const task = tasksMap[agent._id] || {}; // FIX: Use _id instead of id
-                    return task.audited && task.competition_sent; // Progress is based on both tasks
+                    return task.audited; // FIX: Completion is based on audit only
                 }).length;
 
                 const pendingAgents = agentsForToday.filter(agent => {
-                    const task = tasksMap[agent._id]; // FIX: Use _id instead of id
-                    // Show agents who are missing either task
-                    return !task || !task.audited || !task.competition_sent;
+                    const task = tasksMap[agent._id];
+                    return !task || !task.audited;  // Show agents that have not been audited yet
+                });
+
+                // ترتيب الوكلاء حسب التصنيف
+                pendingAgents.sort((a, b) => {
+                    const classOrder = { 'R': 0, 'A': 1, 'B': 2, 'C': 3 };
+                    return classOrder[a.classification] - classOrder[b.classification];
                 });
 
                 const progressPercent = totalTodayTasks > 0 ? Math.round((completedToday / totalTodayTasks) * 100) : 0;
@@ -147,6 +152,21 @@ function updateHomePageUI(stats) {
                 document.getElementById('tasks-progress-bar').style.width = `${progressPercent}%`;
                 document.getElementById('progress-label').textContent = `${completedToday} / ${totalTodayTasks}`;
                 document.getElementById('pending-count').textContent = pendingAgents.length;
+
+                // عرض قائمة الوكلاء المتبقين
+                if (pendingAgents.length > 0) {
+                    pendingList.innerHTML = pendingAgents.map(agent => `
+                        <a href="#tasks?highlight=${agent._id}" class="pending-task-item ${tasksMap[agent._id]?.competition_sent ? 'partial' : ''}">
+                            <div class="pending-task-info">
+                                <span class="pending-agent-name">${agent.name}</span>
+                                <span class="pending-agent-id">#${agent.agent_id}</span>
+                            </div>
+                            <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
+                        </a>
+                    `).join('');
+                } else {
+                    pendingList.innerHTML = '<p class="no-pending-tasks">لا توجد مهام متبقية لليوم 🎉</p>';
+                }
                 
                 let pendingHtml = '';
 
@@ -216,17 +236,8 @@ function updateHomePageUI(stats) {
     // 4. Render Agent Quick Stats
     const agentStatsContainer = document.getElementById('agent-quick-stats');
     if (agentStatsContainer) {
-        const classificationCounts = (agentsByClassification || []).reduce((acc, agent) => {
-            const classification = agent.classification || 'N/A';
-            acc[classification] = (acc[classification] || 0) + 1;
-            return acc;
-        }, {});
-
-        // Clear loader before rendering content
-        agentStatsContainer.innerHTML = `
-            <div class="quick-stat-item"><i class="fas fa-user-clock"></i><div class="quick-stat-info"><h4>${formatNumber(newAgentsThisMonth)}</h4><p>وكلاء جدد هذا الشهر</p></div></div>
-            <div class="quick-stat-item"><div class="classification-chart-container"><canvas id="classification-chart"></canvas></div></div>
-        `;
+        const classificationCounts = agentsByClassification || {}; // FIX: The backend now sends an object of counts directly.
+        agentStatsContainer.innerHTML = `...`; // The rest of the function is correct
         
         // Render the new classification chart AFTER the container is in the DOM
         renderClassificationChart(classificationCounts);

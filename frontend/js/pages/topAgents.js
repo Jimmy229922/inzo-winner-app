@@ -123,10 +123,10 @@ async function fetchAndRenderTopAgents(dateRange = 'all') {
             throw new Error(errorResult.message || 'فشل تحميل بيانات الوكلاء.');
         }
 
-        const { agents, competitions } = await response.json();
+        const topAgentsData = await response.json();
 
         // The rest of the logic remains the same, but we need to adjust for _id
-        processAndDisplayTopAgents(agents, competitions);
+        processAndDisplayTopAgents(topAgentsData);
     } catch (error) {
         container.innerHTML = `<p class="error">${error.message}</p>`;
     }
@@ -134,25 +134,16 @@ async function fetchAndRenderTopAgents(dateRange = 'all') {
 
 function processAndDisplayTopAgents(agents, competitions) {
     // Group competitions by agent
-    const competitionsByAgent = competitions.reduce((acc, comp) => {
-        if (!acc[comp.agent_id]) {
-            acc[comp.agent_id] = [];
-        }
-        acc[comp.agent_id].push(comp);
-        return acc;
-    }, {});
-
+    // --- FIX: The backend now sends a single array with stats already calculated ---
     agentStats = agents.map(agent => {
-        const agentComps = competitionsByAgent[agent._id] || [];
-        const total_views = agentComps.reduce((sum, c) => sum + (c.views_count || 0), 0);
-        const total_reactions = agentComps.reduce((sum, c) => sum + (c.reactions_count || 0), 0);
-        const total_participants = agentComps.reduce((sum, c) => sum + (c.participants_count || 0), 0);
+        const total_views = agent.total_views || 0;
+        const total_reactions = agent.total_reactions || 0;
+        const total_participants = agent.total_participants || 0;
 
         let growth_rate = 0;
         let trend = 'stable'; // 'up', 'down', 'stable'
-        if (agentComps.length >= 2) {
-            const latest = agentComps[0];
-            const previous = agentComps[1];
+        // Growth rate calculation needs to be re-evaluated if needed, as we don't have individual competitions here.
+        /* if (agentComps.length >= 2) {
             const latestTotal = (latest.views_count || 0) + (latest.reactions_count || 0) + (latest.participants_count || 0);
             const previousTotal = (previous.views_count || 0) + (previous.reactions_count || 0) + (previous.participants_count || 0);
             if (previousTotal > 0) {
@@ -160,7 +151,7 @@ function processAndDisplayTopAgents(agents, competitions) {
                 if (growth_rate > 5) trend = 'up';
                 else if (growth_rate < -5) trend = 'down';
             }
-        }
+        } */
 
         return {
             ...agent,

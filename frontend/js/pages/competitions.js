@@ -321,9 +321,9 @@ function generateCompetitionGridHtml(competitions) {
     if (competitions.length === 0) return ''; // Let displayCompetitionsPage handle the empty message
     return competitions.map(comp => { // The agent object is now nested under 'agent' not 'agents'
         const isSelected = selectedCompetitionIds.includes(comp.id);
-        const agent = comp.agents;
+        const agent = comp.agent; // FIX: The agent object is nested under 'agent'
         const agentInfoHtml = agent
-            ? `<div class="table-agent-cell" onclick="window.location.hash='#profile/${agent.id}'" style="cursor: pointer;">
+            ? `<div class="table-agent-cell" onclick="window.location.hash='#profile/${agent._id}'" style="cursor: pointer;">
                     ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy">` : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`}
                     <div class="agent-details">
                         <span>${agent.name}</span>

@@ -1,3 +1,52 @@
+async function handleMarkAllTasksComplete() {
+    try {
+        const dayIndex = new Date().getDay();
+        const container = document.getElementById('task-list-container');
+        if (!container) return;
+
+        // عرض تأكيد قبل التنفيذ
+        showConfirmationModal('هل أنت متأكد من تمييز جميع المهام كمكتملة؟', async () => {
+            showLoader();
+            const allCards = container.querySelectorAll('.task-card');
+            const promises = [];
+
+            for (const card of allCards) {
+                const agentId = card.dataset.agentId;
+                if (!agentId) continue;
+
+                // تحديث في السيرفر
+                const promise = authedFetch('/api/tasks', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        agentId: agentId,
+                        taskType: 'audited',
+                        status: true,
+                        dayIndex: dayIndex
+                    })
+                });
+                promises.push(promise);
+
+                // تحديث في taskStore
+                window.taskStore.updateTaskStatus(agentId, dayIndex, 'audited', true);
+            }
+
+            try {
+                await Promise.all(promises);
+                showToast('تم تحديث جميع المهام بنجاح', 'success');
+            } catch (error) {
+                console.error('Error updating all tasks:', error);
+                showToast('حدث خطأ أثناء تحديث بعض المهام', 'error');
+            } finally {
+                hideLoader();
+                await renderTaskList(); // تحديث واجهة المستخدم
+            }
+        });
+    } catch (error) {
+        console.error('Error in handleMarkAllTasksComplete:', error);
+        showToast('حدث خطأ أثناء تحديث المهام', 'error');
+    }
+}
+
 async function renderTasksPage() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
