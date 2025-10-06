@@ -92,9 +92,9 @@ async function handleLogin(e) {
         } else {
             localStorage.removeItem('rememberedEmail');
         }
-        // --- FIX: Use location.reload() after setting the hash to force a clean state read ---
+        // --- FIX: Use location.href to force a full page reload, ensuring main.js reads the new cached profile ---
         // This is more robust than location.replace() for clearing cached states.
-        window.location.href = '/';
+        window.location.href = '/'; 
     } catch (error) {
         console.error('[Login] Login attempt failed:', error.message);
         showLoginError(error.message);

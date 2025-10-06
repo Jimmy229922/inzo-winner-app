@@ -339,6 +339,12 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
 
         // --- Verification Logic ---
         let targetGroupInfo = 'المجموعة العامة';
+        // --- FIX: Check for chat_id first and show a clear error if it's missing ---
+        if (!agent.telegram_chat_id) {
+            showToast('لا يمكن الإرسال. معرف مجموعة التلجرام غير مسجل لهذا الوكيل.', 'error');
+            return; // Stop the process
+        }
+
         if (agent.telegram_chat_id && agent.telegram_group_name) {
             try {
                 showToast('جاري التحقق من بيانات المجموعة...', 'info');
@@ -1217,9 +1223,37 @@ async function renderInlineEditor(groupElement, agent) {
                 finalValue = newValue === '' ? null : (isNaN(parsedValue) ? newValue : parsedValue);
             }
 
-            // Direct update: The user is now responsible for all values.
-            // The backend will simply save what it's given.
+            // --- FIX: Smart updates for financial fields ---
+            // Start with the direct update
             updateData[fieldName] = finalValue;
+
+            // Get current values for calculation, defaulting to 0 if null/undefined
+            const competitionBonus = parseFloat(fieldName === 'competition_bonus' ? finalValue : currentAgent.competition_bonus) || 0;
+            const consumedBalance = parseFloat(fieldName === 'consumed_balance' ? finalValue : currentAgent.consumed_balance) || 0;
+            const remainingBalance = parseFloat(fieldName === 'remaining_balance' ? finalValue : currentAgent.remaining_balance) || 0;
+            
+            const depositBonusCount = parseInt(fieldName === 'deposit_bonus_count' ? finalValue : currentAgent.deposit_bonus_count, 10) || 0;
+            const usedDepositBonus = parseInt(fieldName === 'used_deposit_bonus' ? finalValue : currentAgent.used_deposit_bonus, 10) || 0;
+            const remainingDepositBonus = parseInt(fieldName === 'remaining_deposit_bonus' ? finalValue : currentAgent.remaining_deposit_bonus, 10) || 0;
+
+            // Recalculate related fields based on which field was edited
+            if (fieldName === 'competition_bonus' || fieldName === 'consumed_balance') {
+                updateData.remaining_balance = competitionBonus - consumedBalance;
+            } else if (fieldName === 'remaining_balance') {
+                updateData.consumed_balance = competitionBonus - remainingBalance;
+            }
+
+            if (fieldName === 'deposit_bonus_count' || fieldName === 'used_deposit_bonus') {
+                updateData.remaining_deposit_bonus = depositBonusCount - usedDepositBonus;
+            } else if (fieldName === 'remaining_deposit_bonus') {
+                updateData.used_deposit_bonus = depositBonusCount - remainingDepositBonus;
+            }
+
+            // Ensure no negative values are saved for balances
+            if (updateData.remaining_balance < 0) updateData.remaining_balance = 0;
+            if (updateData.consumed_balance < 0) updateData.consumed_balance = 0;
+            if (updateData.remaining_deposit_bonus < 0) updateData.remaining_deposit_bonus = 0;
+            if (updateData.used_deposit_bonus < 0) updateData.used_deposit_bonus = 0;
         }
 
         try {
@@ -1391,6 +1425,9 @@ async function renderAgentAnalytics(agent, container, dateRange = 'all') {
         }
     });
 
+    // --- FIX: Render chart after the container is in the DOM ---
+    renderAgentAnalyticsChart(competitions, dateRange, agent);
+
     if (competitions.length === 0) {
         container.innerHTML = `${analyticsHeaderHtml}<p class="no-results-message">لا توجد بيانات تحليلية في النطاق الزمني المحدد.</p>`;
         return;
@@ -1429,8 +1466,9 @@ async function renderAgentAnalytics(agent, container, dateRange = 'all') {
             </div>
         </div>
     `;
+}
 
-    // --- NEW: Render daily performance chart ---
+function renderAgentAnalyticsChart(competitions, dateRange, agent) {
     const ctx = document.getElementById('agent-analytics-chart')?.getContext('2d');
     if (!ctx) return;
 

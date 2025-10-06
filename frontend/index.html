@@ -106,7 +106,7 @@
     <!-- FIX: Add cache-busting to all scripts to ensure the latest version is always loaded -->
     <script>
         const cacheBuster = `v=${new Date().getTime()}`;
-        const scripts = ['/js/pages/taskStore.js', '/js/pages/home.js', '/js/pages/agents.js', '/js/pages/competitions.js', '/js/pages/calendar.js', '/js/pages/topAgents.js', '/js/pages/profile.js', '/js/pages/users.js', '/js/pages/tasks.js', '/js/pages/addAgent.js', '/js/pages/activityLog.js', '/js/main.js', '/js/components.js', '/js/router.js', '/js/store.js'];
+        const scripts = ['/js/pages/taskStore.js', '/js/pages/home.js', '/js/pages/agents.js', '/js/pages/competitions.js', '/js/pages/calendar.js', '/js/pages/topAgents.js', '/js/pages/profile.js', '/js/pages/users.js', '/js/pages/tasks.js', '/js/pages/addAgent.js', '/js/pages/activityLog.js', '/js/main.js'];
         scripts.forEach(src => {
             document.write(`<script src="${src}?${cacheBuster}"><\/script>`);
         });

@@ -4,6 +4,12 @@ const cors = require('cors');
 const path = require('path');
 const helmet = require('helmet');
 
+// --- NEW: Environment Variable Check ---
+if (!process.env.TELEGRAM_BOT_TOKEN) {
+    console.error('\x1b[31m%s\x1b[0m', 'FATAL ERROR: TELEGRAM_BOT_TOKEN is not defined in the .env file.');
+    process.exit(1); // Stop the server from starting
+}
+
 const authRoutes = require('./routes/auth.routes');
 const agentRoutes = require('./routes/agent.routes');
 const logRoutes = require('./routes/log.routes');
@@ -22,27 +28,26 @@ const app = express();
 // Middlewares
 app.use(cors());
 app.use(express.json());
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-            // FIX: Add the hash of the inline script in index.html to allow cache-busting script to run
-            "script-src": [
-                "'self'", 
-                "https://cdn.jsdelivr.net", 
-                "https://cdnjs.cloudflare.com",
-                // "'sha256-8wRuEDii/8OrjKP+SkrGmAiY6dnp1/j/6JdNr8TjXtY='", // Old hash
-                "'sha256-C+UNglKutB8VZOyHLy9MTyAC11AaepJoYdvIp21CZXY='", // New hash for the updated script loader
-            ],
-            "connect-src": ["'self'", "https:", "http://localhost:*"], // Keep existing connect-src
-            "img-src": ["'self'", "data:", "blob:", "https://ui-avatars.com", "https://via.placeholder.com"],
-        },
-    },
-}));
+app.use(
+    helmet.contentSecurityPolicy({
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "script-src": [
+          "'self'",
+          "https://cdn.jsdelivr.net",
+          "https://cdnjs.cloudflare.com",
+          // السماح بتنفيذ السكريبت المضمن في index.html لتحميل الملفات
+          "'sha256-C+UNglKutB8VZOyHLy9MTyAC11AaepJoYdvIp21CZXY='",
+          // السماح بتنفيذ سكريبت مضمن آخر يتم إنشاؤه ديناميكياً (ربما في نافذة منبثقة)
+          "'sha256-8wRuEDii/8OrjKP+SkrGmAiY6dnp1/j/6JdNr8TjXtY='",
+        ],
+        "img-src": ["'self'", "data:", "blob:", "https://ui-avatars.com", "https://via.placeholder.com"],
+        // السماح بتحميل ملفات .map من cdn.jsdelivr.net
+        "connect-src": ["'self'", "https://cdn.jsdelivr.net"],
+      },
+    })
+);
 
-// --- FIX: Serve static files BEFORE API routes to avoid conflicts ---
-// Serve static files from the 'frontend' directory. This must come before the API catch-all.
-app.use(express.static(path.join(__dirname, '../../frontend')));
 // --- إضافة: جعل مجلد 'uploads' متاحاً للوصول العام ---
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
@@ -56,15 +61,16 @@ app.use('/api/stats', authMiddleware.authenticate, statsRoutes); // إضافة: 
 app.use('/api/calendar', authMiddleware.authenticate, calendarRoutes); // إضافة: استخدام مسارات التقويم
 app.use('/api/competitions', authMiddleware.authenticate, competitionRoutes); // إضافة: استخدام مسارات المسابقات
 app.use('/api/templates', authMiddleware.authenticate, templateRoutes); // إضافة: استخدام مسارات القوالب
-// --- إضافة: استخدام مسارات تلجرام ---
-// Note: These are not protected by authMiddleware to allow more flexibility if needed later.
-app.use('/api', telegramRoutes);
+app.use('/api', authMiddleware.authenticate, telegramRoutes); // FIX: Protect all telegram routes
 app.use('/api/log-error', errorRoutes); // إضافة: استخدام مسارات الأخطاء
 
 // Catch-all for API routes that don't exist
 app.use('/api/*', (req, res) => {
     res.status(404).json({ message: `API route not found: ${req.method} ${req.originalUrl}` });
 });
+
+// --- FIX: Serve static files AFTER API routes but BEFORE the final catch-all ---
+app.use(express.static(path.join(__dirname, '../../frontend')));
 
 // For any other GET request that is not an API route, serve the main index.html
 // app.get('/', (req, res) => { // This line was causing a duplicate route definition
