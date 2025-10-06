@@ -123,15 +123,6 @@ async function renderAgentProfilePage(agentId, options = {}) {
         ? `<div class="audit-days-display">${agent.audit_days.sort().map(dayIndex => `<span class="day-tag">${dayNames[dayIndex]}</span>`).join('')}</div>`
         : '<span class="day-tag-none">لا توجد أيام محددة</span>';
 
-    // --- NEW: Add a clear indicator that an admin is viewing another user's profile ---
-    const viewingAsAdminBar = `
-        <div class="viewing-as-admin-bar">
-            <i class="fas fa-user-shield"></i>
-            <span><strong>${currentUserProfile.full_name || 'المدير'}</strong> يقوم بعرض ملف:</span>
-            <span class="viewed-user-name">${agent.name}</span>
-        </div>
-    `;
-
     appContent.innerHTML = `
         <div class="profile-page-top-bar">
             <button id="back-btn" class="btn-secondary">&larr; عودة</button>
@@ -139,7 +130,6 @@ async function renderAgentProfilePage(agentId, options = {}) {
         </div>
         
         <div class="profile-header-v2">
-            ${isSuperAdmin || isAdmin ? viewingAsAdminBar : ''}
             <div class="profile-avatar">
                 ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar">` : '<i class="fas fa-user-astronaut"></i>'}
             </div>
