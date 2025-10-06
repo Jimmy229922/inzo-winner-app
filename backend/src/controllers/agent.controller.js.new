@@ -1,0 +1,43 @@
+const { translateField, formatValue } = require('../utils/fieldTranslations');
+const Agent = require('../models/Agent');
+const { logActivity } = require('../utils/logActivity');
+
+exports.updateAgent = async (req, res) => {
+    try {
+        // --- FIX: Add detailed activity logging on agent update ---
+        const agentBeforeUpdate = await Agent.findById(req.params.id).lean();
+        if (!agentBeforeUpdate) return res.status(404).json({ message: 'Agent not found.' });
+
+        const updatedAgent = await Agent.findByIdAndUpdate(req.params.id, req.body, { new: true });
+
+        // --- FIX: Always log activity on update from the backend for reliability ---
+        const userId = req.user ? req.user._id : null;
+        const hasProfileUpdate = ['name', 'telegram_channel_url', 'telegram_group_url', 'telegram_chat_id', 'telegram_group_name'].some(key => key in req.body);
+
+        // Determine action type based on what was changed
+        const actionType = hasProfileUpdate ? 'PROFILE_UPDATE' : 'DETAILS_UPDATE';
+
+        // تحضير وصف مفصل للتغييرات
+        const changes = Object.entries(req.body).map(([field, newValue]) => {
+            const oldValue = agentBeforeUpdate[field];
+            const arabicFieldName = translateField(field);
+            return {
+                field: arabicFieldName,
+                from: formatValue(oldValue),
+                to: formatValue(newValue)
+            };
+        });
+
+        const description = `تم تحديث بيانات الوكيل. التغييرات:\n` + 
+            changes.map(c => `${c.field}: من "${c.from}" إلى "${c.to}"`).join('\n');
+
+        await logActivity(userId, updatedAgent._id, actionType, description, {
+            changes: changes
+        });
+
+        res.json({ data: updatedAgent });
+
+    } catch (error) {
+        res.status(400).json({ message: 'Failed to update agent.', error: error.message });
+    }
+};

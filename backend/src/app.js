@@ -15,7 +15,7 @@ const competitionRoutes = require('./routes/competition.routes'); // إضافة:
 const templateRoutes = require('./routes/template.routes'); // إضافة: استيراد مسارات القوالب
 const telegramRoutes = require('./routes/telegram.routes'); // إضافة: استيراد مسارات تلجرام
 const errorRoutes = require('./routes/error.routes'); // إضافة: استيراد مسارات الأخطاء
-const authMiddleware = require('./middleware/auth.middleware');
+const authMiddleware = require('./api/middleware/auth.middleware');
 
 const app = express();
 
@@ -35,14 +35,14 @@ app.use(helmet({
 
 // API Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/agents', authMiddleware, agentRoutes);
-app.use('/api/logs', authMiddleware, logRoutes);
-app.use('/api/tasks', authMiddleware, taskRoutes); // إضافة: استخدام مسارات المهام
-app.use('/api/users', authMiddleware, userRoutes); // إضافة: استخدام مسارات المستخدمين
-app.use('/api/stats', authMiddleware, statsRoutes); // إضافة: استخدام مسارات الإحصائيات
-app.use('/api/calendar', authMiddleware, calendarRoutes); // إضافة: استخدام مسارات التقويم
-app.use('/api/competitions', authMiddleware, competitionRoutes); // إضافة: استخدام مسارات المسابقات
-app.use('/api/templates', authMiddleware, templateRoutes); // إضافة: استخدام مسارات القوالب
+app.use('/api/agents', authMiddleware.authenticate, agentRoutes);
+app.use('/api/logs', authMiddleware.authenticate, logRoutes);
+app.use('/api/tasks', authMiddleware.authenticate, taskRoutes); // إضافة: استخدام مسارات المهام
+app.use('/api/users', authMiddleware.authenticate, userRoutes); // إضافة: استخدام مسارات المستخدمين
+app.use('/api/stats', authMiddleware.authenticate, statsRoutes); // إضافة: استخدام مسارات الإحصائيات
+app.use('/api/calendar', authMiddleware.authenticate, calendarRoutes); // إضافة: استخدام مسارات التقويم
+app.use('/api/competitions', authMiddleware.authenticate, competitionRoutes); // إضافة: استخدام مسارات المسابقات
+app.use('/api/templates', authMiddleware.authenticate, templateRoutes); // إضافة: استخدام مسارات القوالب
 // --- إضافة: استخدام مسارات تلجرام ---
 // Note: These are not protected by authMiddleware to allow more flexibility if needed later.
 app.use('/api', telegramRoutes);

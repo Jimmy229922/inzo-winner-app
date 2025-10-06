@@ -18,11 +18,12 @@ async function checkExpiredCompetitions() {
             ends_at: { $lte: now } // Find competitions where the end date/time has passed
         }).populate('agent_id', 'name telegram_chat_id');
 
-        console.log(`[Scheduler] Checking competitions at ${new Date().toISOString()}`);
-        console.log(`[Scheduler] Found ${expiredCompetitions.length} expired competitions`);
+        // سنظهر رسالة فقط إذا كان هناك مسابقات منتهية
+        if (expiredCompetitions.length > 0) {
+            console.log(`[Scheduler] Found ${expiredCompetitions.length} expired competitions to process`);
+        }
 
         for (const comp of expiredCompetitions) {
-            console.log(`[Scheduler] Processing competition: ${comp._id}, ends_at: ${comp.ends_at}`);
             
             // تحديث حالة المسابقة
             comp.status = 'awaiting_winners';

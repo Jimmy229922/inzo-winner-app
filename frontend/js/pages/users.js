@@ -67,7 +67,7 @@ function renderUserRow(user) {
     const isTargetAdmin = user.role === 'admin';
     const isCurrentUserAdmin = currentUserProfile?.role === 'admin';
     const isCurrentUserSuperAdmin = currentUserProfile?.role === 'super_admin';
-    const isTargetSuperAdmin = user.role === 'super_admin';
+    const isTargetSuperAdmin = user.role === 'super_admin'; // نحتفظ بهذا فقط لعرض الشارة
 
     // --- إصلاح: تعريف متغير الحالة في بداية الدالة لتجنب أخطاء الوصول ---
     const isInactive = user.status === 'inactive';

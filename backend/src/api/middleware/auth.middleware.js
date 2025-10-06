@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-module.exports = function(req, res, next) {
+const authenticate = function(req, res, next) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -21,4 +21,8 @@ module.exports = function(req, res, next) {
         console.warn('[AUTH-WARN] Token validation failed:', err.message);
         res.status(401).json({ message: 'Unauthorized: Invalid token.' });
     }
+};
+
+module.exports = {
+    authenticate
 };

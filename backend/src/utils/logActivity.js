@@ -15,11 +15,11 @@ async function logActivity(userId, agentId, actionType, description, details = {
             agent_id: agentId,
             action_type: actionType,
             description: description,
-            details: details
+        metadata: details
         });
         await logEntry.save();
     } catch (error) {
-        console.error('Failed to log activity:', error);
+        console.error(`[BACKEND LOG] ❌ فشل حفظ النشاط:`, error.message);
         // لا نرسل خطأ للمستخدم، فقط نسجله في الكونسول لأن تسجيل النشاط عملية خلفية
     }
 }

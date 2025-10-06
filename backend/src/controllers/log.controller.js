@@ -7,6 +7,7 @@ exports.getAllLogs = async (req, res) => {
 
         let query = {};
         if (agent_id) {
+            // --- FIX: Let Mongoose handle the string-to-ObjectId casting during the query. ---
             query.agent_id = agent_id;
         }
 
@@ -23,7 +24,7 @@ exports.getAllLogs = async (req, res) => {
             .lean();
 
         if (populate === 'user') {
-            logQuery = logQuery.populate('user_id', 'full_name');
+            logQuery = logQuery.populate('user', 'full_name').populate('agent_id', 'name phone');
         }
 
         const logs = await logQuery;
@@ -34,7 +35,8 @@ exports.getAllLogs = async (req, res) => {
         // Add user_name to logs for easier display
         const formattedLogs = logs.map(log => ({
             ...log,
-            user_name: log.user_id ? log.user_id.full_name : 'النظام'
+            user_name: log.user ? log.user.full_name : 'النظام',
+            created_at: log.createdAt ? log.createdAt.toISOString() : null
         }));
 
         res.json({
@@ -51,12 +53,10 @@ exports.getAllLogs = async (req, res) => {
 
 exports.createLog = async (req, res) => {
     try {
-        // FIX: The frontend sends 'agent_id', not 'agentId'.
         const { agent_id, action_type, description, metadata } = req.body;
         const userId = req.user ? req.user._id : null;
 
         const log = new Log({
-            // FIX: The Log model schema expects the field to be named 'user', not 'user_id'.
             user: userId,
             agent_id: agent_id,
             action_type,

@@ -24,17 +24,15 @@ async function renderAgentProfilePage(agentId, options = {}) {
     // Clear any previous timers from other profiles
     stopAllProfileTimers();
 
-    // --- NEW: Permission Check ---
+    // --- FIX: Use actual user permissions from currentUserProfile ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
-    const agentPerms = currentUserProfile?.permissions?.agents || {};
-    const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
-    const compsPerms = currentUserProfile?.permissions?.competitions || {};
-    const canViewFinancials = isSuperAdmin || isAdmin; // تعديل: السماح للمسؤول برؤية التفاصيل دائماً
-    const canEditProfile = isAdmin;
-    const canEditFinancials = isSuperAdmin || isAdmin; // تعديل: السماح للمسؤول بتعديل البيانات المالية دائماً
-    const canViewAgentComps = isAdmin || agentPerms.can_view_competitions_tab; // المسؤولون لديهم صلاحية عرض المسابقات دائماً
-    const canCreateComp = isAdmin || compsPerms.can_create; // المسؤولون لديهم صلاحية إنشاء المسابقات دائماً
-    const canEditComps = isAdmin || compsPerms.manage_comps === 'full'; // FIX: Define the missing permission variable
+    const isAdmin = currentUserProfile?.role === 'admin';
+    const userPerms = currentUserProfile?.permissions || {};
+    const canViewFinancials = isSuperAdmin || isAdmin || userPerms.agents?.view_financials;
+    const canEditProfile = isSuperAdmin || isAdmin; // Or a specific permission
+    const canViewAgentComps = isSuperAdmin || isAdmin || userPerms.agents?.can_view_competitions_tab;
+    const canCreateComp = isSuperAdmin || isAdmin || userPerms.competitions?.can_create;
+    const canEditComps = isSuperAdmin || isAdmin || userPerms.competitions?.manage_comps === 'full';
 
     // Check for edit mode in hash, e.g., #profile/123/edit
     const hashParts = window.location.hash.split('/');
@@ -278,7 +276,11 @@ async function renderAgentProfilePage(agentId, options = {}) {
                         const result = await response.json();
                         throw new Error(result.message || 'فشل تجديد الرصيد.');
                     }
-                    await logAgentActivity(agent._id, 'MANUAL_RENEWAL', 'تم تجديد الرصيد يدوياً.');
+                    // --- FIX: Add correct logging for manual renewal ---
+                    await logAgentActivity(agent._id, 'MANUAL_RENEWAL', `تم تجديد الرصيد يدوياً للوكيل ${agent.name}.`, {
+                        renewed_by: currentUserProfile.full_name,
+                        new_balance: agent.competition_bonus
+                    });
                     showToast('تم تجديد الرصيد بنجاح.', 'success');
                     renderAgentProfilePage(agent._id, { activeTab: 'action' }); // Re-render the page
                 } catch (error) {
@@ -377,7 +379,10 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                         throw new Error(result.message || 'فشل الاتصال بالخادم.');
                     }
                     showToast('تم إرسال كليشة البونص إلى تلجرام بنجاح.', 'success');
-                    await logAgentActivity(agent._id, 'BONUS_CLICHE_SENT', 'تم إرسال كليشة تذكير البونص إلى تلجرام.');
+                    // --- FIX: Add correct logging for sending bonus cliche ---
+                    await logAgentActivity(agent._id, 'BONUS_CLICHE_SENT', `تم إرسال كليشة تذكير البونص إلى تلجرام للوكيل ${agent.name}.`, {
+                        sent_by: currentUserProfile.full_name
+                    });
                 } catch (error) {
                     showToast(`فشل إرسال الكليشة: ${error.message}`, 'error');
                 }
@@ -420,7 +425,10 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                     if (!response.ok) throw new Error(result.message || 'فشل الاتصال بالخادم.');
 
                     showToast('تم إرسال طلب اختيار الفائزين إلى تلجرام بنجاح.', 'success');
-                    await logAgentActivity(agent._id, 'WINNERS_SELECTION_REQUESTED', `تم إرسال طلب اختيار الفائزين لمسابقة الوكيل ${agent.name}.`);
+                    // --- FIX: Add correct logging for winner selection request ---
+                    await logAgentActivity(agent._id, 'WINNERS_SELECTION_REQUESTED', `تم إرسال طلب اختيار الفائزين لمسابقة "${activeCompetition?.name || 'الأخيرة'}".`, {
+                        sent_by: currentUserProfile.full_name
+                    });
                 } catch (error) {
                     showToast(`فشل إرسال الطلب: ${error.message}`, 'error');
                 }
@@ -656,7 +664,11 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                             showToast('فشل إكمال المسابقة.', 'error');
                         } else {
                             showToast('تم إكمال المسابقة بنجاح.', 'success');
-                            await logAgentActivity(agent._id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}" مع تسجيل بيانات الأداء.`);
+                            // --- FIX: Add correct logging for competition completion ---
+                            await logAgentActivity(agent._id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}" وتسجيل الأداء.`, {
+                                completed_by: currentUserProfile.full_name,
+                                performance: updateData
+                            });
                             renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });
                         }
                     }, {
@@ -692,6 +704,10 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                             return;
                         }
                         showToast('تم حذف المسابقة بنجاح.', 'success');
+                        // --- FIX: Add correct logging for competition deletion ---
+                        await logAgentActivity(agent._id, 'COMPETITION_DELETED', `تم حذف مسابقة من سجل الوكيل.`, {
+                            deleted_by: currentUserProfile.full_name
+                        });
                         renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });
                     }, {
                         title: 'تأكيد الحذف',
@@ -771,7 +787,10 @@ function renderEditProfileHeader(agent) {
             }
 
             showToast('تم تحديث بيانات الوكيل بنجاح.', 'success');
-            await logAgentActivity(agent._id, 'PROFILE_UPDATE', 'تم تحديث بيانات الملف الشخصي للوكيل.');
+            // --- FIX: Backend already logs this. No need to log from frontend. ---
+            // The backend provides a more reliable and detailed log for this action.
+            // await logAgentActivity(agent._id, 'PROFILE_UPDATE', 'تم تحديث بيانات الملف الشخصي للوكيل.');
+
             // Re-render the entire page to reflect changes everywhere
             renderAgentProfilePage(agent._id);
 
@@ -835,6 +854,7 @@ function generateActivityLogHTML(logs, isAgentProfile = false) {
         if (actionType.includes('CREATED')) return { icon: 'fa-user-plus', colorClass: 'log-icon-create' };
         if (actionType.includes('DELETED')) return { icon: 'fa-user-slash', colorClass: 'log-icon-delete' }
         if (actionType.includes('PROFILE_UPDATE')) return { icon: 'fa-user-edit', colorClass: 'log-icon-profile' };
+        if (actionType.includes('MANUAL_RENEWAL')) return { icon: 'fa-sync-alt', colorClass: 'log-icon-renewal' };
         if (actionType.includes('DETAILS_UPDATE')) return { icon: 'fa-cogs', colorClass: 'log-icon-details' };
         if (actionType.includes('COMPETITION_CREATED')) return { icon: 'fa-trophy', colorClass: 'log-icon-competition' };
         if (actionType.includes('WINNERS_SELECTION_REQUESTED')) return { icon: 'fa-question-circle', colorClass: 'log-icon-telegram' };
@@ -851,18 +871,32 @@ function generateActivityLogHTML(logs, isAgentProfile = false) {
         const yesterdayStr = yesterday.toISOString().split('T')[0];
 
         logs.forEach(log => {
-            const logDate = new Date(log.created_at);
-            const logDateStr = logDate.toISOString().split('T')[0];
-            let dateKey;
+            try {
+                if (!log.created_at) {
+                    console.warn('Log entry missing created_at:', log);
+                    return;
+                }
+                
+                const logDate = new Date(log.created_at);
+                if (isNaN(logDate.getTime())) {
+                    console.warn('Invalid date in log:', log.created_at);
+                    return;
+                }
 
-            if (logDateStr === todayStr) dateKey = 'اليوم';
-            else if (logDateStr === yesterdayStr) dateKey = 'الأمس';
-            else dateKey = logDate.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+                const logDateStr = logDate.toISOString().split('T')[0];
+                let dateKey;
 
-            if (!groups[dateKey]) {
-                groups[dateKey] = [];
+                if (logDateStr === todayStr) dateKey = 'اليوم';
+                else if (logDateStr === yesterdayStr) dateKey = 'الأمس';
+                else dateKey = logDate.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+
+                if (!groups[dateKey]) {
+                    groups[dateKey] = [];
+                }
+                groups[dateKey].push(log);
+            } catch (error) {
+                console.error('Error processing log entry:', error, log);
             }
-            groups[dateKey].push(log);
         });
         return groups;
     };
@@ -883,7 +917,7 @@ function generateActivityLogHTML(logs, isAgentProfile = false) {
                                 <p class="log-description">${log.description}</p>
                                 <p class="log-timestamp">
                                     <i class="fas fa-user"></i> ${log.user_name || 'نظام'}
-                                    <span class="log-separator">|</span>
+                                    <span class="log-separator"></span>
                                     <i class="fas fa-clock"></i> ${new Date(log.createdAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
                                 </p>
                             </div>
@@ -1191,18 +1225,16 @@ async function renderInlineEditor(groupElement, agent) {
             if (!response.ok) throw new Error((await response.json()).message || 'فشل تحديث الحقل.');
             const { data: updatedAgent } = await response.json();
 
-            const oldValue = currentAgent[fieldName];
-            const description = `تم تحديث "${label}" من "${oldValue || 'فارغ'}" إلى "${newValue || 'فارغ'}".`; // This will be migrated later
-            await logAgentActivity(agent._id, 'DETAILS_UPDATE', description, { field: label, from: oldValue, to: newValue });
+            // --- FIX: Backend already logs this. No need to log from frontend. ---
+            // The backend provides a more reliable and detailed log for this action.
+            // const oldValue = currentAgent[fieldName];
+            // const description = `تم تحديث "${label}" من "${oldValue || 'فارغ'}" إلى "${newValue || 'فارغ'}".`;
+            // await logAgentActivity(agent._id, 'DETAILS_UPDATE', description, { field: label, from: oldValue, to: newValue });
+
             showToast('تم حفظ التغيير بنجاح.', 'success');
-            // If rank or renewal period was changed, a full re-render is needed to update all dependent fields.
-            if (fieldName === 'rank' || fieldName === 'renewal_period') {
-                renderAgentProfilePage(agent._id, { activeTab: 'details' });
-            } else {
-                // تحسين: إعادة عرض الأجزاء المتأثرة فقط، بما في ذلك سجل النشاط
-                renderDetailsView(updatedAgent);
-                // This will be migrated later
-            }
+            // FIX: Always re-render the full profile page to ensure all tabs (especially the log) are updated.
+            // This is more reliable than partial updates.
+            renderAgentProfilePage(agent._id, { activeTab: 'details' });
         } catch (e) {
             showToast(`فشل تحديث الحقل: ${e.message}`, 'error');
             renderDetailsView(agent); // Revert on error

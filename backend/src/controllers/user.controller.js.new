@@ -24,15 +24,10 @@ const userController = {
     },
 
     createUser: async (req, res) => {
-        const { full_name, email, password, role, permissions } = req.body;
+        const { full_name, email, password, role } = req.body;
 
         if (!full_name || !email || !password || !role) {
             return res.status(400).json({ message: 'Please provide all required fields.' });
-        }
-
-        // --- SECURITY: Only super_admin can create users with specific roles/permissions ---
-        if ((role !== 'employee' || (permissions && permissions.length > 0)) && req.user.role !== 'super_admin') {
-            return res.status(403).json({ message: 'Forbidden: You do not have permission to create users with special roles or permissions.' });
         }
 
         try {
@@ -48,7 +43,6 @@ const userController = {
                 email,
                 password: hashedPassword,
                 role,
-                permissions: permissions || [] // Ensure permissions is an array
             });
 
             await user.save();
@@ -66,11 +60,6 @@ const userController = {
         if (full_name) updateData.full_name = full_name;
         if (permissions) updateData.permissions = permissions;
         if (status) updateData.status = status;
-
-        // --- SECURITY FIX: Only super_admin can change permissions ---
-        if (permissions && req.user.role !== 'super_admin') {
-            return res.status(403).json({ message: 'Forbidden: You do not have permission to change user permissions.' });
-        }
 
         try {
             const userToUpdate = await User.findById(req.params.id);

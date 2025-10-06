@@ -140,7 +140,7 @@ async function handleRouting() {
         '#competitions': { func: renderCompetitionsPage, nav: 'nav-manage-competitions' },
         '#archived-competitions': { func: renderCompetitionsPage, nav: 'nav-archived-competitions' },
         '#competition-templates': { func: renderCompetitionTemplatesPage, nav: 'nav-competition-templates' },
-        '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competitions-dropdown' },
+        '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competition-templates' }, // Corrected nav item
         '#users': { func: renderUsersPage, nav: 'nav-users', adminOnly: true },
         '#profile-settings': { func: renderProfileSettingsPage, nav: null }, // NEW: Profile settings page
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },'#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' }
@@ -213,14 +213,22 @@ function setActiveNav(activeElement) {
 
 async function logAgentActivity(agentId, actionType, description, metadata = {}) {
     // This function will be reimplemented later using our own backend.
+    console.log(`[FRONTEND LOG] ➡️ محاولة تسجيل نشاط: ${actionType} للوكيل ${agentId}`);
     try {
-        await authedFetch('/api/logs', {
+        const response = await authedFetch('/api/logs', {
             method: 'POST',
-            // FIX: The backend expects 'agent_id', not 'agentId'.
-            body: JSON.stringify({ agent_id: agentId, action_type: actionType, description, metadata })
+            body: JSON.stringify({
+                user_id: currentUserProfile?._id, // Pass the current user's ID
+                agent_id: agentId,
+                action_type: actionType,
+                description,
+                metadata
+            })
         });
+        if (!response.ok) throw new Error(`Server responded with status ${response.status}`);
+        console.log(`[FRONTEND LOG] ✅ تم إرسال النشاط بنجاح إلى الخادم.`);
     } catch (error) {
-        console.error('Failed to log agent activity:', error);
+        console.error(`[FRONTEND LOG] ❌ فشل إرسال النشاط إلى الخادم:`, error);
     }
 }
 
@@ -558,17 +566,6 @@ function setupNavbar() {
                         if (mainSearchClearBtn) mainSearchClearBtn.style.display = 'none';
                     });
                 });
-                if (currentUserProfile && currentUserProfile.role === 'admin') {
-                 const usersResultItem = document.createElement('div');
-                    usersResultItem.className = "search-result-item";
-                  usersResultItem.textContent = "إدارة المستخدمين";
-                  searchResultsContainer.appendChild(usersResultItem)
-                     usersResultItem.addEventListener('click', async () => {
-                         window.location.hash = `users`;
-                          searchResultsContainer.classList.remove('visible');
-                           searchInput.value = '';
-                    })
-                }
             } else {
                 searchResultsContainer.innerHTML = '<div class="search-result-item" style="cursor: default;">لا توجد نتائج</div>';
                 searchResultsContainer.classList.add('visible');
@@ -609,7 +606,7 @@ function setupNavbar() {
     if (navTopAgents) navTopAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'top-agents'; }); // NEW
     if (navManageAgents) navManageAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'manage-agents'; });
     if (navProfileSettings) navProfileSettings.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'profile-settings'; }); // NEW
-    if (navManageCompetitions) navManageCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competitions'; });
+    if (navManageCompetitions) navManageCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = '#competitions'; });
     if (navArchivedCompetitions) navArchivedCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-competitions'; });
     if (navArchivedTemplates) navArchivedTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'archived-templates'; });
     if (navCompetitionTemplates) navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
@@ -634,6 +631,47 @@ function setupNavbar() {
             e.preventDefault(); // يمنع الرابط من تغيير الـ hash والانتقال للصفحة الرئيسية
         });
     }
+}
+
+function renderAddUserForm() {
+    const isSuperAdmin = currentUserProfile && currentUserProfile.role === 'super_admin';
+
+    const formHtml = `
+        <form id="add-user-form" class="styled-form">
+            <div class="form-group">
+                <label for="full_name">الاسم الكامل</label>
+                <input type="text" id="full_name" name="full_name" required>
+            </div>
+            <div class="form-group">
+                <label for="email">البريد الإلكتروني</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="password">كلمة المرور</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            ${isSuperAdmin ? `
+                <div class="form-group">
+                    <label for="role">الدور</label>
+                    <select id="role" name="role"><option value="employee">موظف</option><option value="admin">مسؤول</option></select>
+                </div>
+            ` : '<input type="hidden" id="role" name="role" value="employee">'}
+        </form>
+    `;
+
+    showConfirmationModal(formHtml, () => {
+        const form = document.getElementById('add-user-form');
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        // Handle user creation logic here
+        console.log('Creating user with data:', data);
+
+    }, {
+        title: 'إضافة موظف جديد',
+        confirmText: 'إنشاء',
+        cancelText: 'إلغاء'
+    });
 }
 
 // Main entry point when the page loads

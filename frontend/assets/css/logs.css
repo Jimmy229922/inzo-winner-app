@@ -1,0 +1,47 @@
+.log-detail-line {
+    margin: 5px 0;
+    line-height: 1.4;
+    font-size: 14px;
+}
+
+.log-detail-line:first-child {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.log-entry {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: flex-start;
+}
+
+.log-icon {
+    margin-left: 15px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f5f5f5;
+}
+
+.log-content {
+    flex: 1;
+}
+
+.log-meta {
+    margin-top: 8px;
+    color: #666;
+    font-size: 13px;
+}
+
+.log-time {
+    margin-right: 8px;
+}
+
+.log-message {
+    white-space: pre-wrap;
+    direction: rtl;
+}

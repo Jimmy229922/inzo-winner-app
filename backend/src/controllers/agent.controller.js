@@ -1,5 +1,6 @@
 const Agent = require('../models/Agent');
 const { logActivity } = require('../utils/logActivity');
+const { translateField, formatValue } = require('../utils/fieldTranslations');
 
 exports.getAllAgents = async (req, res) => {
     try {
@@ -82,29 +83,49 @@ exports.updateAgent = async (req, res) => {
     try {
         // --- FIX: Add detailed activity logging on agent update ---
         const agentBeforeUpdate = await Agent.findById(req.params.id).lean();
-        if (!agentBeforeUpdate) return res.status(404).json({ message: 'Agent not found.' });
+        if (!agentBeforeUpdate) {
+            return res.status(404).json({ message: 'Agent not found.' });
+        }
 
         const updatedAgent = await Agent.findByIdAndUpdate(req.params.id, req.body, { new: true });
 
-        // Compare old and new data to generate a log description
-        const changes = [];
-        for (const key in req.body) {
-            if (JSON.stringify(agentBeforeUpdate[key]) !== JSON.stringify(req.body[key])) {
-                changes.push(`'${key}' from '${agentBeforeUpdate[key] || 'empty'}' to '${req.body[key] || 'empty'}'`);
-            }
-        }
+        // --- FIX: Always log activity on update from the backend for reliability ---
+        const userId = req.user?._id; // Use optional chaining
+        const hasProfileUpdate = ['name', 'telegram_channel_url', 'telegram_group_url', 'telegram_chat_id', 'telegram_group_name'].some(key => key in req.body);
+        
+        const actionType = hasProfileUpdate ? 'PROFILE_UPDATE' : 'DETAILS_UPDATE';
 
-        if (changes.length > 0) {
-            const description = `Agent profile updated. Changes: ${changes.join(', ')}.`;
-            // Assuming req.user is populated by auth middleware
-            const userId = req.user ? req.user._id : null; 
-            await logActivity(userId, updatedAgent._id, 'AGENT_UPDATE', description, req.body);
+        // تحضير وصف مفصل للتغييرات
+        const changes = Object.entries(req.body).map(([field, newValue]) => {
+            const oldValue = agentBeforeUpdate[field];
+            // نتحقق فقط من الحقول التي تغيرت قيمتها
+            if (String(oldValue) === String(newValue)) return null;
+            
+            const arabicFieldName = translateField(field);
+            return {
+                field: arabicFieldName,
+                from: formatValue(oldValue),
+                to: formatValue(newValue)
+            };
+        }).filter(change => change !== null); // نزيل الحقول التي لم تتغير
+
+        const description = changes.length > 0 
+            ? `تم تحديث بيانات الوكيل:\n${changes.map(c => `${c.field}: من "${c.from}" إلى "${c.to}"`).join('\n')}`
+            : 'تم تحديث بيانات الوكيل بدون تغييرات';
+
+        if (userId) {
+            await logActivity(userId, updatedAgent._id, actionType, description, {
+                changes: changes
+            });
         }
 
         res.json({ data: updatedAgent });
-
     } catch (error) {
-        res.status(400).json({ message: 'Failed to update agent.', error: error.message });
+        console.error('[Agent Update Error]:', error);
+        res.status(400).json({ 
+            message: 'Failed to update agent.', 
+            error: error.message 
+        });
     }
 };
 
