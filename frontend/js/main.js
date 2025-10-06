@@ -313,10 +313,10 @@ function showConfirmationModal(message, onConfirm, options = {}) {
     document.body.appendChild(overlay);
 
     document.getElementById('confirm-btn').onclick = () => {
-        // FIX: Remove the modal *before* executing the callback.
-        // This prevents a race condition where the callback tries to open a new modal while this one is still in the DOM.
-        overlay.remove();
-        if (onConfirm) { onConfirm(); }
+        // FIX: Execute the callback *before* removing the modal.
+        // This ensures that any inputs inside the modal are still accessible to the callback.
+        if (onConfirm) onConfirm();
+        overlay.remove(); // Now remove the modal.
     };
     const cancelBtn = document.getElementById('cancel-btn');
     if (cancelBtn) cancelBtn.onclick = () => overlay.remove();
