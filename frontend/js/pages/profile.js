@@ -277,7 +277,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                         throw new Error(result.message || 'فشل تجديد الرصيد.');
                     }
                     // --- FIX: Add correct logging for manual renewal ---
-                    await logAgentActivity(agent._id, 'MANUAL_RENEWAL', `تم تجديد الرصيد يدوياً للوكيل ${agent.name}.`, {
+                    await logAgentActivity(currentUserProfile?._id, agent._id, 'MANUAL_RENEWAL', `تم تجديد الرصيد يدوياً للوكيل ${agent.name}.`, {
                         renewed_by: currentUserProfile.full_name,
                         new_balance: agent.competition_bonus
                     });
@@ -380,7 +380,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                     }
                     showToast('تم إرسال كليشة البونص إلى تلجرام بنجاح.', 'success');
                     // --- FIX: Add correct logging for sending bonus cliche ---
-                    await logAgentActivity(agent._id, 'BONUS_CLICHE_SENT', `تم إرسال كليشة تذكير البونص إلى تلجرام للوكيل ${agent.name}.`, {
+                    await logAgentActivity(currentUserProfile?._id, agent._id, 'BONUS_CLICHE_SENT', `تم إرسال كليشة تذكير البونص إلى تلجرام للوكيل ${agent.name}.`, {
                         sent_by: currentUserProfile.full_name
                     });
                 } catch (error) {
@@ -426,7 +426,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
 
                     showToast('تم إرسال طلب اختيار الفائزين إلى تلجرام بنجاح.', 'success');
                     // --- FIX: Add correct logging for winner selection request ---
-                    await logAgentActivity(agent._id, 'WINNERS_SELECTION_REQUESTED', `تم إرسال طلب اختيار الفائزين لمسابقة "${activeCompetition?.name || 'الأخيرة'}".`, {
+                    await logAgentActivity(currentUserProfile?._id, agent._id, 'WINNERS_SELECTION_REQUESTED', `تم إرسال طلب اختيار الفائزين لمسابقة "${activeCompetition?.name || 'الأخيرة'}".`, {
                         sent_by: currentUserProfile.full_name
                     });
                 } catch (error) {
@@ -665,7 +665,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                         } else {
                             showToast('تم إكمال المسابقة بنجاح.', 'success');
                             // --- FIX: Add correct logging for competition completion ---
-                            await logAgentActivity(agent._id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}" وتسجيل الأداء.`, {
+                            await logAgentActivity(currentUserProfile?._id, agent._id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}" وتسجيل الأداء.`, {
                                 completed_by: currentUserProfile.full_name,
                                 performance: updateData
                             });
@@ -705,7 +705,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                         }
                         showToast('تم حذف المسابقة بنجاح.', 'success');
                         // --- FIX: Add correct logging for competition deletion ---
-                        await logAgentActivity(agent._id, 'COMPETITION_DELETED', `تم حذف مسابقة من سجل الوكيل.`, {
+                        await logAgentActivity(currentUserProfile?._id, agent._id, 'COMPETITION_DELETED', `تم حذف مسابقة من سجل الوكيل.`, {
                             deleted_by: currentUserProfile.full_name
                         });
                         renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });

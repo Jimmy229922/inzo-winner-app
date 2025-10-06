@@ -1,10 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const templateController = require('../controllers/template.controller');
-const { authenticate } = require('../api/middleware/auth.middleware');
-const telegramController = require('../controllers/telegram.controller'); // Assuming this is the telegram controller
 
-// --- FIX: Add authentication middleware to the get-chat-info route ---
-router.get('/get-chat-info', authenticate, telegramController.getChatInfo);
+// Note: The main authentication middleware is already applied in app.js
+
+router.get('/', templateController.getAllTemplates);
+router.get('/available', templateController.getAvailableTemplates);
+router.post('/', templateController.createTemplate);
+router.get('/:id', templateController.getTemplateById);
+router.put('/:id', templateController.updateTemplate);
+router.delete('/:id', templateController.deleteTemplate); // This archives the template
+router.put('/:id/reactivate', templateController.reactivateTemplate);
 
 module.exports = router;

@@ -211,15 +211,23 @@ function setActiveNav(activeElement) {
     }
 }
 
-async function logAgentActivity(agentId, actionType, description, metadata = {}) {
+async function logAgentActivity(userId, agentId, actionType, description, metadata = {}) {
     // This function will be reimplemented later using our own backend.
     console.log(`[FRONTEND LOG] ➡️ محاولة تسجيل نشاط: ${actionType} للوكيل ${agentId}`);
     try {
+        // FIX: Ensure userId is correctly identified, even if only agentId is passed as the first argument.
+        let finalUserId = userId;
+        let finalAgentId = agentId;
+        if (arguments.length <= 4 && typeof userId === 'string' && !agentId) {
+            finalAgentId = userId;
+            finalUserId = currentUserProfile?._id;
+        }
+
         const response = await authedFetch('/api/logs', {
             method: 'POST',
             body: JSON.stringify({
-                user_id: currentUserProfile?._id, // Pass the current user's ID
-                agent_id: agentId,
+                user_id: finalUserId, // Pass the current user's ID
+                agent_id: finalAgentId,
                 action_type: actionType,
                 description,
                 metadata

@@ -113,10 +113,11 @@ exports.updateAgent = async (req, res) => {
             ? `تم تحديث بيانات الوكيل:\n${changes.map(c => `${c.field}: من "${c.from}" إلى "${c.to}"`).join('\n')}`
             : 'تم تحديث بيانات الوكيل بدون تغييرات';
 
-        if (userId) {
-            await logActivity(userId, updatedAgent._id, actionType, description, {
-                changes: changes
-            });
+        // --- FIX: Only log if a user context exists and there were actual changes ---
+        if (userId && changes.length > 0) {
+             await logActivity(userId, updatedAgent._id, actionType, description, {
+                 changes: changes
+             });
         }
 
         res.json({ data: updatedAgent });

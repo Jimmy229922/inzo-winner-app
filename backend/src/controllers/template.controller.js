@@ -39,12 +39,25 @@ exports.getTemplateById = async (req, res) => {
 // Create new template
 exports.createTemplate = async (req, res) => {
     try {
-        const template = new CompetitionTemplate(req.body);
+        // FIX: Ensure the 'question' field is populated from 'name' if it's missing.
+        const templateData = { ...req.body };
+        if (templateData.name && !templateData.question) {
+            templateData.question = templateData.name;
+        }
+        const template = new CompetitionTemplate(templateData);
         await template.save();
-        await logActivity(req.user._id, null, 'TEMPLATE_CREATED', `تم إنشاء قالب جديد: ${template.name}`);
+        // FIX: Ensure req.user._id is passed for logging
+        if (req.user && req.user._id) {
+            await logActivity(req.user._id, null, 'TEMPLATE_CREATED', `تم إنشاء قالب جديد: ${template.question}`);
+        }
         res.status(201).json({ data: template });
     } catch (error) {
-        res.status(400).json({ message: 'Failed to create template.', error: error.message });
+        // --- IMPROVEMENT: Provide more detailed error messages ---
+        console.error('[CREATE TEMPLATE ERROR]', error); // Log the full error on the server
+        // Check for Mongoose validation error
+        const errorMessage = error.name === 'ValidationError' ? Object.values(error.errors).map(e => e.message).join(', ') : error.message;
+        
+        res.status(400).json({ message: `فشل إنشاء القالب: ${errorMessage}`, error: error });
     }
 };
 
@@ -59,10 +72,18 @@ exports.updateTemplate = async (req, res) => {
         if (!template) {
             return res.status(404).json({ message: 'Template not found.' });
         }
-        await logActivity(req.user._id, null, 'TEMPLATE_UPDATED', `تم تحديث القالب: ${template.name}`);
+        // FIX: Ensure req.user._id is passed for logging
+        if (req.user && req.user._id) {
+            await logActivity(req.user._id, null, 'TEMPLATE_UPDATED', `تم تحديث القالب: ${template.question}`);
+        }
         res.json({ data: template });
     } catch (error) {
-        res.status(400).json({ message: 'Failed to update template.', error: error.message });
+        // --- IMPROVEMENT: Provide more detailed error messages ---
+        console.error('[CREATE TEMPLATE ERROR]', error); // Log the full error on the server
+        // Check for Mongoose validation error
+        const errorMessage = error.name === 'ValidationError' ? Object.values(error.errors).map(e => e.message).join(', ') : error.message;
+        
+        res.status(400).json({ message: `فشل إنشاء القالب: ${errorMessage}`, error: error });
     }
 };
 
@@ -77,7 +98,10 @@ exports.deleteTemplate = async (req, res) => {
         if (!template) {
             return res.status(404).json({ message: 'Template not found.' });
         }
-        await logActivity(req.user._id, null, 'TEMPLATE_DELETED', `تم حذف القالب: ${template.name}`);
+        // FIX: Ensure req.user._id is passed for logging
+        if (req.user && req.user._id) {
+            await logActivity(req.user._id, null, 'TEMPLATE_DELETED', `تم حذف القالب: ${template.question}`);
+        }
         res.json({ message: 'Template archived successfully.' });
     } catch (error) {
         res.status(500).json({ message: 'Failed to delete template.', error: error.message });
@@ -95,7 +119,10 @@ exports.reactivateTemplate = async (req, res) => {
         if (!template) {
             return res.status(404).json({ message: 'Template not found.' });
         }
-        await logActivity(req.user._id, null, 'TEMPLATE_REACTIVATED', `تمت إعادة تفعيل القالب: ${template.name}`);
+        // FIX: Ensure req.user._id is passed for logging
+        if (req.user && req.user._id) {
+            await logActivity(req.user._id, null, 'TEMPLATE_REACTIVATED', `تمت إعادة تفعيل القالب: ${template.question}`);
+        }
         res.json({ data: template });
     } catch (error) {
         res.status(500).json({ message: 'Failed to reactivate template.', error: error.message });

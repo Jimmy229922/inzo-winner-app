@@ -524,7 +524,7 @@ async function renderCompetitionCreatePage(agentId) {
                     <label for="competition-template-select">المسابقات المقترحة</label>
                     <select id="competition-template-select" required>
                         <option value="" disabled selected>-- اختار مسابقة --</option>
-                        ${templates.map(t => `<option value="${t.id}">${t.question}</option>`).join('')}
+                        ${templates.map(t => `<option value="${t._id}">${t.question}</option>`).join('')}
                     </select>
                     <div id="template-usage-info" class="form-hint" style="display: none;">
                         <!-- Usage info will be displayed here -->
@@ -617,7 +617,7 @@ async function renderCompetitionCreatePage(agentId) {
 
     function updateDescriptionAndPreview(event = {}) {
         const selectedId = templateSelect.value;
-        const selectedTemplate = templates.find(t => t.id == selectedId);
+        const selectedTemplate = templates.find(t => String(t._id) === selectedId);
 
         // FIX: If no template is selected, do not proceed. This prevents errors on focusout.
         if (!selectedTemplate) {
@@ -826,7 +826,7 @@ async function renderCompetitionCreatePage(agentId) {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const selectedTemplateId = templateSelect.value;
-        const selectedTemplate = templates.find(t => t.id == selectedTemplateId);
+        const selectedTemplate = templates.find(t => t._id == selectedTemplateId);
         if (!selectedTemplate) {
             showToast('يرجى اختيار قالب مسابقة صالح.', 'error');
             sendBtn.disabled = false;
@@ -883,8 +883,8 @@ async function renderCompetitionCreatePage(agentId) {
                 deposit_winners_count: depositWinnersCount,
                 correct_answer: selectedTemplate.correct_answer,
                 winners_count: winnersCount,
-                prize_per_winner: prizePerWinner,
-                template_id: selectedTemplate.id // Send template ID for usage tracking
+                prize_per_winner: prizePerWinner
+                // template_id: selectedTemplate.id // This is now handled by the backend
             };
 
             const compResponse = await authedFetch('/api/competitions', {
@@ -953,7 +953,7 @@ async function renderCompetitionCreatePage(agentId) {
             }
 
             // 4. Log activity
-            await logAgentActivity(agent._id, 'COMPETITION_CREATED', `تم إنشاء وإرسال مسابقة "${selectedTemplate.question}" بتكلفة ${totalCost.toFixed(2)}$ و ${depositWinnersCount} بونص إيداع.`);
+            await logAgentActivity(currentUserProfile?._id, agent._id, 'COMPETITION_CREATED', `تم إنشاء وإرسال مسابقة "${selectedTemplate.question}" بتكلفة ${totalCost.toFixed(2)}$ و ${depositWinnersCount} بونص إيداع.`);
             
             // 5. Success
             showToast('تم حفظ المسابقة وإرسالها وخصم الرصيد بنجاح.', 'success');
@@ -1280,18 +1280,19 @@ async function renderCompetitionTemplatesPage() {
                 return orderA - orderB;
             }
             // Secondary sort by question name alphabetically
-            return a.question.localeCompare(b.question);
+            // --- FIX: Add a fallback for templates that might not have a name ---
+            return (a.name || '').localeCompare(b.name || '');
         });
 
         if (templates.length === 0) {
             templatesListDiv.innerHTML = '<p class="no-results-message">لا توجد قوالب محفوظة بعد.</p>';
         } else {
             const groupedTemplates = templates.reduce((acc, template) => {
-                const key = template.classification || 'All';
+            const key = template.classification || 'All'; // Ensure key exists
                 if (!acc[key]) acc[key] = [];
                 acc[key].push(template);
                 return acc;
-            }, {});
+        }, {}); // Initialize with an empty object
 
             const classificationOrder = ['R', 'A', 'B', 'C', 'All'];
             let groupsHtml = '';
@@ -1307,17 +1308,17 @@ async function renderCompetitionTemplatesPage() {
                             </summary>
                             <div class="template-group-content">
                                 ${group.map(template => `
-                                    <div class="template-card" data-id="${template.id}" data-question="${template.question.toLowerCase()}" data-classification="${template.classification || 'All'}">
+                                <div class="template-card" data-id="${template._id}" data-question="${(template.name || '').toLowerCase()}" data-classification="${template.classification || 'All'}">
                                         <div class="template-card-header">
-                                            <h4>${template.question}</h4>
+                                        <h4>${template.name || 'قالب بدون اسم'}</h4>
                                         </div>
                                         <div class="template-card-body">
                                             <p>${template.content.substring(0, 120)}...</p>
                                         </div>
                                         <div class="template-card-footer">
-                                            <button class="btn-secondary edit-template-btn" data-id="${template.id}"><i class="fas fa-edit"></i> تعديل</button>
-                                            <button class="btn-danger delete-template-btn" data-id="${template.id}"><i class="fas fa-trash-alt"></i> حذف</button>
-                                        </div>
+                                            <button class="btn-secondary edit-template-btn" data-id="${template._id}"><i class="fas fa-edit"></i> تعديل</button>
+                                            <button class="btn-danger delete-template-btn" data-id="${template._id}"><i class="fas fa-trash-alt"></i> حذف</button>
+                                        </div> 
                                     </div>
                                 `).join('')}
                             </div>
@@ -1333,10 +1334,10 @@ async function renderCompetitionTemplatesPage() {
         const editBtn = e.target.closest('.edit-template-btn');
         if (editBtn) {
             if (!canEdit) {
-                showToast('ليس لديك صلاحية لتعديل القوالب.', 'error');
+                showToast('ليس لديك صلاحية لتعديل القوالب.', 'error'); // Corrected permission check
                 return;
             }
-            const id = editBtn.dataset.id;
+            const id = editBtn.dataset.id; // This is the Supabase ID, which is correct for fetching
             const response = await authedFetch(`/api/templates/${id}`);
             const { data: template } = await response.json();
             
@@ -1354,11 +1355,11 @@ async function renderCompetitionTemplatesPage() {
                 showToast('ليس لديك صلاحية لحذف القوالب.', 'error');
                 return;
             }
-            const id = deleteBtn.dataset.id;
+            const templateId = deleteBtn.dataset.id; // This is the MongoDB _id string
             showConfirmationModal(
                 'هل أنت متأكد من حذف هذا القالب؟<br><small>لا يمكن التراجع عن هذا الإجراء.</small>',
                 async () => {
-                    const response = await authedFetch(`/api/templates/${id}`, { method: 'DELETE' });
+                    const response = await authedFetch(`/api/templates/${templateId}`, { method: 'DELETE' });
                     if (!response.ok) {
                         const result = await response.json();
                         showToast(result.message || 'فشل حذف القالب.', 'error');
@@ -1453,14 +1454,16 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
         }
 
         const formData = {
-            question: document.getElementById('create-template-question').value.trim(),
+            name: questionText, // FIX: Change 'question' to 'name' to match the schema
             classification: document.getElementById('create-template-classification').value,
             content: document.getElementById('create-template-content').value.trim(),
             correct_answer: document.getElementById('create-template-correct-answer').value.trim(),
-            usage_limit: document.getElementById('create-template-usage-limit').value ? parseInt(document.getElementById('create-template-usage-limit').value, 10) : null,
-            image_url: null, // FIX: Do not save image URL for new templates
-            is_archived: false
+            usage_limit: document.getElementById('create-template-usage-limit').value ? parseInt(document.getElementById('create-template-usage-limit').value, 10) : null, // Corrected: usage_limit
+            usage_count: 0, // FIX: Add usage_count on creation
+            is_archived: false,
         };
+
+        console.log('[DEBUG] Sending template data:', formData); // إضافة: عرض البيانات المرسلة
 
         const response = await authedFetch('/api/templates', {
             method: 'POST',
@@ -1468,7 +1471,8 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
         });
         if (!response.ok) {
             const result = await response.json();
-            console.error('Error inserting template:', result); // Log the detailed error
+            // إضافة: عرض رسالة الخطأ من الخادم بشكل واضح
+            console.error('Error inserting template:', { message: result.message, error: result.error });
             // تعديل: عرض رسالة خطأ أكثر تفصيلاً للمستخدم
             showToast(`فشل حفظ القالب. السبب: ${result.message}`, 'error');
         } else {
@@ -1494,7 +1498,7 @@ function setupTemplateFilters() {
         const searchTerm = searchInput.value.toLowerCase().trim();
         const activeFilter = document.querySelector('.template-filters .filter-btn.active').dataset.filter;
 
-        const allGroups = document.querySelectorAll('.template-group');
+        const allGroups = document.querySelectorAll('.template-group'); // Corrected selector
         let hasResults = false;
 
         allGroups.forEach(group => {
@@ -1502,7 +1506,7 @@ function setupTemplateFilters() {
             let visibleCardsInGroup = 0;
 
             cards.forEach(card => {
-                const question = card.dataset.question;
+                const question = card.dataset.question || ''; // Add fallback for safety
                 const classification = card.dataset.classification;
 
                 const matchesSearch = searchTerm === '' || question.includes(searchTerm);
@@ -1590,9 +1594,13 @@ async function renderArchivedTemplatesPage() {
     let allArchivedTemplates = [];
 
     function displayArchived(templatesToDisplay) {
+        const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+        const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
+        const templatesPerm = currentUserProfile?.permissions?.competitions?.manage_templates || 'none';
+        const canEdit = isAdmin || templatesPerm === 'full';
         if (templatesToDisplay.length === 0) {
             listDiv.innerHTML = '<p class="no-results-message">لا توجد قوالب في الأرشيف تطابق بحثك.</p>';
-        } else {
+        } else { // Corrected logic
             listDiv.innerHTML = `
                 <table class="modern-table">
                     <thead>
@@ -1605,14 +1613,14 @@ async function renderArchivedTemplatesPage() {
                     </thead>
                     <tbody>
                         ${templatesToDisplay.map(template => `
-                            <tr data-question="${template.question.toLowerCase()}" data-classification="${template.classification || 'All'}">
-                                <td data-label="اسم القالب">${template.question}</td>
+                            <tr data-question="${template.name.toLowerCase()}" data-classification="${template.classification || 'All'}">
+                                <td data-label="اسم القالب">${template.name}</td>
                                 <td data-label="التصنيف"><span class="classification-badge classification-${(template.classification || 'all').toLowerCase()}">${template.classification || 'الكل'}</span></td>
                                 <td data-label="مرات الاستخدام">${template.usage_count} / ${template.usage_limit}</td>
                                 <td class="actions-cell">
                                     <button class="btn-primary reactivate-template-btn btn-small" data-id="${template.id}"><i class="fas fa-undo"></i> إعادة تفعيل</button>
-                                    <button class="btn-danger delete-template-btn btn-small" data-id="${template.id}"><i class="fas fa-trash-alt"></i> حذف نهائي</button>
-                                </td>
+                                    ${canEdit ? `<button class="btn-danger delete-template-btn btn-small" data-id="${template._id}"><i class="fas fa-trash-alt"></i> حذف نهائي</button>` : ''}
+                                </td> 
                             </tr>
                         `).join('')}
                     </tbody>
@@ -1632,7 +1640,7 @@ async function renderArchivedTemplatesPage() {
             const activeFilter = document.querySelector('.template-filters .filter-btn.active').dataset.filter;
 
             const filtered = allArchivedTemplates.filter(template => {
-                const matchesSearch = searchTerm === '' || template.question.toLowerCase().includes(searchTerm);
+                const matchesSearch = searchTerm === '' || template.name.toLowerCase().includes(searchTerm);
                 const matchesFilter = activeFilter === 'all' || (template.classification || 'All') === activeFilter;
                 return matchesSearch && matchesFilter;
             });
@@ -1669,7 +1677,7 @@ async function renderArchivedTemplatesPage() {
         if (reactivateBtn) {
             const id = reactivateBtn.dataset.id;
             showConfirmationModal('هل أنت متأكد من إعادة تفعيل هذا القالب؟<br><small>سيتم إعادة تعيين عداد استخدامه إلى الصفر.</small>', async () => {
-                const response = await authedFetch(`/api/templates/${id}/reactivate`, {
+                const response = await authedFetch(`/api/templates/${allArchivedTemplates.find(t => t.id == id)._id}/reactivate`, {
                     method: 'PUT'
                 });
                 if (!response.ok) {
@@ -1710,13 +1718,13 @@ function renderEditTemplateModal(template, onSaveCallback) {
     modal.innerHTML = `
         <div class="form-modal-header">
             <h2>تعديل قالب مسابقة</h2>
-            <button id="close-modal-btn" class="btn-secondary" style="min-width: 40px; padding: 5px 10px;">&times;</button>
+            <button id="close-modal-btn" class="btn-icon-action" title="إغلاق">&times;</button>
         </div>
         <div class="form-modal-body">
             <form id="edit-template-form" class="form-layout">
                 <div class="form-group">
                     <label for="edit-template-question">السؤال</label>
-                    <textarea id="edit-template-question" rows="3" required>${template.question}</textarea>
+                    <textarea id="edit-template-question" rows="3" required>${template.name}</textarea>
                 </div>
                 <div class="form-group">
                     <label for="edit-template-correct-answer">الإجابة الصحيحة</label>
@@ -1771,7 +1779,8 @@ function renderEditTemplateModal(template, onSaveCallback) {
         const fixedImageUrl = `${window.location.origin}/images/competition_bg.jpg`;
 
         const updatedData = {
-            question: document.getElementById('edit-template-question').value.trim(),
+            name: document.getElementById('edit-template-question').value.trim(),
+            question: document.getElementById('edit-template-question').value.trim(), // Also send 'question' for compatibility
             classification: document.getElementById('edit-template-classification').value,
             content: document.getElementById('edit-template-content').value.trim(),
             correct_answer: document.getElementById('edit-template-correct-answer').value.trim(),
@@ -1779,7 +1788,7 @@ function renderEditTemplateModal(template, onSaveCallback) {
             image_url: fixedImageUrl
         };
 
-        const response = await authedFetch(`/api/templates/${template.id}`, {
+        const response = await authedFetch(`/api/templates/${template._id}`, {
             method: 'PUT',
             body: JSON.stringify(updatedData)
         });

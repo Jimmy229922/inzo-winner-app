@@ -53,12 +53,12 @@ exports.getAllLogs = async (req, res) => {
 
 exports.createLog = async (req, res) => {
     try {
-        // --- FIX: Prioritize user_id from body for frontend-initiated logs ---
-        const { agent_id, action_type, description, metadata, user_id } = req.body;
-        const userId = user_id || (req.user ? req.user._id : null);
+        const { agent_id, action_type, description, metadata } = req.body;
+        // FIX: Prioritize user_id from the request body, fallback to authenticated user context.
+        const userId = req.body.user_id || req.user?._id;
 
         const log = new Log({
-            user: userId,
+            user: userId, // This now correctly uses the user ID from body or auth context.
             agent_id: agent_id,
             action_type,
             description,

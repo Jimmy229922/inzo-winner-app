@@ -30,8 +30,8 @@ const userController = {
             return res.status(400).json({ message: 'Please provide all required fields.' });
         }
 
-        // --- SECURITY: Only super_admin can create users with specific roles/permissions ---
-        if ((role !== 'employee' || (permissions && permissions.length > 0)) && req.user.role !== 'super_admin') {
+        // --- SECURITY: Only super_admin can create users with the 'admin' role or assign permissions ---
+        if ((role === 'admin' || (permissions && Object.keys(permissions).length > 0)) && req.user.role !== 'super_admin') {
             return res.status(403).json({ message: 'Forbidden: You do not have permission to create users with special roles or permissions.' });
         }
 
@@ -48,7 +48,7 @@ const userController = {
                 email,
                 password: hashedPassword,
                 role,
-                permissions: permissions || [] // Ensure permissions is an array
+                permissions: permissions || {} // Ensure permissions is an object
             });
 
             await user.save();
