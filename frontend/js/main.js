@@ -240,6 +240,43 @@ async function logAgentActivity(userId, agentId, actionType, description, metada
     }
 }
 
+/**
+ * NEW: Verifies that the agent's stored Telegram chat ID and group name match the actual data on Telegram.
+ * @param {object} agent The agent object containing telegram_chat_id and telegram_group_name.
+ * @returns {Promise<{verified: boolean, message: string}>} An object indicating if verification passed.
+ */
+async function verifyTelegramChat(agent) {
+    if (!agent.telegram_chat_id) {
+        const message = 'لا يمكن الإرسال. معرف دردشة التلجرام غير مسجل لهذا الوكيل.';
+        showToast(message, 'error');
+        return { verified: false, message };
+    }
+    if (!agent.telegram_group_name) {
+        const message = 'لا يمكن الإرسال. اسم مجموعة التلجرام غير مسجل لهذا الوكيل.';
+        showToast(message, 'error');
+        return { verified: false, message };
+    }
+
+    try {
+        showToast('جاري التحقق من تطابق بيانات مجموعة التلجرام...', 'info');
+        const response = await authedFetch(`/api/get-chat-info?chatId=${agent.telegram_chat_id}`);
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.message || 'فشل التحقق من بيانات مجموعة التلجرام.');
+
+        const actualGroupName = data.title;
+        if (actualGroupName.trim() !== agent.telegram_group_name.trim()) {
+            const errorMessage = `<b>خطأ في التحقق:</b> اسم المجموعة المسجل (<b>${agent.telegram_group_name}</b>) لا يطابق الاسم الفعلي (<b>${actualGroupName}</b>). يرجى تصحيح البيانات.`;
+            showToast(errorMessage, 'error');
+            return { verified: false, message: errorMessage };
+        }
+        return { verified: true, message: 'تم التحقق من المجموعة بنجاح.' };
+    } catch (error) {
+        showToast(`فشل التحقق من المجموعة: ${error.message}`, 'error');
+        return { verified: false, message: error.message };
+    }
+}
+
 // 2. Function to initialize the application session
 async function initializeApp() {
     updateStatus('connected', 'متصل وجاهز');

@@ -867,6 +867,16 @@ async function renderCompetitionCreatePage(agentId) {
         sendBtn.disabled = true;
         sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
 
+        // --- NEW: Add mandatory Telegram chat verification before proceeding ---
+        const verification = await verifyTelegramChat(agent);
+        if (!verification.verified) {
+            showToast('تم إيقاف الإرسال بسبب فشل التحقق من بيانات التلجرام.', 'error');
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = originalBtnHtml;
+            return; // Stop the submission
+        }
+        // --- End Verification ---
+
         try {
             // The backend will handle the image URL logic. We just send the template ID.
             const finalImageUrlForTelegram = `${window.location.origin}/images/competition_bg.jpg`;

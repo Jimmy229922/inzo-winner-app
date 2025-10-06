@@ -396,11 +396,16 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
         );
     });
 
-    document.getElementById('send-winners-cliche-btn').addEventListener('click', () => {
-        const targetGroup = agent.telegram_group_name && agent.telegram_chat_id 
-            ? `مجموعة الوكيل: <strong>${agent.telegram_group_name}</strong>` 
-            : 'المجموعة العامة';
+    document.getElementById('send-winners-cliche-btn').addEventListener('click', async () => {
+        // --- NEW: Use centralized verification function ---
+        const verification = await verifyTelegramChat(agent);
+        if (!verification.verified) {
+            return;
+        }
+        const targetGroup = `مجموعة الوكيل: <strong>${agent.telegram_group_name}</strong> (تم التحقق)`;
+        // --- End Verification ---
 
+        const activeCompetition = agentCompetitions.find(c => c.is_active);
 
         const clicheText = `دمت بخير شريكنا العزيز ${agent.name}،
 
