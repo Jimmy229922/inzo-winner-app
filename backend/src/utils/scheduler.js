@@ -42,7 +42,7 @@ async function checkExpiredCompetitions() {
                     console.log(`[Scheduler] Sent winner selection request for competition ${comp._id} to agent ${agent.name}`);
                     
                     await logActivity(
-                        null, // Pass null for userId to indicate a system action
+                        null,
                         agent._id, 
                         'WINNERS_SELECTION_REQUESTED', 
                         `تم إغلاق المسابقة "${comp.name}" وإرسال طلب اختيار الفائزين تلقائياً.`

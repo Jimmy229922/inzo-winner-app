@@ -673,13 +673,13 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                         title: 'إكمال المسابقة وتسجيل الأداء',
                         confirmText: 'نعم، اكتملت',
                         confirmClass: 'btn-primary',
-                        onRender: (modal) => { // This will be migrated later
-                            const confirmBtn = modal.querySelector('#confirm-btn'); // This will be migrated later
+                        onRender: (modal) => {
+                            const confirmBtn = modal.querySelector('#confirm-btn');
                             const inputs = modal.querySelectorAll('.modal-input');
                             confirmBtn.disabled = true; // Disable by default
 
                             inputs.forEach(input => input.addEventListener('input', () => {
-                                const allFilled = Array.from(inputs).every(i => i.value.trim() !== '' && parseInt(i.value, 10) >= 0);
+                                const allFilled = Array.from(inputs).every(i => i.value.trim() !== '' && parseInt(i.value, 10) >= 0 && i.value !== '');
                                 confirmBtn.disabled = !allFilled;
                             }));
                         }

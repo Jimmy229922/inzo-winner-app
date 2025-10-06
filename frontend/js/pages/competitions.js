@@ -765,16 +765,13 @@ async function renderCompetitionCreatePage(agentId) {
 
         // --- NEW: Update Winner Selection Date Preview ---
         if (duration) {
-            const today = new Date();
-            const newDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-            // Set to the beginning of the day to avoid time-of-day issues
-            
             let daysToAdd = 0;
             switch (duration) {
                 case '1d': daysToAdd = 1; break; // Ends at the start of the day after 1 full day
                 case '2d': daysToAdd = 2; break; // Ends at the start of the day after 2 full days
                 case '1w': daysToAdd = 7; break; // Ends at the start of the day after 7 full days
             }
+            const tzOffsetHours = 3; // Egypt timezone
 
             // Simulate the backend logic for preview purposes.
             // Get today's date in the local timezone (e.g., Egypt time)
@@ -782,7 +779,7 @@ async function renderCompetitionCreatePage(agentId) {
             // Set time to 00:00:00 to get the start of the local day
             localToday.setHours(0, 0, 0, 0);
             // The winner selection day is the day *after* the duration ends. So, duration + 1.
-            localToday.setDate(localToday.getDate() + daysToAdd + 1);
+            localToday.setDate(localToday.getDate() + daysToAdd + 1); // This logic is correct for local display.
             
             winnerDatePreview.innerHTML = `
                 سيتم إرسال طلب اختيار الفائزين في بداية يوم <br><strong>${localToday.toLocaleDateString('ar-EG', {

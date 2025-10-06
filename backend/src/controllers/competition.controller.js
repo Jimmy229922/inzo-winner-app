@@ -10,11 +10,11 @@ const Template = require('../models/Template');
  */
 function calculateEndsAtUTC(duration, tzOffsetHours = 3) {
     const msDay = 86400000;
-    const tzMs = tzOffsetHours * 3600000;
-    const nowUtcMs = Date.now();
-    const nowLocalMs = nowUtcMs + tzMs;
-    const localDayStartMs = Math.floor(nowLocalMs / msDay) * msDay;
 
+    // FIX: Correctly get the start of the current local day.
+    const localToday = new Date();
+    localToday.setHours(0, 0, 0, 0);
+    const localDayStartMs = localToday.getTime(); // This gives the timestamp for the start of the local day.
     const durationMap = { '1d': 1, '2d': 2, '1w': 7 };
     const durationDays = durationMap[duration];
     if (durationDays === undefined) return null;
@@ -22,8 +22,9 @@ function calculateEndsAtUTC(duration, tzOffsetHours = 3) {
     // The competition ends at the start of the day *after* the duration ends.
     // The winner selection date is the day *after* the competition's actual end date.
     // So, winner_selection_date = creation_date + duration_days + 1.
-    const winnerLocalStartMs = localDayStartMs + (durationDays + 1) * msDay;
-    const winnerUtcMs = winnerLocalStartMs - tzMs;
+    const winnerLocalStartMs = localDayStartMs + (durationDays + 1) * msDay; // This logic is correct
+
+    const winnerUtcMs = winnerLocalStartMs; // The timestamp is already correct relative to UTC
     return new Date(winnerUtcMs).toISOString();
 }
 
@@ -107,6 +108,7 @@ exports.createCompetition = async (req, res) => {
             return res.status(400).json({ message: 'Invalid competition duration provided.' });
         }
         competitionData.ends_at = endsAtUTC;
+
         const competition = new Competition(competitionData);
 
         await competition.save();
