@@ -7,16 +7,15 @@ async function renderActivityLogPage() {
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
 
-    // --- FIX: Allow all users to view the page as per previous request ---
-    // if (!isAdmin) {
-    //     appContent.innerHTML = `
-    //         <div class="access-denied-container">
-    //             <i class="fas fa-lock"></i>
-    //             <h2>ليس لديك صلاحية وصول</h2>
-    //             <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
-    //         </div>`;
-    //     return;
-    // }
+    if (!isAdmin) {
+        appContent.innerHTML = `
+            <div class="access-denied-container">
+                <i class="fas fa-lock"></i>
+                <h2>ليس لديك صلاحية وصول</h2>
+                <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
+            </div>`;
+        return;
+    }
 
     appContent.innerHTML = `
         <div class="page-header column-header">
@@ -82,42 +81,11 @@ function displayLogsPage(logs, page, totalCount) {
 
     let paginationHtml = '';
     if (totalPages > 1) {
-        paginationHtml = '<div class="pagination-container">';
-        const maxVisiblePages = 5; // Max number of page links to show
-        let startPage, endPage;
-
-        if (totalPages <= maxVisiblePages) {
-            startPage = 1;
-            endPage = totalPages;
-        } else {
-            const maxPagesBeforeCurrent = Math.floor(maxVisiblePages / 2);
-            const maxPagesAfterCurrent = Math.ceil(maxVisiblePages / 2) - 1;
-            if (page <= maxPagesBeforeCurrent) {
-                startPage = 1;
-                endPage = maxVisiblePages;
-            } else if (page + maxPagesAfterCurrent >= totalPages) {
-                startPage = totalPages - maxVisiblePages + 1;
-                endPage = totalPages;
-            } else {
-                startPage = page - maxPagesBeforeCurrent;
-                endPage = page + maxPagesAfterCurrent;
-            }
-        }
-
-        paginationHtml += `<button class="page-btn" data-page="${page - 1}" ${page === 1 ? 'disabled' : ''}><i class="fas fa-chevron-right"></i> السابق</button>`;
-
-        if (startPage > 1) {
-            paginationHtml += `<button class="page-btn" data-page="1">1</button>`;
-            if (startPage > 2) {
-                paginationHtml += `<span class="page-ellipsis">...</span>`;
-            }
-        }
-
-        for (let i = startPage; i <= endPage; i++) {
-            paginationHtml += `<button class="page-btn ${i === page ? 'active' : ''}" data-page="${i}">${i}</button>`;
-        }
-
-        paginationHtml += `<button class="page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>التالي <i class="fas fa-chevron-left"></i></button>`;
+        paginationHtml += '<div class="pagination-container">';
+        paginationHtml += `<button class="page-btn" data-page="${page - 1}" ${page === 1 ? 'disabled' : ''}>السابق</button>`;
+        // Simplified pagination for many pages
+        paginationHtml += `<span class="page-info">صفحة ${page} من ${totalPages}</span>`;
+        paginationHtml += `<button class="page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>التالي</button>`;
         paginationHtml += '</div>';
     }
 

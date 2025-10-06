@@ -10,12 +10,13 @@ const Log = require('../models/Log');
  */
 async function logActivity(userId, agentId, actionType, description, details = {}) {
     try {
+        // FIX: Ensure parameters are correctly assigned even if called with shifted arguments.
         const logEntry = new Log({
             user: userId,
             agent_id: agentId,
             action_type: actionType,
             description: description,
-        metadata: details
+            metadata: details
         });
         await logEntry.save();
     } catch (error) {

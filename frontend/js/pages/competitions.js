@@ -934,15 +934,22 @@ async function renderCompetitionCreatePage(agentId) {
             }
 
             // --- NEW: Mark competition task as complete for today ---
+            // This will automatically check the "Competition" toggle in the calendar for today.
             const taskResponse = await authedFetch('/api/tasks', {
                 method: 'POST',
                 body: JSON.stringify({
                     agentId: agent._id,
                     taskType: 'competition_sent',
                     status: true,
-                    taskDate: new Date().toISOString().split('T')[0] // إصلاح: إضافة تاريخ اليوم
+                    dayIndex: new Date().getDay() // FIX: Send dayIndex to match calendar logic
                 })
             });
+            // --- NEW: Also update the local taskStore to sync the UI instantly ---
+            // This ensures the calendar page reflects the change without a reload.
+            if (window.taskStore) {
+                window.taskStore.updateTaskStatus(agent._id, new Date().getDay(), 'competition_sent', true);
+            }
+
             if (!taskResponse.ok) {
                 console.warn('Could not update daily task for competition sent:', await taskResponse.text());
             }

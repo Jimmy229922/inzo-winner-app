@@ -954,7 +954,7 @@ function renderDetailsView(agent) {
     if (!container) return;
 
     const createFieldHTML = (label, value, fieldName, isEditable = true) => {
-        const numericFields = ['competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'competitions_per_week'];
+        const numericFields = ['competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner'];
         // --- NEW: Define which fields are financial ---
         const financialFields = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period'];
         const isFinancial = financialFields.includes(fieldName);
@@ -1011,7 +1011,6 @@ function renderDetailsView(agent) {
             
             <h3 class="details-section-title">التجديد والمدة</h3>
             ${createFieldHTML('يجدد كل', agent.renewal_period, 'renewal_period')}
-            ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week')}
             ${createFieldHTML('مدة المسابقة', agent.competition_duration, 'competition_duration')}
             ${createFieldHTML('تاريخ آخر مسابقة', agent.last_competition_date, 'last_competition_date')}
         </div>
@@ -1102,9 +1101,6 @@ async function renderInlineEditor(groupElement, agent) {
                 <option value="monthly" ${currentValue === 'monthly' ? 'selected' : ''}>شهر</option>
             </select>`;
             break;
-        case 'competitions_per_week':
-            editorHtml = `<select id="inline-edit-input"><option value="1" ${currentValue == 1 ? 'selected' : ''}>1</option><option value="2" ${currentValue == 2 ? 'selected' : ''}>2</option><option value="3" ${currentValue == 3 ? 'selected' : ''}>3</option></select>`;
-            break;
         case 'last_competition_date': // تعديل: السماح بتعديل تاريخ آخر مسابقة
         case 'winner_selection_date': // تعديل: السماح بتعديل تاريخ اختيار الفائز
             editorHtml = `<input type="date" id="inline-edit-input" value="${currentValue || ''}">`;
@@ -1179,6 +1175,10 @@ async function renderInlineEditor(groupElement, agent) {
         const input = groupElement.querySelector('#inline-edit-input');
         let newValue = input.value;
         const updateData = {};
+
+        // --- DEBUG: Log the field and new value ---
+        console.log(`[Inline Edit] Field: "${fieldName}", New Value from input: "${newValue}"`);
+
         
         // --- STEP 5: MIGRATION TO CUSTOM BACKEND ---
         let currentAgent;
@@ -1215,12 +1215,35 @@ async function renderInlineEditor(groupElement, agent) {
             let finalValue;
             if (fieldName === 'audit_days') {
                 finalValue = Array.from(groupElement.querySelectorAll('.day-toggle-input:checked')).map(input => parseInt(input.value, 10));
-                newValue = finalValue.map(d => dayNames[d]).join(', ') || 'فارغ'; // For logging
             } else if (fieldName.includes('_date')) {
                 finalValue = newValue === '' ? null : newValue;
-            }else {
-                const parsedValue = parseFloat(newValue);
-                finalValue = newValue === '' ? null : (isNaN(parsedValue) ? newValue : parsedValue);
+            } else {
+                // --- REWRITE: Professional and robust value parsing ---
+                // Define which fields should be treated as integers vs floats
+                const integerFields = ['deposit_bonus_count', 'used_deposit_bonus', 'remaining_deposit_bonus', 'winners_count'];
+                const floatFields = ['competition_bonus', 'consumed_balance', 'remaining_balance', 'single_competition_balance', 'prize_per_winner', 'deposit_bonus_percentage'];
+
+                if (integerFields.includes(fieldName)) {
+                    const parsedInt = parseInt(newValue, 10);
+                    finalValue = isNaN(parsedInt) ? null : parsedInt;
+                } else if (floatFields.includes(fieldName)) {
+                    const parsedFloat = parseFloat(newValue);
+                    finalValue = isNaN(parsedFloat) ? null : parsedFloat;
+                } else {
+                    // For all other fields (like rank, renewal_period, etc.)
+                    finalValue = newValue;
+                }
+            }
+
+            // --- DEBUG: Log the final parsed value ---
+            console.log(`[Inline Edit] Final parsed value for "${fieldName}":`, finalValue);
+
+            // --- NEW: Automatically calculate single_competition_balance ---
+            const winnersCount = parseInt(fieldName === 'winners_count' ? finalValue : currentAgent.winners_count, 10) || 0;
+            const prizePerWinner = parseFloat(fieldName === 'prize_per_winner' ? finalValue : currentAgent.prize_per_winner) || 0;
+
+            if (fieldName === 'winners_count' || fieldName === 'prize_per_winner') {
+                updateData.single_competition_balance = winnersCount * prizePerWinner;
             }
 
             // --- FIX: Smart updates for financial fields ---
@@ -1255,6 +1278,9 @@ async function renderInlineEditor(groupElement, agent) {
             if (updateData.remaining_deposit_bonus < 0) updateData.remaining_deposit_bonus = 0;
             if (updateData.used_deposit_bonus < 0) updateData.used_deposit_bonus = 0;
         }
+
+        // --- DEBUG: Log the complete data payload being sent to the server ---
+        console.log('[Inline Edit] Sending update payload to server:', updateData);
 
         try {
             const response = await authedFetch(`/api/agents/${agent._id}`, {

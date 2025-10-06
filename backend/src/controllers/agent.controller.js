@@ -81,13 +81,28 @@ exports.createAgent = async (req, res) => {
 
 exports.updateAgent = async (req, res) => {
     try {
+        // --- DEBUG: Log the incoming request body from the frontend ---
+        console.log(`[Agent Update] Received request to update agent ${req.params.id}.`);
+        console.log('[Agent Update] Request Body:', JSON.stringify(req.body, null, 2));
+
         // --- FIX: Add detailed activity logging on agent update ---
         const agentBeforeUpdate = await Agent.findById(req.params.id).lean();
         if (!agentBeforeUpdate) {
             return res.status(404).json({ message: 'Agent not found.' });
         }
 
-        const updatedAgent = await Agent.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        // --- REWRITE: Explicitly define updatable fields for security and clarity ---
+        const allowedUpdates = [
+            'name', 'telegram_channel_url', 'telegram_group_url', 'telegram_chat_id', 'telegram_group_name',
+            'rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage',
+            'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus',
+            'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period',
+            'competition_duration', 'last_competition_date',
+            'audit_days'
+        ];
+        const updatePayload = { ...req.body }; // Copy the request body
+
+        const updatedAgent = await Agent.findByIdAndUpdate(req.params.id, { $set: updatePayload }, { new: true, runValidators: true });
 
         // --- FIX: Always log activity on update from the backend for reliability ---
         const userId = req.user?._id; // Use optional chaining

@@ -476,74 +476,6 @@ function setupNavbar() {
     const themeBtnDropdown = document.getElementById('theme-toggle-btn-dropdown');
     if (themeBtnDropdown) themeBtnDropdown.addEventListener('click', themeToggleHandler);
 
-    // Update App Button Logic
-    const updateBtn = document.getElementById('update-app-btn');
-    if (updateBtn) {
-        updateBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            showConfirmationModal(
-                'هل أنت متأكد من رغبتك في تحديث التطبيق إلى آخر إصدار؟ سيتم إعادة تشغيل الخادم.',
-                () => {
-                    // This function is called when the user confirms.
-                    // We will now show a new, more detailed modal for the update process.
-                    showUpdateProgressModal();
-                }, 
-                { title: 'تحديث التطبيق', confirmText: 'تحديث الآن', confirmClass: 'btn-primary' }
-            );
-        });
-    }
-
-    // --- إصلاح: إضافة الدالة المفقودة لعملية التحديث ---
-    function showUpdateProgressModal() {
-        const modalContent = `
-            <div class="update-progress-container">
-                <i class="fas fa-sync-alt fa-spin update-icon"></i>
-                <h3 id="update-status-text">جاري الاتصال بالخادم لبدء التحديث...</h3>
-                <p id="update-details-text" style="margin-top: 10px;"></p>
-            </div>
-        `;
-        showConfirmationModal(modalContent, null, {
-            title: 'جاري تحديث التطبيق',
-            showCancel: false,
-            showConfirm: false,
-            modalClass: 'modal-no-actions'
-        });
-
-        // استدعاء الخادم لبدء التحديث
-        triggerAppUpdate();
-    }
-
-    async function triggerAppUpdate() {
-        const statusText = document.getElementById('update-status-text');
-        const detailsText = document.getElementById('update-details-text');
-        const icon = document.querySelector('.modal-no-actions .update-icon');
-
-        try {
-            const response = await fetch('/api/update-app', { method: 'POST' });
-            const result = await response.json();
-
-            if (!response.ok) throw new Error(result.message || 'فشل غير معروف');
-
-            icon.className = 'fas fa-check-circle update-icon';
-            statusText.textContent = 'تم التحديث بنجاح!';
-            detailsText.textContent = result.message;
-
-        } catch (error) {
-            icon.className = 'fas fa-times-circle update-icon';
-            statusText.textContent = 'فشل التحديث';
-            detailsText.textContent = `السبب: ${error.message}`;
-            console.error('Update failed:', error);
-        } finally {
-            // --- تعديل: إخفاء نافذة التحديث تلقائياً بعد 3 ثوانٍ ---
-            setTimeout(() => {
-                const modalOverlay = document.querySelector('.modal-overlay');
-                if (modalOverlay) {
-                    modalOverlay.remove();
-                }
-            }, 3000); // إغلاق بعد 3 ثوانٍ
-        }
-    }
-
     // Logout Button Logic
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
@@ -646,14 +578,14 @@ function setupNavbar() {
     const navCalendar = document.getElementById('nav-calendar');
     const navActivityLog = document.getElementById('nav-activity-log');
     const navUsers = document.getElementById('nav-users'); // NEW
-    const navProfileSettings = document.getElementById('nav-profile-settings');
+    const navProfileSettings = document.getElementById('nav-profile-settings'); // This is a dropdown item
 
-    navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navActivityLog, navUsers, navProfileSettings, document.getElementById('logout-btn')];
+    navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navUsers, navProfileSettings, navActivityLog, document.getElementById('logout-btn')];
     
     // NEW: Navigation listeners update the hash, which triggers the router
     if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'home'; });
     if (navTasks) navTasks.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'tasks'; });
-    if (navTopAgents) navTopAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'top-agents'; }); // NEW
+    if (navTopAgents) navTopAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'top-agents'; });
     if (navManageAgents) navManageAgents.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'manage-agents'; });
     if (navProfileSettings) navProfileSettings.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'profile-settings'; }); // NEW
     if (navManageCompetitions) navManageCompetitions.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = '#competitions'; });

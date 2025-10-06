@@ -481,23 +481,25 @@ async function handleBulkSendBalances() {
             for (let i = 0; i < eligibleAgents.length; i++) {
                 const agent = eligibleAgents[i];
                 
-                // بناء الرسالة الخاصة بكل وكيل
-                const renewalText = renewalPeriodMap[agent.renewal_period] || 'تداولي';
+                // --- FIX: Improved message construction logic ---
+                const renewalValue = (agent.renewal_period && agent.renewal_period !== 'none') 
+                    ? (renewalPeriodMap[agent.renewal_period] || '')
+                    : '';
+
                 let benefitsText = '';
                 if ((agent.remaining_balance || 0) > 0) {
-                    benefitsText += `💰 <b>رصيد مسابقات (${renewalText}):</b> <code>${agent.remaining_balance}$</code>\n`;
+                    benefitsText += `💰 <b>بونص تداولي:</b> <code>${agent.remaining_balance}$</code>\n`;
                 }
                 if ((agent.remaining_deposit_bonus || 0) > 0) {
                     benefitsText += `🎁 <b>بونص ايداع:</b> <code>${agent.remaining_deposit_bonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
                 }
 
-                const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...\n\nيسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع بالمميزات التالية:\n\n${benefitsText.trim()}\n\nبامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.\n\nهل ترغب بارسال مسابقة لحضرتك؟`; // This will be migrated later
+                const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...\n\nيسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع برصيد مسابقات:\n${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}\n\nبامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.\n\nهل ترغب بارسال مسابقة لحضرتك؟`;
 
-                // --- STEP 6: MIGRATION - Temporarily disable sending to Telegram ---
+                // --- FIX: Use authedFetch for authenticated requests ---
                 try {
-                    const response = await fetch('/api/post-announcement', {
+                    const response = await authedFetch('/api/post-announcement', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
                     });
 
