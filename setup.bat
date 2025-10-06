@@ -43,6 +43,9 @@ REM Create the .env file directly from the batch script
     echo.
     echo # JWT Secret for authentication tokens
     echo JWT_SECRET=your-super-secret-jwt-key-that-is-long-and-random-and-changed
+    echo.
+    echo # Application Environment (development or production^)
+    echo NODE_ENV=development
 ) > ".env"
 
 echo [OK] Configuration file (.env) created successfully.

@@ -50,6 +50,8 @@ echo.
  
 :start
 cd backend
+REM Set the environment to development to bypass JWT auth for local testing
+set NODE_ENV=development
 node server.js
  
 IF %errorlevel% == 42 (
