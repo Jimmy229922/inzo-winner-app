@@ -949,7 +949,9 @@ function renderDetailsView(agent) {
     // --- NEW: Permission Check ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const isAdmin = currentUserProfile?.role === 'admin';
-    const canEditFinancials = isSuperAdmin || isAdmin; // In a real scenario, this would be a specific permission like `userPerms.agents.edit_financials`
+    // --- MODIFICATION: Allow anyone who can view financials to also edit them, as per user request. ---
+    const userPerms = currentUserProfile?.permissions || {};
+    const canEditFinancials = isSuperAdmin || isAdmin || userPerms.agents?.view_financials;
 
     const container = document.getElementById('tab-details');
     if (!container) return;
@@ -1304,11 +1306,10 @@ async function renderInlineEditor(groupElement, agent) {
             if (!response.ok) throw new Error((await response.json()).message || 'فشل تحديث الحقل.');
             const { data: updatedAgent } = await response.json();
 
-            // --- FIX: Backend already logs this. No need to log from frontend. ---
-            // The backend provides a more reliable and detailed log for this action.
-            // const oldValue = currentAgent[fieldName];
-            // const description = `تم تحديث "${label}" من "${oldValue || 'فارغ'}" إلى "${newValue || 'فارغ'}".`;
-            // await logAgentActivity(agent._id, 'DETAILS_UPDATE', description, { field: label, from: oldValue, to: newValue });
+            // --- ACTIVATED: Log the activity from the frontend to ensure user context is captured. ---
+            const oldValue = currentAgent[fieldName];
+            const description = `تم تحديث "${label}" من "${oldValue || 'فارغ'}" إلى "${newValue || 'فارغ'}".`;
+            await logAgentActivity(currentUserProfile?._id, agent._id, 'DETAILS_UPDATE', description, { field: label, from: oldValue, to: newValue });
 
             showToast('تم حفظ التغيير بنجاح.', 'success');
             // FIX: Always re-render the full profile page to ensure all tabs (especially the log) are updated.
