@@ -421,7 +421,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
 يرجى اختيار الفائزين بالمسابقة الاخيرة التي تم انتهاء مدة المشاركة بها 
 وتزويدنا بفيديو الروليت والاسم الثلاثي و معلومات الحساب لكل فائز قبل الاعلان عنهم في قناتكم كي يتم التحقق منهم من قبل القسم المختص
 
-الإجابة الصحيحة هي :${activeCompetition?.correct_answer}
+الإجابة الصحيحة هي: <code>${activeCompetition?.correct_answer || 'غير محددة'}</code>
 كما يجب اختيار الفائزين بالقرعة لشفافية الاختيار.`;
 
         // Show confirmation modal before sending

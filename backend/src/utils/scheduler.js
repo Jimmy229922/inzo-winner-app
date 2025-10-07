@@ -35,7 +35,7 @@ async function checkExpiredCompetitions() {
                 const clicheText = `دمت بخير شريكنا العزيز ${agent.name}،\n\n` +
                     `انتهت فترة المشاركة في مسابقة "${comp.name}".\n` +
                     `يرجى اختيار الفائزين في المسابقة.\n\n` +
-                    `الإجابة الصحيحة هي: ${comp.correct_answer || 'غير محددة'}\n\n` +
+                    `الإجابة الصحيحة هي: <code>${comp.correct_answer || 'غير محددة'}</code>\n\n` +
                     `ملاحظة: تم إغلاق المشاركة في المسابقة تلقائياً.`;
                 
                 try {
