@@ -228,25 +228,23 @@ function setActiveNav(activeElement) {
 
 async function logAgentActivity(userId, agentId, actionType, description, metadata = {}) {
     // This function will be reimplemented later using our own backend.
-    console.log(`[FRONTEND LOG] ➡️ محاولة تسجيل نشاط: ${actionType} للوكيل ${agentId}`);
+    console.log(`[FRONTEND LOG] ➡️ محاولة تسجيل نشاط: ${actionType} (Agent: ${agentId || 'N/A'})`);
     try {
-        // FIX: Ensure userId is correctly identified, even if only agentId is passed as the first argument.
-        let finalUserId = userId;
-        let finalAgentId = agentId;
-        if (arguments.length <= 4 && typeof userId === 'string' && !agentId) {
-            finalAgentId = userId;
-            finalUserId = currentUserProfile?._id;
+        const payload = {
+            user_id: userId || currentUserProfile?._id, // Default to current user if not provided
+            action_type: actionType,
+            description,
+            metadata
+        };
+
+        // Only add agent_id to the payload if it's a valid, non-null value.
+        if (agentId) {
+            payload.agent_id = agentId;
         }
 
         const response = await authedFetch('/api/logs', {
             method: 'POST',
-            body: JSON.stringify({
-                user_id: finalUserId, // Pass the current user's ID
-                agent_id: finalAgentId,
-                action_type: actionType,
-                description,
-                metadata
-            })
+            body: JSON.stringify(payload)
         });
         if (!response.ok) throw new Error(`Server responded with status ${response.status}`);
         console.log(`[FRONTEND LOG] ✅ تم إرسال النشاط بنجاح إلى الخادم.`);

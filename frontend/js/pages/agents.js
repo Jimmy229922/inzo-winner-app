@@ -381,7 +381,8 @@ async function handleBulkRenewBalances() {
                 progressBar.style.backgroundColor = 'var(--success-color)';
 
                 console.log(`[Bulk Renew] Success. ${result.processedCount} agents renewed.`);
-                await logAgentActivity(null, 'BULK_RENEWAL', `تم تجديد أرصدة ${result.processedCount} وكيل.`);
+                // --- FIX: Correctly call logAgentActivity with the right arguments ---
+                await logAgentActivity(null, null, 'AGENT_BULK_RENEW', `تم تجديد أرصدة ${result.processedCount} وكيل.`);
                 await fetchAndDisplayAgents(1); // Refresh the agents list
 
             } catch (error) {
