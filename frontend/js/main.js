@@ -103,12 +103,19 @@ function updateUIAfterLogin(user) {
     const userEmailDisplay = document.getElementById('user-email');
     const userAvatar = document.getElementById('user-avatar');
     const usersNavItem = document.getElementById('nav-users');
+    const activityLogNavItem = document.getElementById('nav-activity-log');
 
     if (settingsMenu) settingsMenu.style.display = 'block';
     if (userNameDisplay) userNameDisplay.textContent = user.full_name;
     if (userEmailDisplay) userEmailDisplay.textContent = user.email;
     if (userAvatar) {
         userAvatar.src = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.full_name)}&background=random`;
+    }
+
+    // --- MODIFICATION: Show activity log link only to admins and super admins ---
+    if (activityLogNavItem) {
+        const canViewLogs = user.role === 'super_admin' || user.role === 'admin';
+        activityLogNavItem.style.display = canViewLogs ? 'block' : 'none';
     }
 
     // Show admin-only links if the user is a super_admin or admin

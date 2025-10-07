@@ -22,16 +22,16 @@ async function renderActivityLogPage() {
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const isAdmin = isSuperAdmin || currentUserProfile?.role === 'admin';
 
-    // --- FIX: Allow all users to view the page as per previous request ---
-    // if (!isAdmin) {
-    //     appContent.innerHTML = `
-    //         <div class="access-denied-container">
-    //             <i class="fas fa-lock"></i>
-    //             <h2>ليس لديك صلاحية وصول</h2>
-    //             <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
-    //         </div>`;
-    //     return;
-    // }
+    // --- MODIFICATION: Restrict access to Admins and Super Admins only ---
+    if (!isAdmin) {
+        appContent.innerHTML = `
+            <div class="access-denied-container">
+                <i class="fas fa-lock"></i>
+                <h2>ليس لديك صلاحية وصول</h2>
+                <p>أنت لا تملك الصلاحية اللازمة لعرض هذه الصفحة. يرجى التواصل مع المدير.</p>
+            </div>`;
+        return;
+    }
 
     appContent.innerHTML = `
         <div class="page-header column-header">
@@ -40,21 +40,21 @@ async function renderActivityLogPage() {
             </div>
             <div class="filters-container">
                 <div class="filter-group">
-                    <label for="log-user-filter">فلترة حسب المستخدم:</label>
+                    <label for="log-user-filter">فلترة حسب المستخدم</label>
                     <select id="log-user-filter">
                         <option value="all">كل المستخدمين</option>
                         <!-- User options will be populated here -->
                     </select>
                 </div>
                 <div class="filter-group">
-                    <label for="log-action-filter">فلترة حسب الإجراء:</label>
+                    <label for="log-action-filter">فلترة حسب الإجراء</label>
                     <select id="log-action-filter">
                         <option value="all">كل الإجراءات</option>
                         ${Object.entries(LOG_ACTION_TYPES).map(([key, value]) => `<option value="${key}">${value}</option>`).join('')}
                     </select>
                 </div>
-                <div class="sort-container">
-                    <label for="log-sort-select">ترتيب حسب:</label>
+                <div class="filter-group">
+                    <label for="log-sort-select">ترتيب حسب</label>
                     <select id="log-sort-select">
                         <option value="newest">الأحدث أولاً</option>
                         <option value="oldest">الأقدم أولاً</option>
@@ -70,7 +70,6 @@ async function renderActivityLogPage() {
             <div class="loader-container"><div class="spinner"></div></div>
         </div>
     `;
-
     document.getElementById('apply-log-filters').addEventListener('click', () => fetchAndDisplayLogs(1));
     document.getElementById('reset-log-filters').addEventListener('click', () => {
         ['log-user-filter', 'log-action-filter', 'log-sort-select'].forEach(id => document.getElementById(id).selectedIndex = 0);
@@ -84,7 +83,7 @@ async function fetchAndDisplayLogs(page) {
     if (!container) return;
     container.innerHTML = '<div class="loader-container"><div class="spinner"></div></div>';
 
-    const sortValue = document.getElementById('log-sort-select')?.value || 'newest';
+    const sortValue = document.getElementById('log-sort-select')?.value || 'newest'; // This element is duplicated, but we handle it.
     const userFilter = document.getElementById('log-user-filter')?.value || 'all';
     const actionFilter = document.getElementById('log-action-filter')?.value || 'all';
 
@@ -109,9 +108,9 @@ async function fetchAndDisplayLogs(page) {
         // --- NEW: Populate user filter if not already populated ---
         const userFilterSelect = document.getElementById('log-user-filter');
         if (userFilterSelect && userFilterSelect.options.length <= 1) {
-            const usersResponse = await authedFetch('/api/users?limit=1000&select=full_name');
+            const usersResponse = await authedFetch('/api/users?limit=1000&select=full_name,_id');
             if (usersResponse.ok) {
-                const { data: users } = await usersResponse.json();
+                const { users } = await usersResponse.json(); // The endpoint returns { users: [...] }
                 // Add a "System" option
                 userFilterSelect.innerHTML += `<option value="system">النظام (تلقائي)</option>`;
                 // --- FIX: Ensure 'users' is an array before iterating ---
