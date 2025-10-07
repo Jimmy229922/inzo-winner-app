@@ -91,7 +91,7 @@ function renderAddAgentForm() {
                                 <option value="monthly">شهري</option>
                             </select>
                         </div>
-                        <div class="form-group" id="competitions-per-week-group" style="display: none;">
+                        <div class="form-group" id="competitions-per-week-group">
                             <label for="agent-competitions-per-week">عدد المسابقات كل أسبوع</label>
                             <select id="agent-competitions-per-week">
                                 <option value="1">1</option>
@@ -132,12 +132,11 @@ function renderAddAgentForm() {
         } else if (classification === 'B' || classification === 'C') {
             competitionsPerWeekSelect.value = '1';
         }
-        // --- NEW: Show the field after a classification is selected ---
-        competitionsGroup.style.display = 'block';
     };
 
     classificationSelect.addEventListener('change', updateCompetitionsPerWeek);
-
+    // --- MODIFICATION: Call the function on page load to set the initial value and ensure visibility ---
+    updateCompetitionsPerWeek();
     // Avatar preview logic
     const avatarUploadInput = document.getElementById('avatar-upload');
     const avatarPreview = document.getElementById('avatar-preview');
