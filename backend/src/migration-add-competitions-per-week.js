@@ -1,4 +1,4 @@
-const Agent = require('./models/Agent'); // FIX: Correct path to Agent model
+const Agent = require('./models/agent.model');
 
 /**
  * This migration script adds a default `competitions_per_week` value

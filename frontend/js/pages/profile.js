@@ -58,14 +58,16 @@ async function renderAgentProfilePage(agentId, options = {}) {
         const compResponse = await authedFetch(`/api/competitions?agentId=${agentId}&limit=100&sort=newest`); // Fetch up to 100 competitions for the agent
         const logUrl = `/api/logs?agent_id=${agentId}&limit=50&populate=user`;
         const logResponse = await authedFetch(logUrl); // Fetch latest 50 logs for the agent
+        var agentCompetitions = []; // Initialize with an empty array
+        var agentLogs = []; // Initialize with an empty array
 
         if (compResponse.ok) {
             const compResult = await compResponse.json();
-            var agentCompetitions = compResult.data || [];
+            agentCompetitions = compResult.data || [];
         }
         if (logResponse.ok) {
             const logResult = await logResponse.json();
-            var agentLogs = logResult.data || [];
+            agentLogs = logResult.data || [];
         }
     } catch (compError) {
     }
@@ -510,7 +512,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
 
     if (logTabContent) {
         if (agentLogs && agentLogs.length > 0) {
-            logTabContent.innerHTML = generateActivityLogHTML(agentLogs, true); // Pass true to indicate it's for a single agent
+            logTabContent.innerHTML = generateAgentActivityLogHTML(agentLogs); // Use the dedicated function for agent profile
         } else {
             logTabContent.innerHTML = '<h2>سجل النشاط</h2><p>لا توجد سجلات حالياً لهذا الوكيل.</p>';
         }
@@ -861,15 +863,22 @@ function startCompetitionCountdowns() {
     competitionCountdownIntervals.push(intervalId);
 }
 
-function generateActivityLogHTML(logs, isAgentProfile = false) {
+/**
+ * Generates the HTML for an agent's activity log, grouped by date.
+ * This function is now self-contained within the profile page script.
+ * @param {Array} logs - The array of log objects for the agent.
+ * @returns {string} The generated HTML string.
+ */
+function generateAgentActivityLogHTML(logs) {
     const getLogIconDetails = (actionType) => {
         if (actionType.includes('CREATED')) return { icon: 'fa-user-plus', colorClass: 'log-icon-create' };
-        if (actionType.includes('DELETED')) return { icon: 'fa-user-slash', colorClass: 'log-icon-delete' }
+        if (actionType.includes('DELETED')) return { icon: 'fa-user-slash', colorClass: 'log-icon-delete' };
         if (actionType.includes('PROFILE_UPDATE')) return { icon: 'fa-user-edit', colorClass: 'log-icon-profile' };
         if (actionType.includes('MANUAL_RENEWAL')) return { icon: 'fa-sync-alt', colorClass: 'log-icon-renewal' };
         if (actionType.includes('DETAILS_UPDATE')) return { icon: 'fa-cogs', colorClass: 'log-icon-details' };
         if (actionType.includes('COMPETITION_CREATED')) return { icon: 'fa-trophy', colorClass: 'log-icon-competition' };
         if (actionType.includes('WINNERS_SELECTION_REQUESTED')) return { icon: 'fa-question-circle', colorClass: 'log-icon-telegram' };
+        // Add more specific icons for agent profile if needed
         return { icon: 'fa-history', colorClass: 'log-icon-generic' };
     };
 
@@ -878,53 +887,45 @@ function generateActivityLogHTML(logs, isAgentProfile = false) {
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
-
         const todayStr = today.toISOString().split('T')[0];
         const yesterdayStr = yesterday.toISOString().split('T')[0];
 
         logs.forEach(log => {
             try {
-                if (!log.created_at) {
-                    console.warn('Log entry missing created_at:', log);
+                if (!log.createdAt) {
+                    console.warn('Agent log entry missing createdAt:', log);
                     return;
                 }
-                
-                const logDate = new Date(log.created_at);
+                const logDate = new Date(log.createdAt);
                 if (isNaN(logDate.getTime())) {
-                    console.warn('Invalid date in log:', log.created_at);
+                    console.warn('Invalid date in agent log:', log.createdAt);
                     return;
                 }
-
                 const logDateStr = logDate.toISOString().split('T')[0];
                 let dateKey;
-
                 if (logDateStr === todayStr) dateKey = 'اليوم';
                 else if (logDateStr === yesterdayStr) dateKey = 'الأمس';
                 else dateKey = logDate.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
-
-                if (!groups[dateKey]) {
-                    groups[dateKey] = [];
-                }
+                if (!groups[dateKey]) groups[dateKey] = [];
                 groups[dateKey].push(log);
             } catch (error) {
-                console.error('Error processing log entry:', error, log);
+                console.error('Error processing agent log entry:', error, log);
             }
         });
         return groups;
     };
 
     const groupedLogs = groupLogsByDate(logs);
-    let html = '<h2>سجل النشاط</h2><div class="log-timeline-v2" id="agent-log-timeline">';
+    let html = '<h2>سجل النشاط الخاص بالوكيل</h2><div class="log-timeline-v2" id="agent-log-timeline">';
 
     for (const date in groupedLogs) {
         html += `
             <div class="log-date-group">
                 <div class="log-date-header">${date}</div>
                 ${groupedLogs[date].map(log => {
-                    const { icon, colorClass } = getLogIconDetails(log.action_type);
                     return `
                         <div class="log-item-v2">
-                            <div class="log-item-icon-v2 ${colorClass}"><i class="fas ${icon}"></i></div>
+                            <div class="log-item-icon-v2 ${getLogIconDetails(log.action_type).colorClass}"><i class="fas ${getLogIconDetails(log.action_type).icon}"></i></div>
                             <div class="log-item-content-v2">
                                 <p class="log-description">${log.description}</p>
                                 <p class="log-timestamp">

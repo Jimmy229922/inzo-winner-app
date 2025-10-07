@@ -161,7 +161,9 @@ async function handleRouting() {
     if (hash.startsWith('#profile/')) {
         const agentId = hash.split('/')[1];
         if (agentId) {
-            renderFunction = () => renderAgentProfilePage(agentId);
+            if (typeof renderAgentProfilePage !== 'undefined') {
+                renderFunction = () => renderAgentProfilePage(agentId);
+            }
             navElement = null; // No nav item is active on a profile page
         }
     } else if (hash.startsWith('#competitions/edit/')) {

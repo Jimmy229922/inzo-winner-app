@@ -82,4 +82,4 @@ competitionSchema.methods.isExpired = function() {
     return this.ends_at < now;
 };
 
-module.exports = mongoose.model('Competition', competitionSchema);
+module.exports = mongoose.models.Competition || mongoose.model('Competition', competitionSchema);

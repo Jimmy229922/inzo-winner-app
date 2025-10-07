@@ -1,4 +1,4 @@
-const Agent = require('../models/Agent'); // FIX: Correct path to Agent model
+const Agent = require('../models/agent.model');
 const { logActivity } = require('../utils/logActivity');
 const { translateField, formatValue } = require('../utils/fieldTranslations');
 
@@ -153,12 +153,6 @@ exports.updateAgent = async (req, res) => {
  */
 exports.deleteAllAgents = async (req, res) => {
     try {
-        // --- FIX: Log this critical action ---
-        const userId = req.user?._id;
-        if (userId) {
-            await logActivity(userId, null, 'AGENT_BULK_DELETE', 'تم حذف جميع الوكلاء من النظام.');
-        }
-
         await Agent.deleteMany({});
         res.json({ message: 'All agents have been deleted successfully.' });
     } catch (error) {

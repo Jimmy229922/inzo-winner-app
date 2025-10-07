@@ -103,12 +103,22 @@
     <button id="scroll-to-top-btn" title="العودة للأعلى"><i class="fas fa-arrow-up"></i></button>
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- FIX: Add cache-busting to all scripts to ensure the latest version is always loaded -->
-    <script>
-        const cacheBuster = `v=${new Date().getTime()}`;
-        const scripts = ['/js/pages/taskStore.js', '/js/pages/home.js', '/js/pages/agents.js', '/js/pages/competitions.js', '/js/pages/calendar.js', '/js/pages/topAgents.js', '/js/pages/profile.js', '/js/pages/users.js', '/js/pages/tasks.js', '/js/pages/addAgent.js', '/js/pages/activityLog.js', '/js/main.js'];
-        scripts.forEach(src => {
-            document.write(`<script src="${src}?${cacheBuster}"><\/script>`);
-        });
-    </script>
+
+    <!-- 
+      IMPROVEMENT: Replaced document.write with deferred scripts.
+      This improves performance by allowing parallel download and ensures execution order
+      without blocking page rendering. It also enables browser caching.
+    -->
+    <script src="/js/pages/taskStore.js" defer></script>
+    <script src="/js/pages/home.js" defer></script>
+    <script src="/js/pages/agents.js" defer></script>
+    <script src="/js/pages/competitions.js" defer></script>
+    <script src="/js/pages/calendar.js" defer></script>
+    <script src="/js/pages/topAgents.js" defer></script>
+    <script src="/js/pages/profile.js" defer></script>
+    <script src="/js/pages/users.js" defer></script>
+    <script src="/js/pages/tasks.js" defer></script>
+    <script src="/js/pages/addAgent.js" defer></script>
+    <script src="/js/pages/activityLog.js" defer></script>
+    <script src="/js/main.js" defer></script>
 </body>

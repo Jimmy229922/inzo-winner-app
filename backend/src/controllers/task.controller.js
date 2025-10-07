@@ -1,5 +1,5 @@
 const Task = require('../models/Task');
-const Agent = require('../models/Agent'); // FIX: Correct path to Agent model
+const Agent = require('../models/agent.model');
 const { logActivity } = require('../utils/logActivity');
 
 /**

@@ -1226,7 +1226,7 @@ async function renderCompetitionTemplatesPage() {
 ✨ هل تملك عينًا خبيرة في قراءة الشارتات؟ اختبر نفسك واربح!
 
 💰 الجائزة: {{prize_details}}
-🎁 أو جائزة بونص إيداع: {{deposit_bonus_prize_details}}
+🎁           {{deposit_bonus_prize_details}}
 
 ❓ سؤال المسابقة:
 {{question}}
@@ -1643,7 +1643,7 @@ async function renderArchivedTemplatesPage() {
                                 <td data-label="التصنيف"><span class="classification-badge classification-${(template.classification || 'all').toLowerCase()}">${template.classification || 'الكل'}</span></td>
                                 <td data-label="مرات الاستخدام">${template.usage_count} / ${template.usage_limit}</td>
                                 <td class="actions-cell">
-                                    <button class="btn-primary reactivate-template-btn btn-small" data-id="${template.id}"><i class="fas fa-undo"></i> إعادة تفعيل</button>
+                                    <button class="btn-primary reactivate-template-btn btn-small" data-id="${template._id}"><i class="fas fa-undo"></i> إعادة تفعيل</button>
                                     ${canEdit ? `<button class="btn-danger delete-template-btn btn-small" data-id="${template._id}"><i class="fas fa-trash-alt"></i> حذف نهائي</button>` : ''}
                                 </td> 
                             </tr>
@@ -1702,9 +1702,7 @@ async function renderArchivedTemplatesPage() {
         if (reactivateBtn) {
             const id = reactivateBtn.dataset.id;
             showConfirmationModal('هل أنت متأكد من إعادة تفعيل هذا القالب؟<br><small>سيتم إعادة تعيين عداد استخدامه إلى الصفر.</small>', async () => {
-                const response = await authedFetch(`/api/templates/${allArchivedTemplates.find(t => t.id == id)._id}/reactivate`, {
-                    method: 'PUT'
-                });
+                const response = await authedFetch(`/api/templates/${id}/reactivate`, { method: 'PUT' });
                 if (!response.ok) {
                     const result = await response.json();
                     showToast(result.message || 'فشل إعادة تفعيل القالب.', 'error');

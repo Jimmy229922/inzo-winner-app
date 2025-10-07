@@ -55,4 +55,4 @@ AgentSchema.methods.isReadyForRenewal = function() {
     return now >= nextRenewalDate;
 };
 
-module.exports = mongoose.model('Agent', AgentSchema);
+module.exports = mongoose.models.Agent || mongoose.model('Agent', AgentSchema);

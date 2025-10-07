@@ -1,5 +1,5 @@
 const Competition = require('../models/Competition');
-const Agent = require('../models/Agent'); // FIX: Correct path to Agent model
+const Agent = require('../models/agent.model');
 const CompetitionTemplate = require('../models/CompetitionTemplate'); // NEW: Import the template model
 
 /**
@@ -47,6 +47,15 @@ exports.getAllCompetitions = async (req, res) => {
             ];
         }
 
+        // --- REFACTOR: Integrate classification filter into the main query for efficiency and correctness ---
+        if (classification && classification !== 'all') {
+            // Find agents with the specified classification first
+            const classifiedAgents = await Agent.find({ classification: classification }).select('_id');
+            const classifiedAgentIds = classifiedAgents.map(a => a._id);
+            // Add this condition to the main query
+            query.agent_id = { $in: classifiedAgentIds };
+        }
+
         if (status && status !== 'all') {
             query.is_active = status === 'active';
         }
@@ -79,16 +88,10 @@ exports.getAllCompetitions = async (req, res) => {
             };
         });
 
-        // Filter by classification after populating
-        let finalCompetitions = formattedCompetitions;
-        if (classification && classification !== 'all') {
-            finalCompetitions = formattedCompetitions.filter(c => c.agents && c.agents.classification === classification);
-        }
-
         const count = await Competition.countDocuments(query);
 
         res.json({
-            data: finalCompetitions,
+            data: formattedCompetitions,
             count: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page

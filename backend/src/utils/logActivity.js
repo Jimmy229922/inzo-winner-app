@@ -1,4 +1,4 @@
-const Log = require('../models/Log'); // FIX: Correct path to Log model
+const ActivityLog = require('../models/ActivityLog');
 
 /**
  * دالة مساعدة لتسجيل الأنشطة في قاعدة البيانات.
@@ -11,8 +11,8 @@ const Log = require('../models/Log'); // FIX: Correct path to Log model
 async function logActivity(userId, agentId, actionType, description, details = {}) {
     try {
         // FIX: Ensure parameters are correctly assigned even if called with shifted arguments.
-        const logEntry = new Log({
-            user: userId,
+        const logEntry = new ActivityLog({
+            user_id: userId,
             agent_id: agentId,
             action_type: actionType,
             description: description,

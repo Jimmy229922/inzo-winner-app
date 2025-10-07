@@ -1,39 +1,49 @@
-const Log = require('../models/Log');
+const ActivityLog = require('../models/ActivityLog');
 
+/**
+ * @desc    Get all activity logs with filtering and pagination
+ * @route   GET /api/logs
+ * @access  Private (Admin/Super Admin)
+ */
 exports.getAllLogs = async (req, res) => {
     try {
-        const { page = 1, limit = 20, sort = 'newest', agent_id, populate } = req.query; 
+        const { page = 1, limit = 25, sort, user_id, agent_id, action_type, populate } = req.query;
 
         let query = {};
-        if (agent_id) {
-            // --- FIX: Let Mongoose handle the string-to-ObjectId casting during the query. ---
+
+        if (user_id && user_id !== 'all') {
+            // Handle "System" user filter
+            query.user_id = user_id === 'system' ? null : user_id;
+        }
+        if (agent_id && agent_id !== 'all') {
             query.agent_id = agent_id;
         }
+        if (action_type && action_type !== 'all') {
+            query.action_type = action_type;
+        }
 
-        let sortOptions = { createdAt: -1 }; // Default to newest
+        let sortOptions = { createdAt: -1 }; // Default to newest first
         if (sort === 'oldest') {
             sortOptions = { createdAt: 1 };
         }
 
-        let logQuery = Log.find(query)
+        const logsQuery = ActivityLog.find(query)
             .sort(sortOptions)
             .limit(limit * 1)
             .skip((page - 1) * limit)
             .lean();
 
         if (populate === 'user') {
-            logQuery = logQuery.populate('user', 'full_name').populate('agent_id', 'name phone');
+            logsQuery.populate('user_id', 'full_name');
         }
 
-        const logs = await logQuery;
+        const logs = await logsQuery;
+        const count = await ActivityLog.countDocuments(query);
 
-        const count = await Log.countDocuments(query);
-
-        // Add user_name to logs for easier display
+        // Add user_name to logs for frontend convenience
         const formattedLogs = logs.map(log => ({
             ...log,
-            user_name: log.user ? log.user.full_name : 'النظام',
-            created_at: log.createdAt ? log.createdAt.toISOString() : null
+            user_name: log.user_id ? log.user_id.full_name : 'النظام'
         }));
 
         res.json({
@@ -43,29 +53,30 @@ exports.getAllLogs = async (req, res) => {
             currentPage: page
         });
     } catch (error) {
-        console.error('[Logs] Error fetching logs:', error);
         res.status(500).json({ message: 'Server error while fetching logs.', error: error.message });
     }
 };
 
+/**
+ * @desc    Create a new activity log entry
+ * @route   POST /api/logs
+ * @access  Private (Authenticated users)
+ */
 exports.createLog = async (req, res) => {
     try {
-        const { agent_id, action_type, description, metadata } = req.body;
-        // FIX: Prioritize user_id from the request body, fallback to authenticated user context.
-        const userId = req.body.user_id || req.user?._id;
+        const { user_id, agent_id, action_type, description, metadata } = req.body;
 
-        const log = new Log({
-            user: userId, // This now correctly uses the user ID from body or auth context.
-            agent_id: agent_id,
+        const newLog = new ActivityLog({
+            user_id,
+            agent_id,
             action_type,
             description,
             metadata
         });
 
-        await log.save();
-        res.status(201).json({ message: 'Log created successfully.', data: log });
+        const savedLog = await newLog.save();
+        res.status(201).json({ data: savedLog });
     } catch (error) {
-        console.error('[Logs] Error creating log:', error);
-        res.status(400).json({ message: 'Failed to create log.', error: error.message });
+        res.status(400).json({ message: 'Failed to create log entry.', error: error.message });
     }
 };
