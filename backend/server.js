@@ -78,6 +78,12 @@ async function startServer() {
     wss.on('connection', (ws) => {
         console.log('[WebSocket] A client connected.');
 
+        // Part of the heartbeat mechanism
+        ws.isAlive = true;
+        ws.on('pong', () => {
+            ws.isAlive = true; // Connection is alive.
+        });
+
         ws.on('message', (message) => {
             try {
                 const data = JSON.parse(message);
@@ -112,6 +118,17 @@ async function startServer() {
             console.error('[WebSocket] An error occurred:', error);
         });
     });
+
+    // --- NEW: Add WebSocket heartbeat to prevent idle timeouts ---
+    const interval = setInterval(function ping() {
+        wss.clients.forEach(function each(ws) {
+            // The 'isAlive' property is managed by the pong listener below.
+            if (ws.isAlive === false) return ws.terminate();
+
+            ws.isAlive = false; // Assume connection is lost until a pong is received.
+            ws.ping();
+        });
+    }, 30000); // Ping every 30 seconds
 
     server.listen(port, () => {
         console.log(`Backend server is running at http://localhost:${port}`);

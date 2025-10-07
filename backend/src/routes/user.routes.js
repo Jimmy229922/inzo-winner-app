@@ -64,7 +64,7 @@ router.route('/')
 router.route('/:id')
     .get(authenticate, userController.getUserById)
     .put(authenticate, canUpdateUser, userController.updateUser)
-    .delete(authenticate, isSuperAdmin, userController.deleteUser);
+    .delete(authenticate, isSuperAdmin, userController.deleteUser); // FIX: Removed incorrect canUpdateUser middleware from delete route
 
 // Special routes
 router.post('/:id/avatar', authenticate, upload.single('avatar'), userController.uploadAvatar);
