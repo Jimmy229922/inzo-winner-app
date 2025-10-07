@@ -116,23 +116,20 @@ exports.createCompetition = async (req, res) => {
 
         await competition.save();
 
-
         // --- NEW: Increment template usage count and archive if limit is reached ---
         if (req.body.template_id) {
             const template = await CompetitionTemplate.findById(req.body.template_id);
             if (template) {
                 template.usage_count = (template.usage_count || 0) + 1;
-                
+
                 // Archive if usage limit is met or exceeded
                 if (template.usage_limit !== null && template.usage_count >= template.usage_limit) {
                     template.is_archived = true;
                 }
-                
+
                 await template.save();
             }
         }
-
-        // TODO: Increment usage_count on the template
         res.status(201).json({ data: competition });
     } catch (error) {
         res.status(400).json({ message: 'Failed to create competition.', error: error.message });
