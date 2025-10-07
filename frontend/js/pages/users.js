@@ -160,8 +160,11 @@ function renderUserRow(user) {
 
                 // عرض الأزرار للمستخدمين العاديين والمسؤولين الآخرين
                 return `<td class="actions-cell">
-                    <button class="btn-secondary edit-user-btn" data-user-id="${user._id}" title="تعديل بيانات المستخدم"><i class="fas fa-edit"></i> تعديل</button>
-                    <button class="btn-primary permissions-user-btn" data-user-id="${user._id}" title="إدارة الصلاحيات" ${!isCurrentUserSuperAdmin ? 'disabled' : ''}><i class="fas fa-shield-alt"></i> الصلاحيات</button>
+                    <button class="btn-secondary edit-user-btn" data-user-id="${user._id}" title="تعديل بيانات المستخدم"><i class="fas fa-edit"></i></button>
+                    ${/* --- MODIFICATION: Allow admins to manage permissions for users, but not other admins. --- */ ''}
+                    <button class="btn-primary permissions-user-btn" data-user-id="${user._id}" title="إدارة الصلاحيات" 
+                        ${(isCurrentUserAdmin && isTargetAdmin) || (!isCurrentUserSuperAdmin && !isCurrentUserAdmin) ? 'disabled' : ''}>
+                        <i class="fas fa-shield-alt"></i></button>
                     ${/* --- MODIFICATION: Allow admins to delete users, but not other admins. Super admins can delete anyone except themselves. --- */ ''}
                     <button class="btn-danger delete-user-btn" data-user-id="${user._id}" title="حذف المستخدم نهائياً" 
                         ${(isCurrentUserAdmin && isTargetAdmin) || !isCurrentUserSuperAdmin && !isCurrentUserAdmin ? 'disabled' : ''}>
