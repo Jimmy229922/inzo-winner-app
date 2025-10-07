@@ -1,9 +1,16 @@
 require('dotenv').config();
+const http = require('http');
+const { Server: WebSocketServer } = require('ws');
+const jwt = require('jsonwebtoken');
 const app = require('./src/app');
 const connectDB = require('./src/config/db');
 const User = require('./src/models/User');
 const bcrypt = require('bcryptjs');
 const { startScheduler } = require('./src/utils/scheduler');
+
+// --- NEW: Map to store online users ---
+// Key: userId (string), Value: WebSocket client instance
+const onlineClients = new Map();
 
 const port = process.env.PORT || 30001;
 
@@ -42,13 +49,71 @@ async function createSuperAdmin() {
     }
 }
 
+/**
+ * NEW: Broadcasts the list of online user IDs to all connected clients.
+ */
+function broadcastPresence() {
+    const onlineUserIds = Array.from(onlineClients.keys());
+    const message = JSON.stringify({ type: 'presence_update', onlineUserIds });
+
+    onlineClients.forEach((client) => {
+        if (client.readyState === client.OPEN) {
+            client.send(message);
+        }
+    });
+}
+
 async function startServer() {
     await connectDB();
     await createSuperAdmin();
 
     startScheduler();
 
-    app.listen(port, () => {
+    // --- REFACTOR: Create an HTTP server from the Express app ---
+    const server = http.createServer(app);
+
+    // --- NEW: Initialize WebSocket Server ---
+    const wss = new WebSocketServer({ server });
+
+    wss.on('connection', (ws) => {
+        console.log('[WebSocket] A client connected.');
+
+        ws.on('message', (message) => {
+            try {
+                const data = JSON.parse(message);
+                if (data.type === 'auth' && data.token) {
+                    const decoded = jwt.verify(data.token, process.env.JWT_SECRET);
+                    const userId = decoded.userId;
+
+                    // Associate this WebSocket connection with the user ID
+                    ws.userId = userId;
+                    onlineClients.set(userId, ws);
+
+                    console.log(`[WebSocket] User ${userId} authenticated and connected.`);
+                    broadcastPresence(); // Notify all clients about the new online user
+                }
+            } catch (e) {
+                console.error('[WebSocket] Error processing message:', e.message);
+                ws.close(); // Close connection on auth error
+            }
+        });
+
+        ws.on('close', () => {
+            if (ws.userId) {
+                onlineClients.delete(ws.userId);
+                console.log(`[WebSocket] User ${ws.userId} disconnected.`);
+                broadcastPresence(); // Notify all clients that a user went offline
+            } else {
+                console.log('[WebSocket] An unauthenticated client disconnected.');
+            }
+        });
+
+        ws.on('error', (error) => {
+            console.error('[WebSocket] An error occurred:', error);
+        });
+    });
+
+    server.listen(port, () => {
         console.log(`Backend server is running at http://localhost:${port}`);
     });
 }

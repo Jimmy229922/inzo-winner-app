@@ -72,11 +72,6 @@ const userController = {
              return res.status(403).json({ message: 'Forbidden: You can only change your own name.' });
         }
  
-        // --- SECURITY FIX: Only super_admin can change permissions or status ---
-        if (permissions && req.user.role !== 'super_admin') {
-            return res.status(403).json({ message: 'Forbidden: You do not have permission to change user permissions.' });
-        }
-
         try {
             const userToUpdate = await User.findById(req.params.id);
             // --- SECURITY FIX: Prevent any modification to a super_admin account via API ---
@@ -86,6 +81,11 @@ const userController = {
 
             if (userToUpdate && userToUpdate.role === 'super_admin') {
                 return res.status(403).json({ message: 'Cannot modify a Super Admin account.' });
+            }
+            
+            // --- SECURITY FIX: Only super_admin can change permissions, unless an admin is changing a 'user' ---
+            if (permissions && req.user.role !== 'super_admin' && !(req.user.role === 'admin' && userToUpdate.role === 'user')) {
+                return res.status(403).json({ message: 'Forbidden: You do not have permission to change these user permissions.' });
             }
 
             if (password) {
@@ -157,6 +157,22 @@ const userController = {
         } catch (error) {
             res.status(500).json({ message: 'Server error while deleting user.', error: error.message });
         }
+    }
+};
+
+/**
+ * Helper function to find a user by ID.
+ * This is used by middleware in other files (like user.routes.js).
+ * @param {string} userId The ID of the user to find.
+ * @returns {Promise<User|null>}
+ */
+userController.findUserById = async (userId) => {
+    try {
+        // Use .lean() for a faster, plain JavaScript object result as we don't need Mongoose methods here.
+        const user = await User.findById(userId).lean();
+        return user;
+    } catch (error) {
+        return null; // Return null on any error (e.g., invalid ID format)
     }
 };
 
