@@ -5,9 +5,10 @@ function stopCompetitionCountdowns() {
     competitionCountdownIntervals = [];
 }
 
-let renewalCountdownInterval;
-function stopRenewalCountdown() {
-    if (renewalCountdownInterval) clearInterval(renewalCountdownInterval);
+function stopAllProfileTimers() {
+    // A single function to clean up all timers when leaving the profile page.
+    // This ensures complete separation.
+    stopCompetitionCountdowns();
 }
 
 async function renderAgentProfilePage(agentId, options = {}) {
@@ -20,8 +21,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
     }
 
     // Clear any previous timers from other profiles
-    stopCompetitionCountdowns();
-    stopRenewalCountdown(); // تعديل: إيقاف عداد التجديد السابق قبل عرض ملف شخصي جديد
+    stopAllProfileTimers();
 
     // Check for edit mode in hash, e.g., #profile/123/edit
     const hashParts = window.location.hash.split('/');
@@ -76,7 +76,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
     appContent.innerHTML = `
         <div class="profile-page-top-bar">
             <button id="back-btn" class="btn-secondary">&larr; عودة</button>
-            <div id="renewal-countdown-timer" class="countdown-timer" style="display: none;"></div>
+            <div id="renewal-date-display" class="countdown-timer" style="display: none;"></div>
         </div>
         
         <div class="profile-header-v2">
@@ -138,6 +138,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                         <button id="create-agent-competition" class="btn-primary"><i class="fas fa-magic"></i> إنشاء مسابقة</button>
                         <button id="send-bonus-cliche-btn" class="btn-telegram-bonus"><i class="fas fa-paper-plane"></i> إرسال كليشة البونص</button>
                         <button id="send-winners-cliche-btn" class="btn-telegram-winners"><i class="fas fa-trophy"></i> إرسال كليشة الفائزين</button>
+                        <button id="manual-renew-btn" class="btn-renewal"><i class="fas fa-sync-alt"></i> تجديد الرصيد يدوياً</button>
                     </div>
                 </div>
             </div>
@@ -156,8 +157,6 @@ async function renderAgentProfilePage(agentId, options = {}) {
         </div>
     `;
  
-    startRenewalCountdown(agent);
-
     document.getElementById('back-btn').addEventListener('click', () => {
         window.location.hash = '#manage-agents';
     });
@@ -173,6 +172,58 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     document.getElementById('create-agent-competition').addEventListener('click', () => {
         window.location.hash = `competitions/new?agentId=${agent.id}`;
+    });
+
+    // --- Manual Renewal Button Logic ---
+    document.getElementById('manual-renew-btn').addEventListener('click', async () => {
+        if (!agent.renewal_period || agent.renewal_period === 'none') {
+            showToast('لا يوجد نظام تجديد مفعل لهذا الوكيل.', 'info');
+            return;
+        }
+
+        // Calculate next renewal date (same logic as the countdown)
+        const renewalBtn = document.getElementById('manual-renew-btn');
+        const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.created_at);
+        let nextRenewalDate = new Date(lastRenewal);
+        if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
+        else if (agent.renewal_period === 'biweekly') nextRenewalDate.setDate(lastRenewal.getDate() + 14);
+        else if (agent.renewal_period === 'monthly') nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
+
+        if (new Date() < nextRenewalDate) {
+            const remainingTime = nextRenewalDate - new Date();
+            const days = Math.ceil(remainingTime / (1000 * 60 * 60 * 24)); // Use ceil to show "1 day" for any remaining time
+            showToast(`لا يمكن التجديد الآن. متبقي ${days} يوم.`, 'warning');
+            return;
+        }
+
+        // If eligible, show confirmation
+        showConfirmationModal(
+            `هل أنت متأكد من تجديد رصيد الوكيل <strong>${agent.name}</strong> يدوياً؟`,
+            async () => {
+                const updateData = {
+                    consumed_balance: 0,
+                    remaining_balance: agent.competition_bonus,
+                    used_deposit_bonus: 0,
+                    remaining_deposit_bonus: agent.deposit_bonus_count,
+                    last_renewal_date: new Date().toISOString()
+                };
+
+                const { error } = await supabase.from('agents').update(updateData).eq('id', agent.id);
+
+                if (error) {
+                    showToast(`فشل تجديد الرصيد: ${error.message}`, 'error');
+                } else {
+                    await logAgentActivity(agent.id, 'MANUAL_RENEWAL', 'تم تجديد الرصيد يدوياً.');
+                    showToast('تم تجديد الرصيد بنجاح.', 'success');
+                    renderAgentProfilePage(agent.id, { activeTab: 'action' }); // Re-render the page
+                }
+            },
+            {
+                title: 'تأكيد التجديد اليدوي',
+                confirmText: 'نعم، جدد الآن',
+                confirmClass: 'btn-renewal'
+            }
+        );
     });
 
     document.getElementById('send-bonus-cliche-btn').addEventListener('click', async () => {
@@ -289,6 +340,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
     // Render competitions in the log tab
     const logTabContent = document.getElementById('tab-log');
     if (agentLogs && agentLogs.length > 0) {
+        updateManualRenewButtonState(agent);
         logTabContent.innerHTML = generateActivityLogHTML(agentLogs);
     }
 
@@ -436,6 +488,9 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     // Start live countdowns for competitions
     startCompetitionCountdowns();
+
+    // Display the next renewal date, which is now fully independent
+    displayNextRenewalDate(agent);
 }
 
 function startCompetitionCountdowns() {
@@ -458,10 +513,12 @@ function startCompetitionCountdowns() {
                 el.classList.add('expired');
             } else {
                 activeTimers = true;
-                const hours = Math.floor(diffTime / (1000 * 60 * 60));
-                const minutes = Math.floor((diffTime % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((diffTime % (1000 * 60)) / 1000);
-                el.innerHTML = `<i class="fas fa-clock"></i> <span>متبقي: ${hours.toString().padStart(2, '0')} س و ${minutes.toString().padStart(2, '0')} د و ${seconds.toString().padStart(2, '0')} ث</span>`;
+                const days = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                if (days > 0) {
+                    el.innerHTML = `<i class="fas fa-clock"></i> <span>متبقي: ${days} يوم</span>`;
+                } else {
+                    el.innerHTML = `<i class="fas fa-clock"></i> <span>ينتهي اليوم</span>`;
+                }
             }
         });
         if (!activeTimers) stopCompetitionCountdowns();
@@ -641,7 +698,12 @@ function renderInlineEditor(groupElement, agent) {
             </select>`;
             break;
         case 'renewal_period':
-            editorHtml = `<select id="inline-edit-input"><option value="weekly" ${currentValue === 'weekly' ? 'selected' : ''}>أسبوع</option><option value="biweekly" ${currentValue === 'biweekly' ? 'selected' : ''}>أسبوعين</option><option value="monthly" ${currentValue === 'monthly' ? 'selected' : ''}>شهر</option></select>`;
+            editorHtml = `<select id="inline-edit-input">
+                <option value="none" ${currentValue === 'none' ? 'selected' : ''}>بدون تجديد</option>
+                <option value="weekly" ${currentValue === 'weekly' ? 'selected' : ''}>أسبوع</option>
+                <option value="biweekly" ${currentValue === 'biweekly' ? 'selected' : ''}>أسبوعين</option>
+                <option value="monthly" ${currentValue === 'monthly' ? 'selected' : ''}>شهر</option>
+            </select>`;
             break;
         case 'competitions_per_week':
             editorHtml = `<select id="inline-edit-input"><option value="1" ${currentValue == 1 ? 'selected' : ''}>1</option><option value="2" ${currentValue == 2 ? 'selected' : ''}>2</option><option value="3" ${currentValue == 3 ? 'selected' : ''}>3</option></select>`;
@@ -698,6 +760,11 @@ function renderInlineEditor(groupElement, agent) {
             }
             updateData[fieldName] = finalValue;
 
+            // تعديل: عند تغيير فترة التجديد، أعد تعيين المؤقت عن طريق تحديث تاريخ آخر تجديد إلى الآن.
+            if (fieldName === 'renewal_period') {
+                updateData.last_renewal_date = new Date().toISOString();
+            }
+
             // Interconnected logic on save
             if (fieldName === 'consumed_balance') {
                 updateData.remaining_balance = (currentAgent.competition_bonus || 0) - (finalValue || 0);
@@ -734,11 +801,12 @@ function renderInlineEditor(groupElement, agent) {
             renderDetailsView(agent); // Revert on error
         } else {
             const oldValue = currentAgent[fieldName];
+            console.log(`[DEBUG] Field '${label}' updated successfully. Old value: '${oldValue}', New value: '${newValue}'.`);
             const description = `تم تحديث "${label}" من "${oldValue || 'فارغ'}" إلى "${newValue || 'فارغ'}".`;
             await logAgentActivity(agent.id, 'DETAILS_UPDATE', description, { field: label, from: oldValue, to: newValue });
             showToast('تم حفظ التغيير بنجاح.', 'success');
-            // If rank was changed, a full re-render is needed to update all dependent fields (bonuses, balances, etc.)
-            if (fieldName === 'rank') {
+            // If rank or renewal period was changed, a full re-render is needed to update all dependent fields.
+            if (fieldName === 'rank' || fieldName === 'renewal_period') {
                 renderAgentProfilePage(agent.id, { activeTab: 'details' });
             } else {
                 renderDetailsView(updatedAgent); // For other fields, just re-render the details view to avoid page jump
@@ -747,19 +815,38 @@ function renderInlineEditor(groupElement, agent) {
     });
 }
 
-function startRenewalCountdown(agent) {
-    const countdownElement = document.getElementById('renewal-countdown-timer');
-    if (!countdownElement || !agent.renewal_period || agent.renewal_period === 'none') {
-        if(countdownElement) countdownElement.style.display = 'none';
+function updateManualRenewButtonState(agent) {
+    const renewalBtn = document.getElementById('manual-renew-btn');
+    if (!renewalBtn || !agent || !agent.renewal_period || agent.renewal_period === 'none') {
+        if (renewalBtn) renewalBtn.style.display = 'none';
         return;
     }
 
-    // Clear any existing interval
-    stopRenewalCountdown();
+    renewalBtn.style.display = 'inline-flex';
 
-    // If last_renewal_date is null, it means it has never been renewed.
-    // Use the agent's creation date as the base for the first renewal.
-    // If last_renewal_date exists, use that.
+    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.created_at);
+    let nextRenewalDate = new Date(lastRenewal);
+    if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
+    else if (agent.renewal_period === 'biweekly') nextRenewalDate.setDate(lastRenewal.getDate() + 14);
+    else if (agent.renewal_period === 'monthly') nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
+
+    if (new Date() >= nextRenewalDate) {
+        renewalBtn.disabled = false;
+        renewalBtn.classList.add('ready');
+    } else {
+        renewalBtn.disabled = true;
+        renewalBtn.classList.remove('ready');
+    }
+}
+
+function displayNextRenewalDate(agent) {
+    const displayElement = document.getElementById('renewal-date-display');
+    if (!displayElement || !agent.renewal_period || agent.renewal_period === 'none') {
+        if(displayElement) displayElement.style.display = 'none';
+        updateManualRenewButtonState(agent);
+        return;
+    }
+
     const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.created_at);
     let nextRenewalDate = new Date(lastRenewal);
 
@@ -767,32 +854,15 @@ function startRenewalCountdown(agent) {
     else if (agent.renewal_period === 'biweekly') nextRenewalDate.setDate(lastRenewal.getDate() + 14);
     else if (agent.renewal_period === 'monthly') nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
     else {
-        countdownElement.style.display = 'none';
+        displayElement.style.display = 'none';
         return;
     }
 
-    countdownElement.style.display = 'flex';
+    displayElement.style.display = 'flex';
+    displayElement.innerHTML = `<i class="fas fa-calendar-alt"></i> <span>يُجدد في: ${nextRenewalDate.toLocaleDateString('ar-EG')}</span>`;
 
-    function updateCountdown() {
-        const now = new Date();
-        const distance = nextRenewalDate - now;
-
-        if (distance < 0) {
-            countdownElement.innerHTML = `<i class="fas fa-hourglass-end"></i> <span>انتهت مدة التجديد</span>`;
-            clearInterval(renewalCountdownInterval);
-            return;
-        }
-
-        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-        countdownElement.innerHTML = `<i class="fas fa-clock"></i> <span>التجديد خلال: ${days}ي ${hours}س ${minutes}د ${seconds}ث</span>`;
-    }
-
-    updateCountdown(); // Initial call
-    renewalCountdownInterval = setInterval(updateCountdown, 1000);
+    // Also update the button state based on the date
+    updateManualRenewButtonState(agent);
 }
 
 function renderEditProfileHeader(agent, parentElement) {

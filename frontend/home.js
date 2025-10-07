@@ -45,19 +45,21 @@ async function renderHomePage() {
         const tomorrowStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
 
         const [
-            { count: totalAgents, error: agentsError },
-            { count: activeCompetitions, error: activeCompError },
-            { data: agentsForToday, error: agentsTodayError }, // Agents with tasks today
-            { data: competitionsToday, error: compTodayError }, // Competitions created today
-            { count: newAgentsThisMonth, error: newAgentsError },
-            { data: agentsByClassification, error: classificationError }
+            { count: totalAgents },
+            { count: activeCompetitions },
+            { data: agentsForToday },
+            { data: competitionsToday },
+            { count: newAgentsThisMonth },
+            { data: agentsByClassification },
+            { data: tasksForToday } // تعديل: جلب مهام اليوم في نفس الطلب
         ] = await Promise.all([
             supabase.from('agents').select('*', { count: 'exact', head: true }),
             supabase.from('competitions').select('*', { count: 'exact', head: true }).eq('is_active', true),
             supabase.from('agents').select('id, name, avatar_url').contains('audit_days', [todayDayIndex]),
             supabase.from('competitions').select('created_at').gte('created_at', todayStart).lt('created_at', tomorrowStart),
             supabase.from('agents').select('*', { count: 'exact', head: true }).gte('created_at', monthStart),
-            supabase.from('agents').select('classification')
+            supabase.from('agents').select('classification'),
+            supabase.from('daily_tasks').select('*').eq('task_date', todayStr) // تعديل: إضافة جلب المهام هنا
         ]);
 
         // Update Stat Cards
@@ -85,15 +87,9 @@ async function renderHomePage() {
         // Update Tasks Progress
         const totalTodayTasks = agentsForToday?.length || 0;
         if (totalTodayTasks > 0) {
-            const agentIds = agentsForToday.map(a => a.id);
-            const { data: tasks, error: tasksError } = await supabase
-                .from('daily_tasks')
-                .select('*')
-                .eq('task_date', todayStr)
-                .in('agent_id', agentIds);
-
-            if (!tasksError && tasks) {
-                const tasksMap = tasks.reduce((acc, task) => {
+            // تعديل: استخدام بيانات المهام التي تم جلبها مسبقاً
+            if (tasksForToday) {
+                const tasksMap = tasksForToday.reduce((acc, task) => {
                     acc[task.agent_id] = task;
                     return acc;
                 }, {});

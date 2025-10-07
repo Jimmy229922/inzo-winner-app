@@ -512,10 +512,9 @@ async function renderCompetitionCreatePage(agentId) {
                         <label for="override-duration">مدة المسابقة</label>
                         <select id="override-duration">
                             <option value="" disabled selected>-- اختر مدة --</option>
-                            <option value="1d" ${agent.competition_duration === '1d' ? 'selected' : ''}>يوم</option>
-                            <option value="10s">10 ثواني (للاختبار)</option>
-                            <option value="2d" ${agent.competition_duration === '2d' ? 'selected' : ''}>يومين</option>
-                            <option value="1w" ${agent.competition_duration === '1w' ? 'selected' : ''}>أسبوع</option>
+                            <option value="1d">يوم واحد</option>
+                            <option value="2d">يومين</option>
+                            <option value="1w">أسبوع</option>
                         </select>
                     </div>
                 </div>
@@ -719,15 +718,16 @@ async function renderCompetitionCreatePage(agentId) {
         if (duration) {
             const today = new Date();
             const newDate = new Date(today);
+            // تعديل: ضبط التاريخ ليبدأ من بداية اليوم المحدد
+            newDate.setHours(0, 0, 0, 0);
             switch (duration) {
                 case '1d': newDate.setDate(newDate.getDate() + 1); break;
-                case '10s': newDate.setSeconds(newDate.getSeconds() + 10); break;
                 case '2d': newDate.setDate(newDate.getDate() + 2); break;
                 case '1w': newDate.setDate(newDate.getDate() + 7); break;
             }
-            winnerDatePreview.textContent = newDate.toLocaleDateString('ar-EG', {
+            winnerDatePreview.textContent = `سيتم إرسال الطلب في بداية يوم ${newDate.toLocaleDateString('ar-EG', {
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-            });
+            })}`;
             winnerDatePreview.parentElement.style.display = 'block';
         } else {
             winnerDatePreview.value = 'يرجى تحديد مدة المسابقة';
@@ -810,15 +810,15 @@ async function renderCompetitionCreatePage(agentId) {
         let endsAtDate = null;
         let winnerSelectionDate = null;
         if (selectedDuration) {
-            const newDate = new Date();
+            const newDate = new Date(); // Start from today
+            // تعديل: ضبط التاريخ ليبدأ من بداية اليوم المحدد
+            newDate.setHours(0, 0, 0, 0);
             switch (selectedDuration) {
                 case '1d': newDate.setDate(newDate.getDate() + 1); break;
-                case '10s': newDate.setSeconds(newDate.getSeconds() + 10); break;
                 case '2d': newDate.setDate(newDate.getDate() + 2); break;
                 case '1w': newDate.setDate(newDate.getDate() + 7); break;
             }
             endsAtDate = newDate.toISOString();
-            winnerSelectionDate = newDate.toISOString().split('T')[0]; // Save just the date part
         }
 
         try {

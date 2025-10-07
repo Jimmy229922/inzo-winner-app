@@ -252,32 +252,35 @@ cron.schedule('0 7 * * 0', async () => {
     timezone: "Africa/Cairo" // Set to your local timezone
 });
 
-// تعديل: المهمة تعمل الآن كل 10 ثوانٍ للتحقق من المسابقات المنتهية بدقة
-cron.schedule('*/10 * * * * *', async () => {
-    // console.log(`[CRON] Checking for expired competitions...`);
+// تعديل: المهمة تعمل الآن مرة واحدة يومياً الساعة 12:00 صباحاً
+cron.schedule('0 0 * * *', async () => {
     if (!supabaseAdmin) {
-        console.error('[CRON] Aborting expired competition check: Supabase admin client is not initialized.');
+        // console.error('[CRON] Aborting check: Supabase admin client is not initialized.');
         return;
     }
     try {
-        const now = new Date().toISOString();
-        // تعديل: البحث عن المسابقات التي انتهى وقتها بالفعل
-        const { data: expiredCompetitions, error: fetchError } = await supabaseAdmin
+        // تعديل: البحث عن المسابقات التي تاريخ انتهائها هو اليوم
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+        const tomorrowStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+
+        const { data: competitionsForToday, error: fetchError } = await supabaseAdmin
             .from('competitions')
             .select('id, name, correct_answer, agents(name)')
             .eq('status', 'sent')
-            .lte('ends_at', now);
+            .gte('ends_at', todayStart) // Greater than or equal to the start of today
+            .lt('ends_at', tomorrowStart); // Less than the start of tomorrow
 
         if (fetchError) throw fetchError;
 
-        if (expiredCompetitions.length > 0) {
-            // console.log(`[CRON] Found ${expiredCompetitions.length} expired competition(s).`);
+        if (competitionsForToday.length > 0) {
+            console.log(`[CRON] Found ${competitionsForToday.length} competition(s) scheduled for winner selection today.`);
             
             // 1. Mark all found competitions as 'processing' immediately to prevent re-fetching
-            const competitionIds = expiredCompetitions.map(c => c.id);
+            const competitionIds = competitionsForToday.map(c => c.id);
             await supabaseAdmin.from('competitions').update({ status: 'processing' }).in('id', competitionIds);
 
-            for (const comp of expiredCompetitions) {
+            for (const comp of competitionsForToday) {
                 const agentName = comp.agents ? comp.agents.name : 'شريكنا';
                 const clicheText = `دمت بخير شريكنا العزيز ${agentName}،\n\nانتهى وقت المشاركة في مسابقة "${comp.name}".\n\nالإجابة الصحيحة هي: **${comp.correct_answer}**\n\nيرجى اختيار الفائزين وتزويدنا بفيديو الروليت وبياناتهم ليتم التحقق منهم من قبل القسم المختص.`;
                 
@@ -294,15 +297,9 @@ cron.schedule('*/10 * * * * *', async () => {
     } catch (err) {
         console.error('[CRON] Error processing expired competitions:', err.message);
     }
-});
 
-// Schedule a task to reset agent balances based on their renewal period. Runs once a day at midnight.
-cron.schedule('0 0 * * *', async () => {
     console.log(`[CRON - ${new Date().toLocaleTimeString()}] Running daily check for agent balance renewals.`);
-    if (!supabaseAdmin) {
-        console.error('[CRON] Aborting agent renewal check: Supabase admin client is not initialized.');
-        return;
-    }
+
     try {
         // Fetch all agents with a renewal period
         const { data: agents, error: fetchError } = await supabaseAdmin
@@ -329,6 +326,7 @@ cron.schedule('0 0 * * *', async () => {
             // Check if today is the renewal day or later
             if (today >= nextRenewalDate) {
                 console.log(`[CRON] Renewing balance for agent: ${agent.name} (ID: ${agent.id})`);
+                const renewalTimestamp = today.toISOString();
 
                 const { error: updateError } = await supabaseAdmin
                     .from('agents')
@@ -337,7 +335,7 @@ cron.schedule('0 0 * * *', async () => {
                         remaining_balance: agent.competition_bonus,
                         used_deposit_bonus: 0,
                         remaining_deposit_bonus: agent.deposit_bonus_count,
-                        last_renewal_date: today.toISOString() // Set renewal date to today
+                        last_renewal_date: renewalTimestamp
                     })
                     .eq('id', agent.id);
 
@@ -357,9 +355,8 @@ cron.schedule('0 0 * * *', async () => {
     } catch (err) {
         console.error('[CRON] Error processing agent renewals:', err.message);
     }
-}, { timezone: "Africa/Cairo" });
+});
 
-// --- بدء تشغيل السيرفر ---
 async function startServer() {
     // 1. قم بتحميل الإعدادات الآمنة أولاً وانتظر اكتمالها
     await loadSecureConfig();

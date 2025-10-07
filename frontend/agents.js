@@ -781,6 +781,15 @@ function renderAddAgentForm() {
                             </optgroup>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label for="agent-renewal-period">فترة تجديد الرصيد</label>
+                        <select id="agent-renewal-period">
+                            <option value="none" selected>بدون تجديد</option>
+                            <option value="weekly">أسبوعي</option>
+                            <option value="biweekly">كل أسبوعين</option>
+                            <option value="monthly">شهري</option>
+                        </select>
+                    </div>
                     <div class="form-group"><label for="telegram-channel-url">رابط قناة التلجرام</label><input type="text" id="telegram-channel-url"></div>
                     <div class="form-group"><label for="telegram-group-url">رابط جروب التلجرام</label><input type="text" id="telegram-group-url"></div>
                     <div class="form-group" style="grid-column: 1 / -1;">
@@ -850,6 +859,7 @@ function renderAddAgentForm() {
             rank: rank || null,
             telegram_channel_url: document.getElementById('telegram-channel-url').value || null,
             telegram_group_url: document.getElementById('telegram-group-url').value || null,
+            renewal_period: document.getElementById('agent-renewal-period').value,
             competition_bonus: rankData.competition_bonus,
             deposit_bonus_percentage: rankData.deposit_bonus_percentage,
             deposit_bonus_count: rankData.deposit_bonus_count,

@@ -475,6 +475,32 @@
     background-color: #e67e22;
     transform: translateY(-2px);
 }
+/* New style for the manual renewal button */
+.btn-renewal {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
+    background-color: #1abc9c; /* Teal */
+}
+.btn-renewal:hover:not(:disabled) {
+    background-color: #16a085;
+    transform: translateY(-2px);
+}
+.btn-renewal:disabled {
+    background-color: var(--border-color);
+    cursor: not-allowed;
+}
+.btn-renewal.ready {
+    animation: pulse-green 2s infinite;
+}
+
 
 .competitions-list-profile {
     display: flex;
