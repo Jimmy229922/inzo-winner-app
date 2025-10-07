@@ -914,13 +914,21 @@ async function renderCompetitionCreatePage(agentId) {
             const newRemainingDepositBonus = (agent.deposit_bonus_count || 0) - newUsedDepositBonus;
             const todayStr = new Date().toISOString();
 
+            // --- FIX: Convert competition duration to the format expected by the Agent schema ('24h'/'48h') ---
+            let agentCompetitionDuration = null;
+            if (selectedDuration === '1d') {
+                agentCompetitionDuration = '24h';
+            } else if (selectedDuration === '2d' || selectedDuration === '1w') { // Treat '1w' as '48h' for the agent's default duration
+                agentCompetitionDuration = '48h';
+            }
+
             const agentUpdatePayload = {
                     consumed_balance: newConsumed,
                     remaining_balance: newRemaining,
                     used_deposit_bonus: newUsedDepositBonus,
                     remaining_deposit_bonus: newRemainingDepositBonus,
                     last_competition_date: todayStr,
-                    competition_duration: selectedDuration // حفظ المدة المختارة للوكيل
+                    competition_duration: agentCompetitionDuration // حفظ المدة المختارة للوكيل بالصيغة الصحيحة
             };
 
             const agentUpdateResponse = await authedFetch(`/api/agents/${agent._id}`, {

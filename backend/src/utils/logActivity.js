@@ -1,4 +1,4 @@
-const Log = require('../models/Log');
+const Log = require('../models/Log'); // FIX: Correct path to Log model
 
 /**
  * دالة مساعدة لتسجيل الأنشطة في قاعدة البيانات.

@@ -51,7 +51,9 @@ echo.
 :start
 cd backend
 REM Set the environment to development to bypass JWT auth for local testing
-set NODE_ENV=development
+set NODE_ENV=development & set PORT=30001 
+REM The migration script below has been disabled as it should only run once.
+REM node -e "require('./src/migration-add-competitions-per-week.js')().then(() => console.log('[Migration] Script finished.')).catch(e => console.error(e))"
 node server.js
  
 IF %errorlevel% == 42 (

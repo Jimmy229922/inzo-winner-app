@@ -969,7 +969,7 @@ function renderDetailsView(agent) {
 
 
 
-        if (numericFields.includes(fieldName)) {
+        if (numericFields.includes(fieldName) || fieldName === 'competitions_per_week') {
             displayValue = (value === null || value === undefined) ? 0 : value;
             if (fieldName === 'prize_per_winner') displayValue = parseFloat(displayValue).toFixed(2);
             if (fieldName === 'deposit_bonus_percentage') displayValue = `${displayValue}%`;
@@ -1013,7 +1013,7 @@ function renderDetailsView(agent) {
             ${createFieldHTML('يجدد كل', agent.renewal_period, 'renewal_period')}
             ${createFieldHTML('مدة المسابقة', agent.competition_duration, 'competition_duration')}
             ${createFieldHTML('تاريخ آخر مسابقة', agent.last_competition_date, 'last_competition_date')}
-        </div>
+            ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week')}        </div>
         ${isSuperAdmin ? `
             <div class="details-actions" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
                 <button id="trigger-renewal-test-btn" class="btn-danger"><i class="fas fa-history"></i> تجربة التجديد (20 ثانية)</button>
@@ -1212,6 +1212,18 @@ async function renderInlineEditor(groupElement, agent) {
             }
             updateData.remaining_deposit_bonus = (rankData.deposit_bonus_count || 0) - (currentAgent.used_deposit_bonus || 0);
         } else {
+            // --- NEW: Automatically update competition_duration when competitions_per_week changes ---
+            if (fieldName === 'competitions_per_week') {
+                const compsPerWeek = parseInt(newValue, 10);
+                if (compsPerWeek === 1) {
+                    updateData.competition_duration = '48h';
+                } else if (compsPerWeek === 2) {
+                    updateData.competition_duration = '24h';
+                } else if (compsPerWeek === 3) {
+                    updateData.competition_duration = '24h'; // Fallback for 16h
+                }
+            }
+
             let finalValue;
             if (fieldName === 'audit_days') {
                 finalValue = Array.from(groupElement.querySelectorAll('.day-toggle-input:checked')).map(input => parseInt(input.value, 10));
@@ -1220,7 +1232,7 @@ async function renderInlineEditor(groupElement, agent) {
             } else {
                 // --- REWRITE: Professional and robust value parsing ---
                 // Define which fields should be treated as integers vs floats
-                const integerFields = ['deposit_bonus_count', 'used_deposit_bonus', 'remaining_deposit_bonus', 'winners_count'];
+                const integerFields = ['deposit_bonus_count', 'used_deposit_bonus', 'remaining_deposit_bonus', 'winners_count', 'competitions_per_week'];
                 const floatFields = ['competition_bonus', 'consumed_balance', 'remaining_balance', 'single_competition_balance', 'prize_per_winner', 'deposit_bonus_percentage'];
 
                 if (integerFields.includes(fieldName)) {

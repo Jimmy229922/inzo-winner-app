@@ -1,4 +1,4 @@
-const Agent = require('../models/Agent');
+const Agent = require('../models/Agent'); // FIX: Correct path to Agent model
 const { logActivity } = require('../utils/logActivity');
 const { translateField, formatValue } = require('../utils/fieldTranslations');
 
@@ -98,7 +98,8 @@ exports.updateAgent = async (req, res) => {
             'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus',
             'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period',
             'competition_duration', 'last_competition_date',
-            'audit_days'
+            'audit_days',
+            'competitions_per_week'
         ];
         const updatePayload = { ...req.body }; // Copy the request body
 
@@ -152,6 +153,12 @@ exports.updateAgent = async (req, res) => {
  */
 exports.deleteAllAgents = async (req, res) => {
     try {
+        // --- FIX: Log this critical action ---
+        const userId = req.user?._id;
+        if (userId) {
+            await logActivity(userId, null, 'AGENT_BULK_DELETE', 'تم حذف جميع الوكلاء من النظام.');
+        }
+
         await Agent.deleteMany({});
         res.json({ message: 'All agents have been deleted successfully.' });
     } catch (error) {
@@ -162,6 +169,13 @@ exports.deleteAllAgents = async (req, res) => {
 exports.deleteAgent = async (req, res) => {
     try {
         const agent = await Agent.findByIdAndDelete(req.params.id);
+
+        // --- FIX: Log this action ---
+        const userId = req.user?._id;
+        if (userId && agent) {
+            await logActivity(userId, agent._id, 'AGENT_DELETED', `تم حذف الوكيل: ${agent.name}.`);
+        }
+
         if (!agent) return res.status(404).json({ message: 'Agent not found.' });
         res.json({ message: 'Agent deleted successfully.' });
     } catch (error) {
@@ -205,6 +219,11 @@ exports.renewEligibleAgentBalances = async () => {
             agent.last_renewal_date = now;
 
             await agent.save();
+
+            // --- FIX: Log automatic renewal ---
+            // We pass null for user_id as this is a system action.
+            await logActivity(null, agent._id, 'AUTO_RENEWAL', `تم تجديد الرصيد تلقائياً للوكيل ${agent.name}.`);
+
             renewedCount++;
         }
     }
@@ -239,6 +258,12 @@ exports.bulkRenewBalances = async (req, res) => {
             await agent.save();
             
             processedCount++;
+        }
+
+        // --- FIX: Log this bulk action ---
+        const userId = req.user?._id;
+        if (userId) {
+            await logActivity(userId, null, 'AGENT_BULK_RENEW', `تم تشغيل عملية تجديد الرصيد الجماعي لـ ${processedCount} وكيل.`);
         }
 
         res.json({ message: 'Bulk renewal process completed successfully.', processedCount });
@@ -352,6 +377,13 @@ exports.renewSingleAgentBalance = async (req, res) => {
         agent.last_renewal_date = new Date();
 
         await agent.save();
+
+        // --- FIX: Log this manual action ---
+        const userId = req.user?._id;
+        if (userId) {
+            await logActivity(userId, agent._id, 'MANUAL_RENEWAL', `تم تجديد الرصيد يدوياً للوكيل ${agent.name}.`);
+        }
+
         res.json({ message: 'Agent balance renewed successfully.', data: agent });
     } catch (error) {
         res.status(500).json({ message: 'Failed to renew agent balance.', error: error.message });

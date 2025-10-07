@@ -1,5 +1,5 @@
 const Competition = require('../models/Competition');
-const Agent = require('../models/Agent');
+const Agent = require('../models/Agent'); // FIX: Correct path to Agent model
 const CompetitionTemplate = require('../models/CompetitionTemplate'); // NEW: Import the template model
 
 /**
@@ -138,8 +138,30 @@ exports.createCompetition = async (req, res) => {
 
 exports.updateCompetition = async (req, res) => {
     try {
+        const competitionBeforeUpdate = await Competition.findById(req.params.id).lean();
+        if (!competitionBeforeUpdate) {
+            return res.status(404).json({ message: 'Competition not found.' });
+        }
+
         const updatedCompetition = await Competition.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!updatedCompetition) return res.status(404).json({ message: 'Competition not found.' });
+
+        // --- FIX: Add activity logging for competition updates ---
+        const userId = req.user?._id;
+        if (userId && updatedCompetition) {
+            const changes = Object.entries(req.body).map(([field, newValue]) => {
+                const oldValue = competitionBeforeUpdate[field];
+                if (String(oldValue) !== String(newValue)) {
+                    return `حقل "${field}" تغير من "${oldValue}" إلى "${newValue}"`;
+                }
+                return null;
+            }).filter(Boolean);
+
+            if (changes.length > 0) {
+                const description = `تم تحديث مسابقة "${updatedCompetition.name}":\n${changes.join('\n')}`;
+                await logActivity(userId, updatedCompetition.agent_id, 'COMPETITION_UPDATE', description);
+            }
+        }
+
         res.json({ data: updatedCompetition });
     } catch (error) {
         res.status(400).json({ message: 'Failed to update competition.', error: error.message });
@@ -149,6 +171,11 @@ exports.updateCompetition = async (req, res) => {
 exports.deleteCompetition = async (req, res) => {
     try {
         const competition = await Competition.findByIdAndDelete(req.params.id);
+        // --- FIX: Log this action ---
+        const userId = req.user?._id;
+        if (userId && competition) {
+            await logActivity(userId, competition.agent_id, 'COMPETITION_DELETED', `تم حذف المسابقة: ${competition.name}.`);
+        }
         if (!competition) return res.status(404).json({ message: 'Competition not found.' });
         res.json({ message: 'Competition deleted successfully.' });
     } catch (error) {

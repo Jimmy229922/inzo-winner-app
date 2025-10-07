@@ -91,6 +91,14 @@ function renderAddAgentForm() {
                                 <option value="monthly">شهري</option>
                             </select>
                         </div>
+                        <div class="form-group" id="competitions-per-week-group" style="display: none;">
+                            <label for="agent-competitions-per-week">عدد المسابقات كل أسبوع</label>
+                            <select id="agent-competitions-per-week">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-group" style="margin-top: 20px;">
                         <label style="margin-bottom: 10px;">أيام التدقيق</label>
@@ -111,6 +119,24 @@ function renderAddAgentForm() {
             </form>
         </div>
     `;
+
+    // --- الاقتراح: ربط عدد المسابقات الأسبوعية بالتصنيف تلقائياً ---
+    const classificationSelect = document.getElementById('agent-classification');
+    const competitionsGroup = document.getElementById('competitions-per-week-group');
+    const competitionsPerWeekSelect = document.getElementById('agent-competitions-per-week');
+
+    const updateCompetitionsPerWeek = () => {
+        const classification = classificationSelect.value;
+        if (classification === 'R' || classification === 'A') {
+            competitionsPerWeekSelect.value = '2';
+        } else if (classification === 'B' || classification === 'C') {
+            competitionsPerWeekSelect.value = '1';
+        }
+        // --- NEW: Show the field after a classification is selected ---
+        competitionsGroup.style.display = 'block';
+    };
+
+    classificationSelect.addEventListener('change', updateCompetitionsPerWeek);
 
     // Avatar preview logic
     const avatarUploadInput = document.getElementById('avatar-upload');
@@ -211,6 +237,20 @@ function renderAddAgentForm() {
         const rank = document.getElementById('agent-rank').value;
         const rankData = RANKS_DATA[rank] || {};
 
+        // --- NEW: Calculate competition_duration based on competitions_per_week ---
+        const competitionsPerWeek = parseInt(document.getElementById('agent-competitions-per-week').value, 10);
+        let competitionDuration = '48h'; // Default
+
+        // --- DEBUG: Log the value read from the form ---
+        console.log(`[Add Agent Debug 1] Value for competitionsPerWeek from form: ${competitionsPerWeek}`);
+
+        if (competitionsPerWeek === 2) {
+            competitionDuration = '24h';
+        } else if (competitionsPerWeek === 3) {
+            // As 16h is not a standard option, we can default to 24h or handle as needed.
+            competitionDuration = '24h';
+        }
+
         const selectedDays = Array.from(document.querySelectorAll('.days-selector-v2 input:checked')).map(input => parseInt(input.value, 10));
 
         const newAgentData = {
@@ -223,23 +263,38 @@ function renderAddAgentForm() {
             telegram_group_url: document.getElementById('telegram-group-url').value || null,
             telegram_chat_id: document.getElementById('telegram-chat-id').value || null,
             telegram_group_name: document.getElementById('telegram-group-name').value || null,
-            renewal_period: document.getElementById('agent-renewal-period').value,
             competition_bonus: rankData.competition_bonus,
             deposit_bonus_percentage: rankData.deposit_bonus_percentage,
             deposit_bonus_count: rankData.deposit_bonus_count,
             remaining_balance: rankData.competition_bonus,
             remaining_deposit_bonus: rankData.deposit_bonus_count,
+            renewal_period: document.getElementById('agent-renewal-period').value,
+            competitions_per_week: competitionsPerWeek, // --- FIX: Ensure this is added to the payload ---
+            competition_duration: competitionDuration, // --- NEW: Add calculated duration ---
         };
+
+        // --- DEBUG: Log the created agent data object ---
+        console.log('[Add Agent Debug 2] newAgentData object created:', newAgentData);
 
         // --- الاقتراح د: تأكيد قبل الحفظ ---
         const summaryHtml = `
-            <div class="confirmation-summary">
-                <p><strong>الاسم:</strong> ${newAgentData.name}</p>
-                <p><strong>رقم الوكالة:</strong> ${newAgentData.agent_id}</p>
-                <p><strong>المرتبة:</strong> ${newAgentData.rank}</p>
-            </div>
+            <div class="confirmation-summary-grid">
+                <div class="summary-item"><strong>الاسم:</strong> ${newAgentData.name}</div>
+                <div class="summary-item"><strong>رقم الوكالة:</strong> ${newAgentData.agent_id}</div>
+                <div class="summary-item"><strong>المرتبة:</strong> ${newAgentData.rank}</div>
+                <div class="summary-item"><strong>التصنيف:</strong> ${newAgentData.classification}</div>
+                <hr>
+                <div class="summary-item"><strong><i class="fas fa-cogs"></i> بيانات تلقائية:</strong></div>
+                <div class="summary-item"><strong>بونص المسابقات:</strong> ${newAgentData.competition_bonus === Infinity ? 'غير محدود' : `$${newAgentData.competition_bonus || 0}`}</div>
+                <div class="summary-item"><strong>بونص الإيداع:</strong> ${newAgentData.deposit_bonus_count === Infinity ? 'غير محدود' : (newAgentData.deposit_bonus_count || 0)} مرات بنسبة ${newAgentData.deposit_bonus_percentage || 0}%</div>
+                <div class="summary-item"><strong>مدة المسابقة:</strong> ${newAgentData.competition_duration}</div>
+                <div class="summary-item"><strong>عدد المسابقات أسبوعياً:</strong> ${newAgentData.competitions_per_week}</div>
+             </div>
             <p>هل أنت متأكد من أن البيانات صحيحة؟</p>
         `;
+
+        // --- DEBUG: Log before showing confirmation modal ---
+        console.log('[Add Agent Debug 3] Data before showing confirmation modal:', newAgentData);
 
         showConfirmationModal(
             summaryHtml,
@@ -259,6 +314,9 @@ async function saveAgent(newAgentData) {
     saveBtn.disabled = true;
     saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
 
+    // --- DEBUG: Log the data received by the saveAgent function ---
+    console.log('[Add Agent Debug 4] Data received by saveAgent function:', newAgentData);
+
     // --- STEP 3: MIGRATION TO CUSTOM BACKEND ---
     try {
         const rank = newAgentData.rank;
@@ -270,6 +328,9 @@ async function saveAgent(newAgentData) {
         newAgentData.deposit_bonus_count = rankData.deposit_bonus_count;
         newAgentData.remaining_balance = rankData.competition_bonus;
         newAgentData.remaining_deposit_bonus = rankData.deposit_bonus_count;
+        // --- FIX: Preserve competitions_per_week and competition_duration from the form ---
+        // The original newAgentData object already has these values. We just need to make sure they are not overwritten.
+        // No explicit re-assignment is needed if we don't nullify them.
         
         // --- إصلاح: منطق خاص لمرتبة "وكيل حصري بدون مرتبة" ---
         if (rank === 'وكيل حصري بدون مرتبة') {
@@ -279,6 +340,9 @@ async function saveAgent(newAgentData) {
             newAgentData.deposit_bonus_count = null;
             newAgentData.remaining_deposit_bonus = null;
         }
+
+        // --- DEBUG: Log the final payload before sending to the server ---
+        console.log('[Add Agent Debug 5] Final payload being sent to server:', newAgentData);
 
         // Send data to our new backend API
         const response = await authedFetch('/api/agents', {
@@ -298,7 +362,7 @@ async function saveAgent(newAgentData) {
         // TODO: Re-implement avatar upload. This will require a separate endpoint on the backend
         // that handles file uploads (e.g., using multer) and saves them to a folder or a cloud service like S3.
 
-        await logAgentActivity(insertedAgent._id, 'AGENT_CREATED', `تم إنشاء وكيل جديد: ${insertedAgent.name}.`);
+        await logAgentActivity(currentUserProfile?._id, insertedAgent._id, 'AGENT_CREATED', `تم إنشاء وكيل جديد: ${insertedAgent.name}.`);
         showToast('تمت إضافة الوكيل بنجاح!', 'success');
         window.allAgentsData = []; // مسح ذاكرة التخزين المؤقت للوكلاء لإعادة جلبها عند العودة
         // Use replace to avoid adding the 'add-agent' page to history
@@ -402,7 +466,8 @@ async function handleBulkAddAgents(data) {
             telegram_group_url = '', 
             telegram_chat_id = '', 
             telegram_group_name = '',
-            competition_duration = null] = fields;
+            competition_duration = null,
+            competitions_per_week_str = ''] = fields; // --- NEW: Read competitions per week ---
 
         if (!name || !agent_id || !classification || !rank) { // --- IMPROVEMENT: More specific error message ---
             errors.push(`السطر ${index + 1}: الحقول الأساسية (الاسم، الرقم، التصنيف، المرتبة) مطلوبة.`);
@@ -443,6 +508,27 @@ async function handleBulkAddAgents(data) {
             }
         }
 
+        // --- NEW: Process competitions_per_week ---
+        let competitions_per_week = parseInt(competitions_per_week_str, 10);
+        if (isNaN(competitions_per_week)) {
+            // If not provided or invalid, set it automatically based on classification
+            if (classification.toUpperCase() === 'R' || classification.toUpperCase() === 'A') {
+                competitions_per_week = 2;
+            } else { // B or C
+                competitions_per_week = 1;
+            }
+        }
+
+        // --- NEW: Calculate competition_duration based on competitions_per_week ---
+        let competition_duration_calculated = '48h'; // Default
+        if (competitions_per_week === 2) {
+            competition_duration_calculated = '24h';
+        } else if (competitions_per_week === 3) {
+            competition_duration_calculated = '24h'; // Fallback for 16h
+        }
+        // If a duration is explicitly provided in the sheet, it will override the calculated one.
+        const final_competition_duration = processed_competition_duration || competition_duration_calculated;
+
         const rankData = RANKS_DATA[correctRank];
         const newAgent = {
             name,
@@ -462,8 +548,9 @@ async function handleBulkAddAgents(data) {
             remaining_deposit_bonus: rankData.deposit_bonus_count || 0,
             consumed_balance: 0,
             used_deposit_bonus: 0,
-            status: 'Active', // NEW: Set status to Active by default
-            competition_duration: processed_competition_duration,
+            status: 'Active',
+            competition_duration: final_competition_duration, // --- MODIFIED: Use the final duration ---
+            competitions_per_week, // --- NEW: Add the processed value ---
         };
         allParsedAgents.push(newAgent);
     });

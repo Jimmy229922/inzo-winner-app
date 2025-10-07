@@ -13,7 +13,8 @@ const fieldTranslations = {
     telegram_group_name: 'اسم مجموعة التليجرام',
     phone: 'رقم الهاتف',
     status: 'الحالة',
-    renewal_date: 'تاريخ التجديد'
+    renewal_date: 'تاريخ التجديد',
+    competitions_per_week: 'عدد المسابقات كل أسبوع'
 };
 
 const translateField = (fieldName) => {

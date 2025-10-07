@@ -10,6 +10,7 @@ const AgentSchema = new mongoose.Schema({
     audit_days: { type: [Number], default: [] }, // 0=Sun, 1=Mon, ...
     renewal_period: { type: String, enum: ['none', 'weekly', 'biweekly', 'monthly'], default: 'none' },
     last_renewal_date: { type: Date, default: null },
+    competitions_per_week: { type: Number, default: 1 },
     competition_duration: { type: String, enum: ['24h', '48h', null], default: null },
     last_competition_date: { type: Date, default: null },
     winner_selection_date: { type: Date, default: null },

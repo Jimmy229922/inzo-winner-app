@@ -1,5 +1,5 @@
 const Competition = require('../models/Competition');
-const Agent = require('../models/Agent');
+const Agent = require('../models/Agent'); // FIX: Correct path to Agent model
 const { logActivity } = require('./logActivity');
 const { postToTelegram } = require('./telegram');
 
@@ -45,7 +45,7 @@ async function checkExpiredCompetitions() {
                     await logActivity(
                         null,
                         agent._id, 
-                        'WINNERS_SELECTION_REQUESTED', 
+                        'COMPETITION_EXPIRED', 
                         `تم إغلاق المسابقة "${comp.name}" وإرسال طلب اختيار الفائزين تلقائياً.`
                     );
                 } catch (telegramError) {
