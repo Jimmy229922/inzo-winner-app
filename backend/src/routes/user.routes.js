@@ -56,6 +56,32 @@ const canUpdateUser = async (req, res, next) => {
     return res.status(403).json({ message: 'Forbidden: You do not have permission to modify this user.' });
 };
 
+// --- NEW: Middleware to check if a user can be deleted ---
+const canDeleteUser = async (req, res, next) => {
+    const currentUser = req.user;
+    const targetUserId = req.params.id;
+
+    // Super admin can delete anyone except other super admins (which is handled in the controller).
+    if (currentUser.role === 'super_admin') {
+        return next();
+    }
+
+    // Admin can delete users with the 'user' role.
+    if (currentUser.role === 'admin') {
+        try {
+            const targetUser = await userController.findUserById(targetUserId);
+            if (targetUser && targetUser.role === 'user') {
+                return next();
+            }
+        } catch (error) {
+            return res.status(500).json({ message: 'Error verifying user to delete.' });
+        }
+    }
+
+    // If none of the above, deny access.
+    return res.status(403).json({ message: 'Forbidden: You do not have permission to delete this user.' });
+};
+
 // Basic CRUD routes
 router.route('/')
     .get(authenticate, isAdminOrSuperAdmin, userController.getAllUsers) // FIX: Allow Admins and Super Admins to get all users
@@ -64,7 +90,7 @@ router.route('/')
 router.route('/:id')
     .get(authenticate, userController.getUserById)
     .put(authenticate, canUpdateUser, userController.updateUser)
-    .delete(authenticate, isSuperAdmin, userController.deleteUser); // FIX: Removed incorrect canUpdateUser middleware from delete route
+    .delete(authenticate, canDeleteUser, userController.deleteUser); // MODIFICATION: Use the new canDeleteUser middleware
 
 // Special routes
 router.post('/:id/avatar', authenticate, upload.single('avatar'), userController.uploadAvatar);

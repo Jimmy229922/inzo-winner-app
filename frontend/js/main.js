@@ -112,7 +112,8 @@ function updateUIAfterLogin(user) {
     }
 
     // Show admin-only links if the user is a super_admin or admin
-    if (usersNavItem && user.role === 'super_admin') {
+    // --- MODIFICATION: Allow admins to see the users link as well ---
+    if (usersNavItem && (user.role === 'super_admin' || user.role === 'admin')) {
         usersNavItem.style.display = 'block';
     }
 }

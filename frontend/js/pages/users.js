@@ -1,8 +1,10 @@
 async function renderUsersPage() {
     const appContent = document.getElementById('app-content');
 
-    // --- FIX: Add permission check at the start of the function ---
-    if (currentUserProfile?.role !== 'super_admin') {
+    // --- MODIFICATION: Allow both super_admin and admin to access this page ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const isAdmin = currentUserProfile?.role === 'admin';
+    if (!isSuperAdmin && !isAdmin) {
         appContent.innerHTML = `
             <div class="access-denied-container">
                 <i class="fas fa-lock"></i>
@@ -11,6 +13,10 @@ async function renderUsersPage() {
             </div>`;
         return;
     }
+
+    // --- MODIFICATION: Only show the "Add User" button if the user has permission (admin or super_admin) ---
+    const canAddUser = isSuperAdmin || isAdmin;
+    const addUserButtonHtml = canAddUser ? `<button id="add-new-user-btn" class="btn-primary"><i class="fas fa-user-plus"></i> إضافة مستخدم جديد</button>` : '';
 
     appContent.innerHTML = `
         <!-- NEW: Stats Cards Section -->
@@ -24,7 +30,7 @@ async function renderUsersPage() {
         <div class="page-header column-header">
             <div class="header-top-row">
                 <h1><i class="fas fa-users-cog"></i> إدارة المستخدمين</h1>
-                <button id="add-new-user-btn" class="btn-primary"><i class="fas fa-user-plus"></i> إضافة مستخدم جديد</button>
+                ${addUserButtonHtml}
             </div>
             <div class="filters-container">
                 <div class="filter-search-container">
@@ -46,7 +52,10 @@ async function renderUsersPage() {
     `;
 
     // Add listener for the new user button
-    document.getElementById('add-new-user-btn').addEventListener('click', renderCreateUserModal);
+    const addUserBtn = document.getElementById('add-new-user-btn');
+    if (addUserBtn) {
+        addUserBtn.addEventListener('click', renderCreateUserModal);
+    }
     
     // Attach event listeners for actions (delete, role change) to the persistent container
     attachUserActionListeners();
@@ -153,7 +162,10 @@ function renderUserRow(user) {
                 return `<td class="actions-cell">
                     <button class="btn-secondary edit-user-btn" data-user-id="${user._id}" title="تعديل بيانات المستخدم"><i class="fas fa-edit"></i> تعديل</button>
                     <button class="btn-primary permissions-user-btn" data-user-id="${user._id}" title="إدارة الصلاحيات" ${!isCurrentUserSuperAdmin ? 'disabled' : ''}><i class="fas fa-shield-alt"></i> الصلاحيات</button>
-                    <button class="btn-danger delete-user-btn" data-user-id="${user._id}" title="حذف المستخدم نهائياً" ${!isCurrentUserSuperAdmin ? 'disabled' : ''}><i class="fas fa-trash-alt"></i></button>
+                    ${/* --- MODIFICATION: Allow admins to delete users, but not other admins. Super admins can delete anyone except themselves. --- */ ''}
+                    <button class="btn-danger delete-user-btn" data-user-id="${user._id}" title="حذف المستخدم نهائياً" 
+                        ${(isCurrentUserAdmin && isTargetAdmin) || !isCurrentUserSuperAdmin && !isCurrentUserAdmin ? 'disabled' : ''}>
+                        <i class="fas fa-trash-alt"></i></button>
                     <label class="custom-checkbox toggle-switch small-toggle" title="${isInactive ? 'تفعيل الحساب' : 'تعطيل الحساب'}" ${!isCurrentUserSuperAdmin ? 'style="display:none;"' : ''}>
                         <input type="checkbox" class="status-toggle" data-user-id="${user._id}" ${!isInactive ? 'checked' : ''}><span class="slider round"></span>
                     </label>
@@ -398,6 +410,8 @@ function notifyUserOfRoleChange(userId, newRole) {
 function renderCreateUserModal() {
     // --- NEW: Professional Create User Modal ---
     const overlay = document.createElement('div');
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+
     overlay.className = 'modal-overlay';
     
     const modal = document.createElement('div');
@@ -445,13 +459,16 @@ function renderCreateUserModal() {
                             <button type="button" id="generate-password-btn" class="btn-secondary btn-small">إنشاء كلمة مرور قوية</button>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label for="new-user-role">الصلاحية</label>
-                        <select id="new-user-role">
-                            <option value="user" selected>موظف</option>
-                            <option value="admin">مسؤول</option>
-                        </select>
-                    </div>
+                    ${isSuperAdmin ? `
+                        <div class="form-group">
+                            <label for="new-user-role">الصلاحية</label>
+                            <select id="new-user-role">
+                                <option value="user" selected>موظف</option>
+                                <option value="admin">مسؤول</option>
+                            </select>
+                        </div>
+                    ` : '<input type="hidden" id="new-user-role" value="user">'
+                    }
                 </div>
                 <!-- Actions Section -->
                 <div class="form-grid-actions">
