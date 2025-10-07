@@ -335,6 +335,9 @@ function attachUserActionListeners() {
                 }
 
                 showToast('تم تحديث صلاحية المستخدم بنجاح.', 'success');
+                // NEW: Notify the user whose role was changed in real-time
+                // This requires a WebSocket setup to be effective.
+                notifyUserOfRoleChange(userId, newRole);
             } catch (error) {
                 showToast(`فشل تحديث الصلاحية: ${error.message}`, 'error');
                 // Revert the select box to the previous value on error without a full page reload
@@ -366,6 +369,30 @@ function attachUserActionListeners() {
             }
         }
     });
+}
+
+/**
+ * NEW: Notifies a specific user that their role has been changed.
+ * This function should send a message via WebSocket to the server,
+ * which then relays it to the target user.
+ * @param {string} userId The ID of the user to notify.
+ * @param {string} newRole The new role assigned to the user.
+ */
+function notifyUserOfRoleChange(userId, newRole) {
+    // This is a placeholder for a real WebSocket implementation.
+    // In a real app, you would have a global WebSocket instance, e.g., `socket`.
+    // if (socket && socket.readyState === WebSocket.OPEN) {
+    //     socket.send(JSON.stringify({
+    //         type: 'role_change',
+    //         payload: {
+    //             targetUserId: userId,
+    //             newRole: newRole
+    //         }
+    //     }));
+    // }
+
+    // For now, we can simulate this by logging to the console.
+    console.log(`[SIMULATION] Notifying user ${userId} of role change to ${newRole}. This would be sent via WebSocket.`);
 }
 
 function renderCreateUserModal() {

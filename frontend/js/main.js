@@ -318,6 +318,43 @@ async function initializeApp() {
     }
 }
 
+/**
+ * NEW: Sets up a listener for real-time messages from the server (e.g., via WebSocket).
+ */
+function setupRealtimeListeners() {
+    // This is a placeholder. In a real implementation, you would initialize
+    // your WebSocket connection here and define its event handlers.
+
+    // Example using a hypothetical 'socket' instance:
+    /*
+    const socket = new WebSocket('ws://your-server-address');
+
+    socket.onmessage = async (event) => {
+        try {
+            const message = JSON.parse(event.data);
+
+            // Check if the message is a role change notification for the current user
+            if (message.type === 'role_change_notification' && message.payload?.userId === currentUserProfile?.userId) {
+                const newRole = message.payload.newRole;
+                
+                // Show a friendly notification to the user
+                showToast(`تم تحديث صلاحيتك إلى "${newRole === 'admin' ? 'مسؤول' : 'موظف'}". سيتم تحديث الواجهة.`, 'info');
+
+                // Wait a moment for the user to read the toast, then refresh the profile and UI
+                setTimeout(async () => {
+                    // Refetch the user profile to get all new permissions and data
+                    await fetchUserProfile(); 
+                    // Reload the page to apply all changes, including nav links and permissions
+                    window.location.reload(); 
+                }, 3000); // 3-second delay
+            }
+        } catch (error) {
+            console.error('Error processing real-time message:', error);
+        }
+    };
+    */
+}
+
 // --- UI Component Functions (Moved from script.js to main.js) ---
 
 function showLoader() {
@@ -664,6 +701,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavbar();
     setupAutoHidingNavbar();
     initializeApp();
+    // NEW: Initialize the real-time listener. This function needs to be
+    // implemented with your actual WebSocket logic.
+    setupRealtimeListeners();
     createFloatingParticles(); // --- NEW: Add animated background to the main app ---
 
     // --- NEW: Listen for browser online/offline events ---

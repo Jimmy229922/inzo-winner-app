@@ -552,6 +552,10 @@ async function renderCompetitionCreatePage(agentId) {
                             <option value="1w">أسبوع</option>
                         </select>
                     </div>
+                    <div class="form-group" style="grid-column: 1 / -1; background-color: var(--bg-color); padding: 10px 15px; border-radius: 6px; margin-top: 10px;">
+                        <label for="winner-selection-date-preview" style="color: var(--primary-color);"><i class="fas fa-calendar-alt"></i> تاريخ اختيار الفائز المتوقع</label>
+                        <p id="winner-selection-date-preview" class="summary-preview-text"></p>
+                    </div>
                 </div>
                 <div class="form-group" style="margin-top: 15px;">
                     <label for="override-correct-answer">الإجابة الصحيحة للمسابقة</label>
@@ -563,13 +567,8 @@ async function renderCompetitionCreatePage(agentId) {
                 </div>
                 <div id="validation-messages" class="validation-messages" style="margin-top: 20px;"></div>
             </div>
+            
 
-            <!-- Preview Column -->
-            <div class="preview-v3 card-style-container">
-                <div class="form-group" style="margin-top: 15px; background-color: var(--bg-color); padding: 10px; border-radius: 6px;">
-                    <label for="winner-selection-date-preview" style="color: var(--primary-color);"><i class="fas fa-calendar-alt"></i> تاريخ اختيار الفائز المتوقع</label>
-                    <p id="winner-selection-date-preview" class="summary-preview-text"></p>
-                </div>
             <!-- Preview Column -->
             <div class="preview-v3 card-style-container">
                 <form id="competition-form">
@@ -596,6 +595,7 @@ async function renderCompetitionCreatePage(agentId) {
                     </div>
                 </form>
             </div>
+
         </div>
     `;
 
