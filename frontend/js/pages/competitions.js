@@ -546,9 +546,9 @@ async function renderCompetitionCreatePage(agentId) {
                     <div class="form-group">
                         <label for="override-duration">مدة المسابقة</label>
                         <select id="override-duration">
-                            <option value="" disabled selected>-- اختر مدة --</option>
-                            <option value="1d">يوم واحد</option>
-                            <option value="2d">يومين</option>
+                            <option value="" disabled>-- اختر مدة --</option>
+                            <option value="1d" ${agent.competition_duration === '24h' ? 'selected' : ''}>يوم واحد</option>
+                            <option value="2d" ${agent.competition_duration === '48h' ? 'selected' : ''}>يومين</option>
                             <option value="1w">أسبوع</option>
                         </select>
                     </div>

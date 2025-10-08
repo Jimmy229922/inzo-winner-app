@@ -270,6 +270,7 @@ function renderAddAgentForm() {
             renewal_period: document.getElementById('agent-renewal-period').value,
             competitions_per_week: competitionsPerWeek, // --- FIX: Ensure this is added to the payload ---
             competition_duration: competitionDuration, // --- NEW: Add calculated duration ---
+            prize_per_winner: 30, // --- NEW: Default prize per winner to $30 ---
         };
 
         // --- DEBUG: Log the created agent data object ---

@@ -75,6 +75,64 @@ async function renderManageAgentsPage() {
         bulkAddBtn.addEventListener('click', renderBulkAddAgentsModal);
     }
 
+    // --- NEW: Attach event listeners once for the entire page ---
+    const container = document.getElementById('agent-table-container');
+    container.addEventListener('click', (e) => {
+        const agentCell = e.target.closest('.table-agent-cell');
+        const agentIdText = e.target.closest('.agent-id-text');
+        const editBtn = e.target.closest('.edit-btn');
+        const deleteBtn = e.target.closest('.delete-btn');
+        const link = e.target.closest('a');
+        const paginationBtn = e.target.closest('.page-btn');
+
+        // 1. نسخ رقم الوكالة
+        if (agentIdText) {
+            e.stopPropagation();
+            const agentIdToCopy = agentIdText.textContent;
+            navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
+        }
+        // 2. الانتقال للملف الشخصي عند الضغط على خلية الوكيل (الاسم/الصورة)
+        else if (agentCell && !editBtn && !deleteBtn && !link) {
+            const row = agentCell.closest('tr');
+            if (row && row.dataset.agentId) {
+                window.location.hash = `profile/${row.dataset.agentId}`;
+            }
+        }
+        // 3. زر التعديل
+        else if (editBtn) {
+            const row = editBtn.closest('tr');
+            if (row) window.location.hash = `profile/${row.dataset.agentId}/edit`;
+        }
+        // 4. زر الحذف
+        else if (deleteBtn) {
+            const row = deleteBtn.closest('tr');
+            const agentId = row.dataset.agentId;
+            const agentName = row.querySelector('.agent-details')?.textContent || 'وكيل غير معروف';
+            const currentPage = parseInt(container.querySelector('.page-btn.active')?.dataset.page || '1');
+
+            showConfirmationModal(
+                `هل أنت متأكد من حذف الوكيل "<strong>${agentName}</strong>"؟<br><small>سيتم حذف جميع بياناته المرتبطة بشكل دائم.</small>`,
+                async () => {
+                    try {
+                        const response = await authedFetch(`/api/agents/${agentId}`, { method: 'DELETE' });
+                        if (!response.ok) {
+                            const result = await response.json();
+                            throw new Error(result.message || 'فشل حذف الوكيل.');
+                        }
+                        showToast('تم حذف الوكيل بنجاح.', 'success');
+                        fetchAndDisplayAgents(currentPage); // تحديث القائمة بعد الحذف
+                    } catch (error) {
+                        showToast(`فشل حذف الوكيل: ${error.message}`, 'error');
+                    }
+                }, { title: 'تأكيد حذف الوكيل', confirmText: 'حذف نهائي', confirmClass: 'btn-danger' });
+        }
+        // 5. أزرار التنقل بين الصفحات
+        else if (paginationBtn && !paginationBtn.disabled) {
+            const newPage = paginationBtn.dataset.page;
+            if (newPage) fetchAndDisplayAgents(parseInt(newPage));
+        }
+    });
+
     setupAgentFilters();
     await fetchAndDisplayAgents(1); // Initial fetch for page 1
 }
@@ -222,72 +280,7 @@ function displayAgentsPage(paginatedAgents, page, totalCount) {
 
     container.innerHTML = `<div class="table-responsive-container">${tableHtml}</div>${paginationHtml}`;
 
-    attachCardEventListeners(page);
-}
-
-function attachCardEventListeners(currentPage) {
-    const container = document.getElementById('agent-table-container');
-    if (!container) return;
-
-    // Event delegation for edit, delete, and pagination buttons
-    container.addEventListener('click', (e) => {
-        const agentCell = e.target.closest('.table-agent-cell');
-        const agentIdText = e.target.closest('.agent-id-text');
-        const editBtn = e.target.closest('.edit-btn');
-        const deleteBtn = e.target.closest('.delete-btn');
-        const link = e.target.closest('a');
-        const paginationBtn = e.target.closest('.page-btn');
-
-        // 1. نسخ رقم الوكالة
-        if (agentIdText) {
-            e.stopPropagation();
-            const agentIdToCopy = agentIdText.textContent;
-            navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
-        }
-        // 2. الانتقال للملف الشخصي عند الضغط على خلية الوكيل (الاسم/الصورة)
-        else if (agentCell && !editBtn && !deleteBtn && !link) {
-            const row = agentCell.closest('tr');
-            if (row && row.dataset.agentId) {
-                window.location.hash = `profile/${row.dataset.agentId}`;
-            }
-        }
-        // 3. زر التعديل
-        else if (editBtn) {
-            const row = editBtn.closest('tr');
-            if (row) window.location.hash = `profile/${row.dataset.agentId}/edit`;
-        }
-        // 4. زر الحذف
-        else if (deleteBtn) {
-            const row = deleteBtn.closest('tr');
-            const agentId = row.dataset.agentId;
-            const agentName = row.querySelector('.agent-details')?.textContent || 'وكيل غير معروف';
-            showConfirmationModal(
-                `هل أنت متأكد من حذف الوكيل "<strong>${agentName}</strong>"؟<br><small>سيتم حذف جميع بياناته المرتبطة بشكل دائم.</small>`,
-                async () => {
-                    // --- STEP 4: MIGRATION TO CUSTOM BACKEND ---
-                    try {
-                        const response = await authedFetch(`/api/agents/${agentId}`, {
-                            method: 'DELETE',
-                            // No 'Content-Type' for DELETE with no body
-                            // headers: { 'Content-Type': 'application/json' }
-                        });
-                        if (!response.ok) {
-                            const result = await response.json();
-                            throw new Error(result.message || 'فشل حذف الوكيل.');
-                        }
-                        showToast('تم حذف الوكيل بنجاح.', 'success');
-                        fetchAndDisplayAgents(currentPage);
-                    } catch (error) {
-                        showToast(`فشل حذف الوكيل: ${error.message}`, 'error');
-                    }
-                }, { title: 'تأكيد حذف الوكيل', confirmText: 'حذف نهائي', confirmClass: 'btn-danger' });
-        }
-        // 5. أزرار التنقل بين الصفحات
-        else if (paginationBtn && !paginationBtn.disabled) {
-            const newPage = paginationBtn.dataset.page;
-            if (newPage) fetchAndDisplayAgents(parseInt(newPage));
-        }
-    });
+    // The event listener is now attached once in renderManageAgentsPage, so no need to re-attach.
 }
 
 // --- NEW: Delete All Agents Feature (Super Admin only) ---
