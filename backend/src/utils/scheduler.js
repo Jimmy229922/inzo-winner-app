@@ -9,12 +9,11 @@ const { postToTelegram } = require('./telegram');
  */
 async function checkExpiredCompetitions() {
     try {
-        // FIX: Use UTC for consistent date comparison across timezones.
-        const now = new Date(); // Current time in UTC
+        const now = new Date(); // Current server time
 
         // البحث عن المسابقات التي انتهى يومها
         const expiredCompetitions = await Competition.find({
-            status: { $in: ['sent', 'active'] }, // Only process active or sent competitions
+            status: { $in: ['sent'] }, // Only process active or sent competitions
             ends_at: { $lte: now } // Find competitions where the end date/time has passed
         }).populate('agent_id', 'name telegram_chat_id');
 
