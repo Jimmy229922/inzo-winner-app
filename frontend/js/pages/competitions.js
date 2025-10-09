@@ -324,7 +324,6 @@ function setupCompetitionListGlobalListeners() {
     });
 }
 
-
 function generateCompetitionGridHtml(competitions) {
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const compsPerm = currentUserProfile?.permissions?.competitions?.manage_comps;
@@ -346,56 +345,14 @@ function generateCompetitionGridHtml(competitions) {
 
         let countdownHtml = '';
         if (comp.ends_at && comp.status !== 'completed' && comp.status !== 'awaiting_winners') {
-            countdownHtml = `<div class="competition-list-countdown" data-end-date="${comp.ends_at}"><i class="fas fa-hourglass-half"></i> <span>جاري الحساب...</span></div>`;
-        }
-
-        return `
-        <div class="competition-card ${isSelected ? 'selected' : ''}" data-id="${comp.id}">
-            <label class="custom-checkbox row-checkbox">
-                <input type="checkbox" class="competition-select-checkbox" data-id="${comp.id}" ${isSelected ? 'checked' : ''}>
-                <span class="checkmark"></span>
-            </label>
-            <div class="competition-card-name">
-                <h3>${comp.name}</h3>
-                ${countdownHtml}
-            </div>
-            <div class="competition-card-status">
-                <label class="custom-checkbox toggle-switch small-toggle" title="${comp.is_active ? 'تعطيل' : 'تفعيل'}" ${!canEdit ? 'style="cursor:not-allowed;"' : ''}>
-                    <input type="checkbox" class="competition-status-toggle" data-id="${comp.id}" ${comp.is_active ? 'checked' : ''} ${!canEdit ? 'disabled' : ''}>
-                    <span class="slider round"></span>
-                </label>
-            </div>
-            ${agentInfoHtml}
-            <div class="competition-card-footer">
-                <button class="btn-danger delete-competition-btn" title="حذف" data-id="${comp.id}"><i class="fas fa-trash-alt"></i></button>
-            </div>
-        </div>
-        `;
-    }).join('');
-}
-
-function generateCompetitionGridHtml(competitions) {
-    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
-    const compsPerm = currentUserProfile?.permissions?.competitions?.manage_comps;
-    const canEdit = isSuperAdmin || compsPerm === 'full';
-
-    if (competitions.length === 0) return ''; // Let displayCompetitionsPage handle the empty message
-    return competitions.map(comp => { // The agent object is now nested under 'agent' not 'agents'
-        const isSelected = selectedCompetitionIds.includes(comp.id);
-        const agent = comp.agents;
-        const agentInfoHtml = agent
-            ? `<div class="table-agent-cell" data-agent-id="${agent._id}" style="cursor: pointer;">
-                    ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy">` : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`}
-                    <div class="agent-details">
-                        <span>${agent.name}</span>
-                        ${agent.classification ? `<span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>` : ''}
-                    </div>
-               </div>`
-            : `<div class="table-agent-cell"><span>(وكيل محذوف أو غير مرتبط)</span></div>`;
-
-        let countdownHtml = '';
-        if (comp.ends_at && comp.status !== 'completed' && comp.status !== 'awaiting_winners') {
-            countdownHtml = `<div class="competition-list-countdown" data-end-date="${comp.ends_at}"><i class="fas fa-hourglass-half"></i> <span>جاري الحساب...</span></div>`;
+            const endDate = new Date(comp.ends_at);
+            const formattedDate = endDate.toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: 'numeric', minute: 'numeric' });
+            countdownHtml = `
+                <div class="competition-timing-info">
+                    <div class="competition-list-countdown" data-end-date="${comp.ends_at}"><i class="fas fa-hourglass-half"></i> <span>جاري الحساب...</span></div>
+                    <div class="competition-end-date"><i class="fas fa-calendar-check"></i> <span>تنتهي في: ${formattedDate}</span></div>
+                </div>
+            `;
         }
 
         return `

@@ -99,7 +99,6 @@ function updateCountdownTimer(el) {
         if (parts.length === 0 && diffTime > 0) {
             parts.push('أقل من دقيقة');
         }
-
         el.innerHTML = `<i class="fas fa-hourglass-half"></i> <span>متبقي: ${parts.join(' و ')}</span>`;
     }
 }

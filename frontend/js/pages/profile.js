@@ -837,8 +837,22 @@ function startCompetitionCountdowns() {
             const endDate = new Date(endDateStr);
             const diffTime = endDate.getTime() - Date.now();
 
-            updateCountdownTimer(el); // Use the global helper for all cases
-            if (diffTime > 0) activeTimers = true;
+            if (diffTime <= 0) {
+                el.innerHTML = `<i class="fas fa-hourglass-end"></i> <span>في انتظار المعالجة...</span>`;
+                el.classList.add('expired');
+            } else {
+                activeTimers = true;
+                const days = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                let daysText = '';
+                if (days > 1) {
+                    daysText = `${days} أيام`;
+                } else if (days === 1) {
+                    daysText = `يوم واحد`;
+                } else { // Fallback for less than a day
+                    daysText = 'أقل من يوم';
+                }
+                el.innerHTML = `<i class="fas fa-hourglass-half"></i> <span>متبقي: ${daysText}</span>`;
+            }
         });
         if (!activeTimers) stopCompetitionCountdowns();
     };
