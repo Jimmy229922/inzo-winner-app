@@ -55,4 +55,15 @@ exports.getMe = async (req, res) => {
         res.status(500).json({ message: 'Server Error' });
     }
 };
+
+/**
+ * @desc    Logs user out
+ * @route   POST /api/auth/logout
+ * @access  Private
+ */
+exports.logout = (req, res) => {
+    // On the backend, for a stateless JWT system, logout is mainly a client-side operation (deleting the token).
+    // This endpoint is useful for future enhancements like token blocklisting.
+    res.status(200).json({ message: "تم تسجيل الخروج بنجاح." });
+};
                 

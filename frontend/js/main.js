@@ -560,7 +560,17 @@ function setupNavbar() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            showConfirmationModal('هل أنت متأكد من رغبتك في تسجيل الخروج؟', () => { localStorage.removeItem('authToken'); localStorage.removeItem('userProfile'); window.location.replace('/login.html'); }, { title: 'تأكيد تسجيل الخروج' });
+            showConfirmationModal('هل أنت متأكد من رغبتك في تسجيل الخروج؟', async () => {
+                try {
+                    // استدعاء الواجهة الخلفية لتسجيل الخروج (للتوافقية المستقبلية)
+                    await authedFetch('/api/auth/logout', { method: 'POST' });
+                } catch (error) {
+                    console.warn('Logout API call failed, but proceeding with client-side logout.', error);
+                }
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('userProfile');
+                window.location.replace('/login.html');
+            }, { title: 'تأكيد تسجيل الخروج' });
         });
     }
 
