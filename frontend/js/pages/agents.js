@@ -13,7 +13,7 @@ async function renderManageAgentsPage() {
                 <div class="header-actions-group">
                     ${isSuperAdmin ? `<button id="delete-all-agents-btn" class="btn-danger"><i class="fas fa-skull-crossbones"></i> حذف كل الوكلاء</button>` : ''}
                     ${isAdmin ? `<button id="bulk-renew-balances-btn" class="btn-renewal"><i class="fas fa-sync-alt"></i> تجديد الأرصدة</button>` : ''}
-                    <button id="bulk-send-balance-btn" class="btn-telegram-bonus"><i class="fas fa-bullhorn"></i> تعميم الأرصدة</button>
+                    ${isSuperAdmin ? `<button id="bulk-send-balance-btn" class="btn-telegram-bonus"><i class="fas fa-bullhorn"></i> تعميم الأرصدة</button>` : ''}
                     ${isAdmin ? `<button id="bulk-add-agents-btn" class="btn-secondary"><i class="fas fa-users-cog"></i> إضافة وكلاء دفعة واحدة</button>` : ''}
                     <button id="add-agent-btn" class="btn-primary"><i class="fas fa-plus"></i> إضافة وكيل جديد</button>
                 </div>
