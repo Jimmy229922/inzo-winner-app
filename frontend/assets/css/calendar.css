@@ -27,7 +27,7 @@
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 15px;
-    flex-grow: 1; /* Fill available vertical space */
+    /* The container itself doesn't need to grow, its content will define the page height */
 }
 
 .day-column {
@@ -36,7 +36,10 @@
     border-radius: 8px;
     display: flex;
     flex-direction: column;
-    overflow: hidden; /* Ensure content respects border-radius */
+    /* overflow: hidden; is not needed as the column will expand */
+    /* --- PERFORMANCE OPTIMIZATION --- */
+    content-visibility: auto; /* Tell the browser to skip rendering this element if it's off-screen */
+    contain-intrinsic-size: 1000px; /* Estimate the vertical size to prevent scrollbar jumping */
 }
 
 .day-column.today {
@@ -134,23 +137,28 @@
 }
 
 .day-column-content {
-    flex-grow: 1;
-    overflow-y: auto; /* Allow content to scroll if it overflows */
-    position: relative; /* For virtual scrolling */
-}
-
-.virtual-scroll-sizer {
-    position: relative;
-    width: 1px; /* Just to take up space */
-}
-
-.virtual-scroll-viewport {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
+    /* No flex-grow or overflow is needed. It will expand with its content. */
     padding: 15px;
-    will-change: transform;
+    /* Remove padding from the top if the first item has margin-top */
+    padding-top: 0;
+}
+
+.no-tasks-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary-color);
+    padding: 40px 20px;
+    text-align: center;
+}
+
+.no-tasks-placeholder {
+    padding: 40px 20px;
+}
+
+.no-tasks-placeholder {
+    padding: 40px 20px;
 }
 
 .no-tasks {
@@ -170,7 +178,8 @@
     gap: 10px;
     transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
     box-sizing: border-box;
-    margin-bottom: 15px; /* زيادة المسافة بين بطاقات الوكلاء */
+    /* Use margin-top on all but the first child for consistent spacing */
+    margin-top: 15px;
 }
 
 .calendar-agent-item[style*="display: none"] {
@@ -235,6 +244,13 @@
     margin-top: 0;
 }
 
+.agent-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
 .calendar-agent-id {
     font-size: 0.85em;
     color: var(--text-secondary-color);
@@ -265,6 +281,7 @@
     padding: 8px 12px;
     border-radius: 6px;
     border: 1px solid var(--border-color);
+    cursor: pointer; /* NEW: Add pointer cursor to the whole item */
 }
 
 .filter-btn.active {
@@ -312,6 +329,14 @@ body.dark-mode .calendar-agent-item mark {
 .calendar-agent-actions .toggle-switch input:checked + .slider:before {
     transform: translateX(16px);
 }
+
+.agent-name .task-complete-icon {
+    display: none; /* Hide by default */
+}
+
+.agent-name.has-checkmark .task-complete-icon {
+    display: inline-flex; /* Show only when the parent has the class */
+}
 .task-complete-icon {
     color: #fff;
     background-color: #27ae60;
@@ -326,4 +351,31 @@ body.dark-mode .calendar-agent-item mark {
     justify-content: center;
     line-height: 1;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* NEW: Classification Badge Styles (copied from agents.css for consistency) */
+.classification-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    font-weight: bold;
+    color: #fff;
+    text-align: center;
+}
+
+.classification-r {
+    background-color: #e74c3c; /* Red */
+}
+
+.classification-a {
+    background-color: #f39c12; /* Orange */
+}
+
+.classification-b {
+    background-color: #3498db; /* Blue */
+}
+
+.classification-c {
+    background-color: #95a5a6; /* Gray */
 }

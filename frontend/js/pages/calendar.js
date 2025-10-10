@@ -1,70 +1,24 @@
 const ITEM_HEIGHT = 140; // 130px height + 10px margin-bottom
 const BUFFER_ITEMS = 5; // Render items above and below the viewport for smoother scrolling
 
-class VirtualScroller {
-    constructor(container, allItems, itemRenderer) {
-        this.container = container;
-        this.allItems = allItems;
-        this.itemRenderer = itemRenderer;
+/**
+ * Applies or removes search term highlighting from an agent item element.
+ * @param {HTMLElement} element The agent item element.
+ * @param {string} searchTerm The search term to highlight.
+ */
+function applyHighlight(element, searchTerm) {
+    const nameEl = element.querySelector('.agent-name');
+    const idEl = element.querySelector('.calendar-agent-id');
+    const originalName = element.dataset.name;
+    const originalId = '#' + element.dataset.agentidStr;
 
-        this.viewportHeight = this.container.clientHeight;
-        this.totalHeight = this.allItems.length * ITEM_HEIGHT;
-        this.visibleItemCount = Math.ceil(this.viewportHeight / ITEM_HEIGHT);
-        this.totalVisibleItems = this.visibleItemCount + 2 * BUFFER_ITEMS;
+    const regex = searchTerm ? new RegExp(searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi') : null;
 
-        this.sizer = document.createElement('div');
-        this.sizer.className = 'virtual-scroll-sizer';
-        this.sizer.style.height = `${this.totalHeight}px`;
-
-        this.viewport = document.createElement('div');
-        this.viewport.className = 'virtual-scroll-viewport';
-
-        this.container.innerHTML = '';
-
-        this.onScroll = this.onScroll.bind(this);
-        this.container.addEventListener('scroll', this.onScroll, { passive: true });
-
-        // --- إصلاح: تأخير الحسابات الأولية لضمان تحديد ارتفاع الحاوية بشكل صحيح ---
-        // هذا يمنع حساب عدد العناصر المرئية بشكل خاطئ قبل أن يأخذ العنصر أبعاده الكاملة.
-        requestAnimationFrame(() => {
-            this.viewportHeight = this.container.clientHeight;
-            this.visibleItemCount = Math.ceil(this.viewportHeight / ITEM_HEIGHT);
-            this.totalVisibleItems = this.visibleItemCount + 2 * BUFFER_ITEMS;
-            
-            this.container.appendChild(this.sizer);
-            this.container.appendChild(this.viewport);
-            this.render();
-        });
-    }
-
-    onScroll() {
-        window.requestAnimationFrame(() => this.render());
-    }
-
-    render() {
-        // --- إصلاح: إعادة حساب ارتفاع منطقة العرض عند كل عملية عرض ---
-        // هذا يحل مشكلة عدم ظهور جميع العناصر عند التمرير، خاصة في الأعمدة الطويلة.
-        this.viewportHeight = this.container.clientHeight;
-        this.visibleItemCount = Math.ceil(this.viewportHeight / ITEM_HEIGHT);
-        this.totalVisibleItems = this.visibleItemCount + 2 * BUFFER_ITEMS;
-
-        const scrollTop = this.container.scrollTop;
-        let startIndex = Math.floor(scrollTop / ITEM_HEIGHT);
-        startIndex = Math.max(0, startIndex - BUFFER_ITEMS);
-        const endIndex = Math.min(this.allItems.length, startIndex + this.totalVisibleItems);
-        this.viewport.style.transform = `translateY(${startIndex * ITEM_HEIGHT}px)`;
-        this.viewport.innerHTML = this.allItems.slice(startIndex, endIndex).map((item, index) => this.itemRenderer(item, startIndex + index)).join('');
-    }
-
-    updateItems(newItems) {
-        this.allItems = newItems;
-        this.totalHeight = this.allItems.length * ITEM_HEIGHT;
-        this.sizer.style.height = `${this.totalHeight}px`;
-        this.render();
-    }
+    nameEl.innerHTML = searchTerm ? originalName.replace(regex, '<mark>$&</mark>') : originalName;
+    idEl.innerHTML = searchTerm ? originalId.replace(regex, '<mark>$&</mark>') : originalId;
 }
 
-function createAgentItemHtml(agent, dayIndex, isToday, tasksState, number) {
+function createAgentItemHtml(agent, dayIndex, isToday, tasksState, number, searchTerm = '') {
     // Read state directly from the centralized store's state
     const agentTasks = tasksState.tasks[agent._id] || {};
     const task = agentTasks[dayIndex] || { audited: false, competition_sent: false };
@@ -74,56 +28,65 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksState, number) {
         ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar" loading="lazy">`
         : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
 
-    const searchTerm = document.getElementById('calendar-search-input')?.value.toLowerCase().trim() || '';
-    let highlightedName = agent.name;
-    let highlightedId = '#' + agent.agent_id;
-
-    if (searchTerm) {
-        const regex = new RegExp(searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi');
-        highlightedName = agent.name.replace(regex, '<mark>$&</mark>');
-        highlightedId = ('#' + agent.agent_id).replace(regex, '<mark>$&</mark>');
-    }
-
-    const completeIconHtml = isComplete ? '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
-
     // --- إضافة: التحقق من صلاحية السوبر أدمن لتفعيل السحب والإفلات ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const draggableAttribute = isSuperAdmin ? 'draggable="true"' : '';
     const cursorStyle = isSuperAdmin ? 'cursor: grab;' : 'cursor: pointer;';
 
-    return `
-        <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent._id}" data-classification="${agent.classification}" data-name="${agent.name}" data-agentid-str="${agent.agent_id}" style="${cursorStyle}" ${draggableAttribute} data-day-index="${dayIndex}">
-            <div class="calendar-agent-number">${number}</div>
-            <div class="calendar-agent-main">
-                ${avatarHtml}
-                <div class="calendar-agent-info">
-                    <span class="agent-name">${highlightedName} ${completeIconHtml}</span>
-                    <p class="calendar-agent-id" title="نسخ الرقم" data-agent-id-copy="${agent.agent_id}">${highlightedId}</p>
-                </div>
-            </div>
-            <div class="calendar-agent-actions">
-                <div class="action-item ${task.audited ? 'done' : ''}">
-                    <label>التدقيق</label>
-                    <label class="custom-checkbox toggle-switch">
-                        <input type="checkbox" class="audit-check" data-agent-id="${agent._id}" data-day-index="${dayIndex}" ${task.audited ? 'checked' : ''}>
-                        <span class="slider round"></span>
-                    </label>
-                </div>
-                <div class="action-item ${task.competition_sent ? 'done' : ''}">
-                    <label>المسابقة</label>
-                    <label class="custom-checkbox toggle-switch">
-                        <input type="checkbox" class="competition-check" data-agent-id="${agent._id}" data-day-index="${dayIndex}" ${task.competition_sent ? 'checked' : ''}>
-                        <span class="slider round"></span>
-                    </label>
+    const element = document.createElement('div');
+    element.className = `calendar-agent-item ${isComplete ? 'complete' : ''}`;
+    element.dataset.agentId = agent._id;
+    element.dataset.classification = agent.classification;
+    element.dataset.name = agent.name;
+    element.dataset.agentidStr = agent.agent_id;
+    element.dataset.dayIndex = dayIndex;
+    element.style.cssText = cursorStyle;
+    if (isSuperAdmin) element.setAttribute('draggable', 'true');
+
+    element.innerHTML = `
+        <div class="calendar-agent-number">${number}</div>
+        <div class="calendar-agent-main">
+            ${avatarHtml}
+            <div class="calendar-agent-info">
+                <span class="agent-name"></span>
+                <div class="agent-meta">
+                    <p class="calendar-agent-id" title="نسخ الرقم" data-agent-id-copy="${agent.agent_id}"></p>
+                    <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
                 </div>
             </div>
         </div>
+        <div class="calendar-agent-actions">
+            <div class="action-item ${task.audited ? 'done' : ''}">
+                <label>التدقيق</label>
+                <label class="custom-checkbox toggle-switch">
+                    <input type="checkbox" class="audit-check" data-agent-id="${agent._id}" data-day-index="${dayIndex}" ${task.audited ? 'checked' : ''}>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <div class="action-item ${task.competition_sent ? 'done' : ''}">
+                <label>المسابقة</label>
+                <label class="custom-checkbox toggle-switch">
+                    <input type="checkbox" class="competition-check" data-agent-id="${agent._id}" data-day-index="${dayIndex}" ${task.competition_sent ? 'checked' : ''}>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+        </div>
     `;
+
+    applyHighlight(element, searchTerm);
+
+    // Add checkmark icon separately for easier toggling
+    const nameEl = element.querySelector('.agent-name');
+    nameEl.insertAdjacentHTML('beforeend', '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>');
+    nameEl.classList.toggle('has-checkmark', isComplete);
+
+    return element;
 }
 
-async function renderCalendarPage() {
-    const appContent = document.getElementById('app-content');
-    appContent.innerHTML = `
+class CalendarUI {
+    constructor(container) {
+        this.container = container;
+        this.container.innerHTML = `
         <div class="page-header column-header">
             <div class="header-top-row">
                 <h1>تقويم المهام الأسبوعي</h1>
@@ -147,10 +110,20 @@ async function renderCalendarPage() {
             </div>
         </div>
         <div id="calendar-container" class="calendar-container"></div>
-    `;
+        `;
+        this.calendarContainer = this.container.querySelector('#calendar-container');
+        this.calendarData = [];
+        this.tasksState = null;
+        this.daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+        this.searchDebounceTimer = null; // For debouncing search input
+    }
 
-    try {
-        // --- تعديل: استخدام authedFetch لجلب البيانات من الخادم الخلفي ---
+    destroy() {
+        window.taskStore.unsubscribe(this.boundUpdateUIFromState);
+        clearTimeout(this.searchDebounceTimer); // Clear any pending search
+    }
+
+    async render() {
         const response = await authedFetch('/api/calendar/data');
         if (!response.ok) {
             const errorResult = await response.json();
@@ -158,94 +131,124 @@ async function renderCalendarPage() {
         }
         const { agents, tasks } = await response.json();
 
-        // ARCHITECTURAL FIX: The store is now guaranteed to be ready.
-        // We can safely access its state.
-        const tasksState = window.taskStore.state;
-        console.log('[Calendar Page] Rendering with initial data. Agents:', agents.length, 'Tasks in Store:', Object.keys(tasksState.tasks).length);
+        this.tasksState = window.taskStore.state;
+        console.log('[Calendar Page] Rendering with initial data. Agents:', agents.length, 'Tasks in Store:', Object.keys(this.tasksState.tasks).length);
 
-        const daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
-        const calendarData = daysOfWeek.map(() => []);
-
+        this.calendarData = this.daysOfWeek.map(() => []);
         agents.forEach(agent => {
-            // --- تعديل: قراءة الجدول الزمني من كائن schedule ---
             const dayIndices = agent.audit_days || [];
-
-            dayIndices.forEach(dayIndex => { // --- إصلاح: التعامل مع 6 أيام في الأسبوع فقط ---
+            dayIndices.forEach(dayIndex => {
                 if (dayIndex >= 0 && dayIndex < 6) {
-                    calendarData[dayIndex].push(agent);
+                    this.calendarData[dayIndex].push(agent);
                 }
             });
         });
 
-        let html = '';
-        daysOfWeek.forEach((dayName, index) => {
+        this._renderDayColumns();
+        this._renderAllAgentCards(); // Render cards initially
+
+        this._setupEventListeners();
+        setupCalendarFilters(this); // Pass the entire UI instance
+
+        this.boundUpdateUIFromState = updateCalendarUIFromState.bind(this);
+        window.taskStore.subscribe(this.boundUpdateUIFromState);
+    }
+
+    _renderDayColumns() {
+        this.calendarContainer.innerHTML = ''; // Clear previous columns
+        this.daysOfWeek.forEach((dayName, index) => {
             const isToday = new Date().getDay() === index;
-            const dailyAgents = calendarData[index];
+            const dailyAgents = this.calendarData[index];
+            const { completedTasks, totalTasks, progressPercent } = this._calculateDayProgress(index);
 
-            let completedTasks = 0;
-            dailyAgents.forEach(agent => {
-                const agentTasks = tasksState.tasks[agent._id] || {};
-                const task = agentTasks[index] || {};
-                // Progress is based on audit only
-                if (task.audited) {
-                    completedTasks++;
-                }
-            });
-            const totalTasks = dailyAgents.length;
-            const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-
-            html += `
-                <div class="day-column ${isToday ? 'today' : ''}" data-day-index="${index}">
-                    <h2>${dayName}</h2>
-                    <div class="day-progress">
-                        <div class="progress-bar" style="width: ${progressPercent}%"></div>
-                        <span class="progress-label">${completedTasks} / ${totalTasks} مكتمل</span>
-                    </div>
-                    <div class="day-column-content">
-                        <!-- This will be populated by VirtualScroller -->
-                    </div>
+            const columnEl = document.createElement('div');
+            columnEl.className = `day-column ${isToday ? 'today' : ''}`;
+            columnEl.dataset.dayIndex = index;
+            columnEl.innerHTML = `
+                <h2>${dayName}</h2>
+                <div class="day-progress">
+                    <div class="progress-bar" style="width: ${progressPercent}%"></div>
+                    <span class="progress-label">${completedTasks} / ${totalTasks} مكتمل</span>
                 </div>
+                <div class="day-column-content"></div>
             `;
+            this.calendarContainer.appendChild(columnEl);
         });
+    }
 
-        document.getElementById('calendar-container').innerHTML = html;
-
-        // --- إصلاح: تعريف متغير الحاوية قبل استخدامه ---
-        const container = document.getElementById('calendar-container');
-
-        const scrollers = [];
-        document.querySelectorAll('.day-column').forEach(columnEl => {
-            const dayIndex = parseInt(columnEl.dataset.dayIndex, 10);
-            const agentsForDay = calendarData[dayIndex];
-            const isToday = new Date().getDay() === dayIndex;
-            const contentContainer = columnEl.querySelector('.day-column-content');
-
-            if (agentsForDay.length === 0) {
-                contentContainer.innerHTML = '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
-                return;
+    _calculateDayProgress(dayIndex) {
+        const dailyAgents = this.calendarData[dayIndex] || [];
+        const totalTasks = dailyAgents.length;
+        let completedTasks = 0;
+        dailyAgents.forEach(agent => {
+            const agentTasks = this.tasksState.tasks[agent._id] || {};
+            const task = agentTasks[dayIndex] || {};
+            if (task.audited) {
+                completedTasks++;
             }
-
-            const itemRenderer = (agent, index) => createAgentItemHtml(agent, dayIndex, isToday, window.taskStore.state, index + 1);
-            const scroller = new VirtualScroller(contentContainer, agentsForDay, itemRenderer);
-            scrollers.push({ dayIndex: dayIndex, instance: scroller, allAgents: agentsForDay });
         });
+        const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+        return { completedTasks, totalTasks, progressPercent };
+    }
 
-        // --- FIX: Make calendarData globally available for progress UI updates ---
-        window.calendarPageData = { calendarData };
+    _renderAllAgentCards() {
+        this.calendarData.forEach((agentsForDay, dayIndex) => {
+            const columnEl = this.calendarContainer.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
+            if (!columnEl) return;
 
-        setupCalendarEventListeners(container, calendarData);
-        setupCalendarFilters(scrollers, calendarData, window.taskStore.state);
+            const contentContainer = columnEl.querySelector('.day-column-content');
+            contentContainer.innerHTML = ''; // Clear previous content
 
-        // --- NEW: Subscribe to store changes to keep the UI in sync ---
-        // This ensures that if a task is updated on another page (like the tasks page), this page reflects the change.
-        window.taskStore.subscribe(updateCalendarUIFromState);
+            if (agentsForDay.length > 0) {
+                const fragment = document.createDocumentFragment();
+                const isToday = new Date().getDay() === dayIndex;
+                agentsForDay.forEach((agent, index) => {
+                    const agentElement = createAgentItemHtml(agent, dayIndex, isToday, this.tasksState, index + 1, '');
+                    fragment.appendChild(agentElement);
+                });
+                contentContainer.appendChild(fragment);
+            } else {
+                contentContainer.innerHTML = '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
+            }
+        });
+    }
 
+    _setupEventListeners() {
+        setupCalendarEventListeners(this.calendarContainer, this.calendarData, this);
+    }
+
+    /**
+     * Surgically updates the UI after a drag-and-drop operation.
+     * Instead of a full re-render, it only updates the source and destination columns.
+     * @param {number} sourceDayIndex The original day index.
+     * @param {number} newDayIndex The new day index.
+     * @param {string} agentId The ID of the agent that was moved.
+     */
+    _updateAfterDrag(sourceDayIndex, newDayIndex, agentId) {
+        const agentToMove = this.calendarData[sourceDayIndex].find(a => a._id === agentId);
+        if (!agentToMove) return; // Should not happen
+
+        // Update data arrays
+        this.calendarData[sourceDayIndex] = this.calendarData[sourceDayIndex].filter(a => a._id !== agentId);
+        this.calendarData[newDayIndex].push(agentToMove);
+        this.calendarData[newDayIndex].sort((a, b) => a.name.localeCompare(b.name)); // Keep it sorted
+    }
+}
+
+let currentCalendarInstance = null;
+
+async function renderCalendarPage() {
+    if (currentCalendarInstance) {
+        currentCalendarInstance.destroy();
+    }
+    const appContent = document.getElementById('app-content');
+    currentCalendarInstance = new CalendarUI(appContent);
+    try {
+        await currentCalendarInstance.render();
     } catch (error) {
         console.error("Error rendering calendar page:", error);
-        const container = document.getElementById('calendar-container');
-        if (container) {
-            container.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات التقويم: ${error.message}</p>`;
-        }
+        const calendarContainer = document.getElementById('calendar-container');
+        if (calendarContainer) calendarContainer.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات التقويم: ${error.message}</p>`;
     }
 }
 
@@ -255,8 +258,8 @@ async function renderCalendarPage() {
  * @param {object} state The latest state from taskStore.
  */
 function updateCalendarUIFromState(state) {
-    const container = document.getElementById('calendar-container');
-    if (!container) return; // Only run if the calendar page is active
+    const container = this.calendarContainer;
+    if (!container) return;
 
     const allItems = container.querySelectorAll('.calendar-agent-item');
     const updatedDayIndexes = new Set();
@@ -283,17 +286,15 @@ function updateCalendarUIFromState(state) {
         item.classList.toggle('complete', isComplete);
 
         // Update the checkmark icon next to the name
+        // --- REFACTOR: Toggle a class instead of manipulating innerHTML ---
         const nameEl = item.querySelector('.agent-name');
-        const iconHtml = isComplete ? ' <i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
-        // This is a bit tricky because of search highlighting. We'll just append/remove the icon.
-        nameEl.querySelector('.task-complete-icon')?.remove();
-        if (isComplete) nameEl.insertAdjacentHTML('beforeend', iconHtml);
+        if (nameEl) nameEl.classList.toggle('has-checkmark', isComplete);
 
         updatedDayIndexes.add(dayIndex);
     });
 
     // Update progress bars for all affected days
-    updatedDayIndexes.forEach(dayIndex => updateDayProgressUI(dayIndex));
+    updatedDayIndexes.forEach(dayIndex => updateDayProgressUI.call(this, dayIndex));
 }
 
 function updateDayProgressUI(dayIndex) {
@@ -304,7 +305,7 @@ function updateDayProgressUI(dayIndex) {
     const progressLabel = column.querySelector('.progress-label');
     
     // We need the original data to know which agents belong to this day
-    const allAgentsForDay = window.calendarPageData?.calendarData?.[dayIndex] || [];
+    const allAgentsForDay = this.calendarData?.[dayIndex] || [];
     const totalTasks = allAgentsForDay.length;
     let completedTasks = 0;
 
@@ -322,7 +323,7 @@ function updateDayProgressUI(dayIndex) {
 }
 
 // --- NEW: Function to handle event listeners for the calendar page ---
-function setupCalendarEventListeners(container, calendarData) {
+function setupCalendarEventListeners(container, calendarData, uiInstance) {
     // --- NEW: Event Delegation for CSP Compliance ---
     container.addEventListener('click', (e) => {
         const copyIdTrigger = e.target.closest('.calendar-agent-id[data-agent-id-copy]');
@@ -335,6 +336,17 @@ function setupCalendarEventListeners(container, calendarData) {
         const card = e.target.closest('.calendar-agent-item[data-agent-id]');
         if (card && !e.target.closest('.calendar-agent-actions')) { // Don't navigate if clicking on toggles
             window.location.hash = `#profile/${card.dataset.agentId}`;
+        }
+
+        // --- NEW: Allow clicking the entire action item to toggle the checkbox ---
+        const actionItem = e.target.closest('.action-item');
+        if (actionItem && !e.target.matches('input[type="checkbox"]')) {
+            const checkbox = actionItem.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                // Manually trigger a 'change' event to run the update logic
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
         }
     });
 
@@ -423,7 +435,9 @@ function setupCalendarEventListeners(container, calendarData) {
 
                         showToast('تم تحديث يوم التدقيق بنجاح.', 'success');
                         await logAgentActivity(currentUserProfile?._id, agentId, 'DETAILS_UPDATE', `تم تغيير يوم التدقيق من ${sourceDayName} إلى ${newDayName} عبر التقويم.`);
-                        renderCalendarPage(); // Re-render the whole page to reflect changes
+                        // --- REFACTOR: Perform a surgical update instead of a full re-render ---
+                        uiInstance._updateAfterDrag(sourceDayIndex, newDayIndex, agentId);
+                        uiInstance.render(); // Re-render to apply changes to the two affected columns
                     } catch (error) {
                         showToast(`فشل تحديث يوم التدقيق: ${error.message}`, 'error');
                     }
@@ -440,10 +454,17 @@ function setupCalendarEventListeners(container, calendarData) {
             const taskType = checkbox.classList.contains('audit-check') ? 'audited' : 'competition_sent';
             const status = checkbox.checked;
 
+            const agentItem = checkbox.closest('.calendar-agent-item');
+            const actionsContainer = agentItem.querySelector('.calendar-agent-actions');
+
+            // --- UX IMPROVEMENT: Show loading state on the card ---
+            agentItem.classList.add('is-loading');
+            actionsContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = true);
+
+
             // Dispatch the update to the central store.
             window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, status);
             // Optimistic UI update
-            const agentItem = checkbox.closest('.calendar-agent-item');
             const actionItem = checkbox.closest('.action-item');
             if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
             
@@ -452,16 +473,11 @@ function setupCalendarEventListeners(container, calendarData) {
             const isComplete = auditCheck.checked; // Completion is based on audit only
             agentItem.classList.toggle('complete', isComplete);
 
-            // NEW: Update the checkmark icon next to the name instantly
+            // --- REFACTOR: Toggle a class instead of manipulating innerHTML ---
             const nameEl = agentItem.querySelector('.agent-name');
-            // Re-apply search highlight if it exists
-            const searchTerm = document.getElementById('calendar-search-input')?.value.toLowerCase().trim() || '';
-            let agentNameForDisplay = agentItem.dataset.name;
-            if (searchTerm) agentNameForDisplay = agentNameForDisplay.replace(new RegExp(searchTerm, 'gi'), '<mark>$&</mark>');
-            const iconHtml = isComplete ? ' <i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
-            nameEl.innerHTML = `${agentNameForDisplay}${iconHtml}`;
+            if (nameEl) nameEl.classList.toggle('has-checkmark', isComplete);
 
-            updateDayProgressUI(dayIndex);
+            updateDayProgressUI.call(uiInstance, dayIndex);
 
             try {
                 const payload = { agentId, taskType, status, dayIndex }; // Send dayIndex to backend
@@ -492,18 +508,21 @@ function setupCalendarEventListeners(container, calendarData) {
                 const isCompleteAfterRevert = auditCheck.checked; // Completion is based on audit only
                 agentItem.classList.toggle('complete', isCompleteAfterRevert);
                 
-                let agentNameForDisplayAfterRevert = agentItem.dataset.name;
-                if (searchTerm) agentNameForDisplayAfterRevert = agentNameForDisplayAfterRevert.replace(new RegExp(searchTerm, 'gi'), '<mark>$&</mark>');
-                const iconHtmlAfterRevert = isCompleteAfterRevert ? ' <i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
-                nameEl.innerHTML = `${agentNameForDisplayAfterRevert}${iconHtmlAfterRevert}`;
+                // --- REFACTOR: Revert class toggle ---
+                const nameEl = agentItem.querySelector('.agent-name');
+                if (nameEl) nameEl.classList.toggle('has-checkmark', isCompleteAfterRevert);
 
-                updateDayProgressUI(dayIndex);
+                updateDayProgressUI.call(uiInstance, dayIndex);
+            } finally {
+                // --- UX IMPROVEMENT: Remove loading state ---
+                agentItem.classList.remove('is-loading');
+                actionsContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
             }
         }
     });
 }
 
-function setupCalendarFilters(scrollers, calendarData, tasksState) {
+function setupCalendarFilters(uiInstance) {
     const searchInput = document.getElementById('calendar-search-input');
     const clearBtn = document.getElementById('calendar-search-clear');
     const filterButtons = document.querySelectorAll('.filter-btn');
@@ -516,8 +535,10 @@ function setupCalendarFilters(scrollers, calendarData, tasksState) {
         const searchTerm = searchInput.value.toLowerCase().trim();
         const activeFilter = document.querySelector('.filter-btn.active').dataset.filter;
 
-        scrollers.forEach(scrollerData => {
-            const allAgentsForDay = calendarData[scrollerData.dayIndex];
+        uiInstance.calendarData.forEach((allAgentsForDay, dayIndex) => {
+            const columnEl = uiInstance.calendarContainer.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
+            if (!columnEl) return;
+
             const filteredAgents = allAgentsForDay.filter(agent => {
                 const name = agent.name.toLowerCase();
                 const agentIdStr = agent.agent_id;
@@ -526,11 +547,29 @@ function setupCalendarFilters(scrollers, calendarData, tasksState) {
                 const matchesFilter = activeFilter === 'all' || classification === activeFilter;
                 return matchesSearch && matchesFilter;
             });
-            scrollerData.instance.updateItems(filteredAgents);
+            
+            const contentContainer = columnEl.querySelector('.day-column-content');
+            contentContainer.innerHTML = ''; // Clear current items
+
+            if (filteredAgents.length === 0) {
+                contentContainer.innerHTML = '<div class="no-tasks-placeholder"><i class="fas fa-search"></i><p>لا توجد نتائج</p></div>';
+            } else {
+                const fragment = document.createDocumentFragment();
+                const isToday = new Date().getDay() === dayIndex;
+                filteredAgents.forEach((agent, index) => {
+                    const agentElement = createAgentItemHtml(agent, dayIndex, isToday, uiInstance.tasksState, index + 1, searchTerm);
+                    fragment.appendChild(agentElement);
+                });
+                contentContainer.appendChild(fragment);
+            }
         });
     };
 
-    searchInput.addEventListener('input', applyFilters);
+    searchInput.addEventListener('input', () => {
+        // --- UX IMPROVEMENT: Debounce the search input ---
+        clearTimeout(uiInstance.searchDebounceTimer);
+        uiInstance.searchDebounceTimer = setTimeout(applyFilters, 300); // Wait 300ms after user stops typing
+    });
 
     if (clearBtn) {
         clearBtn.addEventListener('click', () => {

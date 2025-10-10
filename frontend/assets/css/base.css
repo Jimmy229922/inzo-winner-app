@@ -286,3 +286,27 @@ footer {
     white-space: nowrap;
     flex-shrink: 0;
 }
+
+/* NEW: General Filter Container Styles */
+.filters-container {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+}
+
+.filter-search-container {
+    position: relative;
+    flex-grow: 1;
+    min-width: 250px;
+}
+
+.item-count-display {
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}

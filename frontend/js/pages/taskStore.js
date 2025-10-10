@@ -12,6 +12,7 @@ const taskStore = {
         // tasks: { agentId: { dayIndex: { audited: bool, competition_sent: bool } } }
         tasks: {},
     },
+    _subscribers: [], // NEW: To hold all callback functions
 
     /**
      * Initializes the store by loading data from localStorage and fetching initial data.
@@ -90,8 +91,8 @@ const taskStore = {
     },
 
     _notify() {
-        // Dispatch a custom event that components can listen to.
-        window.dispatchEvent(new CustomEvent('taskStateChanged', { detail: this.state }));
+        // Call all subscribed callbacks with the new state
+        this._subscribers.forEach(callback => callback(this.state));
     },
 
     /**
@@ -99,7 +100,17 @@ const taskStore = {
      * @param {Function} callback
      */
     subscribe(callback) {
-        window.addEventListener('taskStateChanged', (e) => callback(e.detail));
+        if (!this._subscribers.includes(callback)) {
+            this._subscribers.push(callback);
+        }
+    },
+
+    /**
+     * Unsubscribes a callback function from state changes.
+     * @param {Function} callback
+     */
+    unsubscribe(callback) {
+        this._subscribers = this._subscribers.filter(cb => cb !== callback);
     }
 };
 
