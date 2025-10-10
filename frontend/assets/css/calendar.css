@@ -188,6 +188,20 @@
     border-color: #27ae60;
 }
 
+/* إضافة: تنسيقات السحب والإفلات */
+.calendar-agent-item.dragging {
+    opacity: 0.5;
+    background-color: var(--primary-color);
+    cursor: grabbing;
+}
+
+.day-column.drag-over {
+    background-color: color-mix(in srgb, var(--primary-color) 20%, var(--card-bg-color));
+    border-style: dashed;
+    border-color: var(--primary-hover-color);
+}
+/* نهاية الإضافة */
+
 .calendar-agent-main {
     display: flex;
     align-items: center;
