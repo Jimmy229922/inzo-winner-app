@@ -86,8 +86,13 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksState, number) {
 
     const completeIconHtml = isComplete ? '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>' : '';
 
+    // --- إضافة: التحقق من صلاحية السوبر أدمن لتفعيل السحب والإفلات ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const draggableAttribute = isSuperAdmin ? 'draggable="true"' : '';
+    const cursorStyle = isSuperAdmin ? 'cursor: grab;' : 'cursor: pointer;';
+
     return `
-        <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent._id}" data-classification="${agent.classification}" data-name="${agent.name}" data-agentid-str="${agent.agent_id}" style="cursor: grab;" draggable="true" data-day-index="${dayIndex}">
+        <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent._id}" data-classification="${agent.classification}" data-name="${agent.name}" data-agentid-str="${agent.agent_id}" style="${cursorStyle}" ${draggableAttribute} data-day-index="${dayIndex}">
             <div class="calendar-agent-number">${number}</div>
             <div class="calendar-agent-main">
                 ${avatarHtml}
@@ -333,96 +338,99 @@ function setupCalendarEventListeners(container, calendarData) {
         }
     });
 
-    // --- إضافة: وظيفة السحب والإفلات لتغيير أيام التدقيق ---
-    let draggedItem = null;
-    let sourceDayIndex = null;
+    // --- تعديل: تفعيل السحب والإفلات للسوبر أدمن فقط ---
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    if (isSuperAdmin) {
+        let draggedItem = null;
+        let sourceDayIndex = null;
 
-    container.addEventListener('dragstart', (e) => {
-        const target = e.target.closest('.calendar-agent-item');
-        if (target) {
-            draggedItem = target;
-            sourceDayIndex = parseInt(target.dataset.dayIndex, 10);
-            setTimeout(() => {
-                target.classList.add('dragging');
-            }, 0);
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', target.dataset.agentId); // Required for Firefox
-        }
-    });
-
-    container.addEventListener('dragend', (e) => {
-        if (draggedItem) {
-            draggedItem.classList.remove('dragging');
-            draggedItem = null;
-        }
-    });
-
-    container.addEventListener('dragover', (e) => {
-        e.preventDefault(); // Allow drop
-        const column = e.target.closest('.day-column');
-        if (column) {
-            column.classList.add('drag-over');
-        }
-    });
-
-    container.addEventListener('dragleave', (e) => {
-        const column = e.target.closest('.day-column');
-        if (column) {
-            column.classList.remove('drag-over');
-        }
-    });
-
-    container.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        const targetColumn = e.target.closest('.day-column');
-        if (!targetColumn || !draggedItem) return;
-
-        targetColumn.classList.remove('drag-over');
-        const newDayIndex = parseInt(targetColumn.dataset.dayIndex, 10);
-        const agentId = draggedItem.dataset.agentId;
-        const agentName = draggedItem.dataset.name;
-
-        if (sourceDayIndex === newDayIndex) return; // Dropped in the same column
-
-        const daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
-        const sourceDayName = daysOfWeek[sourceDayIndex];
-        const newDayName = daysOfWeek[newDayIndex];
-
-        // --- إضافة: التحقق مما إذا كان الوكيل مسجلاً بالفعل في اليوم الجديد ---
-        try {
-            const agentCheckResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
-            const { data: agent } = await agentCheckResponse.json();
-            if ((agent.audit_days || []).includes(newDayIndex)) {
-                showToast(`هذا الوكيل مجدول بالفعل في يوم ${newDayName}.`, 'warning');
-                return; // إيقاف العملية
+        container.addEventListener('dragstart', (e) => {
+            const target = e.target.closest('.calendar-agent-item');
+            if (target) {
+                draggedItem = target;
+                sourceDayIndex = parseInt(target.dataset.dayIndex, 10);
+                setTimeout(() => {
+                    target.classList.add('dragging');
+                }, 0);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', target.dataset.agentId); // Required for Firefox
             }
-        } catch (error) {
-            // تجاهل الخطأ في حالة فشل التحقق، والسماح للمستخدم بالمتابعة على مسؤوليته
-        }
+        });
 
-        showConfirmationModal(
-            `هل أنت متأكد من نقل الوكيل <strong>${agentName}</strong> من يوم <strong>${sourceDayName}</strong> إلى يوم <strong>${newDayName}</strong>؟`,
-            async () => {
-                try {
-                    const agentResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
-                    const { data: agent } = await agentResponse.json();
-                    const currentAuditDays = agent.audit_days || [];
-                    const newAuditDays = [...currentAuditDays.filter(d => d !== sourceDayIndex), newDayIndex];
+        container.addEventListener('dragend', (e) => {
+            if (draggedItem) {
+                draggedItem.classList.remove('dragging');
+                draggedItem = null;
+            }
+        });
 
-                    await authedFetch(`/api/agents/${agentId}`, {
-                        method: 'PUT',
-                        body: JSON.stringify({ audit_days: newAuditDays })
-                    });
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault(); // Allow drop
+            const column = e.target.closest('.day-column');
+            if (column) {
+                column.classList.add('drag-over');
+            }
+        });
 
-                    showToast('تم تحديث يوم التدقيق بنجاح.', 'success');
-                    await logAgentActivity(currentUserProfile?._id, agentId, 'DETAILS_UPDATE', `تم تغيير يوم التدقيق من ${sourceDayName} إلى ${newDayName} عبر التقويم.`);
-                    renderCalendarPage(); // Re-render the whole page to reflect changes
-                } catch (error) {
-                    showToast(`فشل تحديث يوم التدقيق: ${error.message}`, 'error');
+        container.addEventListener('dragleave', (e) => {
+            const column = e.target.closest('.day-column');
+            if (column) {
+                column.classList.remove('drag-over');
+            }
+        });
+
+        container.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            const targetColumn = e.target.closest('.day-column');
+            if (!targetColumn || !draggedItem) return;
+
+            targetColumn.classList.remove('drag-over');
+            const newDayIndex = parseInt(targetColumn.dataset.dayIndex, 10);
+            const agentId = draggedItem.dataset.agentId;
+            const agentName = draggedItem.dataset.name;
+
+            if (sourceDayIndex === newDayIndex) return; // Dropped in the same column
+
+            const daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+            const sourceDayName = daysOfWeek[sourceDayIndex];
+            const newDayName = daysOfWeek[newDayIndex];
+
+            // --- إضافة: التحقق مما إذا كان الوكيل مسجلاً بالفعل في اليوم الجديد ---
+            try {
+                const agentCheckResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
+                const { data: agent } = await agentCheckResponse.json();
+                if ((agent.audit_days || []).includes(newDayIndex)) {
+                    showToast(`هذا الوكيل مجدول بالفعل في يوم ${newDayName}.`, 'warning');
+                    return; // إيقاف العملية
                 }
-            }, { title: 'تأكيد تغيير يوم التدقيق', confirmText: 'نعم، انقل', confirmClass: 'btn-primary' }
-        );
-    });
+            } catch (error) {
+                // تجاهل الخطأ في حالة فشل التحقق، والسماح للمستخدم بالمتابعة على مسؤوليته
+            }
+
+            showConfirmationModal(
+                `هل أنت متأكد من نقل الوكيل <strong>${agentName}</strong> من يوم <strong>${sourceDayName}</strong> إلى يوم <strong>${newDayName}</strong>؟`,
+                async () => {
+                    try {
+                        const agentResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
+                        const { data: agent } = await agentResponse.json();
+                        const currentAuditDays = agent.audit_days || [];
+                        const newAuditDays = [...currentAuditDays.filter(d => d !== sourceDayIndex), newDayIndex];
+
+                        await authedFetch(`/api/agents/${agentId}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ audit_days: newAuditDays })
+                        });
+
+                        showToast('تم تحديث يوم التدقيق بنجاح.', 'success');
+                        await logAgentActivity(currentUserProfile?._id, agentId, 'DETAILS_UPDATE', `تم تغيير يوم التدقيق من ${sourceDayName} إلى ${newDayName} عبر التقويم.`);
+                        renderCalendarPage(); // Re-render the whole page to reflect changes
+                    } catch (error) {
+                        showToast(`فشل تحديث يوم التدقيق: ${error.message}`, 'error');
+                    }
+                }, { title: 'تأكيد تغيير يوم التدقيق', confirmText: 'نعم، انقل', confirmClass: 'btn-primary' }
+            );
+        });
+    }
 
     container.addEventListener('change', async (e) => {
         const checkbox = e.target;
