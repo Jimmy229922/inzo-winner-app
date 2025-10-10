@@ -20,13 +20,21 @@ class VirtualScroller {
         this.viewport.className = 'virtual-scroll-viewport';
 
         this.container.innerHTML = '';
-        this.container.appendChild(this.sizer);
-        this.container.appendChild(this.viewport);
 
         this.onScroll = this.onScroll.bind(this);
         this.container.addEventListener('scroll', this.onScroll, { passive: true });
 
-        this.render();
+        // --- إصلاح: تأخير الحسابات الأولية لضمان تحديد ارتفاع الحاوية بشكل صحيح ---
+        // هذا يمنع حساب عدد العناصر المرئية بشكل خاطئ قبل أن يأخذ العنصر أبعاده الكاملة.
+        requestAnimationFrame(() => {
+            this.viewportHeight = this.container.clientHeight;
+            this.visibleItemCount = Math.ceil(this.viewportHeight / ITEM_HEIGHT);
+            this.totalVisibleItems = this.visibleItemCount + 2 * BUFFER_ITEMS;
+            
+            this.container.appendChild(this.sizer);
+            this.container.appendChild(this.viewport);
+            this.render();
+        });
     }
 
     onScroll() {
@@ -34,12 +42,18 @@ class VirtualScroller {
     }
 
     render() {
+        // --- إصلاح: إعادة حساب ارتفاع منطقة العرض عند كل عملية عرض ---
+        // هذا يحل مشكلة عدم ظهور جميع العناصر عند التمرير، خاصة في الأعمدة الطويلة.
+        this.viewportHeight = this.container.clientHeight;
+        this.visibleItemCount = Math.ceil(this.viewportHeight / ITEM_HEIGHT);
+        this.totalVisibleItems = this.visibleItemCount + 2 * BUFFER_ITEMS;
+
         const scrollTop = this.container.scrollTop;
         let startIndex = Math.floor(scrollTop / ITEM_HEIGHT);
         startIndex = Math.max(0, startIndex - BUFFER_ITEMS);
         const endIndex = Math.min(this.allItems.length, startIndex + this.totalVisibleItems);
         this.viewport.style.transform = `translateY(${startIndex * ITEM_HEIGHT}px)`;
-        this.viewport.innerHTML = this.allItems.slice(startIndex, endIndex).map(item => this.itemRenderer(item)).join('');
+        this.viewport.innerHTML = this.allItems.slice(startIndex, endIndex).map((item, index) => this.itemRenderer(item, startIndex + index)).join('');
     }
 
     updateItems(newItems) {
@@ -50,7 +64,7 @@ class VirtualScroller {
     }
 }
 
-function createAgentItemHtml(agent, dayIndex, isToday, tasksState) {
+function createAgentItemHtml(agent, dayIndex, isToday, tasksState, number) {
     // Read state directly from the centralized store's state
     const agentTasks = tasksState.tasks[agent._id] || {};
     const task = agentTasks[dayIndex] || { audited: false, competition_sent: false };
@@ -74,6 +88,7 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksState) {
 
     return `
         <div class="calendar-agent-item ${isComplete ? 'complete' : ''}" data-agent-id="${agent._id}" data-classification="${agent.classification}" data-name="${agent.name}" data-agentid-str="${agent.agent_id}" style="cursor: pointer;">
+            <div class="calendar-agent-number">${number}</div>
             <div class="calendar-agent-main">
                 ${avatarHtml}
                 <div class="calendar-agent-info">
@@ -150,7 +165,7 @@ async function renderCalendarPage() {
             // --- تعديل: قراءة الجدول الزمني من كائن schedule ---
             const dayIndices = agent.audit_days || [];
 
-            dayIndices.forEach(dayIndex => {
+            dayIndices.forEach(dayIndex => { // --- إصلاح: التعامل مع 6 أيام في الأسبوع فقط ---
                 if (dayIndex >= 0 && dayIndex < 6) {
                     calendarData[dayIndex].push(agent);
                 }
@@ -201,11 +216,11 @@ async function renderCalendarPage() {
             const contentContainer = columnEl.querySelector('.day-column-content');
 
             if (agentsForDay.length === 0) {
-                contentContainer.innerHTML = '<p class="no-tasks">لا توجد مهام لهذا اليوم.</p>';
+                contentContainer.innerHTML = '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
                 return;
             }
 
-            const itemRenderer = (agent) => createAgentItemHtml(agent, dayIndex, isToday, window.taskStore.state);
+            const itemRenderer = (agent, index) => createAgentItemHtml(agent, dayIndex, isToday, window.taskStore.state, index + 1);
             const scroller = new VirtualScroller(contentContainer, agentsForDay, itemRenderer);
             scrollers.push({ dayIndex: dayIndex, instance: scroller, allAgents: agentsForDay });
         });

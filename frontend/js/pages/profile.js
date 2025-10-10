@@ -1,5 +1,5 @@
 let competitionCountdownIntervals = [];
-const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
 let profilePageEventListeners = []; // Defensive: To manage event listeners
 
 function stopCompetitionCountdowns() {
@@ -133,7 +133,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
     }
     // Helper for audit days in Action Tab
     // --- تعديل: عرض أيام التدقيق المحددة فقط كعلامات (tags) ---
-    const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
     const auditDaysHtml = (agent.audit_days && agent.audit_days.length > 0)
         ? `<div class="audit-days-display">${agent.audit_days.sort().map(dayIndex => `<span class="day-tag">${dayNames[dayIndex]}</span>`).join('')}</div>`
         : '<span class="day-tag-none">لا توجد أيام محددة</span>';
@@ -1179,7 +1179,7 @@ async function renderInlineEditor(groupElement, agent) {
         case 'audit_days':
             editorHtml = `
                 <div class="days-selector-v2" id="inline-edit-input">
-                    ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => `
+                    ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'].map((day, index) => `
                         <div class="day-toggle-wrapper">
                             <input type="checkbox" id="day-edit-inline-${index}" value="${index}" class="day-toggle-input" ${(currentValue || []).includes(index) ? 'checked' : ''}>
                             <label for="day-edit-inline-${index}" class="day-toggle-btn">${day}</label>

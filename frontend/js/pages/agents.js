@@ -14,6 +14,7 @@ async function renderManageAgentsPage() {
                     ${isSuperAdmin ? `<button id="delete-all-agents-btn" class="btn-danger"><i class="fas fa-skull-crossbones"></i> حذف كل الوكلاء</button>` : ''}
                     ${isAdmin ? `<button id="bulk-renew-balances-btn" class="btn-renewal"><i class="fas fa-sync-alt"></i> تجديد الأرصدة</button>` : ''}
                     ${isSuperAdmin ? `<button id="bulk-send-balance-btn" class="btn-telegram-bonus"><i class="fas fa-bullhorn"></i> تعميم الأرصدة</button>` : ''}
+                    ${isAdmin ? `<button id="check-bot-presence-btn" class="btn-secondary btn-telegram-check"><i class="fab fa-telegram-plane"></i> فحص وجود البوت</button>` : ''}
                     ${isAdmin ? `<button id="bulk-add-agents-btn" class="btn-secondary"><i class="fas fa-users-cog"></i> إضافة وكلاء دفعة واحدة</button>` : ''}
                     <button id="add-agent-btn" class="btn-primary"><i class="fas fa-plus"></i> إضافة وكيل جديد</button>
                 </div>
@@ -73,6 +74,12 @@ async function renderManageAgentsPage() {
     const bulkAddBtn = document.getElementById('bulk-add-agents-btn');
     if (bulkAddBtn) {
         bulkAddBtn.addEventListener('click', renderBulkAddAgentsModal);
+    }
+
+    // --- NEW: Add listener for check bot presence button ---
+    const checkBotPresenceBtn = document.getElementById('check-bot-presence-btn');
+    if (checkBotPresenceBtn) {
+        checkBotPresenceBtn.addEventListener('click', handleCheckBotPresence);
     }
 
     // --- NEW: Attach event listeners once for the entire page ---
@@ -554,6 +561,92 @@ function showBulkSendProgressModal(total) {
         showConfirm: false,
         modalClass: 'modal-no-actions'
     });
+}
+
+// --- NEW: Bulk Check Bot Presence Feature ---
+async function handleCheckBotPresence() {
+    showConfirmationModal(
+        'سيقوم النظام بفحص جميع مجموعات الوكلاء المسجلة للتأكد من وجود البوت بداخلها.<br><small>قد تستغرق هذه العملية بعض الوقت حسب عدد الوكلاء.</small>',
+        async () => {
+            const progressModalOverlay = showProgressModal(
+                'فحص وجود البوت في المجموعات',
+                `
+                <div class="update-progress-container">
+                    <i class="fas fa-robot fa-spin update-icon"></i>
+                    <h3 id="bulk-check-status-text">جاري التهيئة...</h3>
+                    <div class="progress-bar-outer">
+                        <div id="bulk-check-progress-bar-inner" class="progress-bar-inner"></div>
+                    </div>
+                </div>
+                `
+            );
+
+            const statusText = document.getElementById('bulk-check-status-text');
+            const progressBar = document.getElementById('bulk-check-progress-bar-inner');
+            const updateIcon = progressModalOverlay.querySelector('.update-icon');
+
+            try {
+                statusText.textContent = 'جاري طلب قائمة الوكلاء...';
+                progressBar.style.width = '10%';
+
+                const response = await authedFetch('/api/agents/bulk-check-bot-presence', { method: 'POST' });
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || 'فشل بدء عملية الفحص.');
+                }
+
+                progressBar.style.width = '100%';
+                updateIcon.className = 'fas fa-check-circle update-icon';
+                progressBar.style.backgroundColor = 'var(--success-color)';
+
+                // Display the final report
+                let reportHtml = `
+                    <h3>اكتمل الفحص بنجاح</h3>
+                    <div class="confirmation-summary-grid" style="text-align: right; margin-top: 15px;">
+                        <div class="summary-item"><strong>إجمالي الوكلاء (معرف دردشة):</strong> ${result.totalChecked}</div>
+                        <div class="summary-item"><strong><i class="fas fa-check-circle" style="color: var(--success-color);"></i> البوت موجود:</strong> ${result.successCount}</div>
+                        <div class="summary-item"><strong><i class="fas fa-times-circle" style="color: var(--danger-color);"></i> البوت غير موجود:</strong> ${result.failureCount}</div>
+                    </div>
+                `;
+
+                if (result.failures.length > 0) {
+                    reportHtml += `
+                        <div style="margin-top: 20px;">
+                            <p><strong>قائمة الوكلاء الذين يحتاجون لإضافة البوت يدوياً:</strong></p>
+                            <ul class="modal-list">
+                                ${result.failures.map(agent => `<li>${agent.name} (<code>${agent.agent_id}</code>)</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                // Replace progress modal content with the report
+                progressModalOverlay.querySelector('.modal-content').innerHTML = reportHtml;
+                // Add a close button to the report modal
+                const closeButton = document.createElement('button');
+                closeButton.textContent = 'إغلاق';
+                closeButton.className = 'btn-primary';
+                closeButton.style.marginTop = '20px';
+                closeButton.onclick = () => progressModalOverlay.remove();
+                progressModalOverlay.querySelector('.modal-content').appendChild(closeButton);
+
+
+            } catch (error) {
+                console.error('[Bulk Check] Frontend error:', error);
+                statusText.innerHTML = `فشل الفحص.<br><small>${error.message}</small>`;
+                updateIcon.className = 'fas fa-times-circle update-icon';
+                progressBar.style.backgroundColor = 'var(--danger-color)';
+                setTimeout(() => {
+                    if (progressModalOverlay) progressModalOverlay.remove();
+                }, 4000);
+            }
+        }, {
+            title: 'تأكيد فحص وجود البوت',
+            confirmText: 'نعم، ابدأ الفحص',
+            confirmClass: 'btn-primary'
+        }
+    );
 }
 
 async function renderMiniCalendar() {
