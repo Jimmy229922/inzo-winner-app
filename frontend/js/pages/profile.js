@@ -1,5 +1,6 @@
 let competitionCountdownIntervals = [];
 const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+let profilePageEventListeners = []; // Defensive: To manage event listeners
 
 function stopCompetitionCountdowns() {
     competitionCountdownIntervals.forEach(clearInterval);
@@ -10,6 +11,11 @@ function stopAllProfileTimers() {
     // A single function to clean up all timers when leaving the profile page.
     // This ensures complete separation.
     stopCompetitionCountdowns();
+    // Defensive: Remove all dynamically added event listeners for this page
+    profilePageEventListeners.forEach(({ element, type, handler }) => {
+        if (element) element.removeEventListener(type, handler);
+    });
+    profilePageEventListeners = [];
 }
 
 async function renderAgentProfilePage(agentId, options = {}) {
@@ -24,15 +30,14 @@ async function renderAgentProfilePage(agentId, options = {}) {
     // Clear any previous timers from other profiles
     stopAllProfileTimers();
 
-    // --- FIX: Use actual user permissions from currentUserProfile ---
+    // --- Defensive Programming: Use optional chaining and provide defaults ---
+    if (!currentUserProfile) { // Worst-case: profile data not loaded yet
+        appContent.innerHTML = `<p class="error">فشل تحميل بيانات المستخدم. يرجى تحديث الصفحة.</p>`;
+        return;
+    }
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const isAdmin = currentUserProfile?.role === 'admin';
     const userPerms = currentUserProfile?.permissions || {};
-    const canViewFinancials = isSuperAdmin || isAdmin || userPerms.agents?.view_financials;
-    const canEditProfile = isSuperAdmin || isAdmin; // Or a specific permission
-    const canViewAgentComps = isSuperAdmin || isAdmin || userPerms.agents?.can_view_competitions_tab;
-    const canCreateComp = isSuperAdmin || isAdmin || userPerms.competitions?.can_create;
-    const canEditComps = isSuperAdmin || isAdmin || userPerms.competitions?.manage_comps === 'full';
 
     // Check for edit mode in hash, e.g., #profile/123/edit
     const hashParts = window.location.hash.split('/');
@@ -54,22 +59,30 @@ async function renderAgentProfilePage(agentId, options = {}) {
         error = e;
     }
 
+    // --- Defensive Programming: Handle API failures gracefully ---
+    let agentCompetitions = [];
+    let agentLogs = [];
     try {
         const compResponse = await authedFetch(`/api/competitions?agentId=${agentId}&limit=100&sort=newest`); // Fetch up to 100 competitions for the agent
         const logUrl = `/api/logs?agent_id=${agentId}&limit=50&populate=user`;
         const logResponse = await authedFetch(logUrl); // Fetch latest 50 logs for the agent
-        var agentCompetitions = []; // Initialize with an empty array
-        var agentLogs = []; // Initialize with an empty array
 
         if (compResponse.ok) {
             const compResult = await compResponse.json();
-            agentCompetitions = compResult.data || [];
+            agentCompetitions = compResult.data || []; // Default to empty array
+        } else {
+            console.error("Failed to fetch agent competitions.");
+            // Don't block rendering, just show an empty list.
         }
         if (logResponse.ok) {
             const logResult = await logResponse.json();
-            agentLogs = logResult.data || [];
+            agentLogs = logResult.data || []; // Default to empty array
+        } else {
+            console.error("Failed to fetch agent logs.");
         }
     } catch (compError) {
+        console.error("Error fetching secondary profile data:", compError);
+        // The page can still render without this data.
     }
     if (error || !agent) {
         appContent.innerHTML = `<p class="error">فشل العثور على الوكيل المطلوب.</p>`;
@@ -80,7 +93,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const today = new Date();
     const todayDayIndex = today.getDay();
     const todayStr = today.toISOString().split('T')[0];
-    let agentTaskToday = {};
+    let agentTaskToday = null;
     let isTaskDay = (agent.audit_days || []).includes(todayDayIndex);
 
     // --- STEP 5: MIGRATION - Temporarily disable fetching daily tasks ---
@@ -95,8 +108,8 @@ async function renderAgentProfilePage(agentId, options = {}) {
     // }
     // --- End new fetch ---
 
-    const hasActiveCompetition = agentCompetitions.some(c => c.is_active);
-    const activeCompetition = agentCompetitions.find(c => c.is_active);
+    const activeCompetition = agentCompetitions.find(c => c.is_active === true);
+    const hasActiveCompetition = !!activeCompetition;
     const hasInactiveCompetition = !hasActiveCompetition && agentCompetitions.length > 0;
 
     let activeCompetitionCountdownHtml = '';
@@ -114,8 +127,8 @@ async function renderAgentProfilePage(agentId, options = {}) {
     // --- NEW: Prepare task icons for the header ---
     let taskIconsHtml = '';
     if (isTaskDay) {
-        const needsAudit = !agentTaskToday.audited;
-        const needsCompetition = !agentTaskToday.competition_sent;
+        const needsAudit = !agentTaskToday?.audited;
+        const needsCompetition = !agentTaskToday?.competition_sent;
         taskIconsHtml = `<div class="profile-task-icons">${needsAudit ? '<i class="fas fa-clipboard-check pending-icon-audit" title="مطلوب تدقيق اليوم"></i>' : ''}${needsCompetition ? '<i class="fas fa-trophy pending-icon-comp" title="مطلوب إرسال مسابقة اليوم"></i>' : ''}</div>`;
     }
     // Helper for audit days in Action Tab
@@ -124,6 +137,14 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const auditDaysHtml = (agent.audit_days && agent.audit_days.length > 0)
         ? `<div class="audit-days-display">${agent.audit_days.sort().map(dayIndex => `<span class="day-tag">${dayNames[dayIndex]}</span>`).join('')}</div>`
         : '<span class="day-tag-none">لا توجد أيام محددة</span>';
+
+    // --- Defensive Programming: Centralize permission checks after data loading ---
+    const canViewFinancials = isSuperAdmin || isAdmin || userPerms.agents?.view_financials;
+    const canEditProfile = isSuperAdmin || isAdmin; // Or a specific permission
+    const canViewAgentComps = isSuperAdmin || isAdmin || userPerms.agents?.can_view_competitions_tab;
+    const canCreateComp = isSuperAdmin || isAdmin || userPerms.competitions?.can_create;
+    const canEditComps = isSuperAdmin || isAdmin || userPerms.competitions?.manage_comps === 'full';
+    const canManualRenew = isSuperAdmin || isAdmin; // Define who can manually renew
 
     appContent.innerHTML = `
         <div class="profile-page-top-bar">
@@ -193,7 +214,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                         <button id="create-agent-competition" class="btn-primary"><i class="fas fa-magic"></i> إنشاء مسابقة</button>
                         <button id="send-bonus-cliche-btn" class="btn-telegram-bonus"><i class="fas fa-paper-plane"></i> إرسال كليشة البونص</button>
                         <button id="send-winners-cliche-btn" class="btn-telegram-winners"><i class="fas fa-trophy"></i> إرسال كليشة الفائزين</button>
-                        <button id="manual-renew-btn" class="btn-renewal"><i class="fas fa-sync-alt"></i> تجديد الرصيد يدوياً</button>
+                        ${canManualRenew ? `<button id="manual-renew-btn" class="btn-renewal"><i class="fas fa-sync-alt"></i> تجديد الرصيد يدوياً</button>` : ''}
                     </div>
                 </div>
             </div>
@@ -235,19 +256,22 @@ async function renderAgentProfilePage(agentId, options = {}) {
     }
 
     // --- Manual Renewal Button Logic ---
-    document.getElementById('manual-renew-btn').addEventListener('click', async () => {
+    const manualRenewBtn = document.getElementById('manual-renew-btn');
+    if (manualRenewBtn) {
+      manualRenewBtn.addEventListener('click', async () => {
         if (!agent.renewal_period || agent.renewal_period === 'none') {
             showToast('لا يوجد نظام تجديد مفعل لهذا الوكيل.', 'info');
             return;
         }
 
         // Calculate next renewal date (same logic as the countdown)
-        const renewalBtn = document.getElementById('manual-renew-btn');
+        const renewalBtn = manualRenewBtn;
         const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.created_at);
         let nextRenewalDate = new Date(lastRenewal);
-        if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
-        else if (agent.renewal_period === 'biweekly') nextRenewalDate.setDate(lastRenewal.getDate() + 14);
-        else if (agent.renewal_period === 'monthly') nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
+        const period = agent.renewal_period;
+        if (period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
+        else if (period === 'biweekly') nextRenewalDate.setDate(lastRenewal.getDate() + 14);
+        else if (period === 'monthly') nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
 
         if (new Date() < nextRenewalDate) {
             const remainingTime = nextRenewalDate - new Date();
@@ -260,6 +284,10 @@ async function renderAgentProfilePage(agentId, options = {}) {
         showConfirmationModal(
             `هل أنت متأكد من تجديد رصيد الوكيل <strong>${agent.name}</strong> يدوياً؟`,
             async () => {
+                // Defensive: Disable button immediately
+                renewalBtn.disabled = true;
+                renewalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
                 const updateData = {
                     consumed_balance: 0,
                     remaining_balance: agent.competition_bonus,
@@ -281,13 +309,16 @@ async function renderAgentProfilePage(agentId, options = {}) {
                     }
                     // --- FIX: Add correct logging for manual renewal ---
                     await logAgentActivity(currentUserProfile?._id, agent._id, 'MANUAL_RENEWAL', `تم تجديد الرصيد يدوياً للوكيل ${agent.name}.`, {
-                        renewed_by: currentUserProfile.full_name,
+                        renewed_by: currentUserProfile?.full_name || 'غير معروف',
                         new_balance: agent.competition_bonus
                     });
                     showToast('تم تجديد الرصيد بنجاح.', 'success');
                     renderAgentProfilePage(agent._id, { activeTab: 'action' }); // Re-render the page
                 } catch (error) {
                     showToast(`فشل تجديد الرصيد: ${error.message}`, 'error');
+                    // Defensive: Re-enable button on failure
+                    renewalBtn.disabled = false;
+                    renewalBtn.innerHTML = '<i class="fas fa-sync-alt"></i> تجديد الرصيد يدوياً';
                 }
             },
             {
@@ -296,7 +327,8 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 confirmClass: 'btn-renewal'
             }
         );
-    });
+      });
+    }
 
     document.getElementById('send-bonus-cliche-btn').addEventListener('click', async () => {
         // 1. Construct the message
@@ -389,8 +421,8 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                     }
                     showToast('تم إرسال كليشة البونص إلى تلجرام بنجاح.', 'success');
                     // --- FIX: Add correct logging for sending bonus cliche ---
-                    await logAgentActivity(currentUserProfile?._id, agent._id, 'BONUS_CLICHE_SENT', `تم إرسال كليشة تذكير البونص إلى تلجرام للوكيل ${agent.name}.`, {
-                        sent_by: currentUserProfile.full_name
+                    await logAgentActivity(currentUserProfile?._id, agent._id, 'BONUS_CLICHE_SENT', `تم إرسال كليشة تذكير البونص إلى تلجرام.`, {
+                        sent_by: currentUserProfile?.full_name
                     });
                 } catch (error) {
                     showToast(`فشل إرسال الكليشة: ${error.message}`, 'error');
@@ -413,7 +445,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
         }
         const targetGroup = `مجموعة الوكيل: <strong>${agent.telegram_group_name}</strong> (تم التحقق)`;
         // --- End Verification ---
-
+        // Defensive: Find active competition, but handle if it's not found
         const activeCompetition = agentCompetitions.find(c => c.is_active);
 
         const clicheText = `دمت بخير شريكنا العزيز ${agent.name}،
@@ -441,7 +473,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                     showToast('تم إرسال طلب اختيار الفائزين إلى تلجرام بنجاح.', 'success');
                     // --- FIX: Add correct logging for winner selection request ---
                     await logAgentActivity(currentUserProfile?._id, agent._id, 'WINNERS_SELECTION_REQUESTED', `تم إرسال طلب اختيار الفائزين لمسابقة "${activeCompetition?.name || 'الأخيرة'}".`, {
-                        sent_by: currentUserProfile.full_name
+                        sent_by: currentUserProfile?.full_name
                     });
                 } catch (error) {
                     showToast(`فشل إرسال الطلب: ${error.message}`, 'error');
@@ -536,7 +568,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                 return;
             }
             const activeAndPendingCompetitions = agentCompetitions.filter(c => c.status !== 'completed');
-            const completedCompetitions = agentCompetitions.filter(c => c.status === 'completed');
+            const completedCompetitions = agentCompetitions.filter(c => c.status === 'completed' || c.status === 'archived'); // Defensive: include archived
 
             const renderCompetitionList = (competitions) => {
                 return competitions.map(comp => {
@@ -680,7 +712,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                             showToast('تم إكمال المسابقة بنجاح.', 'success');
                             // --- FIX: Add correct logging for competition completion ---
                             await logAgentActivity(currentUserProfile?._id, agent._id, 'COMPETITION_COMPLETED', `تم إكمال مسابقة "${name}" وتسجيل الأداء.`, {
-                                completed_by: currentUserProfile.full_name,
+                                completed_by: currentUserProfile?.full_name,
                                 performance: updateData
                             });
                             renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });
@@ -720,7 +752,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                         showToast('تم حذف المسابقة بنجاح.', 'success');
                         // --- FIX: Add correct logging for competition deletion ---
                         await logAgentActivity(currentUserProfile?._id, agent._id, 'COMPETITION_DELETED', `تم حذف مسابقة من سجل الوكيل.`, {
-                            deleted_by: currentUserProfile.full_name
+                            deleted_by: currentUserProfile?.full_name
                         });
                         renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });
                     }, {
@@ -744,6 +776,13 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
  * @param {object} agent The agent object to edit.
  */
 function renderEditProfileHeader(agent) {
+    // Defensive: Check for required permissions
+    const canEditProfile = currentUserProfile?.role === 'super_admin' || currentUserProfile?.role === 'admin';
+    if (!canEditProfile) {
+        showToast('ليس لديك صلاحية لتعديل بيانات الوكيل.', 'error');
+        return;
+    }
+
     const headerContainer = document.querySelector('.profile-main-info');
     const actionsContainer = document.querySelector('.profile-header-actions');
     if (!headerContainer || !actionsContainer) return;
@@ -751,13 +790,28 @@ function renderEditProfileHeader(agent) {
     const originalHeaderHtml = headerContainer.innerHTML;
     const originalActionsHtml = actionsContainer.innerHTML;
 
+    // --- تعديل: إضافة محدد أيام التدقيق ---
+    const auditDaysEditorHtml = `
+        <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px;">
+            <label style="margin-bottom: 10px;">أيام التدقيق</label>
+            <div class="days-selector-v2" id="header-edit-audit-days">
+                ${dayNames.map((day, index) => `
+                    <div class="day-toggle-wrapper">
+                        <input type="checkbox" id="day-header-edit-${index}" value="${index}" class="day-toggle-input" ${(agent.audit_days || []).includes(index) ? 'checked' : ''}>
+                        <label for="day-header-edit-${index}" class="day-toggle-btn">${day}</label>
+                    </div>`).join('')}
+            </div>
+        </div>
+    `;
+
     headerContainer.innerHTML = `
         <div class="form-layout-grid" style="gap: 10px;">
             <div class="form-group"><label>اسم الوكيل</label><input type="text" id="header-edit-name" value="${agent.name || ''}"></div>
-            <div class="form-group"><label>رابط القناة</label><input type="text" id="header-edit-channel" value="${agent.telegram_channel_url || ''}"></div>
-            <div class="form-group"><label>رابط الجروب</label><input type="text" id="header-edit-group" value="${agent.telegram_group_url || ''}"></div>
             <div class="form-group"><label>معرف الدردشة</label><input type="text" id="header-edit-chatid" value="${agent.telegram_chat_id || ''}"></div>
             <div class="form-group"><label>اسم المجموعة</label><input type="text" id="header-edit-groupname" value="${agent.telegram_group_name || ''}"></div>
+            <div class="form-group"><label>رابط القناة</label><input type="text" id="header-edit-channel" value="${agent.telegram_channel_url || ''}"></div>
+            <div class="form-group"><label>رابط الجروب</label><input type="text" id="header-edit-group" value="${agent.telegram_group_url || ''}"></div>
+            ${auditDaysEditorHtml}
         </div>
     `;
 
@@ -781,12 +835,16 @@ function renderEditProfileHeader(agent) {
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
+        // --- تعديل: قراءة أيام التدقيق المحددة ---
+        const selectedDays = Array.from(document.querySelectorAll('#header-edit-audit-days .day-toggle-input:checked')).map(input => parseInt(input.value, 10));
+
         const updatedData = {
             name: document.getElementById('header-edit-name').value,
             telegram_channel_url: document.getElementById('header-edit-channel').value,
             telegram_group_url: document.getElementById('header-edit-group').value,
             telegram_chat_id: document.getElementById('header-edit-chatid').value,
             telegram_group_name: document.getElementById('header-edit-groupname').value,
+            audit_days: selectedDays
         };
 
         try {
@@ -964,9 +1022,10 @@ function renderDetailsView(agent) {
         let displayValue;
         let iconHtml = '';
 
-        // Only show the edit icon if the user has permission
-        if (canEditFinancials) {
-            iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
+        // --- تعديل: إظهار أيقونة التعديل لأيام التدقيق أيضاً ---
+        const isAuditDays = fieldName === 'audit_days';
+        if (canEditFinancials || (isAuditDays && canEditProfile)) { // canEditProfile is a broader permission
+             iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
         }
 
 
@@ -977,7 +1036,9 @@ function renderDetailsView(agent) {
             if (fieldName === 'deposit_bonus_percentage') displayValue = `${displayValue}%`;
             if (fieldName === 'competition_bonus') displayValue = `$${displayValue}`;
         } else if (fieldName === 'audit_days') {
-            displayValue = value || 'غير محدد';
+            // --- تعديل: عرض أيام التدقيق كعلامات (tags) ---
+            const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+            displayValue = (value && value.length > 0) ? value.sort().map(dayIndex => `<span class="day-tag">${dayNames[dayIndex]}</span>`).join('') : '<span class="day-tag-none">غير محدد</span>';
         } else if (fieldName.includes('_date')) {
             displayValue = value ? new Date(value).toLocaleDateString('ar-EG') : 'لم يحدد';
         } else {
@@ -986,7 +1047,7 @@ function renderDetailsView(agent) {
         return `
             <div class="details-group" data-field="${fieldName}">
                 ${iconHtml}
-                <label>${label}</label>
+                <label>${label}</label> 
                 <p>${displayValue}</p>
             </div>
         `;
@@ -1014,6 +1075,7 @@ function renderDetailsView(agent) {
             <h3 class="details-section-title">التجديد والمدة</h3>
             ${createFieldHTML('يجدد كل', agent.renewal_period, 'renewal_period')}
             ${createFieldHTML('مدة المسابقة', agent.competition_duration, 'competition_duration')}
+            ${createFieldHTML('أيام التدقيق', agent.audit_days, 'audit_days')}
             ${createFieldHTML('تاريخ آخر مسابقة', agent.last_competition_date, 'last_competition_date')}
             ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week')}        </div>
         ${isSuperAdmin ? `
@@ -1030,14 +1092,19 @@ function renderDetailsView(agent) {
     // This prevents replacing the container itself, which caused content to leak across pages.
     container.innerHTML = htmlContent;
     const eventHandler = (e) => {
-        const trigger = e.target.closest('.inline-edit-trigger');
-        if (trigger && canEditFinancials) { // Double-check permission on click
+        const trigger = e.target.closest('.inline-edit-trigger'); // Defensive: Use closest to handle clicks on icon
+        if (trigger) { // Permission is checked inside renderInlineEditor
             const group = trigger.closest('.details-group'); 
             // FIX: Add a null check to prevent race condition errors after a save.
             if (!group) return;
             renderInlineEditor(group, agent);
         }
     };
+    
+    // Defensive: Manage event listener to prevent duplicates
+    container.addEventListener('click', eventHandler);
+    profilePageEventListeners.push({ element: container, type: 'click', handler: eventHandler });
+
 
     // --- NEW: Add listener for the test renewal button ---
     const testRenewalBtn = document.getElementById('trigger-renewal-test-btn');
@@ -1062,15 +1129,14 @@ function renderDetailsView(agent) {
             }, 20000); // 20 seconds delay
         });
     }
-
-    container.addEventListener('click', eventHandler);
 }
 
 async function renderInlineEditor(groupElement, agent) {
     // --- NEW: Permission Check ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const isAdmin = currentUserProfile?.role === 'admin';
-    const canEditFinancials = isSuperAdmin || isAdmin;
+    const userPerms = currentUserProfile?.permissions || {};
+    const canEditFinancials = isSuperAdmin || isAdmin || userPerms.agents?.view_financials;
     
     const fieldName = groupElement.dataset.field;
     const originalContent = groupElement.innerHTML;
@@ -1113,7 +1179,7 @@ async function renderInlineEditor(groupElement, agent) {
         case 'audit_days':
             editorHtml = `
                 <div class="days-selector-v2" id="inline-edit-input">
-                    ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'].map((day, index) => `
+                    ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => `
                         <div class="day-toggle-wrapper">
                             <input type="checkbox" id="day-edit-inline-${index}" value="${index}" class="day-toggle-input" ${(currentValue || []).includes(index) ? 'checked' : ''}>
                             <label for="day-edit-inline-${index}" class="day-toggle-btn">${day}</label>
