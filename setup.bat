@@ -47,6 +47,10 @@ REM Create the .env file directly from the batch script
     echo # Application Environment (development or production^)
     echo NODE_ENV=development
 ) > ".env"
+echo. >> ".env"
+echo # Telegram Bot Credentials (Fill these manually) >> ".env"
+echo TELEGRAM_BOT_TOKEN= >> ".env"
+echo TELEGRAM_GENERAL_CHAT_ID= >> ".env"
 
 echo [OK] Configuration file (.env) created successfully.
 cd ..

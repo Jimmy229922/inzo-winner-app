@@ -365,7 +365,7 @@ function setupCalendarEventListeners(container, calendarData) {
                 const actionText = taskType === 'audited' ? 'التدقيق' : 'المسابقة';
                 const statusText = status ? 'تفعيل' : 'إلغاء تفعيل';
                 const agentName = agentItem.dataset.name; // Use the original name from the dataset
-                logAgentActivity(agentId, 'TASK_UPDATE', `تم ${statusText} مهمة "${actionText}" للوكيل ${agentName}.`);
+                await logAgentActivity(currentUserProfile?._id, agentId, 'TASK_UPDATE', `تم ${statusText} مهمة "${actionText}" للوكيل ${agentName}.`);
 
             } catch (error) {
                 console.error(`[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`, error);

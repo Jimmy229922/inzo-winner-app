@@ -33,11 +33,11 @@ async function checkExpiredCompetitions() {
             const agent = comp.agent_id;
             if (agent && agent.telegram_chat_id) {
                 const clicheText = `دمت بخير شريكنا العزيز ${agent.name}،\n\n` +
-                    `انتهت فترة المشاركة في مسابقة "${comp.name}".\n` +
-                    `يرجى اختيار الفائزين في المسابقة.\n\n` +
-                    `الإجابة الصحيحة هي: <code>${comp.correct_answer || 'غير محددة'}</code>\n\n` +
-                    `ملاحظة: تم إغلاق المشاركة في المسابقة تلقائياً.`;
-                
+                    `يرجى اختيار الفائزين بالمسابقة الاخيرة التي تم انتهاء مدة المشاركة بها\n` +
+                    `وتزويدنا بفيديو الروليت والاسم الثلاثي و معلومات الحساب لكل فائز قبل الاعلان عنهم في قناتكم كي يتم التحقق منهم من قبل القسم المختص\n\n` +
+                    `الإجابة الصحيحة هي: <code>${comp.correct_answer || 'غير محددة'}</code>\n` +
+                    `كما يجب اختيار الفائزين بالقرعة لشفافية الاختيار.`;
+
                 try {
                     await postToTelegram(clicheText, agent.telegram_chat_id);
                     console.log(`[Scheduler] Sent winner selection request for competition ${comp._id} to agent ${agent.name}`);

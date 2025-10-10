@@ -69,6 +69,41 @@ function formatNumber(num) {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
+/**
+ * NEW: Global helper to update a single countdown timer element.
+ * @param {HTMLElement} el The element containing the data-end-date attribute.
+ */
+function updateCountdownTimer(el) {
+    const endDateStr = el.dataset.endDate;
+    if (!endDateStr) {
+        el.innerHTML = ''; // Clear if no date
+        return;
+    }
+
+    const endDate = new Date(endDateStr);
+    const diffTime = endDate.getTime() - Date.now();
+
+    if (diffTime <= 0) {
+        el.innerHTML = `<i class="fas fa-hourglass-end"></i> <span>في انتظار المعالجة...</span>`;
+        el.classList.add('expired');
+    } else {
+        const days = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diffTime % (1000 * 60 * 60)) / (1000 * 60));
+
+        let parts = [];
+        if (days > 0) parts.push(`${days} يوم`);
+        if (hours > 0) parts.push(`${hours} ساعة`);
+        if (minutes > 0 && days === 0) parts.push(`${minutes} دقيقة`); // Show minutes only if less than a day
+
+        if (parts.length === 0 && diffTime > 0) {
+            parts.push('أقل من دقيقة');
+        }
+
+        el.innerHTML = `<i class="fas fa-hourglass-half"></i> <span>متبقي: ${parts.join(' و ')}</span>`;
+    }
+}
+
 // NEW: Function to fetch and store the current user's profile
 async function fetchUserProfile() {
     try {

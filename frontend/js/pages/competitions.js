@@ -1,5 +1,6 @@
 // --- Main Router for Competitions/Templates Section ---
 const COMPETITIONS_PER_PAGE = 10; // Changed to 10 for consistency
+let competitionListCountdownInterval = null; // For the main list countdown
 let selectedCompetitionIds = []; // For bulk actions
 
 
@@ -19,6 +20,11 @@ async function renderCompetitionsPage() {
         // Default to #competitions
         await renderCompetitionManagementPage();
     }
+
+    // Cleanup timer when navigating away
+    window.addEventListener('hashchange', () => {
+        if (competitionListCountdownInterval) clearInterval(competitionListCountdownInterval);
+    });
 }
 
 // --- 0. All Competitions List Page (New Default) ---
@@ -291,6 +297,20 @@ function displayCompetitionsPage(paginatedCompetitions, page, totalCount) {
 
     // Attach event listeners for checkboxes and pagination
     attachCompetitionListListeners(paginatedCompetitions, totalCount);
+
+    // Start the countdown timers for the newly rendered list
+    startCompetitionListCountdowns();
+}
+function startCompetitionListCountdowns() {
+    if (competitionListCountdownInterval) clearInterval(competitionListCountdownInterval);
+
+    const updateTimers = () => {
+        document.querySelectorAll('.competition-list-countdown').forEach(el => {
+            updateCountdownTimer(el);
+        });
+    };
+    updateTimers(); // Run once immediately
+    competitionListCountdownInterval = setInterval(updateTimers, 1000);
 }
 
 function setupCompetitionListGlobalListeners() {
@@ -315,14 +335,19 @@ function generateCompetitionGridHtml(competitions) {
         const isSelected = selectedCompetitionIds.includes(comp.id);
         const agent = comp.agents;
         const agentInfoHtml = agent
-            ? `<div class="table-agent-cell" data-agent-id="${agent._id}" style="cursor: pointer;">
+            ? `<a href="#profile/${agent._id}" class="table-agent-cell" data-agent-id="${agent._id}">
                     ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy">` : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`}
                     <div class="agent-details">
                         <span>${agent.name}</span>
                         ${agent.classification ? `<span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>` : ''}
                     </div>
-               </div>`
+               </a>`
             : `<div class="table-agent-cell"><span>(وكيل محذوف أو غير مرتبط)</span></div>`;
+
+        let countdownHtml = '';
+        if (comp.ends_at && comp.status !== 'completed' && comp.status !== 'awaiting_winners') {
+            countdownHtml = `<div class="competition-list-countdown" data-end-date="${comp.ends_at}"><i class="fas fa-hourglass-half"></i> <span>جاري الحساب...</span></div>`;
+        }
 
         return `
         <div class="competition-card ${isSelected ? 'selected' : ''}" data-id="${comp.id}">
@@ -332,6 +357,56 @@ function generateCompetitionGridHtml(competitions) {
             </label>
             <div class="competition-card-name">
                 <h3>${comp.name}</h3>
+                ${countdownHtml}
+            </div>
+            <div class="competition-card-status">
+                <label class="custom-checkbox toggle-switch small-toggle" title="${comp.is_active ? 'تعطيل' : 'تفعيل'}" ${!canEdit ? 'style="cursor:not-allowed;"' : ''}>
+                    <input type="checkbox" class="competition-status-toggle" data-id="${comp.id}" ${comp.is_active ? 'checked' : ''} ${!canEdit ? 'disabled' : ''}>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            ${agentInfoHtml}
+            <div class="competition-card-footer">
+                <button class="btn-danger delete-competition-btn" title="حذف" data-id="${comp.id}"><i class="fas fa-trash-alt"></i></button>
+            </div>
+        </div>
+        `;
+    }).join('');
+}
+
+function generateCompetitionGridHtml(competitions) {
+    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const compsPerm = currentUserProfile?.permissions?.competitions?.manage_comps;
+    const canEdit = isSuperAdmin || compsPerm === 'full';
+
+    if (competitions.length === 0) return ''; // Let displayCompetitionsPage handle the empty message
+    return competitions.map(comp => { // The agent object is now nested under 'agent' not 'agents'
+        const isSelected = selectedCompetitionIds.includes(comp.id);
+        const agent = comp.agents;
+        const agentInfoHtml = agent
+            ? `<div class="table-agent-cell" data-agent-id="${agent._id}" style="cursor: pointer;">
+                    ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Agent Avatar" class="avatar-small" loading="lazy">` : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`}
+                    <div class="agent-details">
+                        <span>${agent.name}</span>
+                        ${agent.classification ? `<span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>` : ''}
+                    </div>
+               </div>`
+            : `<div class="table-agent-cell"><span>(وكيل محذوف أو غير مرتبط)</span></div>`;
+
+        let countdownHtml = '';
+        if (comp.ends_at && comp.status !== 'completed' && comp.status !== 'awaiting_winners') {
+            countdownHtml = `<div class="competition-list-countdown" data-end-date="${comp.ends_at}"><i class="fas fa-hourglass-half"></i> <span>جاري الحساب...</span></div>`;
+        }
+
+        return `
+        <div class="competition-card ${isSelected ? 'selected' : ''}" data-id="${comp.id}">
+            <label class="custom-checkbox row-checkbox">
+                <input type="checkbox" class="competition-select-checkbox" data-id="${comp.id}" ${isSelected ? 'checked' : ''}>
+                <span class="checkmark"></span>
+            </label>
+            <div class="competition-card-name">
+                <h3>${comp.name}</h3>
+                ${countdownHtml}
             </div>
             <div class="competition-card-status">
                 <label class="custom-checkbox toggle-switch small-toggle" title="${comp.is_active ? 'تعطيل' : 'تفعيل'}" ${!canEdit ? 'style="cursor:not-allowed;"' : ''}>
@@ -612,7 +687,7 @@ async function renderCompetitionCreatePage(agentId) {
 
     // NEW: Add listener to the variables card to update on blur/click away
     document.querySelector('.variables-v3').addEventListener('focusout', (e) => {
-        updateDescriptionAndPreview();
+        updateDescriptionAndPreview(e);
     });
 
     function updateDescriptionAndPreview(event = {}) {

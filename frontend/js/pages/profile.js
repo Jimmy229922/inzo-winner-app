@@ -837,23 +837,8 @@ function startCompetitionCountdowns() {
             const endDate = new Date(endDateStr);
             const diffTime = endDate.getTime() - Date.now();
 
-            if (diffTime <= 0) {
-                el.innerHTML = `<i class="fas fa-hourglass-end"></i> في انتظار المعالجة...`;
-                el.classList.add('expired');
-            } else {
-                activeTimers = true;
-                // FIX: Display remaining time in days only.
-                const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                let daysText = '';
-                if (days > 1) {
-                    daysText = `${days} أيام`;
-                } else if (days === 1) {
-                    daysText = `يوم واحد`;
-                } else { // Should not happen with ceil, but as a fallback
-                    daysText = 'أقل من يوم';
-                }
-                el.innerHTML = `<i class="fas fa-hourglass-half"></i> <span>متبقي: ${daysText}</span>`;
-            }
+            updateCountdownTimer(el); // Use the global helper for all cases
+            if (diffTime > 0) activeTimers = true;
         });
         if (!activeTimers) stopCompetitionCountdowns();
     };
