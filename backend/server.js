@@ -1,3 +1,4 @@
+process.env.TZ = 'Asia/Baghdad';
 require('dotenv').config();
 const http = require('http');
 const { Server: WebSocketServer } = require('ws');
