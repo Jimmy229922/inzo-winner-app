@@ -178,8 +178,15 @@ async function handleRouting() {
 
     // Basic routing
     const routes = {
-        '#home': { func: renderHomePage, nav: 'nav-home' },
-        '#tasks': { func: renderTasksPage, nav: 'nav-tasks' },
+        '#home': { func: renderHomePage, nav: 'nav-home' }, // This should be a class instance call in the future
+        '#tasks': { 
+            func: async () => {
+                if (window.currentTasksPageInstance) window.currentTasksPageInstance.destroy();
+                window.currentTasksPageInstance = new TasksPage(window.appContent);
+                await window.currentTasksPageInstance.render();
+            }, 
+            nav: 'nav-tasks' 
+        },
         '#add-agent': { func: renderAddAgentForm, nav: null }, // إصلاح: إضافة المسار المفقود
         '#top-agents': { func: renderTopAgentsPage, nav: 'nav-top-agents' }, // NEW: Top Agents page
         '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents', adminOnly: false },
@@ -362,37 +369,50 @@ async function initializeApp() {
  * NEW: Sets up a listener for real-time messages from the server (e.g., via WebSocket).
  */
 function setupRealtimeListeners() {
-    // This is a placeholder. In a real implementation, you would initialize
-    // your WebSocket connection here and define its event handlers.
+    const protocol = window.location.protocol === 'https' ? 'wss' : 'ws';
+    const wsUrl = `${protocol}://${window.location.host}`;
+    let ws;
 
-    // Example using a hypothetical 'socket' instance:
-    /*
-    const socket = new WebSocket('ws://your-server-address');
+    function connect() {
+        ws = new WebSocket(wsUrl);
 
-    socket.onmessage = async (event) => {
-        try {
-            const message = JSON.parse(event.data);
-
-            // Check if the message is a role change notification for the current user
-            if (message.type === 'role_change_notification' && message.payload?.userId === currentUserProfile?.userId) {
-                const newRole = message.payload.newRole;
-                
-                // Show a friendly notification to the user
-                showToast(`تم تحديث صلاحيتك إلى "${newRole === 'admin' ? 'مسؤول' : 'موظف'}". سيتم تحديث الواجهة.`, 'info');
-
-                // Wait a moment for the user to read the toast, then refresh the profile and UI
-                setTimeout(async () => {
-                    // Refetch the user profile to get all new permissions and data
-                    await fetchUserProfile(); 
-                    // Reload the page to apply all changes, including nav links and permissions
-                    window.location.reload(); 
-                }, 3000); // 3-second delay
+        ws.onopen = () => {
+            console.log('[WebSocket] Connected to server.');
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                ws.send(JSON.stringify({ type: 'auth', token }));
             }
-        } catch (error) {
-            console.error('Error processing real-time message:', error);
-        }
-    };
-    */
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                switch (message.type) {
+                    case 'agent_renewed':
+                        showToast(`تم تجديد رصيد الوكيل ${message.data.agentName} تلقائياً.`, 'success');
+                        break;
+                    case 'presence_update':
+                        // Handle presence update if needed in the future
+                        break;
+                    // Add other message types here
+                }
+            } catch (error) {
+                console.error('Error processing WebSocket message:', error);
+            }
+        };
+
+        ws.onclose = () => {
+            console.log('[WebSocket] Disconnected. Attempting to reconnect in 5 seconds...');
+            setTimeout(connect, 5000); // Attempt to reconnect after 5 seconds
+        };
+
+        ws.onerror = (error) => {
+            console.error('[WebSocket] Error:', error);
+            ws.close();
+        };
+    }
+
+    connect();
 }
 
 // --- UI Component Functions (Moved from script.js to main.js) ---

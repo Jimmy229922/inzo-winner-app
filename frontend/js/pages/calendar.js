@@ -1,5 +1,6 @@
 const ITEM_HEIGHT = 140; // 130px height + 10px margin-bottom
 const BUFFER_ITEMS = 5; // Render items above and below the viewport for smoother scrolling
+let weeklyResetCountdownInterval = null;
 
 /**
  * Applies or removes search term highlighting from an agent item element.
@@ -90,6 +91,10 @@ class CalendarUI {
         <div class="page-header column-header">
             <div class="header-top-row">
                 <h1>تقويم المهام الأسبوعي</h1>
+                <div id="weekly-reset-countdown-container" class="countdown-timer-container" style="display: none;">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>إعادة التعيين خلال: <span id="weekly-reset-countdown" class="countdown-time"></span></span>
+                </div>
                 <span class="info-tooltip" title="حالة جميع الوكلاء سيتم إعادة تعيينها (إلغاء التدقيق والإرسال) تلقائياً كل يوم أحد الساعة 7 صباحاً">
                     <i class="fas fa-info-circle"></i>
                 </span>
@@ -121,6 +126,9 @@ class CalendarUI {
     destroy() {
         window.taskStore.unsubscribe(this.boundUpdateUIFromState);
         clearTimeout(this.searchDebounceTimer); // Clear any pending search
+        if (weeklyResetCountdownInterval) {
+            clearInterval(weeklyResetCountdownInterval);
+        }
     }
 
     async render() {
@@ -245,11 +253,68 @@ async function renderCalendarPage() {
     currentCalendarInstance = new CalendarUI(appContent);
     try {
         await currentCalendarInstance.render();
+        startWeeklyResetCountdown();
     } catch (error) {
         console.error("Error rendering calendar page:", error);
         const calendarContainer = document.getElementById('calendar-container');
         if (calendarContainer) calendarContainer.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات التقويم: ${error.message}</p>`;
     }
+}
+
+function getNextResetTime() {
+    const now = new Date();
+    const nextReset = new Date();
+
+    // Find the next Sunday
+    const day = now.getDay(); // 0=Sunday, 1=Monday, ...
+    const daysUntilSunday = (7 - day) % 7;
+    nextReset.setDate(now.getDate() + daysUntilSunday);
+
+    // Set the time to 7:00 AM
+    nextReset.setHours(7, 0, 0, 0);
+
+    // If it's Sunday and past 7 AM, calculate for next week's Sunday
+    if (day === 0 && now.getTime() > nextReset.getTime()) {
+        nextReset.setDate(nextReset.getDate() + 7);
+    }
+    return nextReset;
+}
+
+
+function startWeeklyResetCountdown() {
+    const countdownContainer = document.getElementById('weekly-reset-countdown-container');
+    const countdownElement = document.getElementById('weekly-reset-countdown');
+
+    if (!countdownContainer || !countdownElement) return;
+
+    const updateTimer = () => {
+        const now = new Date();
+        const nextReset = getNextResetTime();
+        const diff = nextReset - now;
+
+        if (diff > 0 && diff < 5 * 60 * 60 * 1000) {
+            countdownContainer.style.display = 'block';
+            const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const s = Math.floor((diff % (1000 * 60)) / 1000);
+            countdownElement.textContent = `${h}س ${m}د ${s}ث`;
+        } else {
+            countdownContainer.style.display = 'none';
+        }
+        
+        // Force refresh if reset time has passed
+        if (diff < 0) {
+            // To avoid multiple reloads, we can use a flag in localStorage
+            const lastReset = localStorage.getItem('lastWeeklyReset');
+            if (!lastReset || new Date(lastReset) < nextReset) {
+                localStorage.setItem('lastWeeklyReset', new Date().toISOString());
+                location.reload();
+            }
+        }
+    };
+
+    updateTimer();
+    weeklyResetCountdownInterval = setInterval(updateTimer, 1000);
 }
 
 /**

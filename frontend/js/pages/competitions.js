@@ -524,6 +524,8 @@ async function renderCompetitionCreatePage(agentId) {
     const { data: agent } = await agentResponse.json();
 
     const agentClassification = agent.classification || 'R'; // Default to R if not set
+    // جلب القوالب المتاحة:
+    // نرسل تصنيف الوكيل إلى الخادم. سيقوم الخادم بإرجاع القوالب التي تطابق هذا التصنيف، بالإضافة إلى القوالب العامة (All).
     const templatesResponse = await authedFetch(`/api/templates/available?classification=${agentClassification}`);
 
     if (!templatesResponse.ok) {
@@ -573,7 +575,7 @@ async function renderCompetitionCreatePage(agentId) {
                     </div>
                     <div class="form-group">
                         <label for="override-deposit-winners">عدد الفائزين (إيداع)</label>
-                        <input type="number" id="override-deposit-winners" value="0">
+                        <input type="number" id="override-deposit-winners" value="${agent.deposit_bonus_winners_count || 0}">
                     </div>
                     <div class="form-group">
                         <label for="override-duration">مدة المسابقة</label>
@@ -647,6 +649,29 @@ async function renderCompetitionCreatePage(agentId) {
         updateDescriptionAndPreview(e);
     });
 
+    // --- NEW: Check for existing competition when template changes ---
+    async function checkExistingCompetition(agentId, templateId) {
+        const sendBtn = document.querySelector('.btn-send-telegram');
+        const templateUsageInfo = document.getElementById('template-usage-info');
+
+        // Reset state
+        templateUsageInfo.style.display = 'none';
+        templateUsageInfo.classList.remove('error-text');
+
+        if (!agentId || !templateId) return;
+
+        try {
+            const response = await authedFetch(`/api/competitions/check-existence?agent_id=${agentId}&template_id=${templateId}`);
+            if (response.ok) {
+                const { exists } = await response.json();
+                if (exists) {
+                    templateUsageInfo.innerHTML = `<i class="fas fa-exclamation-triangle"></i> تم إرسال هذه المسابقة لهذا الوكيل من قبل.`;
+                    templateUsageInfo.style.display = 'block';
+                    templateUsageInfo.classList.add('error-text'); // Add error class for styling
+                }
+            }
+        } catch (error) { console.error('Failed to check for existing competition:', error); }
+    }
     function updateDescriptionAndPreview(event = {}) {
         const selectedId = templateSelect.value;
         const selectedTemplate = templates.find(t => String(t._id) === selectedId);
@@ -663,6 +688,9 @@ async function renderCompetitionCreatePage(agentId) {
 
         // Show usage limit info only when the template is first selected
         if (event.target && event.target.id === 'competition-template-select') {
+            // --- NEW: Trigger the check for duplicates ---
+            checkExistingCompetition(agent._id, selectedId);
+
             if (selectedTemplate.usage_limit !== null) {
                 const remaining = Math.max(0, selectedTemplate.usage_limit - (selectedTemplate.usage_count || 0));
                 const message = `مرات الاستخدام المتبقية لهذا القالب: ${remaining}`;
@@ -715,11 +743,11 @@ async function renderCompetitionCreatePage(agentId) {
         let depositBonusPrizeText = '';
         if (depositWinners > 0 && depositBonusPerc > 0) {
             if (depositWinners === 1) {
-                depositBonusPrizeText = `${depositBonusPerc}% لفائز واحد.`; // Changed to match tradingWinners logic
-            } else if (depositWinners === 2) depositBonusPrizeText = `${depositBonusPerc}% لفائزين اثنين.`;
-            else if (depositWinners >= 3 && depositWinners <= 10) depositBonusPrizeText = `${depositBonusPerc}% لـ ${numberToArPlural(depositWinners)} فائزين.`;
+                depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لفائز واحد فقط.`;
+            } else if (depositWinners === 2) depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لفائزين اثنين فقط.`;
+            else if (depositWinners >= 3 && depositWinners <= 10) depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لـ ${numberToArPlural(depositWinners)} فائزين فقط.`;
             else if (depositWinners > 10) {
-                depositBonusPrizeText = `${depositBonusPerc}% لـ ${depositWinners} فائزاً.`;
+                depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لـ ${depositWinners} فائزاً فقط.`;
             }
         }
 
@@ -789,6 +817,13 @@ async function renderCompetitionCreatePage(agentId) {
         if (newRemainingDepositBonus < 0) {
             validationMessages += `<div class="validation-error"><i class="fas fa-exclamation-triangle"></i> عدد مرات بونص الإيداع غير كافٍ (المتاح: ${agent.remaining_deposit_bonus || 0}).</div>`;
             isInvalid = true;
+        }
+
+        // --- NEW: Disable button if the template has been used before ---
+        const templateUsageInfo = document.getElementById('template-usage-info');
+        if (templateUsageInfo.style.display === 'block' && templateUsageInfo.classList.contains('error-text')) {
+            isInvalid = true;
+            // The message is already displayed, no need to add another one.
         }
 
         validationContainer.innerHTML = validationMessages;
@@ -918,6 +953,7 @@ async function renderCompetitionCreatePage(agentId) {
                 name: selectedTemplate.question,
                 description: finalDescription,
                 is_active: true,
+                classification: agent.classification, // <-- إضافة: حفظ تصنيف الوكيل مع المسابقة
                 status: 'sent',
                 agent_id: agent._id, // Use MongoDB _id
                 duration: durationInput.value, // Send duration for backend calculation
@@ -935,8 +971,13 @@ async function renderCompetitionCreatePage(agentId) {
                 body: JSON.stringify(competitionPayload)
             });
             if (!compResponse.ok) {
+                // --- NEW: Handle specific 409 Conflict error for duplicates ---
+                if (compResponse.status === 409) {
+                    throw new Error('فشل الإرسال: تم إرسال هذه المسابقة لهذا الوكيل من قبل.');
+                }
+                // Handle other errors
                 const result = await compResponse.json();
-                throw new Error(`فشل حفظ المسابقة: ${result.message}`);
+                throw new Error(result.message || 'فشل حفظ المسابقة.');
             }
 
             // 2. Deduct balance
@@ -1258,7 +1299,7 @@ async function renderCompetitionTemplatesPage() {
 ✨ هل تملك عينًا خبيرة في قراءة الشارتات؟ اختبر نفسك واربح!
 
 💰 الجائزة: {{prize_details}}
-🎁           {{deposit_bonus_prize_details}}
+                 {{deposit_bonus_prize_details}}
 
 ❓ سؤال المسابقة:
 {{question}}

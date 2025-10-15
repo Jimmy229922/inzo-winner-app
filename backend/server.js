@@ -1,12 +1,13 @@
 require('dotenv').config();
 const http = require('http');
 const { Server: WebSocketServer } = require('ws');
+const TelegramBot = require('node-telegram-bot-api'); // --- NEW: Import TelegramBot
 const jwt = require('jsonwebtoken');
 const app = require('./src/app');
 const connectDB = require('./src/config/db');
+const { startAllSchedulers } = require('./src/scheduler'); // NEW: Import the scheduler
 const User = require('./src/models/User');
 const bcrypt = require('bcryptjs');
-const { startScheduler } = require('./src/utils/scheduler');
 
 // --- NEW: Map to store online users ---
 // Key: userId (string), Value: WebSocket client instance
@@ -67,8 +68,31 @@ async function startServer() {
     await connectDB();
     await createSuperAdmin();
 
-    startScheduler();
+    // --- REFACTOR: Pass onlineClients map to the scheduler ---
+    // This allows the scheduler to broadcast messages to clients.
+    app.locals.onlineClients = onlineClients;
 
+    // --- NEW: Initialize Telegram Bot and pass it to the app ---
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) {
+        console.error('[CRITICAL] TELEGRAM_BOT_TOKEN is not set in .env file. Telegram features will fail.');
+    }
+    const bot = new TelegramBot(token); // No polling, we only use it for sending
+    app.locals.telegramBot = bot;
+
+    // --- NEW: Verify the bot token on startup ---
+    try {
+        const me = await bot.getMe();
+        console.log(`[INFO] Telegram bot "${me.first_name}" initialized successfully.`);
+    } catch (error) {
+        console.error(`[CRITICAL] Telegram bot token seems to be invalid. Error: ${error.message}`);
+        console.error('[CRITICAL] Please verify the TELEGRAM_BOT_TOKEN in your .env file.');
+        // We don't exit the process, but the Telegram features will not work.
+        // This allows the rest of the app to run.
+    }
+
+    // --- FIX: Start all scheduled jobs from here ---
+    startAllSchedulers(onlineClients);
     // --- REFACTOR: Create an HTTP server from the Express app ---
     const server = http.createServer(app);
 

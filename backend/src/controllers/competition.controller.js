@@ -103,6 +103,19 @@ exports.getAllCompetitions = async (req, res) => {
 
 exports.createCompetition = async (req, res) => {
     try {
+        const { agent_id, template_id } = req.body;
+
+        // --- NEW: Server-side check to prevent duplicate competitions ---
+        if (agent_id && template_id) {
+            const existingCompetition = await Competition.findOne({ agent_id, template_id });
+            if (existingCompetition) {
+                return res.status(409).json({
+                    message: 'Conflict: A competition with this template has already been sent to this agent.',
+                    error: 'Duplicate competition entry.'
+                });
+            }
+        }
+
         const competitionData = req.body;
         
         // Calculate ends_at on the backend for consistency and accuracy.
@@ -206,5 +219,26 @@ exports.bulkDeleteCompetitions = async (req, res) => {
         res.json({ message: 'Competitions deleted successfully.' });
     } catch (error) {
         res.status(500).json({ message: 'Failed to bulk delete competitions.', error: error.message });
+    }
+};
+
+/**
+ * NEW: Checks if a competition for a specific agent and template already exists.
+ */
+exports.checkCompetitionExistence = async (req, res) => {
+    const { agent_id, template_id } = req.query;
+
+    if (!agent_id || !template_id) {
+        return res.status(400).json({ message: 'Agent ID and Template ID are required.' });
+    }
+
+    try {
+        const existingCompetition = await Competition.findOne({ agent_id, template_id });
+        res.json({ exists: !!existingCompetition });
+    } catch (error) {
+        res.status(500).json({
+            message: 'Server error while checking for competition existence.',
+            error: error.message
+        });
     }
 };

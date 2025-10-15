@@ -24,6 +24,7 @@ const AgentSchema = new mongoose.Schema({
     single_competition_balance: { type: Number, default: 0 },
     winners_count: { type: Number, default: 0 },
     prize_per_winner: { type: Number, default: 0 },
+    deposit_bonus_winners_count: { type: Number, default: 0 },
     last_renewal_date: { type: Date, default: null },
     last_competition_date: { type: Date, default: null },
     winner_selection_date: { type: Date, default: null },

@@ -379,3 +379,25 @@ body.dark-mode .calendar-agent-item mark {
 .classification-c {
     background-color: #95a5a6; /* Gray */
 }
+
+/* NEW: Countdown Timer Styles */
+.countdown-timer-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-color);
+    padding: 8px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.countdown-timer-container .fa-sync-alt {
+    color: var(--primary-color);
+}
+
+.countdown-timer-container .countdown-time {
+    font-weight: bold;
+    color: var(--text-color);
+}

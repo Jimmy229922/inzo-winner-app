@@ -2,7 +2,7 @@ const Agent = require('../models/agent.model');
 const { logActivity } = require('../utils/logActivity');
 const { translateField, formatValue } = require('../utils/fieldTranslations');
 
-exports.getAllAgents = async (req, res) => {
+exports.getAllAgents = async (req, res) => { // NOSONAR
     try {
         const { page = 1, limit = 10, search, classification, sort, eligibleForBalance, for_tasks, select, agent_ids } = req.query;
 
@@ -16,9 +16,10 @@ exports.getAllAgents = async (req, res) => {
             query.classification = classification;
         }
 
-        if (eligibleForBalance === 'true') {
-            query.telegram_chat_id = { $ne: null };
-            query.$or = [
+        if (req.query.eligibleForBroadcast === 'true') {
+            query.telegram_chat_id = { $nin: [null, '', 0] };
+        } else if (eligibleForBalance === 'true') {
+            query.$or = [ // This was the incorrect part
                 { remaining_balance: { $gt: 0 } },
                 { remaining_deposit_bonus: { $gt: 0 } }
             ];
@@ -91,30 +92,21 @@ exports.updateAgent = async (req, res) => {
             return res.status(404).json({ message: 'Agent not found.' });
         }
 
-        // --- REWRITE: Explicitly define updatable fields for security and clarity ---
-        const allowedUpdates = [
-            'name', 'telegram_channel_url', 'telegram_group_url', 'telegram_chat_id', 'telegram_group_name',
-            'rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage',
-            'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus',
-            'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period',
-            'competition_duration', 'last_competition_date',
-            'audit_days',
-            'competitions_per_week'
-        ];
-        const updatePayload = { ...req.body }; // Copy the request body
-
-        const updatedAgent = await Agent.findByIdAndUpdate(req.params.id, { $set: updatePayload }, { new: true, runValidators: true });
+        // --- FIX: Directly use req.body for the update payload ---
+        const updatedAgent = await Agent.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
 
         // --- FIX: Always log activity on update from the backend for reliability ---
         const userId = req.user?._id; // Use optional chaining
         const hasProfileUpdate = ['name', 'telegram_channel_url', 'telegram_group_url', 'telegram_chat_id', 'telegram_group_name'].some(key => key in req.body);
         
         const actionType = hasProfileUpdate ? 'PROFILE_UPDATE' : 'DETAILS_UPDATE';
+        const isFinancialUpdate = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period', 'deposit_bonus_winners_count'].some(key => key in req.body);
 
         // تحضير وصف مفصل للتغييرات
         const changes = Object.entries(req.body).map(([field, newValue]) => {
             const oldValue = agentBeforeUpdate[field];
             // نتحقق فقط من الحقول التي تغيرت قيمتها
+            if (field === 'deposit_bonus_winners_count' && isFinancialUpdate) return null; // تجاهل هذا الحقل إذا كان هناك تحديث مالي آخر
             if (String(oldValue) === String(newValue)) return null;
             
             const arabicFieldName = translateField(field);
@@ -126,8 +118,8 @@ exports.updateAgent = async (req, res) => {
         }).filter(change => change !== null); // نزيل الحقول التي لم تتغير
 
         const description = changes.length > 0 
-            ? `تم تحديث بيانات الوكيل:\n${changes.map(c => `${c.field}: من "${c.from}" إلى "${c.to}"`).join('\n')}`
-            : 'تم تحديث بيانات الوكيل بدون تغييرات';
+            ? `تم تحديث بيانات الوكيل:\n${changes.map(c => `${c.field}: من "${c.from}" إلى "${c.to}"`).join('\n')}`.trim()
+            : 'تم تحديث بيانات الوكيل بدون تغييرات ملحوظة';
 
         // --- FIX: Only log if a user context exists and there were actual changes ---
         if (userId && changes.length > 0) {
@@ -135,6 +127,10 @@ exports.updateAgent = async (req, res) => {
                  changes: changes
              });
         }
+
+        // --- NEW DEBUG: Log the saved data to see what was actually persisted ---
+        console.log('[Agent Update] Data after saving to database:', JSON.stringify(updatedAgent, null, 2));
+        console.log(`[DEBUG] Verifying save for "deposit_bonus_winners_count". Value in DB: ${updatedAgent.deposit_bonus_winners_count}. Value from request: ${req.body.deposit_bonus_winners_count}`);
 
         res.json({ data: updatedAgent });
     } catch (error) {
@@ -181,12 +177,13 @@ exports.deleteAgent = async (req, res) => {
  * @desc    Renew balance for eligible agents. Can be used by cron job or manual trigger.
  * @returns {Promise<number>} Count of renewed agents.
  */
-exports.renewEligibleAgentBalances = async () => {
+exports.renewEligibleAgentBalances = async (onlineClients) => {
     // Find agents with a renewal period set
     const agentsToRenew = await Agent.find({ renewal_period: { $in: ['weekly', 'biweekly', 'monthly'] } });
 
     let renewedCount = 0;
     const now = new Date();
+    now.setHours(0, 0, 0, 0); // Normalize to the start of the day
 
     for (const agent of agentsToRenew) {
         const lastRenewal = agent.last_renewal_date || agent.createdAt;
@@ -194,25 +191,48 @@ exports.renewEligibleAgentBalances = async () => {
 
         switch (agent.renewal_period) {
             case 'weekly':
-                nextRenewalDate.setDate(nextRenewalDate.getDate() + 7);
+                nextRenewalDate.setDate(nextRenewalDate.getDate() + 6);
                 break;
             case 'biweekly':
-                nextRenewalDate.setDate(nextRenewalDate.getDate() + 14);
+                nextRenewalDate.setDate(nextRenewalDate.getDate() + 13);
                 break;
             case 'monthly':
                 nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 1);
+                nextRenewalDate.setDate(nextRenewalDate.getDate() - 1);
                 break;
         }
 
+        nextRenewalDate.setHours(0, 0, 0, 0); // Normalize to the start of the day
+
         if (now >= nextRenewalDate) {
-            // This is the full renewal logic
-            agent.remaining_balance = agent.competition_bonus;
+            // New "roll-over" renewal logic
+            const newRemainingBalance = (agent.remaining_balance || 0) + (agent.consumed_balance || 0);
+            agent.remaining_balance = newRemainingBalance;
             agent.consumed_balance = 0;
-            agent.remaining_deposit_bonus = agent.deposit_bonus_count;
+
+            const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) + (agent.used_deposit_bonus || 0);
+            agent.remaining_deposit_bonus = newRemainingDepositBonus;
             agent.used_deposit_bonus = 0;
+
             agent.last_renewal_date = now;
 
             await agent.save();
+
+            // --- NEW: Broadcast renewal notification via WebSocket ---
+            if (onlineClients && onlineClients.size > 0) {
+                const message = JSON.stringify({
+                    type: 'agent_renewed',
+                    data: { 
+                        agentName: agent.name,
+                        agentId: agent._id
+                    }
+                });
+                onlineClients.forEach((client) => {
+                    if (client.readyState === client.OPEN) {
+                        client.send(message);
+                    }
+                });
+            }
 
             // --- FIX: Log automatic renewal ---
             // We pass null for user_id as this is a system action.
@@ -364,10 +384,15 @@ exports.renewSingleAgentBalance = async (req, res) => {
             agent.competition_duration = null; // Set to null or a valid default to pass validation
         }
 
-        agent.remaining_balance = agent.competition_bonus;
+        // New "roll-over" renewal logic
+        const newRemainingBalance = (agent.remaining_balance || 0) + (agent.consumed_balance || 0);
+        agent.remaining_balance = newRemainingBalance;
         agent.consumed_balance = 0;
-        agent.remaining_deposit_bonus = agent.deposit_bonus_count;
+
+        const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) + (agent.used_deposit_bonus || 0);
+        agent.remaining_deposit_bonus = newRemainingDepositBonus;
         agent.used_deposit_bonus = 0;
+
         agent.last_renewal_date = new Date();
 
         await agent.save();

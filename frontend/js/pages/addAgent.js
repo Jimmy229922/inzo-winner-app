@@ -103,7 +103,7 @@ function renderAddAgentForm() {
                     <div class="form-group" style="margin-top: 20px;">
                         <label style="margin-bottom: 10px;">أيام التدقيق</label>
                         <div class="days-selector-v2">
-                            ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((day, index) => `
+                            ${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'].map((day, index) => `
                                 <div class="day-toggle-wrapper">
                                     <input type="checkbox" id="day-${index}" value="${index}" class="day-toggle-input">
                                     <label for="day-${index}" class="day-toggle-btn">${day}</label>

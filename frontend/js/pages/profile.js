@@ -1,4 +1,6 @@
 let competitionCountdownIntervals = [];
+let renewalCountdownInterval = null; // For the new renewal countdown
+let isRenewing = false; // Flag to prevent renewal race condition
 const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
 let profilePageEventListeners = []; // Defensive: To manage event listeners
 
@@ -11,6 +13,10 @@ function stopAllProfileTimers() {
     // A single function to clean up all timers when leaving the profile page.
     // This ensures complete separation.
     stopCompetitionCountdowns();
+    if (renewalCountdownInterval) {
+        clearInterval(renewalCountdownInterval);
+        renewalCountdownInterval = null;
+    }
     // Defensive: Remove all dynamically added event listeners for this page
     profilePageEventListeners.forEach(({ element, type, handler }) => {
         if (element) element.removeEventListener(type, handler);
@@ -19,6 +25,7 @@ function stopAllProfileTimers() {
 }
 
 async function renderAgentProfilePage(agentId, options = {}) {
+    isRenewing = false; // Reset the flag on each render
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = '';
 
@@ -89,24 +96,15 @@ async function renderAgentProfilePage(agentId, options = {}) {
         return;
     }
 
-    // --- NEW: Fetch today's task status for this agent ---
+    // --- NEW: Fetch today's task status for this agent from the central store ---
     const today = new Date();
     const todayDayIndex = today.getDay();
-    const todayStr = today.toISOString().split('T')[0];
-    let agentTaskToday = null;
     let isTaskDay = (agent.audit_days || []).includes(todayDayIndex);
 
-    // --- STEP 5: MIGRATION - Temporarily disable fetching daily tasks ---
-    // if (isTaskDay) {
-    //     const { data: taskData, error: taskError } = await supabase
-    //         .from('daily_tasks')
-    //         .select('*')
-    //         .eq('agent_id', agentId)
-    //         .eq('task_date', todayStr)
-    //         .maybeSingle(); // FIX: Use maybeSingle() to prevent errors from duplicate entries.
-    //     if (taskData) agentTaskToday = taskData;
-    // }
-    // --- End new fetch ---
+    // --- NEW: Ensure task store is initialized and get today's task status ---
+    await window.taskStore.init(); // Make sure we have the latest task data
+    const agentTaskToday = window.taskStore.state.tasks[agentId]?.[todayDayIndex] || { audited: false, competition_sent: false };
+    const isAuditedToday = agentTaskToday.audited;
 
     const activeCompetition = agentCompetitions.find(c => c.is_active === true);
     const hasActiveCompetition = !!activeCompetition;
@@ -124,16 +122,19 @@ async function renderAgentProfilePage(agentId, options = {}) {
         }
     }
 
-    // --- NEW: Prepare task icons for the header ---
-    let taskIconsHtml = '';
-    if (isTaskDay) {
-        const needsAudit = !agentTaskToday?.audited;
-        const needsCompetition = !agentTaskToday?.competition_sent;
-        taskIconsHtml = `<div class="profile-task-icons">${needsAudit ? '<i class="fas fa-clipboard-check pending-icon-audit" title="مطلوب تدقيق اليوم"></i>' : ''}${needsCompetition ? '<i class="fas fa-trophy pending-icon-comp" title="مطلوب إرسال مسابقة اليوم"></i>' : ''}</div>`;
-    }
+    // --- NEW: Create the audit button for the header ---
+    const auditButtonHtml = isTaskDay
+        ? `<div id="header-audit-status" class="header-audit-status ${isAuditedToday ? 'audited' : 'pending'}">
+               <button id="perform-audit-btn" class="btn-icon-action" title="${isAuditedToday ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"'}">
+                   <i class="fas fa-${isAuditedToday ? 'check-circle' : 'clipboard-check'}"></i>
+               </button>
+               <span class="audit-status-text">${isAuditedToday ? 'تم التدقيق' : 'التدقيق مطلوب اليوم'}</span>
+           </div>`
+        : '';
+
     // Helper for audit days in Action Tab
     // --- تعديل: عرض أيام التدقيق المحددة فقط كعلامات (tags) ---
-    const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+    const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة']; 
     const auditDaysHtml = (agent.audit_days && agent.audit_days.length > 0)
         ? `<div class="audit-days-display">${agent.audit_days.sort().map(dayIndex => `<span class="day-tag">${dayNames[dayIndex]}</span>`).join('')}</div>`
         : '<span class="day-tag-none">لا توجد أيام محددة</span>';
@@ -159,13 +160,13 @@ async function renderAgentProfilePage(agentId, options = {}) {
             <div class="profile-main-info" data-agent-id="${agent._id}">
                 <h1>
                     ${agent.name} 
-                    ${taskIconsHtml}
                     ${hasActiveCompetition ? `<span class="status-badge active">مسابقة نشطة</span>${activeCompetitionCountdownHtml}` : ''}
                     ${hasInactiveCompetition ? '<span class="status-badge inactive">مسابقة غير نشطة</span>' : ''}
                 </h1>
                 <p>رقم الوكالة: <strong class="agent-id-text" title="نسخ الرقم">${agent.agent_id}</strong> | التصنيف: ${agent.classification} | المرتبة: ${agent.rank || 'غير محدد'}</p>
                 <p>روابط التلجرام: ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank">القناة</a>` : 'القناة (غير محدد)'} | ${agent.telegram_group_url ? `<a href="${agent.telegram_group_url}" target="_blank">الجروب</a>` : 'الجروب (غير محدد)'}</p>
                 <p>معرف الدردشة: ${agent.telegram_chat_id ? `<code>${agent.telegram_chat_id}</code>` : 'غير محدد'} | اسم المجموعة: <strong>${agent.telegram_group_name || 'غير محدد'}</strong></p>
+                ${auditButtonHtml}
             </div>
             <div class="profile-header-actions">
                 <button id="edit-profile-btn" class="btn-secondary"><i class="fas fa-user-edit"></i> تعديل</button>
@@ -255,6 +256,51 @@ async function renderAgentProfilePage(agentId, options = {}) {
         }
     }
 
+    // --- NEW: Event listener for the new audit button ---
+    const auditBtn = document.getElementById('perform-audit-btn');
+    if (auditBtn) {
+        // --- MODIFICATION: Make the button a toggle ---
+        auditBtn.addEventListener('click', async () => {
+            // --- REFACTOR: Centralize state management for immediate UI feedback ---
+            const statusContainer = document.getElementById('header-audit-status');
+            const wasAudited = statusContainer.classList.contains('audited');
+            const newAuditStatus = !wasAudited;
+            const statusTextEl = statusContainer.querySelector('.audit-status-text');
+            const iconEl = auditBtn.querySelector('i');
+ 
+            auditBtn.disabled = true;
+            iconEl.className = 'fas fa-spinner fa-spin';
+ 
+            // 1. Optimistically update the UI
+            statusContainer.classList.toggle('pending', !newAuditStatus);
+            statusContainer.classList.toggle('audited', newAuditStatus);
+            iconEl.className = `fas fa-${newAuditStatus ? 'check-circle' : 'clipboard-check'}`;
+            statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق مطلوب اليوم';
+            auditBtn.title = newAuditStatus ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
+ 
+            // 2. Dispatch the update to the central store.
+            // This will handle the backend call and notify other subscribed components (like calendar).
+            try {
+                await window.taskStore.updateTaskStatus(agent._id, todayDayIndex, 'audited', newAuditStatus);
+                // --- FIX: Log this important activity ---
+                const logMessage = `تم ${newAuditStatus ? 'تفعيل' : 'إلغاء تفعيل'} مهمة "التدقيق" للوكيل ${agent.name} من ملفه الشخصي.`;
+                await logAgentActivity(currentUserProfile?._id, agent._id, 'TASK_UPDATE', logMessage);
+
+                showToast('تم تحديث حالة التدقيق بنجاح.', 'success');
+            } catch (error) {
+                showToast('فشل تحديث حالة التدقيق.', 'error');
+                // Revert UI on error
+                statusContainer.classList.toggle('pending', wasAudited);
+                statusContainer.classList.toggle('audited', !wasAudited);
+                iconEl.className = `fas fa-${wasAudited ? 'check-circle' : 'clipboard-check'}`;
+                statusTextEl.textContent = wasAudited ? 'تم التدقيق' : 'التدقيق مطلوب اليوم';
+                auditBtn.title = wasAudited ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
+            } finally {
+                auditBtn.disabled = false; // Re-enable the button
+            }
+        });
+    }
+
     // --- Manual Renewal Button Logic ---
     const manualRenewBtn = document.getElementById('manual-renew-btn');
     if (manualRenewBtn) {
@@ -332,7 +378,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
 
     document.getElementById('send-bonus-cliche-btn').addEventListener('click', async () => {
         // 1. Construct the message
-        const baseLine = `يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع برصيد مسابقات:`;
+        const baseLine = `يسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع برصيد مسابقات:`
 
         // --- NEW: Add renewal period text ---
         const renewalPeriodMap = {
@@ -369,7 +415,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
 
 بامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.
 
-هل ترغب بارسال مسابقة لحضرتك؟`;
+هل ترغب بارسال مسابقة لحضرتك?`;
 
         // --- Verification Logic ---
         let targetGroupInfo = 'المجموعة العامة';
@@ -384,8 +430,12 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                 showToast('جاري التحقق من بيانات المجموعة...', 'info');
                 const response = await authedFetch(`/api/get-chat-info?chatId=${agent.telegram_chat_id}`);
                 const data = await response.json();
-
-                if (!response.ok) throw new Error(data.message);
+                // --- FIX: Handle 404 Not Found specifically ---
+                if (response.status === 404) {
+                    throw new Error('المجموعة غير موجودة أو تم طرد البوت منها.');
+                } else if (!response.ok) {
+                    throw new Error(data.message || 'فشل التحقق من بيانات المجموعة.');
+                }
 
                 const actualGroupName = data.title;
                 if (actualGroupName.trim() !== agent.telegram_group_name.trim()) {
@@ -411,7 +461,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
              <textarea class="modal-textarea-preview" readonly>${clicheText}</textarea>`,
             async () => {
                 try {
-                    const response = await authedFetch('/api/post-announcement', {
+                    const response = await authedFetch('/api/post-announcement', { // This will be migrated later
                         method: 'POST',
                         body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
                     });
@@ -792,7 +842,7 @@ function renderEditProfileHeader(agent) {
 
     // --- تعديل: إضافة محدد أيام التدقيق ---
     const auditDaysEditorHtml = `
-        <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px;">
+        <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px;"> 
             <label style="margin-bottom: 10px;">أيام التدقيق</label>
             <div class="days-selector-v2" id="header-edit-audit-days">
                 ${dayNames.map((day, index) => `
@@ -806,11 +856,20 @@ function renderEditProfileHeader(agent) {
 
     headerContainer.innerHTML = `
         <div class="form-layout-grid" style="gap: 10px;">
-            <div class="form-group"><label>اسم الوكيل</label><input type="text" id="header-edit-name" value="${agent.name || ''}"></div>
+            <div class="form-group" style="grid-column: 1 / span 2;"><label>اسم الوكيل</label><input type="text" id="header-edit-name" value="${agent.name || ''}"></div>
+            <div class="form-group">
+                <label>التصنيف</label>
+                <select id="header-edit-classification">
+                    <option value="R" ${agent.classification === 'R' ? 'selected' : ''}>R</option>
+                    <option value="A" ${agent.classification === 'A' ? 'selected' : ''}>A</option>
+                    <option value="B" ${agent.classification === 'B' ? 'selected' : ''}>B</option>
+                    <option value="C" ${agent.classification === 'C' ? 'selected' : ''}>C</option>
+                </select>
+            </div>
             <div class="form-group"><label>معرف الدردشة</label><input type="text" id="header-edit-chatid" value="${agent.telegram_chat_id || ''}"></div>
             <div class="form-group"><label>اسم المجموعة</label><input type="text" id="header-edit-groupname" value="${agent.telegram_group_name || ''}"></div>
-            <div class="form-group"><label>رابط القناة</label><input type="text" id="header-edit-channel" value="${agent.telegram_channel_url || ''}"></div>
-            <div class="form-group"><label>رابط الجروب</label><input type="text" id="header-edit-group" value="${agent.telegram_group_url || ''}"></div>
+            <div class="form-group" style="grid-column: 1 / -1;"><label>رابط القناة</label><input type="text" id="header-edit-channel" value="${agent.telegram_channel_url || ''}"></div>
+            <div class="form-group" style="grid-column: 1 / -1;"><label>رابط الجروب</label><input type="text" id="header-edit-group" value="${agent.telegram_group_url || ''}"></div>
             ${auditDaysEditorHtml}
         </div>
     `;
@@ -844,6 +903,7 @@ function renderEditProfileHeader(agent) {
             telegram_group_url: document.getElementById('header-edit-group').value,
             telegram_chat_id: document.getElementById('header-edit-chatid').value,
             telegram_group_name: document.getElementById('header-edit-groupname').value,
+            classification: document.getElementById('header-edit-classification').value,
             audit_days: selectedDays
         };
 
@@ -1014,9 +1074,9 @@ function renderDetailsView(agent) {
     if (!container) return;
 
     const createFieldHTML = (label, value, fieldName, isEditable = true) => {
-        const numericFields = ['competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner'];
+        const numericFields = ['competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'deposit_bonus_winners_count'];
         // --- NEW: Define which fields are financial ---
-        const financialFields = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period'];
+        const financialFields = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period', 'deposit_bonus_winners_count'];
         const isFinancial = financialFields.includes(fieldName);
 
         let displayValue;
@@ -1032,7 +1092,7 @@ function renderDetailsView(agent) {
 
         if (numericFields.includes(fieldName) || fieldName === 'competitions_per_week') {
             displayValue = (value === null || value === undefined) ? 0 : value;
-            if (fieldName === 'prize_per_winner') displayValue = parseFloat(displayValue).toFixed(2);
+            if (fieldName === 'prize_per_winner' && typeof displayValue === 'number') displayValue = parseFloat(displayValue).toFixed(2);
             if (fieldName === 'deposit_bonus_percentage') displayValue = `${displayValue}%`;
             if (fieldName === 'competition_bonus') displayValue = `$${displayValue}`;
         } else if (fieldName === 'audit_days') {
@@ -1055,7 +1115,7 @@ function renderDetailsView(agent) {
 
     const htmlContent = `
         <div class="details-grid">
-            <h3 class="details-section-title">المرتبة والمكافآت</h3>
+            <h3 class="details-section-title">الإعدادات الأساسية</h3>
             ${createFieldHTML('المرتبة', agent.rank, 'rank')}
             ${createFieldHTML('بونص المسابقات (تداولي)', agent.competition_bonus, 'competition_bonus')}
             ${createFieldHTML('مرات بونص الإيداع', agent.deposit_bonus_count, 'deposit_bonus_count')}
@@ -1071,6 +1131,7 @@ function renderDetailsView(agent) {
             ${createFieldHTML('رصيد المسابقة الواحدة', agent.single_competition_balance, 'single_competition_balance')}
             ${createFieldHTML('عدد الفائزين', agent.winners_count, 'winners_count')}
             ${createFieldHTML('جائزة كل فائز', agent.prize_per_winner, 'prize_per_winner')}
+            ${createFieldHTML('عدد فائزين بونص ايداع', agent.deposit_bonus_winners_count, 'deposit_bonus_winners_count')}
             
             <h3 class="details-section-title">التجديد والمدة</h3>
             ${createFieldHTML('يجدد كل', agent.renewal_period, 'renewal_period')}
@@ -1159,6 +1220,14 @@ async function renderInlineEditor(groupElement, agent) {
                 <optgroup label="⁕ المراكز ⁖">
                     <option value="CENTER" ${currentValue === 'CENTER' ? 'selected' : ''}>🏢 CENTER</option>
                 </optgroup>
+            </select>`;
+            break;
+        case 'classification':
+            editorHtml = `<select id="inline-edit-input">
+                <option value="R" ${currentValue === 'R' ? 'selected' : ''}>R</option>
+                <option value="A" ${currentValue === 'A' ? 'selected' : ''}>A</option>
+                <option value="B" ${currentValue === 'B' ? 'selected' : ''}>B</option>
+                <option value="C" ${currentValue === 'C' ? 'selected' : ''}>C</option>
             </select>`;
             break;
         case 'renewal_period':
@@ -1279,6 +1348,16 @@ async function renderInlineEditor(groupElement, agent) {
                 updateData.remaining_balance = (rankData.competition_bonus || 0) - (currentAgent.consumed_balance || 0);
             }
             updateData.remaining_deposit_bonus = (rankData.deposit_bonus_count || 0) - (currentAgent.used_deposit_bonus || 0);
+        } else if (fieldName === 'classification') {
+            updateData.classification = newValue;
+            // --- NEW: Automatically update competitions_per_week based on classification ---
+            const newClassification = newValue.toUpperCase();
+            if (newClassification === 'R' || newClassification === 'A') {
+                updateData.competitions_per_week = 2;
+            } else if (newClassification === 'B' || newClassification === 'C') {
+                updateData.competitions_per_week = 1;
+            }
+            updateData.remaining_deposit_bonus = (rankData.deposit_bonus_count || 0) - (currentAgent.used_deposit_bonus || 0);
         } else {
             // --- NEW: Automatically update competition_duration when competitions_per_week changes ---
             if (fieldName === 'competitions_per_week') {
@@ -1300,7 +1379,7 @@ async function renderInlineEditor(groupElement, agent) {
             } else {
                 // --- REWRITE: Professional and robust value parsing ---
                 // Define which fields should be treated as integers vs floats
-                const integerFields = ['deposit_bonus_count', 'used_deposit_bonus', 'remaining_deposit_bonus', 'winners_count', 'competitions_per_week'];
+                const integerFields = ['deposit_bonus_count', 'used_deposit_bonus', 'remaining_deposit_bonus', 'winners_count', 'competitions_per_week', 'deposit_bonus_winners_count'];
                 const floatFields = ['competition_bonus', 'consumed_balance', 'remaining_balance', 'single_competition_balance', 'prize_per_winner', 'deposit_bonus_percentage'];
 
                 if (integerFields.includes(fieldName)) {
@@ -1340,6 +1419,7 @@ async function renderInlineEditor(groupElement, agent) {
             const remainingDepositBonus = parseInt(fieldName === 'remaining_deposit_bonus' ? finalValue : currentAgent.remaining_deposit_bonus, 10) || 0;
 
             // Recalculate related fields based on which field was edited
+            // This logic is now primarily handled by the backend, but we keep it for immediate UI feedback if needed.
             if (fieldName === 'competition_bonus' || fieldName === 'consumed_balance') {
                 updateData.remaining_balance = competitionBonus - consumedBalance;
             } else if (fieldName === 'remaining_balance') {
@@ -1352,6 +1432,11 @@ async function renderInlineEditor(groupElement, agent) {
                 updateData.used_deposit_bonus = depositBonusCount - remainingDepositBonus;
             }
 
+            // --- FIX: Ensure deposit_bonus_winners_count is handled ---
+            if (fieldName === 'deposit_bonus_winners_count') {
+                updateData.deposit_bonus_winners_count = finalValue;
+            }
+
             // Ensure no negative values are saved for balances
             if (updateData.remaining_balance < 0) updateData.remaining_balance = 0;
             if (updateData.consumed_balance < 0) updateData.consumed_balance = 0;
@@ -1361,6 +1446,9 @@ async function renderInlineEditor(groupElement, agent) {
 
         // --- DEBUG: Log the complete data payload being sent to the server ---
         console.log('[Inline Edit] Sending update payload to server:', updateData);
+        // --- NEW DEBUG: Log to show why the number is not being saved ---
+        console.log(`[DEBUG] The payload for the server is being prepared. Field being edited: "${fieldName}". Does the payload include "deposit_bonus_winners_count"?`, 'deposit_bonus_winners_count' in updateData);
+
 
         try {
             const response = await authedFetch(`/api/agents/${agent._id}`, {
@@ -1387,20 +1475,42 @@ async function renderInlineEditor(groupElement, agent) {
     });
 }
 
+function calculateNextRenewalDate(agent) {
+    if (!agent || !agent.renewal_period || agent.renewal_period === 'none') {
+        return null;
+    }
+    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.createdAt);
+    let nextRenewalDate = new Date(lastRenewal);
+
+    switch (agent.renewal_period) {
+        case 'weekly':
+            nextRenewalDate.setDate(nextRenewalDate.getDate() + 6);
+            break;
+        case 'biweekly':
+            nextRenewalDate.setDate(nextRenewalDate.getDate() + 13);
+            break;
+        case 'monthly':
+            nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 1);
+            nextRenewalDate.setDate(nextRenewalDate.getDate() - 1);
+            break;
+        default:
+            return null;
+    }
+    return nextRenewalDate;
+}
+
 function updateManualRenewButtonState(agent) {
     const renewalBtn = document.getElementById('manual-renew-btn');
-    if (!renewalBtn || !agent || !agent.renewal_period || agent.renewal_period === 'none') {
-        if (renewalBtn) renewalBtn.style.display = 'none';
+    if (!renewalBtn) return;
+
+    const nextRenewalDate = calculateNextRenewalDate(agent);
+
+    if (!nextRenewalDate) {
+        renewalBtn.style.display = 'none';
         return;
     }
 
     renewalBtn.style.display = 'inline-flex';
-
-    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.created_at);
-    let nextRenewalDate = new Date(lastRenewal);
-    if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
-    else if (agent.renewal_period === 'biweekly') nextRenewalDate.setDate(lastRenewal.getDate() + 14);
-    else if (agent.renewal_period === 'monthly') nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
 
     if (new Date() >= nextRenewalDate) {
         renewalBtn.disabled = false;
@@ -1411,31 +1521,103 @@ function updateManualRenewButtonState(agent) {
     }
 }
 
+function formatDuration(ms) {
+    if (ms < 0) ms = -ms;
+    const time = {
+        day: Math.floor(ms / 86400000),
+        hour: Math.floor(ms / 3600000) % 24,
+        minute: Math.floor(ms / 60000) % 60,
+        second: Math.floor(ms / 1000) % 60
+    };
+    return Object.entries(time).filter(val => val[1] !== 0).map(([key, val]) => `${val} ${key}${val !== 1 ? 's' : ''}`).join(', ');
+}
+
 function displayNextRenewalDate(agent) {
     const displayElement = document.getElementById('renewal-date-display');
-    if (!displayElement || !agent.renewal_period || agent.renewal_period === 'none') {
-        if(displayElement) displayElement.style.display = 'none';
+    if (!displayElement) return;
+
+    const nextRenewalDate = calculateNextRenewalDate(agent);
+
+    if (!nextRenewalDate) {
+        displayElement.style.display = 'none';
         updateManualRenewButtonState(agent);
         return;
     }
 
-    // --- إصلاح: استخدام تاريخ إنشاء الوكيل كقيمة احتياطية إذا لم يكن هناك تاريخ تجديد سابق ---
-    // هذا يمنع ظهور "Invalid Date" للوكلاء الجدد.
-    const lastRenewal = agent.last_renewal_date ? new Date(agent.last_renewal_date) : new Date(agent.createdAt);
-    let nextRenewalDate = new Date(lastRenewal);
-
-    if (agent.renewal_period === 'weekly') nextRenewalDate.setDate(lastRenewal.getDate() + 7);
-    else if (agent.renewal_period === 'biweekly') nextRenewalDate.setDate(lastRenewal.getDate() + 14);
-    else if (agent.renewal_period === 'monthly') nextRenewalDate.setMonth(lastRenewal.getMonth() + 1);
-    else {
-        displayElement.style.display = 'none';
-        return;
-    }
-
     displayElement.style.display = 'flex';
-    displayElement.innerHTML = `<i class="fas fa-calendar-alt"></i> <span>يُجدد في: ${nextRenewalDate.toLocaleDateString('ar-EG')}</span>`;
 
-    // Also update the button state based on the date
+    const updateCountdown = () => {
+        const now = new Date();
+        const diff = nextRenewalDate - now;
+
+        if (diff <= 0) {
+            console.log('[Renewal] Countdown finished. Checking renewal status...');
+            if (isRenewing) {
+                console.log('[Renewal] Blocked: A renewal process is already in progress.');
+                return;
+            }
+            console.log('[Renewal] Starting renewal process...');
+            isRenewing = true; // Set flag
+
+            if (renewalCountdownInterval) clearInterval(renewalCountdownInterval);
+            
+            displayElement.innerHTML = `<i class="fas fa-spinner fa-spin"></i> <span>جاري التجديد...</span>`;
+            displayElement.classList.add('due');
+
+            // Trigger the renewal immediately
+            (async () => {
+                try {
+                    console.log(`[Renewal] Calling API to renew agent ${agent._id}`);
+                    const response = await authedFetch(`/api/agents/${agent._id}/renew`, { method: 'POST' });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'فشل التجديد التلقائي.');
+                    }
+                    console.log('[Renewal] API call successful. Re-rendering page.');
+                    showToast(`تم تجديد رصيد الوكيل ${agent.name} بنجاح!`, 'success');
+                    // Re-render the page to show updated values
+                    renderAgentProfilePage(agent._id, { activeTab: 'details' });
+                } catch (error) {
+                    console.error('[Renewal] API call failed:', error.message);
+                    showToast(`فشل التجديد: ${error.message}`, 'error');
+                    // Re-render to show the 'due' state again if it fails
+                    renderAgentProfilePage(agent._id, { activeTab: 'details' });
+                }
+            })();
+            return;
+        }
+
+        if (diff < 1800000) { // Less than 30 minutes
+            const minutes = Math.floor((diff / 1000 / 60) % 60).toString().padStart(2, '0');
+            const seconds = Math.floor((diff / 1000) % 60).toString().padStart(2, '0');
+            displayElement.innerHTML = `<i class="fas fa-hourglass-half fa-spin"></i> <span>التجديد خلال: ${minutes}:${seconds}</span>`;
+            displayElement.classList.add('imminent');
+        } else {
+            // More than 1 minute, show relative time
+            const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            let relativeTime = '';
+            if (days > 1) relativeTime = `في ${days} أيام`;
+            else if (days === 1) relativeTime = `خلال يوم`;
+            else if (hours > 0) relativeTime = `في ${hours} ساعة`;
+            else relativeTime = `في ${Math.ceil(diff / 60000)} دقيقة`;
+
+            const absoluteDateString = nextRenewalDate.toLocaleDateString('ar-EG', {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric'
+            });
+            const fullDateTimeString = `${absoluteDateString} الساعة 5:00 ص`;
+
+            displayElement.innerHTML = `<i class="fas fa-calendar-alt"></i> <span>يُجدد ${relativeTime} (${fullDateTimeString})</span>`;
+            displayElement.classList.remove('imminent', 'due');
+        }
+    };
+
+    if (renewalCountdownInterval) clearInterval(renewalCountdownInterval);
+    updateCountdown(); // Initial call
+    renewalCountdownInterval = setInterval(updateCountdown, 1000); // Update every second
+
     updateManualRenewButtonState(agent);
 }
 

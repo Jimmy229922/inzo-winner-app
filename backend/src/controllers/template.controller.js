@@ -16,7 +16,25 @@ exports.getAllTemplates = async (req, res) => {
 // Get available templates (non-archived)
 exports.getAvailableTemplates = async (req, res) => {
     try {
-        const templates = await CompetitionTemplate.find({ is_archived: false }).sort({ name: 1 });
+        const { classification } = req.query;
+
+        // Build the query:
+        // 1. Always fetch non-archived templates.
+        // 2. The usage limit must not be reached (usage_count < usage_limit OR usage_limit is null).
+        // 3. If a classification is provided, fetch templates matching that classification OR 'All'.
+        let query = {
+            is_archived: false,
+            $or: [
+                { usage_limit: null },
+                { $expr: { $lt: ["$usage_count", "$usage_limit"] } }
+            ]
+        };
+
+        if (classification && classification !== 'all') {
+            query.classification = { $in: [classification, 'All'] }; // Correctly filter by agent's classification and 'All'
+        }
+
+        const templates = await CompetitionTemplate.find(query).sort({ name: 1 });
         res.json({ data: templates });
     } catch (error) {
         res.status(500).json({ message: 'Error fetching available templates', error: error.message });

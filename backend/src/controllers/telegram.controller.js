@@ -1,90 +1,77 @@
-const axios = require('axios');
 const path = require('path');
-const { Blob } = require('buffer');
 const fs = require('fs').promises;
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const GENERAL_CHAT_ID = process.env.TELEGRAM_GENERAL_CHAT_ID;
-
-const getApiUrl = (method) => `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
-
+/**
+ * Posts an announcement to a Telegram chat.
+ * It now gets the bot instance from req.app.locals.
+ */
 exports.postAnnouncement = async (req, res) => {
     const { message, chatId, imageUrl } = req.body;
-    const targetChatId = chatId || GENERAL_CHAT_ID;
+    const bot = req.app.locals.telegramBot;
 
-    if (!BOT_TOKEN) {
-        return res.status(500).json({ message: 'Telegram Bot Token is not configured on the server.' });
+    if (!bot) {
+        return res.status(500).json({ message: 'Telegram bot is not initialized on the server.' });
     }
-    if (!targetChatId) {
-        return res.status(400).json({ message: 'No target chat ID provided or configured.' });
+    if (!message || !chatId) {
+        return res.status(400).json({ message: 'Message and Chat ID are required.' });
     }
 
     try {
         if (imageUrl && imageUrl.startsWith('http://localhost')) {
-            // Handle local image: read it and send as a file
+            // Handle local image: read it and send as a stream
             const imagePath = path.join(__dirname, '..', '..', '..', 'frontend', 'images', 'competition_bg.jpg');
-            const imageBuffer = await fs.readFile(imagePath); // This is a Buffer
-            const imageBlob = new Blob([imageBuffer]); // Convert Buffer to Blob
-            
-            const formData = new FormData();
-            formData.append('chat_id', targetChatId);
-            formData.append('photo', imageBlob, 'competition.jpg');
-            formData.append('caption', message);
-            formData.append('parse_mode', 'HTML');
-
-            const response = await axios.post(getApiUrl('sendPhoto'), formData);
-            result = response.data;
+            const imageBuffer = await fs.readFile(imagePath);
+            await bot.sendPhoto(chatId, imageBuffer, { caption: message, parse_mode: 'HTML' });
         } else {
             // Handle remote image URL or text-only message
-            const method = imageUrl ? 'sendPhoto' : 'sendMessage';
-            const payload = { chat_id: targetChatId, parse_mode: 'HTML' };
             if (imageUrl) {
-                payload.photo = imageUrl;
-                payload.caption = message;
+                await bot.sendPhoto(chatId, imageUrl, { caption: message, parse_mode: 'HTML' });
             } else {
-                payload.text = message;
+                await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
             }
-            const response = await axios.post(getApiUrl(method), payload);
-            result = response.data;
-        }
-        if (!result.ok) {
-            throw new Error(result.description || 'Unknown Telegram API error.');
         }
 
-        res.status(200).json({ message: 'Message sent successfully to Telegram.', data: result });
+        res.status(200).json({ message: 'Message sent successfully to Telegram.' });
     } catch (error) {
-        console.error('Error sending message to Telegram:', error);
-        // --- تحسين: إظهار رسالة الخطأ من تلجرام مباشرة إن وجدت ---
-        if (error.response && error.response.data) {
-            return res.status(error.response.status).json({ message: `Telegram API Error: ${error.response.data.description}` });
-        }
-        res.status(500).json({ message: `Failed to send message: ${error.message}` });
+        console.error(`Error sending message to Telegram chat ID ${chatId}:`, error.message);
+        const apiResponse = error.response || {};
+        const statusCode = apiResponse.statusCode || 500;
+        const telegramError = apiResponse.body?.description || 'Unknown Telegram error';
+        const errorMessage = `فشل الإرسال إلى تيليجرام: ${telegramError}`;
+
+        // Return the status code we got from Telegram API if available (e.g., 400 for bad request, 403 for forbidden)
+        // Otherwise, default to 500 for internal server errors.
+        const responseStatus = (statusCode >= 400 && statusCode < 500) ? statusCode : 500;
+
+        res.status(responseStatus).json({ message: errorMessage, telegram_error: telegramError });
     }
 };
 
+/**
+ * Gets information about a Telegram chat.
+ * It now gets the bot instance from req.app.locals.
+ */
 exports.getChatInfo = async (req, res) => {
     const { chatId } = req.query;
+    const bot = req.app.locals.telegramBot;
+
+    if (!bot) {
+        return res.status(500).json({ message: 'Telegram bot is not initialized on the server.' });
+    }
     if (!chatId) {
         return res.status(400).json({ message: 'Chat ID is required.' });
     }
 
-    if (!BOT_TOKEN) {
-        return res.status(500).json({ message: 'Telegram Bot Token is not configured on the server.' });
-    }
-
     try {
-        const response = await axios.post(getApiUrl('getChat'), { chat_id: chatId });
-        const result = response.data;
-        if (!result.ok) {
-            throw new Error(result.description || 'Failed to get chat info.');
-        }
-        res.json(result.result);
+        const chatInfo = await bot.getChat(chatId);
+        res.json(chatInfo);
     } catch (error) {
-        console.error('Error getting chat info from Telegram:', error);
-        // --- تحسين: إظهار رسالة الخطأ من تلجرام مباشرة إن وجدت ---
-        if (error.response && error.response.data) {
-            return res.status(error.response.status).json({ message: `Telegram API Error: ${error.response.data.description}` });
+        console.error('Error getting chat info from Telegram:', error.message);
+        const errorMessage = error.response?.body?.description || error.message;
+        // Handle specific "chat not found" error from Telegram API
+        if (errorMessage.includes('chat not found')) {
+            return res.status(404).json({ message: `Telegram API Error: ${errorMessage}` });
         }
-        res.status(500).json({ message: `Failed to get chat info: ${error.message}` });
+        res.status(500).json({ message: `Failed to get chat info: ${errorMessage}` });
     }
 };

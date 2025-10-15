@@ -33,21 +33,41 @@ const taskStore = {
      * @param {'audited' | 'competition_sent'} taskType
      * @param {boolean} status
      */
-    updateTaskStatus(agentId, dayIndex, taskType, status) {
-        // Ensure the agent and day objects exist
-        if (!this.state.tasks[agentId]) {
-            this.state.tasks[agentId] = {};
-        }
-        if (!this.state.tasks[agentId][dayIndex]) {
-            this.state.tasks[agentId][dayIndex] = { audited: false, competition_sent: false };
-        }
+    async updateTaskStatus(agentId, dayIndex, taskType, status) {
+        try {
+            const response = await authedFetch('/api/tasks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ agentId, dayIndex, taskType, status })
+            });
 
-        // Update the state
-        this.state.tasks[agentId][dayIndex][taskType] = status;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to update task on the server.');
+            }
 
-        // Persist and notify
-        this._saveState();
-        this._notify();
+            // Ensure the agent and day objects exist
+            if (!this.state.tasks[agentId]) {
+                this.state.tasks[agentId] = {};
+            }
+            if (!this.state.tasks[agentId][dayIndex]) {
+                this.state.tasks[agentId][dayIndex] = { audited: false, competition_sent: false };
+            }
+
+            // Update the state
+            this.state.tasks[agentId][dayIndex][taskType] = status;
+
+            // Persist and notify
+            this._saveState();
+            this._notify();
+
+        } catch (error) {
+            console.error("Error updating task status:", error);
+            // Re-throw the error to be caught by the calling UI component
+            throw error;
+        }
     },
 
     /**
