@@ -497,6 +497,8 @@ function updateBulkActionBar(currentPageItemCount) {
 
 async function renderCompetitionCreatePage(agentId) {
     const appContent = document.getElementById('app-content');
+    let competitionImageFile = null; // Variable to hold the new image file
+
     // --- NEW: Permission Check ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const canCreate = isSuperAdmin || currentUserProfile?.permissions?.competitions?.can_create;
@@ -524,8 +526,6 @@ async function renderCompetitionCreatePage(agentId) {
     const { data: agent } = await agentResponse.json();
 
     const agentClassification = agent.classification || 'R'; // Default to R if not set
-    // جلب القوالب المتاحة:
-    // نرسل تصنيف الوكيل إلى الخادم. سيقوم الخادم بإرجاع القوالب التي تطابق هذا التصنيف، بالإضافة إلى القوالب العامة (All).
     const templatesResponse = await authedFetch(`/api/templates/available?classification=${agentClassification}`);
 
     if (!templatesResponse.ok) {
@@ -534,7 +534,6 @@ async function renderCompetitionCreatePage(agentId) {
     }
     const { data: templates } = await templatesResponse.json();
     
-    // New V2 Layout
     appContent.innerHTML = `
         <div class="page-header"><h1><i class="fas fa-magic"></i> إنشاء وإرسال مسابقة</h1></div>
         <p class="page-subtitle">للعميل: <a href="#profile/${agent._id}" class="agent-name-link-subtitle"><strong>${agent.name}</strong></a>. قم بتعديل تفاصيل المسابقة أدناه وسيتم تحديث الكليشة تلقائياً.</p>
@@ -545,7 +544,7 @@ async function renderCompetitionCreatePage(agentId) {
                 <h3><i class="fas fa-user-circle"></i> بيانات الوكيل</h3>
                 <div class="agent-info-grid">
                     <div class="action-info-card"><i class="fas fa-star"></i><div class="info"><label>المرتبة</label><p>${agent.rank || 'غير محدد'}</p></div></div>                    <div class="action-info-card"><i class="fas fa-tag"></i><div class="info"><label>التصنيف</label><p>${agent.classification}</p></div></div>
-                    <div class="action-info-card" id="balance-card"><i class="fas fa-wallet"></i><div class="info"><label>الرصيد المتبقي</label><p id="agent-remaining-balance">$${agent.remaining_balance || 0}</p></div></div>
+                    <div class="action-info-card" id="balance-card"><i class="fas fa-wallet"></i><div class="info"><label>الرصيد المتبقي</label><p id="agent-remaining-balance">${agent.remaining_balance || 0}</p></div></div>
                     <div class="action-info-card" id="bonus-card"><i class="fas fa-gift"></i><div class="info"><label>بونص إيداع متبقي</label><p id="agent-remaining-deposit-bonus">${agent.remaining_deposit_bonus || 0} مرات</p></div></div>
                     <div class="action-info-card"><i class="fas fa-percent"></i><div class="info"><label>نسبة بونص الإيداع</label><p>${agent.deposit_bonus_percentage || 0}%</p></div></div>
                 </div>
@@ -560,9 +559,7 @@ async function renderCompetitionCreatePage(agentId) {
                         <option value="" disabled selected>-- اختار مسابقة --</option>
                         ${templates.map(t => `<option value="${t._id}">${t.question}</option>`).join('')}
                     </select>
-                    <div id="template-usage-info" class="form-hint" style="display: none;">
-                        <!-- Usage info will be displayed here -->
-                    </div>
+                    <div id="template-usage-info" class="form-hint" style="display: none;"></div>
                 </div>
                 <div class="override-fields-grid">
                     <div class="form-group">
@@ -602,26 +599,24 @@ async function renderCompetitionCreatePage(agentId) {
                 <div id="validation-messages" class="validation-messages" style="margin-top: 20px;"></div>
             </div>
             
-
             <!-- Preview Column -->
             <div class="preview-v3 card-style-container">
                 <form id="competition-form">
                     <h3><i class="fab fa-telegram-plane"></i> 2. معاينة وإرسال</h3>
                     <div class="telegram-preview-wrapper">
                         <div class="telegram-preview-header">
-                            <div class="header-left">
-                                <i class="fab fa-telegram"></i>
-                                <span>معاينة الرسالة</span>
-                            </div>
+                            <div class="header-left"><i class="fab fa-telegram"></i><span>معاينة الرسالة</span></div>
                         </div>
                         <div class="telegram-preview-body">
                             <textarea id="competition-description" rows="15" required readonly></textarea>
                         </div>
-                    <!-- NEW: Image Preview in Telegram Box -->
-                    <div id="telegram-image-preview-container" class="telegram-image-preview-container" style="display: none;">
-                        <img id="telegram-image-preview" src="" alt="Competition Image Preview">
-                        <button type="button" id="remove-telegram-image-btn" class="btn-icon-action">&times;</button>
-                    </div>
+                        <div id="telegram-image-preview-container" class="telegram-image-preview-container" style="display: none;">
+                            <img id="telegram-image-preview" src="" alt="Competition Image Preview">
+                        </div>
+                        <div class="image-actions" style="margin-top: 10px;">
+                            <input type="file" id="competition-image-upload" accept="image/*" style="display: none;">
+                            <button type="button" id="change-competition-image-btn" class="btn-secondary btn-small"><i class="fas fa-edit"></i> تغيير الصورة</button>
+                        </div>
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn-primary btn-send-telegram"><i class="fas fa-paper-plane"></i> إرسال إلى تلجرام الآن</button>
@@ -629,7 +624,6 @@ async function renderCompetitionCreatePage(agentId) {
                     </div>
                 </form>
             </div>
-
         </div>
     `;
 
@@ -640,26 +634,30 @@ async function renderCompetitionCreatePage(agentId) {
     const prizeInput = document.getElementById('override-prize');
     const depositWinnersInput = document.getElementById('override-deposit-winners');
     const durationInput = document.getElementById('override-duration');
-    const winnerDatePreview = document.getElementById('winner-selection-date-preview');
-    const costSummaryContainer = document.getElementById('competition-cost-summary');
-    const costSummaryText = document.getElementById('cost-summary-text');
+    const imagePreviewContainer = document.getElementById('telegram-image-preview-container');
+    const imagePreview = document.getElementById('telegram-image-preview');
+    const imageUploadInput = document.getElementById('competition-image-upload');
+    const changeImageBtn = document.getElementById('change-competition-image-btn');
 
-    // NEW: Add listener to the variables card to update on blur/click away
-    document.querySelector('.variables-v3').addEventListener('focusout', (e) => {
-        updateDescriptionAndPreview(e);
+    changeImageBtn.addEventListener('click', () => imageUploadInput.click());
+
+    imageUploadInput.addEventListener('change', () => {
+        const file = imageUploadInput.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            competitionImageFile = file;
+        }
     });
 
-    // --- NEW: Check for existing competition when template changes ---
     async function checkExistingCompetition(agentId, templateId) {
-        const sendBtn = document.querySelector('.btn-send-telegram');
         const templateUsageInfo = document.getElementById('template-usage-info');
-
-        // Reset state
         templateUsageInfo.style.display = 'none';
         templateUsageInfo.classList.remove('error-text');
-
         if (!agentId || !templateId) return;
-
         try {
             const response = await authedFetch(`/api/competitions/check-existence?agent_id=${agentId}&template_id=${templateId}`);
             if (response.ok) {
@@ -667,49 +665,45 @@ async function renderCompetitionCreatePage(agentId) {
                 if (exists) {
                     templateUsageInfo.innerHTML = `<i class="fas fa-exclamation-triangle"></i> تم إرسال هذه المسابقة لهذا الوكيل من قبل.`;
                     templateUsageInfo.style.display = 'block';
-                    templateUsageInfo.classList.add('error-text'); // Add error class for styling
+                    templateUsageInfo.classList.add('error-text');
                 }
             }
         } catch (error) { console.error('Failed to check for existing competition:', error); }
     }
+
     function updateDescriptionAndPreview(event = {}) {
         const selectedId = templateSelect.value;
         const selectedTemplate = templates.find(t => String(t._id) === selectedId);
 
-        // FIX: If no template is selected, do not proceed. This prevents errors on focusout.
         if (!selectedTemplate) {
             descInput.value = 'الرجاء اختيار قالب مسابقة أولاً لعرض المعاينة.';
             return;
         }
 
-        // NEW: Handle image preview
-        const imagePreviewContainer = document.getElementById('telegram-image-preview-container');
-        const imagePreview = document.getElementById('telegram-image-preview');
-
-        // Show usage limit info only when the template is first selected
+        // --- REVISED: Image Handling ---
+        // Image is now always set from the template when the template is selected.
         if (event.target && event.target.id === 'competition-template-select') {
-            // --- NEW: Trigger the check for duplicates ---
-            checkExistingCompetition(agent._id, selectedId);
+            const imageUrl = selectedTemplate.image_url || 'images/competition_bg.jpg';
+            imagePreview.src = imageUrl;
+            imagePreviewContainer.style.display = 'block';
+            competitionImageFile = null; // Reset custom image when template changes
+        }
 
+        if (event.target && event.target.id === 'competition-template-select') {
+            checkExistingCompetition(agent._id, selectedId);
             if (selectedTemplate.usage_limit !== null) {
                 const remaining = Math.max(0, selectedTemplate.usage_limit - (selectedTemplate.usage_count || 0));
                 const message = `مرات الاستخدام المتبقية لهذا القالب: ${remaining}`;
-                if (remaining === 1) {
-                    showToast(message, 'error'); // Red for last one
-                } else if (remaining <= 3) {
-                    showToast(message, 'warning'); // Orange for 2 or 3
-                } else {
-                    showToast(message, 'info'); // Blue for more
-                }
+                if (remaining === 1) showToast(message, 'error');
+                else if (remaining <= 3) showToast(message, 'warning');
+                else showToast(message, 'info');
             }
         }
 
-        // Show correct answer after template is selected
         const correctAnswerDisplay = document.getElementById('correct-answer-display');
         correctAnswerDisplay.textContent = selectedTemplate.correct_answer || 'غير محددة';
         correctAnswerDisplay.parentElement.style.display = 'block';
 
-        // تعديل: ملء حقل الإجابة الصحيحة تلقائياً
         const correctAnswerInput = document.getElementById('override-correct-answer');
         if (correctAnswerInput) correctAnswerInput.value = selectedTemplate.correct_answer || '';
 
@@ -723,50 +717,33 @@ async function renderCompetitionCreatePage(agentId) {
         const depositBonusPerc = agent.deposit_bonus_percentage || 0;
         
         function numberToArPlural(num) {
-            const words = {
-                3: 'ثلاث', 4: 'أربع', 5: 'خمس', 6: 'ست', 7: 'سبع', 8: 'ثماني', 9: 'تسع', 10: 'عشر'
-            };
+            const words = { 3: 'ثلاث', 4: 'أربع', 5: 'خمس', 6: 'ست', 7: 'سبع', 8: 'ثماني', 9: 'تسع', 10: 'عشر' };
             return words[num] || num.toString();
         }
         
-        // Create a formatted prize string
         let prizeDetailsText = '';
         if (tradingWinners === 1) prizeDetailsText = `${prize}$ لفائز واحد فقط.`;
         else if (tradingWinners === 2) prizeDetailsText = `${prize}$ لفائزين اثنين فقط.`;
         else if (tradingWinners >= 3 && tradingWinners <= 10) prizeDetailsText = `${prize}$ لـ ${numberToArPlural(tradingWinners)} فائزين فقط.`;
         else if (tradingWinners > 10) prizeDetailsText = `${prize}$ لـ ${tradingWinners} فائزاً فقط.`;
-        else if (tradingWinners > 0) { // Fallback for any other positive number
-            prizeDetailsText = `${prize}$ لـ ${tradingWinners} فائزاً فقط.`;
-        }
+        else if (tradingWinners > 0) prizeDetailsText = `${prize}$ لـ ${tradingWinners} فائزاً فقط.`;
 
-        // Create deposit bonus prize string
         let depositBonusPrizeText = '';
         if (depositWinners > 0 && depositBonusPerc > 0) {
-            if (depositWinners === 1) {
-                depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لفائز واحد فقط.`;
-            } else if (depositWinners === 2) depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لفائزين اثنين فقط.`;
+            if (depositWinners === 1) depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لفائز واحد فقط.`;
+            else if (depositWinners === 2) depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لفائزين اثنين فقط.`;
             else if (depositWinners >= 3 && depositWinners <= 10) depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لـ ${numberToArPlural(depositWinners)} فائزين فقط.`;
-            else if (depositWinners > 10) {
-                depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لـ ${depositWinners} فائزاً فقط.`;
-            }
+            else if (depositWinners > 10) depositBonusPrizeText = `${depositBonusPerc}% بونص إيداع لـ ${depositWinners} فائزاً فقط.`;
         }
 
         let content = originalTemplateContent;
         content = content.replace(/{{agent_name}}/g, agent.name || 'الوكيل');
-        
-        if (prizeDetailsText) {
-            content = content.replace(/{{prize_details}}/g, prizeDetailsText);
-        } else {
-            content = content.replace(/^.*{{prize_details}}.*\n?/gm, '');
-        }
+        if (prizeDetailsText) content = content.replace(/{{prize_details}}/g, prizeDetailsText);
+        else content = content.replace(/^.*{{prize_details}}.*\n?/gm, '');
 
-        if (depositBonusPrizeText) {
-            content = content.replace(/{{deposit_bonus_prize_details}}/g, depositBonusPrizeText);
-        } else {
-            content = content.replace(/^.*{{deposit_bonus_prize_details}}.*\n?/gm, '');
-        }
+        if (depositBonusPrizeText) content = content.replace(/{{deposit_bonus_prize_details}}/g, depositBonusPrizeText);
+        else content = content.replace(/^.*{{deposit_bonus_prize_details}}.*\n?/gm, '');
 
-        // NEW: Map duration codes to a formatted date string for display
         let displayDuration = '';
         if (duration) {
             const endDate = new Date();
@@ -774,85 +751,57 @@ async function renderCompetitionCreatePage(agentId) {
             if (duration === '1d') daysToAdd = 1;
             else if (duration === '2d') daysToAdd = 2;
             else if (duration === '1w') daysToAdd = 7;
-
             endDate.setDate(endDate.getDate() + daysToAdd);
             const formattedEndDate = endDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
             displayDuration = `من تاريخ اليوم وحتى نهاية يوم ${formattedEndDate}`;
         }
 
-        // Replace duration placeholder with the selected display text
-        if (displayDuration)
-            content = content.replace(/⏳ مدة المسابقة: {{competition_duration}}/g, `⏳ مدة المسابقة:\n${displayDuration}`);
+        if (displayDuration) content = content.replace(/⏳ مدة المسابقة: {{competition_duration}}/g, `⏳ مدة المسابقة:\n${displayDuration}`);
         else content = content.replace(/^.*⏳ مدة المسابقة: {{competition_duration}}.*\n?/gm, '');
         
-
         content = content.replace(/{{question}}/g, selectedTemplateQuestion || '');
         content = content.replace(/{{remaining_deposit_bonus}}/g, agent.remaining_deposit_bonus || 0);
         content = content.replace(/{{deposit_bonus_percentage}}/g, agent.deposit_bonus_percentage || 0);
         content = content.replace(/{{winners_count}}/g, tradingWinners);
         content = content.replace(/{{prize_per_winner}}/g, prize);
-        
         descInput.value = content;
 
-        // --- NEW: Live Balance & Bonus Validation ---
         const totalCost = tradingWinners * prize;
         const newRemainingBalance = (agent.remaining_balance || 0) - totalCost;
         const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) - depositWinners;
-
         const balanceEl = document.getElementById('agent-remaining-balance');
         const bonusEl = document.getElementById('agent-remaining-deposit-bonus');
         const validationContainer = document.getElementById('validation-messages');
-        const sendBtn = document.querySelector('.btn-send-telegram');
-
-        balanceEl.textContent = `$${newRemainingBalance.toFixed(2)}`;
+        balanceEl.textContent = `${newRemainingBalance.toFixed(2)}`;
         bonusEl.textContent = `${newRemainingDepositBonus} مرات`;
 
         let validationMessages = '';
-        let isInvalid = false;
-
         if (newRemainingBalance < 0) {
             validationMessages += `<div class="validation-error"><i class="fas fa-exclamation-triangle"></i> الرصيد غير كافٍ. التكلفة (${totalCost.toFixed(2)}$) تتجاوز الرصيد المتاح (${(agent.remaining_balance || 0).toFixed(2)}$).</div>`;
-            isInvalid = true;
         }
         if (newRemainingDepositBonus < 0) {
             validationMessages += `<div class="validation-error"><i class="fas fa-exclamation-triangle"></i> عدد مرات بونص الإيداع غير كافٍ (المتاح: ${agent.remaining_deposit_bonus || 0}).</div>`;
-            isInvalid = true;
         }
-
-        // --- NEW: Disable button if the template has been used before ---
         const templateUsageInfo = document.getElementById('template-usage-info');
         if (templateUsageInfo.style.display === 'block' && templateUsageInfo.classList.contains('error-text')) {
-            isInvalid = true;
-            // The message is already displayed, no need to add another one.
+            // Message is already displayed
         }
-
         validationContainer.innerHTML = validationMessages;
         document.getElementById('balance-card').classList.toggle('invalid', newRemainingBalance < 0);
         document.getElementById('bonus-card').classList.toggle('invalid', newRemainingDepositBonus < 0);
 
-        // --- NEW: Update Winner Selection Date Preview ---
+        const winnerDatePreview = document.getElementById('winner-selection-date-preview');
         if (duration) {
             let daysToAdd = 0;
             switch (duration) {
-                case '1d': daysToAdd = 1; break; // Ends at the start of the day after 1 full day
-                case '2d': daysToAdd = 2; break; // Ends at the start of the day after 2 full days
-                case '1w': daysToAdd = 7; break; // Ends at the start of the day after 7 full days
+                case '1d': daysToAdd = 1; break;
+                case '2d': daysToAdd = 2; break;
+                case '1w': daysToAdd = 7; break;
             }
-            const tzOffsetHours = 3; // Egypt timezone
-
-            // Simulate the backend logic for preview purposes.
-            // Get today's date in the local timezone (e.g., Egypt time)
             const localToday = new Date();
-            // Set time to 00:00:00 to get the start of the local day
             localToday.setHours(0, 0, 0, 0);
-            // The winner selection day is the day *after* the duration ends. So, duration + 1.
-            localToday.setDate(localToday.getDate() + daysToAdd + 1); // This logic is correct for local display.
-            
-            winnerDatePreview.innerHTML = `
-                سيتم إرسال طلب اختيار الفائزين في بداية يوم <br><strong>${localToday.toLocaleDateString('ar-EG', {
-                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-            })}</strong>
-            `;
+            localToday.setDate(localToday.getDate() + daysToAdd + 1);
+            winnerDatePreview.innerHTML = `سيتم إرسال طلب اختيار الفائزين في بداية يوم <br><strong>${localToday.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>`;
             winnerDatePreview.parentElement.style.display = 'block';
         } else {
             winnerDatePreview.parentElement.style.display = 'none';
@@ -863,28 +812,28 @@ async function renderCompetitionCreatePage(agentId) {
         input.addEventListener('change', updateDescriptionAndPreview);
     });
 
-    // --- NEW: Image preview modal ---
-    const imagePreviewContainer = document.getElementById('telegram-image-preview-container');
-    if (imagePreviewContainer) {
-        imagePreviewContainer.addEventListener('click', (e) => {
-            if (e.target.closest('#remove-telegram-image-btn')) {
-                // Handle image removal
-                const imagePreview = document.getElementById('telegram-image-preview');
-                imagePreview.src = '';
-                imagePreviewContainer.style.display = 'none';
-                return;
-            }
-
-            const imgSrc = document.getElementById('telegram-image-preview').src;
-            if (imgSrc && imgSrc.startsWith('http')) {
-                const modalOverlay = document.createElement('div');
-                modalOverlay.className = 'image-modal-overlay';
-                modalOverlay.innerHTML = `<img src="${imgSrc}" class="image-modal-content">`;
-                modalOverlay.addEventListener('click', () => modalOverlay.remove());
-                document.body.appendChild(modalOverlay);
-            }
-        });
-    }
+    imagePreviewContainer.addEventListener('click', (e) => {
+        if (document.querySelector('.image-modal-overlay')) return;
+        const imgSrc = imagePreview.src;
+        if (imgSrc) { // Allow modal for all image sources, including data: URLs
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'image-modal-overlay';
+            modalOverlay.setAttribute('role', 'dialog');
+            modalOverlay.setAttribute('aria-modal', 'true');
+            modalOverlay.setAttribute('aria-label', 'معاينة الصورة بحجم كبير');
+            modalOverlay.innerHTML = `<img src="${imgSrc}" class="image-modal-content" alt="معاينة الصورة">`;
+            const closeModal = () => {
+                modalOverlay.remove();
+                document.removeEventListener('keydown', handleEsc);
+            };
+            const handleEsc = (event) => {
+                if (event.key === 'Escape') closeModal();
+            };
+            modalOverlay.addEventListener('click', closeModal);
+            document.addEventListener('keydown', handleEsc);
+            document.body.appendChild(modalOverlay);
+        }
+    });
 
     document.getElementById('cancel-competition-form').addEventListener('click', () => {
         window.location.hash = `profile/${agent.id}`;
@@ -892,170 +841,129 @@ async function renderCompetitionCreatePage(agentId) {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const selectedTemplateId = templateSelect.value;
-        const selectedTemplate = templates.find(t => t._id == selectedTemplateId);
-        if (!selectedTemplate) {
-            showToast('يرجى اختيار قالب مسابقة صالح.', 'error');
-            sendBtn.disabled = false;
-            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال إلى تلجرام الآن';
-            return;
-        }
-
-        const finalDescription = descInput.value;
-        const finalImageUrl = document.getElementById('telegram-image-preview').src; // Get image URL from preview
-        const winnersCount = parseInt(document.getElementById('override-trading-winners').value) || 0;
-        const prizePerWinner = parseFloat(document.getElementById('override-prize').value) || 0;
-        const depositWinnersCount = parseInt(document.getElementById('override-deposit-winners').value) || 0;
-        const totalCost = winnersCount * prizePerWinner;
         const sendBtn = e.target.querySelector('.btn-send-telegram');
         const originalBtnHtml = sendBtn.innerHTML;
-        // FIX: Define selectedDuration which is used later in the agent update payload.
-        const selectedDuration = durationInput.value;
-        
-        // Enhanced validation on submit
-        if (totalCost > (agent.remaining_balance || 0) || depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
-            console.log('[Submit Debug] Validation FAILED. Entering error block.');
-            const errorParts = [];
-            if (totalCost > (agent.remaining_balance || 0)) {
-                console.log('[Submit Debug] Insufficient trading balance. Showing toast.');
-                errorParts.push(`رصيد المسابقات غير كافٍ (المطلوب: ${totalCost.toFixed(2)}$، المتاح: ${(agent.remaining_balance || 0).toFixed(2)}$)`);
-            }
-            if (depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
-                console.log('[Submit Debug] Insufficient deposit bonus. Showing toast.');
-                errorParts.push(`بونص الإيداع غير كافٍ (المطلوب: ${depositWinnersCount}، المتاح: ${agent.remaining_deposit_bonus || 0})`);
-            }
-            showToast(errorParts.join(' و '), 'error');
-            console.log('[Submit Debug] Stopping submission.');
-            // No need to disable the button here, just stop the process.
-            return; // Stop submission
-        }
-
-        // If validation passes, disable the button and show loading state
         sendBtn.disabled = true;
-        sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
-
-        // --- NEW: Add mandatory Telegram chat verification before proceeding ---
-        const verification = await verifyTelegramChat(agent);
-        if (!verification.verified) {
-            showToast('تم إيقاف الإرسال بسبب فشل التحقق من بيانات التلجرام.', 'error');
-            sendBtn.disabled = false;
-            sendBtn.innerHTML = originalBtnHtml;
-            return; // Stop the submission
-        }
-        // --- End Verification ---
+        sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق والإرسال...';
 
         try {
-            // The backend will handle the image URL logic. We just send the template ID.
-            const finalImageUrlForTelegram = `${window.location.origin}/images/competition_bg.jpg`;
+            const selectedTemplateId = templateSelect.value;
+            const selectedTemplate = templates.find(t => t._id == selectedTemplateId);
+            if (!selectedTemplate) throw new Error('يرجى اختيار قالب مسابقة صالح.');
 
-            // 1. Save the competition
+            const winnersCount = parseInt(document.getElementById('override-trading-winners').value) || 0;
+            const prizePerWinner = parseFloat(document.getElementById('override-prize').value) || 0;
+            const depositWinnersCount = parseInt(document.getElementById('override-deposit-winners').value) || 0;
+            const totalCost = winnersCount * prizePerWinner;
+
+            if (totalCost > (agent.remaining_balance || 0) || depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
+                throw new Error('الرصيد أو عدد مرات البونص غير كافٍ.');
+            }
+
+            const verification = await verifyTelegramChat(agent);
+            if (!verification.verified) throw new Error('فشل التحقق من بيانات التلجرام.');
+
+            let finalImageUrl = selectedTemplate.image_url || ''; // Default to template image
+
+            if (competitionImageFile) {
+                sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...';
+                const formData = new FormData();
+                formData.append('image', competitionImageFile);
+
+                const uploadResponse = await authedFetch('/api/competitions/upload-image', { method: 'POST', body: formData });
+
+                if (!uploadResponse.ok) {
+                    throw new Error('فشل رفع الصورة.');
+                }
+                
+                const uploadResult = await uploadResponse.json();
+                finalImageUrl = uploadResult.imageUrl;
+            }
+
+            console.log(`The image URL being sent is: ${finalImageUrl}`);
+
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
+
             const competitionPayload = {
                 name: selectedTemplate.question,
-                description: finalDescription,
+                description: descInput.value,
                 is_active: true,
-                classification: agent.classification, // <-- إضافة: حفظ تصنيف الوكيل مع المسابقة
+                classification: agent.classification,
                 status: 'sent',
-                agent_id: agent._id, // Use MongoDB _id
-                duration: durationInput.value, // Send duration for backend calculation
-                total_cost: totalCost, // ends_at is now calculated by the backend
+                agent_id: agent._id,
+                duration: durationInput.value,
+                total_cost: totalCost,
                 deposit_winners_count: depositWinnersCount,
-                correct_answer: selectedTemplate.correct_answer,
+                correct_answer: document.getElementById('override-correct-answer').value,
                 winners_count: winnersCount,
                 prize_per_winner: prizePerWinner,
-                // template_id: selectedTemplate.id // This is now handled by the backend
-                template_id: selectedTemplate._id // NEW: Send the template ID to the backend
+                template_id: selectedTemplate._id,
+                image_url: finalImageUrl
             };
 
             const compResponse = await authedFetch('/api/competitions', {
                 method: 'POST',
                 body: JSON.stringify(competitionPayload)
             });
+
             if (!compResponse.ok) {
-                // --- NEW: Handle specific 409 Conflict error for duplicates ---
-                if (compResponse.status === 409) {
-                    throw new Error('فشل الإرسال: تم إرسال هذه المسابقة لهذا الوكيل من قبل.');
-                }
-                // Handle other errors
+                if (compResponse.status === 409) throw new Error('فشل الإرسال: تم إرسال هذه المسابقة لهذا الوكيل من قبل.');
                 const result = await compResponse.json();
                 throw new Error(result.message || 'فشل حفظ المسابقة.');
             }
 
-            // 2. Deduct balance
-            const newConsumed = (agent.consumed_balance || 0) + totalCost;
-            const newRemaining = (agent.competition_bonus || 0) - newConsumed;
-            const newUsedDepositBonus = (agent.used_deposit_bonus || 0) + depositWinnersCount;
-            const newRemainingDepositBonus = (agent.deposit_bonus_count || 0) - newUsedDepositBonus;
-            const todayStr = new Date().toISOString();
-
-            // --- FIX: Convert competition duration to the format expected by the Agent schema ('24h'/'48h') ---
-            let agentCompetitionDuration = null;
-            if (selectedDuration === '1d') {
-                agentCompetitionDuration = '24h';
-            } else if (selectedDuration === '2d' || selectedDuration === '1w') { // Treat '1w' as '48h' for the agent's default duration
-                agentCompetitionDuration = '48h';
-            }
-
-            const agentUpdatePayload = {
-                    consumed_balance: newConsumed,
-                    remaining_balance: newRemaining,
-                    used_deposit_bonus: newUsedDepositBonus,
-                    remaining_deposit_bonus: newRemainingDepositBonus,
-                    last_competition_date: todayStr,
-                    competition_duration: agentCompetitionDuration // حفظ المدة المختارة للوكيل بالصيغة الصحيحة
-            };
-
-            const agentUpdateResponse = await authedFetch(`/api/agents/${agent._id}`, {
-                method: 'PUT',
-                body: JSON.stringify(agentUpdatePayload)
-            });
-            
-            if (!agentUpdateResponse.ok) {
-                const result = await agentUpdateResponse.json();
-                throw new Error(`فشل تحديث رصيد الوكيل: ${result.message}`);
-            }
-
-            // --- NEW: Mark competition task as complete for today ---
-            // This will automatically check the "Competition" toggle in the calendar for today.
-            const taskResponse = await authedFetch('/api/tasks', {
-                method: 'POST',
-                body: JSON.stringify({
-                    agentId: agent._id,
-                    taskType: 'competition_sent',
-                    status: true,
-                    dayIndex: new Date().getDay() // FIX: Send dayIndex to match calendar logic
-                })
-            });
-            // --- NEW: Also update the local taskStore to sync the UI instantly ---
-            // This ensures the calendar page reflects the change without a reload.
-            if (window.taskStore) {
-                window.taskStore.updateTaskStatus(agent._id, new Date().getDay(), 'competition_sent', true);
-            }
-
-            if (!taskResponse.ok) {
-                console.warn('Could not update daily task for competition sent:', await taskResponse.text());
-            }
-
-            // 3. Send to Telegram
+            // --- FIX: Re-add Telegram sending logic after successful save ---
             const telegramResponse = await authedFetch('/api/post-announcement', {
                 method: 'POST',
                 body: JSON.stringify({
-                    message: finalDescription,
-                    chatId: agent.telegram_chat_id, // تعديل: إرسال المعرف الخاص بالوكيل
-                    imageUrl: finalImageUrlForTelegram // Use the guaranteed public URL
+                    message: competitionPayload.description,
+                    chatId: agent.telegram_chat_id,
+                    imageUrl: finalImageUrl
                 })
             });
 
             if (!telegramResponse.ok) {
                 const result = await telegramResponse.json();
-                throw new Error(`فشل الإرسال إلى تلجرام: ${result.message}`);
+                // Even if Telegram fails, the competition is saved. Log it and inform the user.
+                console.error(`فشل الإرسال إلى تلجرام لكن تم حفظ المسابقة: ${result.message}`);
+                showToast(`تم حفظ المسابقة، لكن فشل الإرسال إلى تلجرام: ${result.message}`, 'warning');
+            } else {
+                showToast('تم حفظ المسابقة وإرسالها بنجاح.', 'success');
+            }
+            // --- End of FIX ---
+
+            // --- NEW: Use the correct PUT endpoint to update the agent's balance and deposit bonus ---
+            const newRemainingBalance = (agent.remaining_balance || 0) - totalCost;
+            const newConsumedBalance = (agent.consumed_balance || 0) + totalCost;
+            const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) - depositWinnersCount;
+            const newUsedDepositBonus = (agent.used_deposit_bonus || 0) + depositWinnersCount;
+
+            const updatePayload = {
+                remaining_balance: newRemainingBalance,
+                consumed_balance: newConsumedBalance,
+                remaining_deposit_bonus: newRemainingDepositBonus,
+                used_deposit_bonus: newUsedDepositBonus
+            };
+
+            const balanceUpdateResponse = await authedFetch(`/api/agents/${agent._id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updatePayload)
+            });
+
+            if (!balanceUpdateResponse.ok) {
+                const result = await balanceUpdateResponse.json();
+                // Log the error and perhaps show a warning to the user that the balance deduction failed
+                console.error(`فشل خصم الرصيد أو البونص: ${result.message}`);
+                showToast(`تم إرسال المسابقة، لكن فشل تحديث الرصيد أو البونص: ${result.message}`, 'warning');
+            } else {
+                showToast('تم خصم التكاليف من الرصيد والبونص بنجاح.', 'success');
             }
 
-            // 4. Log activity
-            await logAgentActivity(currentUserProfile?._id, agent._id, 'COMPETITION_CREATED', `تم إنشاء وإرسال مسابقة "${selectedTemplate.question}" بتكلفة ${totalCost.toFixed(2)}$ و ${depositWinnersCount} بونص إيداع.`);
-            
-            // 5. Success
-            showToast('تم حفظ المسابقة وإرسالها وخصم الرصيد بنجاح.', 'success');
-            window.location.hash = `profile/${agent._id}`;
+            // --- FIX: Force a full page reload to show updated balance ---
+            // Using .hash only changes the URL fragment without reloading, which can show stale cached data.
+            // Using .assign() reloads the page, ensuring the latest agent data (with deducted balance) is fetched from the server.
+            showToast('اكتملت العملية. جاري الانتقال لصفحة الوكيل...', 'info');
+            window.location.assign(`/#profile/${agent._id}`);
 
         } catch (error) {
             showToast(error.message, 'error');
@@ -1479,8 +1387,9 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     
+    let templateImageFile = null; // Variable to hold the new image file
+
     const modal = document.createElement('div');
-    // I need to add a function to create the modal for archived templates
     modal.className = 'form-modal-content modal-fullscreen'; // Use existing style from components.css
     
     modal.innerHTML = `
@@ -1517,10 +1426,14 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
                 </div>
                 <div class="template-form-content">
                     <h3 class="details-section-title" style="margin-top: 0;"><i class="fas fa-file-alt"></i> محتوى المسابقة</h3>
-                    <!-- NEW: Image Preview Section (Generated Automatically) -->
+                    <!-- NEW: Image Preview Section with upload button -->
                     <div class="form-group">
-                        <label>معاينة الصورة التلقائية</label>
-                        <img id="create-template-image-preview" src="images/competition_bg.jpg" alt="صورة القالب الثابتة" class="image-preview">
+                        <label>صورة القالب</label>
+                        <div class="image-preview-container">
+                            <img id="create-template-image-preview" src="images/competition_bg.jpg" alt="صورة القالب" class="image-preview">
+                        </div>
+                        <input type="file" id="create-template-image-upload" accept="image/*" style="display: none;">
+                        <button type="button" id="change-template-image-btn" class="btn-secondary btn-small" style="margin-top: 10px;"><i class="fas fa-edit"></i> تغيير الصورة</button>
                     </div>
                     <div class="form-group">
                         <label for="create-template-content">نص المسابقة</label>
@@ -1540,43 +1453,92 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
 
     const closeModal = () => overlay.remove();
 
+    // --- NEW: Event Listeners for Image Manipulation ---
+    const imageUploadInput = document.getElementById('create-template-image-upload');
+    const changeImageBtn = document.getElementById('change-template-image-btn');
+    const imagePreview = document.getElementById('create-template-image-preview');
+
+    changeImageBtn.addEventListener('click', () => imageUploadInput.click());
+
+    imageUploadInput.addEventListener('change', () => {
+        const file = imageUploadInput.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            templateImageFile = file;
+        }
+    });
+
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('cancel-create-modal').addEventListener('click', closeModal);
     
     document.getElementById('create-template-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalBtnHtml = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+
         const questionText = document.getElementById('create-template-question').value.trim();        
         if (!questionText) {
             showToast('حقل السؤال مطلوب.', 'error');
+            submitBtn.disabled = false;
             return;
         }
 
-        const formData = {
-            name: questionText, // FIX: Change 'question' to 'name' to match the schema
-            classification: document.getElementById('create-template-classification').value,
-            content: document.getElementById('create-template-content').value.trim(),
-            correct_answer: document.getElementById('create-template-correct-answer').value.trim(),
-            usage_limit: document.getElementById('create-template-usage-limit').value ? parseInt(document.getElementById('create-template-usage-limit').value, 10) : null, // Corrected: usage_limit
-            usage_count: 0, // FIX: Add usage_count on creation
-            is_archived: false,
-        };
+        try {
+            let finalImageUrl = 'images/competition_bg.jpg'; // Default image
 
-        console.log('[DEBUG] Sending template data:', formData); // إضافة: عرض البيانات المرسلة
+            if (templateImageFile) {
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...';
+                const formData = new FormData();
+                formData.append('image', templateImageFile);
 
-        const response = await authedFetch('/api/templates', {
-            method: 'POST',
-            body: JSON.stringify(formData)
-        });
-        if (!response.ok) {
-            const result = await response.json();
-            // إضافة: عرض رسالة الخطأ من الخادم بشكل واضح
-            console.error('Error inserting template:', { message: result.message, error: result.error });
-            // تعديل: عرض رسالة خطأ أكثر تفصيلاً للمستخدم
-            showToast(`فشل حفظ القالب. السبب: ${result.message}`, 'error');
-        } else {
+                // Re-using the competition image upload endpoint
+                const uploadResponse = await authedFetch('/api/competitions/upload-image', { method: 'POST', body: formData });
+
+                if (!uploadResponse.ok) {
+                    throw new Error('فشل رفع الصورة.');
+                }
+                
+                const uploadResult = await uploadResponse.json();
+                finalImageUrl = uploadResult.imageUrl; // The backend should return the relative path
+            }
+            
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري حفظ القالب...';
+
+            const formData = {
+                name: questionText,
+                classification: document.getElementById('create-template-classification').value,
+                content: document.getElementById('create-template-content').value.trim(),
+                correct_answer: document.getElementById('create-template-correct-answer').value.trim(),
+                usage_limit: document.getElementById('create-template-usage-limit').value ? parseInt(document.getElementById('create-template-usage-limit').value, 10) : null,
+                usage_count: 0,
+                is_archived: false,
+                image_url: finalImageUrl // Add the image URL to the payload
+            };
+
+            const response = await authedFetch('/api/templates', {
+                method: 'POST',
+                body: JSON.stringify(formData)
+            });
+
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.message || 'فشل حفظ القالب.');
+            }
+            
             showToast('تم حفظ القالب بنجاح.', 'success');
             closeModal();
             if (onSaveCallback) onSaveCallback();
+
+        } catch (error) {
+            showToast(error.message, 'error');
+            console.error('Template creation failed:', error);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHtml;
         }
     });
 }
@@ -1807,52 +1769,62 @@ async function renderArchivedTemplatesPage() {
 function renderEditTemplateModal(template, onSaveCallback) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    
+    let templateImageFile = null; // Variable to hold the new image file
+
     const modal = document.createElement('div');
-    modal.className = 'form-modal-content modal-wide'; // Use existing style from components.css
+    modal.className = 'form-modal-content modal-fullscreen'; // Use fullscreen for consistency
 
     modal.innerHTML = `
         <div class="form-modal-header">
-            <h2>تعديل قالب مسابقة</h2>
+            <h2><i class="fas fa-edit"></i> تعديل قالب مسابقة</h2>
             <button id="close-modal-btn" class="btn-icon-action" title="إغلاق">&times;</button>
         </div>
         <div class="form-modal-body">
-            <form id="edit-template-form" class="form-layout">
-                <div class="form-group">
-                    <label for="edit-template-question">السؤال</label>
-                    <textarea id="edit-template-question" rows="3" required>${template.name}</textarea>
+            <form id="edit-template-form" class="template-form-grid">
+                <div class="template-form-fields">
+                    <h3 class="details-section-title" style="margin-top: 0;"><i class="fas fa-info-circle"></i> الحقول الأساسية</h3>
+                    <div class="form-group">
+                        <label for="edit-template-question">السؤال (سيكون اسم المسابقة)</label>
+                        <textarea id="edit-template-question" rows="3" required>${template.name}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-template-correct-answer">الإجابة الصحيحة</label>
+                        <textarea id="edit-template-correct-answer" rows="2" required>${template.correct_answer || ''}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-template-classification">التصنيف</label>
+                        <select id="edit-template-classification" required>
+                            <option value="All" ${template.classification === 'All' ? 'selected' : ''}>عام</option>
+                            <option value="R" ${template.classification === 'R' ? 'selected' : ''}>R</option>
+                            <option value="A" ${template.classification === 'A' ? 'selected' : ''}>A</option>
+                            <option value="B" ${template.classification === 'B' ? 'selected' : ''}>B</option>
+                            <option value="C" ${template.classification === 'C' ? 'selected' : ''}>C</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-template-usage-limit">
+                            عدد مرات الاستخدام (اتركه فارغاً للاستخدام غير المحدود)
+                            <small style="display: block; color: var(--text-secondary-color);">المستخدم حالياً: ${template.usage_count || 0}</small>
+                        </label>
+                        <input type="number" id="edit-template-usage-limit" min="1" placeholder="مثال: 5" value="${template.usage_limit || ''}">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="edit-template-correct-answer">الإجابة الصحيحة</label>
-                    <textarea id="edit-template-correct-answer" rows="2" required>${template.correct_answer || ''}</textarea>
+                <div class="template-form-content">
+                    <h3 class="details-section-title" style="margin-top: 0;"><i class="fas fa-file-alt"></i> محتوى المسابقة</h3>
+                    <div class="form-group">
+                        <label>صورة القالب</label>
+                        <div class="image-preview-container">
+                            <img id="edit-template-image-preview" src="${template.image_url || 'images/competition_bg.jpg'}" alt="صورة القالب" class="image-preview">
+                        </div>
+                        <input type="file" id="edit-template-image-upload" accept="image/*" style="display: none;">
+                        <button type="button" id="change-template-image-btn" class="btn-secondary btn-small" style="margin-top: 10px;"><i class="fas fa-edit"></i> تغيير الصورة</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-template-content">نص المسابقة</label>
+                        <textarea id="edit-template-content" rows="15" required>${template.content}</textarea>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="edit-template-classification">التصنيف</label>
-                    <select id="edit-template-classification" required>
-                        <option value="All" ${template.classification === 'All' ? 'selected' : ''}>عام</option>
-                        <option value="R" ${template.classification === 'R' ? 'selected' : ''}>R</option>
-                        <option value="A" ${template.classification === 'A' ? 'selected' : ''}>A</option>
-                        <option value="B" ${template.classification === 'B' ? 'selected' : ''}>B</option>
-                        <option value="C" ${template.classification === 'C' ? 'selected' : ''}>C</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <!-- NEW: Image Preview Section (Generated Automatically) -->
-                    <label>معاينة الصورة التلقائية</label>
-                    <img id="edit-template-image-preview" src="images/competition_bg.jpg" alt="صورة القالب الثابتة" class="image-preview">
-                </div>
-                <div class="form-group">
-                    <label for="edit-template-content">محتوى المسابقة</label>
-                    <textarea id="edit-template-content" rows="8" required>${template.content}</textarea>
-                </div>
-                <div class="form-group">
-                    <label for="edit-template-usage-limit">
-                        عدد مرات الاستخدام (اتركه فارغاً للاستخدام غير المحدود)
-                        <small style="display: block; color: var(--text-secondary-color);">المستخدم حالياً: ${template.usage_count || 0}</small>
-                    </label>
-                    <input type="number" id="edit-template-usage-limit" min="1" placeholder="مثال: 5" value="${template.usage_limit || ''}">
-                </div>
-                <div class="form-actions">
+                <div class="form-actions template-form-actions">
                     <button type="submit" class="btn-primary"><i class="fas fa-save"></i> حفظ التعديلات</button>
                     <button type="button" id="cancel-edit-modal" class="btn-secondary">إلغاء</button>
                 </div>
@@ -1865,36 +1837,94 @@ function renderEditTemplateModal(template, onSaveCallback) {
 
     const closeModal = () => overlay.remove();
 
+    // Image manipulation listeners
+    const imageUploadInput = document.getElementById('edit-template-image-upload');
+    const changeImageBtn = document.getElementById('change-template-image-btn');
+    const imagePreview = document.getElementById('edit-template-image-preview');
+
+    changeImageBtn.addEventListener('click', () => imageUploadInput.click());
+
+    imageUploadInput.addEventListener('change', () => {
+        const file = imageUploadInput.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            templateImageFile = file;
+        }
+    });
+
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('cancel-edit-modal').addEventListener('click', closeModal);
 
     document.getElementById('edit-template-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        
-        // Use a fixed image URL for all templates
-        const fixedImageUrl = `${window.location.origin}/images/competition_bg.jpg`;
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalBtnHtml = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        console.log('Edit template form submitted.');
 
-        const updatedData = {
-            name: document.getElementById('edit-template-question').value.trim(),
-            question: document.getElementById('edit-template-question').value.trim(), // Also send 'question' for compatibility
-            classification: document.getElementById('edit-template-classification').value,
-            content: document.getElementById('edit-template-content').value.trim(),
-            correct_answer: document.getElementById('edit-template-correct-answer').value.trim(),
-            usage_limit: document.getElementById('edit-template-usage-limit').value ? parseInt(document.getElementById('edit-template-usage-limit').value, 10) : null,
-            image_url: fixedImageUrl
-        };
+        try {
+            let finalImageUrl = template.image_url; // Start with the existing image URL
+            console.log('Initial image URL:', finalImageUrl);
+            console.log('templateImageFile:', templateImageFile);
 
-        const response = await authedFetch(`/api/templates/${template._id}`, {
-            method: 'PUT',
-            body: JSON.stringify(updatedData)
-        });
-        if (!response.ok) {
-            const result = await response.json();
-            showToast(result.message || 'فشل حفظ التعديلات.', 'error');
-            } else { 
+            if (templateImageFile) {
+                console.log('New template image file detected. Uploading...');
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...';
+                const formData = new FormData();
+                formData.append('image', templateImageFile);
+
+                const uploadResponse = await authedFetch('/api/competitions/upload-image', { method: 'POST', body: formData });
+
+                if (!uploadResponse.ok) {
+                    const errorText = await uploadResponse.text();
+                    console.error('Image upload failed. Status:', uploadResponse.status, 'Response:', errorText);
+                    throw new Error('فشل رفع الصورة.');
+                }
+                
+                const uploadResult = await uploadResponse.json();
+                finalImageUrl = uploadResult.imageUrl;
+                console.log('Image uploaded successfully. New image URL:', finalImageUrl);
+            } else {
+                console.log('No new image file. Keeping existing URL.');
+            }
+            
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري حفظ التعديلات...';
+
+            const updatedData = {
+                name: document.getElementById('edit-template-question').value.trim(),
+                classification: document.getElementById('edit-template-classification').value,
+                content: document.getElementById('edit-template-content').value.trim(),
+                correct_answer: document.getElementById('edit-template-correct-answer').value.trim(),
+                usage_limit: document.getElementById('edit-template-usage-limit').value ? parseInt(document.getElementById('edit-template-usage-limit').value, 10) : null,
+                image_url: finalImageUrl // Use the new or existing image URL
+            };
+
+            console.log('Submitting updated template data:', updatedData);
+
+            const response = await authedFetch(`/api/templates/${template._id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updatedData)
+            });
+
+            if (!response.ok) {
+                const result = await response.json();
+                console.error('Failed to save template:', result);
+                throw new Error(result.message || 'فشل حفظ التعديلات.');
+            }
+            
             showToast('تم حفظ التعديلات بنجاح.', 'success');
             closeModal();
             if (onSaveCallback) onSaveCallback();
+
+        } catch (error) {
+            showToast(error.message, 'error');
+            console.error('Template edit failed:', error);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnHtml;
         }
     });
 }

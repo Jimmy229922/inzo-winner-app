@@ -190,7 +190,7 @@ async function handleRouting() {
         '#add-agent': { func: renderAddAgentForm, nav: null }, // إصلاح: إضافة المسار المفقود
         '#top-agents': { func: renderTopAgentsPage, nav: 'nav-top-agents' }, // NEW: Top Agents page
         '#manage-agents': { func: renderManageAgentsPage, nav: 'nav-manage-agents', adminOnly: false },
-        '#competitions/edit': { func: renderCompetitionEditForm, nav: 'nav-manage-competitions' }, // NEW: Dedicated route for editing
+        '#competitions/edit': { func: () => {}, nav: 'nav-manage-competitions' }, // Placeholder: Actual function is in competitions.js
         '#competitions': { func: renderCompetitionsPage, nav: 'nav-manage-competitions' },
         '#archived-competitions': { func: renderCompetitionsPage, nav: 'nav-archived-competitions' },
         '#competition-templates': { func: renderCompetitionTemplatesPage, nav: 'nav-competition-templates' },
@@ -392,7 +392,13 @@ function setupRealtimeListeners() {
                         showToast(`تم تجديد رصيد الوكيل ${message.data.agentName} تلقائياً.`, 'success');
                         break;
                     case 'presence_update':
-                        // Handle presence update if needed in the future
+                        // message.data should be an array of online user IDs
+                        if (Array.isArray(message.data)) {
+                            window.onlineUsers.clear();
+                            message.data.forEach(userId => window.onlineUsers.set(userId, true));
+                            // Dispatch a global event that the user list can listen to
+                            window.dispatchEvent(new CustomEvent('presence-update'));
+                        }
                         break;
                     // Add other message types here
                 }

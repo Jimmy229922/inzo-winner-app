@@ -44,6 +44,10 @@ const CompetitionTemplateSchema = new mongoose.Schema({
     is_archived: {
         type: Boolean,
         default: false
+    },
+    image_url: {
+        type: String,
+        trim: true
     }
 }, {
     timestamps: true

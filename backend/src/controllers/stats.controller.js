@@ -91,12 +91,25 @@ exports.getAgentAnalytics = async (req, res) => {
 
         const query = { agent_id: agentId, status: 'completed' };
 
-        const now = new Date();
-        if (dateRange === '7d') {
-            query.createdAt = { $gte: new Date(now.setDate(now.getDate() - 7)) };
-        } else if (dateRange === '30d') {
-            query.createdAt = { $gte: new Date(now.setDate(now.getDate() - 30)) };
-        } else if (dateRange === 'month') {
+        // --- FIX: Correctly calculate date ranges without modifying the original date object ---
+        if (dateRange !== 'all') {
+            const now = new Date();
+            let startDate;
+            switch(dateRange) {
+                case '7d':
+                    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+                    break;
+                case '30d':
+                    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+                    break;
+                case 'month':
+                    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                    break;
+            }
+            if (startDate) {
+                startDate.setHours(0, 0, 0, 0); // Set to the beginning of the day
+                query.createdAt = { $gte: startDate };
+            }
         }
 
         const competitions = await Competition.find(query)
@@ -104,10 +117,8 @@ exports.getAgentAnalytics = async (req, res) => {
             .select('name createdAt views_count reactions_count participants_count')
             .lean();
 
-        if (!competitions) {
-            return res.status(404).json({ message: 'No analytics data found for this agent.' });
-        }
-
+        // No need to check for !competitions, as find() returns an empty array, not null/undefined
+        
         res.json({
             competitions
         });

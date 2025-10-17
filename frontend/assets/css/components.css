@@ -268,3 +268,20 @@
 .btn-telegram-bonus:hover {
     background-color: #0077b3;
 }
+
+/* Online Status Indicator */
+.online-status-indicator {
+    width: 12px;
+    height: 12px;
+    background-color: #808080; /* Grey for offline */
+    border-radius: 50%;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    border: 2px solid var(--card-bg-color);
+    transition: background-color 0.3s;
+}
+
+.online-status-indicator.online {
+    background-color: #2ecc71; /* Green for online */
+}

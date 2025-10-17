@@ -119,26 +119,35 @@ function updateHomePageUI(stats) {
         `;
 
         // 2. Update Tasks Progress
-        const totalTodayTasks = agentsForToday?.length || 0;
+        const totalTodayAgents = agentsForToday?.length || 0;
         const pendingList = document.getElementById('pending-tasks-list');
         if (!pendingList) return; // Exit if the element is not on the page
 
-        if (totalTodayTasks > 0) {
+        if (totalTodayAgents > 0) {
             // تعديل: استخدام بيانات المهام التي تم جلبها مسبقاً
             if (tasksForToday) {
                 const tasksMap = (tasksForToday || []).reduce((acc, task) => {
-                    acc[task.agent_id.toString()] = task; // FIX: Use agent_id.toString() as key
+                    acc[task.agent_id.toString()] = task;
                     return acc;
                 }, {});
 
-                const completedToday = agentsForToday.filter(agent => {
-                    const task = tasksMap[agent._id] || {}; // FIX: Use _id instead of id
-                    return task.audited; // FIX: Completion is based on audit only
-                }).length;
+                // A daily task for an agent has two components: audit and competition.
+                const totalTodayActions = totalTodayAgents * 2;
+                let completedActions = 0;
+
+                agentsForToday.forEach(agent => {
+                    const task = tasksMap[agent._id] || {};
+                    if (task.audited) {
+                        completedActions++;
+                    }
+                    if (task.competition_sent) {
+                        completedActions++;
+                    }
+                });
 
                 const pendingAgents = agentsForToday.filter(agent => {
                     const task = tasksMap[agent._id];
-                    return !task || !task.audited;  // Show agents that have not been audited yet
+                    return !task || !task.audited || !task.competition_sent;
                 });
 
                 // ترتيب الوكلاء حسب التصنيف
@@ -147,10 +156,10 @@ function updateHomePageUI(stats) {
                     return classOrder[a.classification] - classOrder[b.classification];
                 });
 
-                const progressPercent = totalTodayTasks > 0 ? Math.round((completedToday / totalTodayTasks) * 100) : 0;
+                const progressPercent = totalTodayActions > 0 ? Math.round((completedActions / totalTodayActions) * 100) : 0;
                 document.getElementById('progress-percentage').textContent = progressPercent;
                 document.getElementById('tasks-progress-bar').style.width = `${progressPercent}%`;
-                document.getElementById('progress-label').textContent = `${completedToday} / ${totalTodayTasks}`;
+                document.getElementById('progress-label').textContent = `${completedActions} / ${totalTodayActions}`;
                 document.getElementById('pending-count').textContent = pendingAgents.length;
 
                 // عرض قائمة الوكلاء المتبقين

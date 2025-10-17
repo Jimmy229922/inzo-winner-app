@@ -20,6 +20,7 @@ const runMigrations = require('./migration-runner'); // FIX: Correct path for mi
 
 const app = express();
 
+
 // Middlewares
 app.use(cors());
 app.use(express.json());

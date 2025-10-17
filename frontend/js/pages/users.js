@@ -1,4 +1,15 @@
+// --- NEW: Handler for presence updates ---
+const handlePresenceUpdateForUsersPage = () => {
+    if (window.updateUserPresenceIndicators) {
+        window.updateUserPresenceIndicators();
+    }
+};
+
 async function renderUsersPage() {
+    // --- NEW: Clean up previous listener and add a new one for this page instance ---
+    window.removeEventListener('presence-update', handlePresenceUpdateForUsersPage);
+    window.addEventListener('presence-update', handlePresenceUpdateForUsersPage);
+
     const appContent = document.getElementById('app-content');
 
     // --- MODIFICATION: Allow both super_admin and admin to access this page ---

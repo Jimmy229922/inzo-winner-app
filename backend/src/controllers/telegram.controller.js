@@ -17,18 +17,34 @@ exports.postAnnouncement = async (req, res) => {
     }
 
     try {
-        if (imageUrl && imageUrl.startsWith('http://localhost')) {
-            // Handle local image: read it and send as a stream
-            const imagePath = path.join(__dirname, '..', '..', '..', 'frontend', 'images', 'competition_bg.jpg');
-            const imageBuffer = await fs.readFile(imagePath);
-            await bot.sendPhoto(chatId, imageBuffer, { caption: message, parse_mode: 'HTML' });
-        } else {
-            // Handle remote image URL or text-only message
-            if (imageUrl) {
-                await bot.sendPhoto(chatId, imageUrl, { caption: message, parse_mode: 'HTML' });
-            } else {
-                await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+        // --- FIX: Handle relative image paths by sending a file buffer ---
+        if (imageUrl && imageUrl.startsWith('/')) {
+            // This block handles relative paths (e.g., /uploads/...) which point to local files.
+            // Telegram's servers can't access these directly.
+            // We must read the image from our filesystem and send it as a file buffer.
+            try {
+                // The imageUrl is the relative path from the root of the backend project.
+                // e.g., /uploads/competitions/image.jpg
+                // We need to construct the full path on the filesystem.
+                const imagePath = path.join(__dirname, '..', '..', imageUrl);
+
+                // Read the file into a buffer
+                const imageBuffer = await fs.readFile(imagePath);
+                // Send the buffer as a photo
+                await bot.sendPhoto(chatId, imageBuffer, { caption: message, parse_mode: 'HTML' });
+            } catch (fileError) {
+                // If reading the local file fails, log the error and do not send to Telegram.
+                console.error(`[Telegram] Could not read local file for path ${imageUrl}. Error: ${fileError.message}`);
+                // We can't fall back to sending the URL because it's not a valid URL.
+                // We'll let the generic error handler below catch this and inform the user.
+                throw new Error(`Server could not process image file: ${fileError.message}`);
             }
+        } else if (imageUrl) {
+            // This handles absolute remote URLs (e.g., from a CDN).
+            await bot.sendPhoto(chatId, imageUrl, { caption: message, parse_mode: 'HTML' });
+        } else {
+            // Handle a text-only message if no imageUrl is provided.
+            await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
         }
 
         res.status(200).json({ message: 'Message sent successfully to Telegram.' });
