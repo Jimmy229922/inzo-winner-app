@@ -29,12 +29,11 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksState, number, searc
         ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar" loading="lazy">`
         : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
 
-    // --- إضافة: التحقق من صلاحية السوبر أدمن لتفعيل السحب والإفلات ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
-    const draggableAttribute = isSuperAdmin ? 'draggable="true"' : '';
     const cursorStyle = isSuperAdmin ? 'cursor: grab;' : 'cursor: pointer;';
 
     const element = document.createElement('div');
+    element.id = `agent-card-${agent._id}-${dayIndex}`;
     element.className = `calendar-agent-item ${isComplete ? 'complete' : ''}`;
     element.dataset.agentId = agent._id;
     element.dataset.classification = agent.classification;
@@ -76,7 +75,6 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksState, number, searc
 
     applyHighlight(element, searchTerm);
 
-    // Add checkmark icon separately for easier toggling
     const nameEl = element.querySelector('.agent-name');
     nameEl.insertAdjacentHTML('beforeend', '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>');
     nameEl.classList.toggle('has-checkmark', isComplete);
@@ -91,13 +89,18 @@ class CalendarUI {
         <div class="page-header column-header">
             <div class="header-top-row">
                 <h1>تقويم المهام الأسبوعي</h1>
-                <div id="weekly-reset-countdown-container" class="countdown-timer-container" style="display: none;">
-                    <i class="fas fa-sync-alt"></i>
-                    <span>إعادة التعيين خلال: <span id="weekly-reset-countdown" class="countdown-time"></span></span>
+                <div class="header-actions-group">
+                    <button id="reset-all-tasks-btn" class="btn btn-danger">
+                        <i class="fas fa-undo"></i> إعادة تعيين الكل
+                    </button>
+                    <div id="weekly-reset-countdown-container" class="countdown-timer-container" style="display: none;">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>إعادة التعيين خلال: <span id="weekly-reset-countdown" class="countdown-time"></span></span>
+                    </div>
+                    <span class="info-tooltip" title="حالة جميع الوكلاء سيتم إعادة تعيينها (إلغاء التدقيق والإرسال) تلقائياً كل يوم أحد الساعة 7 صباحاً">
+                        <i class="fas fa-info-circle"></i>
+                    </span>
                 </div>
-                <span class="info-tooltip" title="حالة جميع الوكلاء سيتم إعادة تعيينها (إلغاء التدقيق والإرسال) تلقائياً كل يوم أحد الساعة 7 صباحاً">
-                    <i class="fas fa-info-circle"></i>
-                </span>
             </div>
             <div class="calendar-filters">
                 <div class="filter-search-container">
@@ -119,54 +122,59 @@ class CalendarUI {
         this.calendarContainer = this.container.querySelector('#calendar-container');
         this.calendarData = [];
         this.tasksState = null;
-        this.daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
-        this.searchDebounceTimer = null; // For debouncing search input
+        this.daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة',];
+        this.searchDebounceTimer = null;
+
+        this.boundHandleChange = this._handleChange.bind(this);
+        this.boundHandleResetAll = this.handleResetAllTasks.bind(this);
     }
 
     destroy() {
         window.taskStore.unsubscribe(this.boundUpdateUIFromState);
-        clearTimeout(this.searchDebounceTimer); // Clear any pending search
+        clearTimeout(this.searchDebounceTimer);
         if (weeklyResetCountdownInterval) {
             clearInterval(weeklyResetCountdownInterval);
         }
+        this.calendarContainer.removeEventListener('change', this.boundHandleChange);
+        const resetBtn = this.container.querySelector('#reset-all-tasks-btn');
+        if (resetBtn) {
+            resetBtn.removeEventListener('click', this.boundHandleResetAll);
+        }
+        console.log('[Calendar Page] Instance destroyed and listeners cleaned up.');
     }
 
     async render() {
         const response = await authedFetch('/api/calendar/data');
         if (!response.ok) {
-            const errorResult = await response.json();
-            throw new Error(errorResult.message || 'فشل جلب بيانات التقويم');
+            throw new Error((await response.json()).message || 'فشل جلب بيانات التقويم');
         }
-        const { agents, tasks } = await response.json();
+        const { agents } = await response.json();
 
         this.tasksState = window.taskStore.state;
-        console.log('[Calendar Page] Rendering with initial data. Agents:', agents.length, 'Tasks in Store:', Object.keys(this.tasksState.tasks).length);
 
         this.calendarData = this.daysOfWeek.map(() => []);
         agents.forEach(agent => {
             const dayIndices = agent.audit_days || [];
             dayIndices.forEach(dayIndex => {
-                if (dayIndex >= 0 && dayIndex < 6) {
+                if (dayIndex >= 0 && dayIndex < 6) { // Corrected to include Saturday
                     this.calendarData[dayIndex].push(agent);
                 }
             });
         });
 
         this._renderDayColumns();
-        this._renderAllAgentCards(); // Render cards initially
-
+        this._renderAllAgentCards();
         this._setupEventListeners();
-        setupCalendarFilters(this); // Pass the entire UI instance
+        setupCalendarFilters(this);
 
         this.boundUpdateUIFromState = updateCalendarUIFromState.bind(this);
         window.taskStore.subscribe(this.boundUpdateUIFromState);
     }
 
     _renderDayColumns() {
-        this.calendarContainer.innerHTML = ''; // Clear previous columns
+        this.calendarContainer.innerHTML = '';
         this.daysOfWeek.forEach((dayName, index) => {
             const isToday = new Date().getDay() === index;
-            const dailyAgents = this.calendarData[index];
             const { completedTasks, totalTasks, progressPercent } = this._calculateDayProgress(index);
 
             const columnEl = document.createElement('div');
@@ -189,8 +197,7 @@ class CalendarUI {
         const totalTasks = dailyAgents.length;
         let completedTasks = 0;
         dailyAgents.forEach(agent => {
-            const agentTasks = this.tasksState.tasks[agent._id] || {};
-            const task = agentTasks[dayIndex] || {};
+            const task = (this.tasksState.tasks[agent._id] || {})[dayIndex] || {};
             if (task.audited) {
                 completedTasks++;
             }
@@ -205,7 +212,7 @@ class CalendarUI {
             if (!columnEl) return;
 
             const contentContainer = columnEl.querySelector('.day-column-content');
-            contentContainer.innerHTML = ''; // Clear previous content
+            contentContainer.innerHTML = '';
 
             if (agentsForDay.length > 0) {
                 const fragment = document.createDocumentFragment();
@@ -222,24 +229,86 @@ class CalendarUI {
     }
 
     _setupEventListeners() {
-        setupCalendarEventListeners(this.calendarContainer, this.calendarData, this);
+        this.calendarContainer.addEventListener('change', this.boundHandleChange);
+        this.container.querySelector('#reset-all-tasks-btn').addEventListener('click', this.boundHandleResetAll);
+        setupClickAndDragEventListeners(this.calendarContainer, this.calendarData, this);
     }
 
-    /**
-     * Surgically updates the UI after a drag-and-drop operation.
-     * Instead of a full re-render, it only updates the source and destination columns.
-     * @param {number} sourceDayIndex The original day index.
-     * @param {number} newDayIndex The new day index.
-     * @param {string} agentId The ID of the agent that was moved.
-     */
+    async handleResetAllTasks() {
+        showConfirmationModal(
+            'هل أنت متأكد من إعادة تعيين جميع المهام (التدقيق والمسابقة) لهذا الأسبوع؟ لا يمكن التراجع عن هذا الإجراء.',
+            async () => {
+                showLoader();
+                try {
+                    await window.taskStore.resetAllTasks();
+                    showToast('تمت إعادة تعيين جميع المهام بنجاح.', 'success');
+                } catch (error) {
+                    console.error('Failed to reset all tasks:', error);
+                    showToast(`فشل إعادة التعيين: ${error.message}`, 'error');
+                } finally {
+                    hideLoader();
+                }
+            },
+            { title: 'تأكيد إعادة تعيين الكل', confirmText: 'نعم، أعد التعيين', confirmClass: 'btn-danger' }
+        );
+    }
+
+    async _handleChange(e) {
+        const checkbox = e.target;
+        if (!checkbox.matches('.audit-check, .competition-check')) return;
+
+        const agentId = checkbox.dataset.agentId;
+        const dayIndex = parseInt(checkbox.dataset.dayIndex, 10);
+        const taskType = checkbox.classList.contains('audit-check') ? 'audited' : 'competition_sent';
+        const status = checkbox.checked;
+
+        const agentItem = checkbox.closest('.calendar-agent-item');
+        agentItem.classList.add('is-loading');
+        agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = true);
+
+        try {
+            await window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, status);
+        } catch (error) {
+            console.error(`[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`, error);
+            showToast('فشل تحديث حالة المهمة.', 'error');
+        } finally {
+            // The store subscription will handle removing the loading state
+        }
+    }
+
     _updateAfterDrag(sourceDayIndex, newDayIndex, agentId) {
         const agentToMove = this.calendarData[sourceDayIndex].find(a => a._id === agentId);
-        if (!agentToMove) return; // Should not happen
+        if (!agentToMove) return;
 
-        // Update data arrays
         this.calendarData[sourceDayIndex] = this.calendarData[sourceDayIndex].filter(a => a._id !== agentId);
         this.calendarData[newDayIndex].push(agentToMove);
-        this.calendarData[newDayIndex].sort((a, b) => a.name.localeCompare(b.name)); // Keep it sorted
+        this.calendarData[newDayIndex].sort((a, b) => a.name.localeCompare(b.name));
+        
+        // Re-render only the two affected columns for efficiency
+        this._renderSingleDayColumn(sourceDayIndex);
+        this._renderSingleDayColumn(newDayIndex);
+    }
+
+    _renderSingleDayColumn(dayIndex) {
+        const columnEl = this.calendarContainer.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
+        if (!columnEl) return;
+
+        const contentContainer = columnEl.querySelector('.day-column-content');
+        contentContainer.innerHTML = '';
+
+        const agentsForDay = this.calendarData[dayIndex] || [];
+        if (agentsForDay.length > 0) {
+            const fragment = document.createDocumentFragment();
+            const isToday = new Date().getDay() === dayIndex;
+            agentsForDay.forEach((agent, index) => {
+                const agentElement = createAgentItemHtml(agent, dayIndex, isToday, this.tasksState, index + 1, '');
+                fragment.appendChild(agentElement);
+            });
+            contentContainer.appendChild(fragment);
+        } else {
+            contentContainer.innerHTML = '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
+        }
+        updateDayProgressUI.call(this, dayIndex);
     }
 }
 
@@ -264,27 +333,19 @@ async function renderCalendarPage() {
 function getNextResetTime() {
     const now = new Date();
     const nextReset = new Date();
-
-    // Find the next Sunday
-    const day = now.getDay(); // 0=Sunday, 1=Monday, ...
+    const day = now.getDay();
     const daysUntilSunday = (7 - day) % 7;
     nextReset.setDate(now.getDate() + daysUntilSunday);
-
-    // Set the time to 7:00 AM
     nextReset.setHours(7, 0, 0, 0);
-
-    // If it's Sunday and past 7 AM, calculate for next week's Sunday
     if (day === 0 && now.getTime() > nextReset.getTime()) {
         nextReset.setDate(nextReset.getDate() + 7);
     }
     return nextReset;
 }
 
-
 function startWeeklyResetCountdown() {
     const countdownContainer = document.getElementById('weekly-reset-countdown-container');
     const countdownElement = document.getElementById('weekly-reset-countdown');
-
     if (!countdownContainer || !countdownElement) return;
 
     const updateTimer = () => {
@@ -293,7 +354,7 @@ function startWeeklyResetCountdown() {
         const diff = nextReset - now;
 
         if (diff > 0 && diff < 5 * 60 * 60 * 1000) {
-            countdownContainer.style.display = 'block';
+            countdownContainer.style.display = 'flex';
             const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             const s = Math.floor((diff % (1000 * 60)) / 1000);
@@ -302,9 +363,7 @@ function startWeeklyResetCountdown() {
             countdownContainer.style.display = 'none';
         }
         
-        // Force refresh if reset time has passed
         if (diff < 0) {
-            // To avoid multiple reloads, we can use a flag in localStorage
             const lastReset = localStorage.getItem('lastWeeklyReset');
             if (!lastReset || new Date(lastReset) < nextReset) {
                 localStorage.setItem('lastWeeklyReset', new Date().toISOString());
@@ -317,48 +376,43 @@ function startWeeklyResetCountdown() {
     weeklyResetCountdownInterval = setInterval(updateTimer, 1000);
 }
 
-/**
- * NEW: Updates the calendar UI based on the current state from the taskStore.
- * This function is called by the store's subscription mechanism.
- * @param {object} state The latest state from taskStore.
- */
 function updateCalendarUIFromState(state) {
     const container = this.calendarContainer;
     if (!container) return;
+
+    this.tasksState = state; // Update the instance's state
 
     const allItems = container.querySelectorAll('.calendar-agent-item');
     const updatedDayIndexes = new Set();
 
     allItems.forEach(item => {
         const agentId = item.dataset.agentId;
-        const dayIndex = parseInt(item.querySelector('.audit-check')?.dataset.dayIndex, 10);
+        const dayIndex = parseInt(item.dataset.dayIndex, 10);
         if (isNaN(dayIndex)) return;
 
-        const taskState = state.tasks[agentId]?.[dayIndex] || { audited: false, competition_sent: false };
+        // Deep copy to prevent mutation issues, which was the likely cause of the Sunday bug.
+        const taskState = JSON.parse(JSON.stringify((state.tasks[agentId] || {})[dayIndex] || { audited: false, competition_sent: false }));
 
         const auditCheck = item.querySelector('.audit-check');
         const competitionCheck = item.querySelector('.competition-check');
 
-        // Update checkbox state without triggering a 'change' event
         if (auditCheck) auditCheck.checked = taskState.audited;
         if (competitionCheck) competitionCheck.checked = taskState.competition_sent;
 
-        // Update visual styles
         auditCheck?.closest('.action-item').classList.toggle('done', taskState.audited);
         competitionCheck?.closest('.action-item').classList.toggle('done', taskState.competition_sent);
 
-        const isComplete = taskState.audited; // Completion is based on audit only
+        const isComplete = taskState.audited;
         item.classList.toggle('complete', isComplete);
+        item.classList.remove('is-loading'); // Remove loading state
+        item.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
 
-        // Update the checkmark icon next to the name
-        // --- REFACTOR: Toggle a class instead of manipulating innerHTML ---
         const nameEl = item.querySelector('.agent-name');
         if (nameEl) nameEl.classList.toggle('has-checkmark', isComplete);
 
         updatedDayIndexes.add(dayIndex);
     });
 
-    // Update progress bars for all affected days
     updatedDayIndexes.forEach(dayIndex => updateDayProgressUI.call(this, dayIndex));
 }
 
@@ -369,15 +423,13 @@ function updateDayProgressUI(dayIndex) {
     const progressBar = column.querySelector('.progress-bar');
     const progressLabel = column.querySelector('.progress-label');
     
-    // We need the original data to know which agents belong to this day
     const allAgentsForDay = this.calendarData?.[dayIndex] || [];
     const totalTasks = allAgentsForDay.length;
     let completedTasks = 0;
 
     allAgentsForDay.forEach(agent => {
-        const agentTasks = window.taskStore.state.tasks[agent._id] || {};
-        const task = agentTasks[dayIndex] || {};
-        if (task.audited) { // Progress is based on audit only
+        const task = (this.tasksState.tasks[agent._id] || {})[dayIndex] || {};
+        if (task.audited) {
             completedTasks++;
         }
     });
@@ -387,35 +439,29 @@ function updateDayProgressUI(dayIndex) {
     progressLabel.textContent = `${completedTasks} / ${totalTasks} مكتمل`;
 }
 
-// --- NEW: Function to handle event listeners for the calendar page ---
-function setupCalendarEventListeners(container, calendarData, uiInstance) {
-    // --- NEW: Event Delegation for CSP Compliance ---
+function setupClickAndDragEventListeners(container, calendarData, uiInstance) {
     container.addEventListener('click', (e) => {
         const copyIdTrigger = e.target.closest('.calendar-agent-id[data-agent-id-copy]');
         if (copyIdTrigger) {
             e.stopPropagation();
-            const agentIdToCopy = copyIdTrigger.dataset.agentIdCopy;
-            navigator.clipboard.writeText(agentIdToCopy).then(() => showToast(`تم نسخ الرقم: ${agentIdToCopy}`, 'info'));
+            navigator.clipboard.writeText(copyIdTrigger.dataset.agentIdCopy).then(() => showToast(`تم نسخ الرقم: ${copyIdTrigger.dataset.agentIdCopy}`, 'info'));
             return;
         }
         const card = e.target.closest('.calendar-agent-item[data-agent-id]');
-        if (card && !e.target.closest('.calendar-agent-actions')) { // Don't navigate if clicking on toggles
+        if (card && !e.target.closest('.calendar-agent-actions')) {
             window.location.hash = `#profile/${card.dataset.agentId}`;
         }
 
-        // --- NEW: Allow clicking the entire action item to toggle the checkbox ---
         const actionItem = e.target.closest('.action-item');
         if (actionItem && !e.target.matches('input[type="checkbox"]')) {
             const checkbox = actionItem.querySelector('input[type="checkbox"]');
             if (checkbox) {
                 checkbox.checked = !checkbox.checked;
-                // Manually trigger a 'change' event to run the update logic
                 checkbox.dispatchEvent(new Event('change', { bubbles: true }));
             }
         }
     });
 
-    // --- تعديل: تفعيل السحب والإفلات للسوبر أدمن فقط ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     if (isSuperAdmin) {
         let draggedItem = null;
@@ -426,15 +472,13 @@ function setupCalendarEventListeners(container, calendarData, uiInstance) {
             if (target) {
                 draggedItem = target;
                 sourceDayIndex = parseInt(target.dataset.dayIndex, 10);
-                setTimeout(() => {
-                    target.classList.add('dragging');
-                }, 0);
+                setTimeout(() => target.classList.add('dragging'), 0);
                 e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', target.dataset.agentId); // Required for Firefox
+                e.dataTransfer.setData('text/plain', target.dataset.agentId);
             }
         });
 
-        container.addEventListener('dragend', (e) => {
+        container.addEventListener('dragend', () => {
             if (draggedItem) {
                 draggedItem.classList.remove('dragging');
                 draggedItem = null;
@@ -442,18 +486,14 @@ function setupCalendarEventListeners(container, calendarData, uiInstance) {
         });
 
         container.addEventListener('dragover', (e) => {
-            e.preventDefault(); // Allow drop
+            e.preventDefault();
             const column = e.target.closest('.day-column');
-            if (column) {
-                column.classList.add('drag-over');
-            }
+            if (column) column.classList.add('drag-over');
         });
 
         container.addEventListener('dragleave', (e) => {
             const column = e.target.closest('.day-column');
-            if (column) {
-                column.classList.remove('drag-over');
-            }
+            if (column) column.classList.remove('drag-over');
         });
 
         container.addEventListener('drop', async (e) => {
@@ -464,34 +504,23 @@ function setupCalendarEventListeners(container, calendarData, uiInstance) {
             targetColumn.classList.remove('drag-over');
             const newDayIndex = parseInt(targetColumn.dataset.dayIndex, 10);
             const agentId = draggedItem.dataset.agentId;
-            const agentName = draggedItem.dataset.name;
 
-            if (sourceDayIndex === newDayIndex) return; // Dropped in the same column
+            if (sourceDayIndex === newDayIndex) return;
 
-            const daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
-            const sourceDayName = daysOfWeek[sourceDayIndex];
-            const newDayName = daysOfWeek[newDayIndex];
-
-            // --- إضافة: التحقق مما إذا كان الوكيل مسجلاً بالفعل في اليوم الجديد ---
             try {
                 const agentCheckResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
                 const { data: agent } = await agentCheckResponse.json();
                 if ((agent.audit_days || []).includes(newDayIndex)) {
-                    showToast(`هذا الوكيل مجدول بالفعل في يوم ${newDayName}.`, 'warning');
-                    return; // إيقاف العملية
+                    showToast(`هذا الوكيل مجدول بالفعل في يوم ${uiInstance.daysOfWeek[newDayIndex]}.`, 'warning');
+                    return;
                 }
-            } catch (error) {
-                // تجاهل الخطأ في حالة فشل التحقق، والسماح للمستخدم بالمتابعة على مسؤوليته
-            }
 
-            showConfirmationModal(
-                `هل أنت متأكد من نقل الوكيل <strong>${agentName}</strong> من يوم <strong>${sourceDayName}</strong> إلى يوم <strong>${newDayName}</strong>؟`,
-                async () => {
-                    try {
+                showConfirmationModal(
+                    `هل أنت متأكد من نقل الوكيل <strong>${draggedItem.dataset.name}</strong> من يوم <strong>${uiInstance.daysOfWeek[sourceDayIndex]}</strong> إلى يوم <strong>${uiInstance.daysOfWeek[newDayIndex]}</strong>؟`,
+                    async () => {
                         const agentResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
                         const { data: agent } = await agentResponse.json();
-                        const currentAuditDays = agent.audit_days || [];
-                        const newAuditDays = [...currentAuditDays.filter(d => d !== sourceDayIndex), newDayIndex];
+                        const newAuditDays = [...(agent.audit_days || []).filter(d => d !== sourceDayIndex), newDayIndex];
 
                         await authedFetch(`/api/agents/${agentId}`, {
                             method: 'PUT',
@@ -499,92 +528,16 @@ function setupCalendarEventListeners(container, calendarData, uiInstance) {
                         });
 
                         showToast('تم تحديث يوم التدقيق بنجاح.', 'success');
-                        await logAgentActivity(currentUserProfile?._id, agentId, 'DETAILS_UPDATE', `تم تغيير يوم التدقيق من ${sourceDayName} إلى ${newDayName} عبر التقويم.`);
-                        // --- REFACTOR: Perform a surgical update instead of a full re-render ---
+                        await logAgentActivity(currentUserProfile?._id, agentId, 'DETAILS_UPDATE', `تم تغيير يوم التدقيق من ${uiInstance.daysOfWeek[sourceDayIndex]} إلى ${uiInstance.daysOfWeek[newDayIndex]} عبر التقويم.`);
+                        
                         uiInstance._updateAfterDrag(sourceDayIndex, newDayIndex, agentId);
-                        uiInstance.render(); // Re-render to apply changes to the two affected columns
-                    } catch (error) {
-                        showToast(`فشل تحديث يوم التدقيق: ${error.message}`, 'error');
                     }
-                }, { title: 'تأكيد تغيير يوم التدقيق', confirmText: 'نعم، انقل', confirmClass: 'btn-primary' }
-            );
+                );
+            } catch (error) {
+                showToast(`فشل تحديث يوم التدقيق: ${error.message}`, 'error');
+            }
         });
     }
-
-    container.addEventListener('change', async (e) => {
-        const checkbox = e.target;
-        if (checkbox.matches('.audit-check, .competition-check')) {
-            const agentId = checkbox.dataset.agentId;
-            const dayIndex = parseInt(checkbox.dataset.dayIndex, 10);
-            const taskType = checkbox.classList.contains('audit-check') ? 'audited' : 'competition_sent';
-            const status = checkbox.checked;
-
-            const agentItem = checkbox.closest('.calendar-agent-item');
-            const actionsContainer = agentItem.querySelector('.calendar-agent-actions');
-
-            // --- UX IMPROVEMENT: Show loading state on the card ---
-            agentItem.classList.add('is-loading');
-            actionsContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = true);
-
-
-            // Dispatch the update to the central store.
-            window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, status);
-            // Optimistic UI update
-            const actionItem = checkbox.closest('.action-item');
-            if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
-            
-            const auditCheck = agentItem.querySelector('.audit-check');
-            const competitionCheck = agentItem.querySelector('.competition-check');
-            const isComplete = auditCheck.checked; // Completion is based on audit only
-            agentItem.classList.toggle('complete', isComplete);
-
-            // --- REFACTOR: Toggle a class instead of manipulating innerHTML ---
-            const nameEl = agentItem.querySelector('.agent-name');
-            if (nameEl) nameEl.classList.toggle('has-checkmark', isComplete);
-
-            updateDayProgressUI.call(uiInstance, dayIndex);
-
-            try {
-                const payload = { agentId, taskType, status, dayIndex }; // Send dayIndex to backend
-                console.log('[Calendar] Sending update to backend:', payload);
-                const response = await authedFetch('/api/tasks', {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                });
-
-                const responseData = await response.json();
-                console.log('[Calendar] Received response from backend:', responseData);
-                if (!response.ok) throw new Error(responseData.message || 'Server responded with an error.');
-
-                // --- Log the action ---
-                const actionText = taskType === 'audited' ? 'التدقيق' : 'المسابقة';
-                const statusText = status ? 'تفعيل' : 'إلغاء تفعيل';
-                const agentName = agentItem.dataset.name; // Use the original name from the dataset
-                await logAgentActivity(currentUserProfile?._id, agentId, 'TASK_UPDATE', `تم ${statusText} مهمة "${actionText}" للوكيل ${agentName}.`);
-
-            } catch (error) {
-                console.error(`[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`, error);
-                showToast('فشل تحديث حالة المهمة.', 'error');
-                // Revert UI on error
-                checkbox.checked = !checkbox.checked;
-                // Revert state in the store
-                window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, checkbox.checked);
-                if (actionItem) actionItem.classList.toggle('done', checkbox.checked);
-                const isCompleteAfterRevert = auditCheck.checked; // Completion is based on audit only
-                agentItem.classList.toggle('complete', isCompleteAfterRevert);
-                
-                // --- REFACTOR: Revert class toggle ---
-                const nameEl = agentItem.querySelector('.agent-name');
-                if (nameEl) nameEl.classList.toggle('has-checkmark', isCompleteAfterRevert);
-
-                updateDayProgressUI.call(uiInstance, dayIndex);
-            } finally {
-                // --- UX IMPROVEMENT: Remove loading state ---
-                agentItem.classList.remove('is-loading');
-                actionsContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
-            }
-        }
-    });
 }
 
 function setupCalendarFilters(uiInstance) {
@@ -614,10 +567,10 @@ function setupCalendarFilters(uiInstance) {
             });
             
             const contentContainer = columnEl.querySelector('.day-column-content');
-            contentContainer.innerHTML = ''; // Clear current items
+            contentContainer.innerHTML = '';
 
             if (filteredAgents.length === 0) {
-                contentContainer.innerHTML = '<div class="no-tasks-placeholder"><i class="fas fa-search"></i><p>لا توجد نتائج</p></div>';
+                contentContainer.innerHTML = '<div class="no-results-placeholder"><i class="fas fa-search"></i><p>لا توجد نتائج</p></div>';
             } else {
                 const fragment = document.createDocumentFragment();
                 const isToday = new Date().getDay() === dayIndex;
@@ -631,9 +584,8 @@ function setupCalendarFilters(uiInstance) {
     };
 
     searchInput.addEventListener('input', () => {
-        // --- UX IMPROVEMENT: Debounce the search input ---
         clearTimeout(uiInstance.searchDebounceTimer);
-        uiInstance.searchDebounceTimer = setTimeout(applyFilters, 300); // Wait 300ms after user stops typing
+        uiInstance.searchDebounceTimer = setTimeout(applyFilters, 300);
     });
 
     if (clearBtn) {

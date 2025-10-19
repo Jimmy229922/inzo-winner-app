@@ -300,6 +300,11 @@
     justify-content: center;
     line-height: 1;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    visibility: hidden; /* Hide by default */
+}
+
+h3.has-checkmark .task-complete-icon {
+    visibility: visible; /* Show when h3 has the class */
 }
 
 .task-agent-id {

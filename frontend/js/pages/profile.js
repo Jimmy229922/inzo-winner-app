@@ -1099,7 +1099,7 @@ function renderDetailsView(agent) {
             if (fieldName === 'competition_bonus') displayValue = `$${displayValue}`;
         } else if (fieldName === 'audit_days') {
             // --- تعديل: عرض أيام التدقيق كعلامات (tags) ---
-            const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+            const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة',];
             displayValue = (value && value.length > 0) ? value.sort().map(dayIndex => `<span class="day-tag">${dayNames[dayIndex]}</span>`).join('') : '<span class="day-tag-none">غير محدد</span>';
         } else if (fieldName.includes('_date')) {
             displayValue = value ? new Date(value).toLocaleDateString('ar-EG') : 'لم يحدد';

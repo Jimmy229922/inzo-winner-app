@@ -5,6 +5,9 @@ const Task = require('../models/Task');
 
 // --- NEW: Route to update a task ---
 router.post('/', tasksController.updateTask);
+
+// --- NEW: Route to reset all tasks ---
+router.post('/reset-all', tasksController.resetAllTasks);
 const Agent = require('../models/agent.model'); // NEW: Import Agent model
 const { logActivity } = require('../utils/logActivity');
 

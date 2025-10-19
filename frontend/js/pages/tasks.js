@@ -1,404 +1,427 @@
+
+// Refactored Tasks Page: Decoupled from Calendar, reliant solely on taskStore.
 (function() {
+    // --- Constants and Configuration ---
+    const CLASSIFICATIONS = ['R', 'A', 'B', 'C'];
+    const OPEN_GROUPS_KEY = 'openTaskGroups';
+
+    // --- UI Rendering Functions ---
+
+    function getTaskCardHtml(agent, task) {
+        const avatarHtml = agent.avatar_url
+            ? `<img src="${agent.avatar_url}" alt="Avatar" class="task-agent-avatar" loading="lazy">`
+            : `<div class="task-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
+
+        const isAudited = task.audited;
+        const isCompetitionSent = task.competition_sent;
+        const isComplete = isAudited; // Main completion logic
+
+        const depositBonusText = (agent.remaining_deposit_bonus > 0 && agent.deposit_bonus_percentage > 0)
+            ? `${agent.remaining_deposit_bonus} ${agent.remaining_deposit_bonus === 1 ? 'مرة' : 'مرات'} بنسبة ${agent.deposit_bonus_percentage}%`
+            : 'لا يوجد';
+
+        return `
+        <div class="task-card ${isComplete ? 'complete' : ''}" data-agent-id="${agent._id}" data-name="${agent.name.toLowerCase()}" data-original-name="${agent.name}" data-agentid-str="${agent.agent_id}">
+            <div class="task-card-header" style="cursor: pointer;">
+                <div class="task-card-main">
+                    ${avatarHtml}
+                    <div class="task-agent-info">
+                        <h3 class="${isComplete ? 'has-checkmark' : ''}">${agent.name}<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i></h3>
+                        <p class="task-agent-id" title="نسخ الرقم">${agent.agent_id}</p>
+                    </div>
+                </div>
+                <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
+            </div>
+            <div class="task-card-body">
+                <div class="task-stat">
+                    <label>الرصيد التداولي:</label>
+                    <span>${agent.remaining_balance || 0}</span>
+                </div>
+                <div class="task-stat">
+                    <label>بونص الإيداع:</label>
+                    <span>${depositBonusText}</span>
+                </div>
+            </div>
+            <div class="task-card-actions">
+                <div class="action-item ${isAudited ? 'done' : ''}">
+                    <label>التدقيق</label>
+                    <label class="custom-checkbox toggle-switch">
+                        <input type="checkbox" class="audit-check" data-agent-id="${agent._id}" ${isAudited ? 'checked' : ''}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <div class="action-item ${isAudited && isCompetitionSent ? 'done' : ''}">
+                    <label>المسابقة</label>
+                    <label class="custom-checkbox toggle-switch">
+                        <input type="checkbox" class="competition-check" data-agent-id="${agent._id}" ${isCompetitionSent ? 'checked' : ''} ${!isAudited ? 'disabled' : ''}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function getTaskGroupHtml(classification, agents, tasksMap, openGroups, highlightedAgentId) {
+        if (agents.length === 0) return '';
+
+        const completedCount = agents.filter(agent => (tasksMap[agent._id] || {}).audited).length;
+        const allComplete = completedCount === agents.length;
+        const containsHighlight = highlightedAgentId && agents.some(agent => agent._id == highlightedAgentId);
+        const isOpen = openGroups.includes(classification) || containsHighlight;
+
+        const agentCardsHtml = agents.map(agent => getTaskCardHtml(agent, tasksMap[agent._id] || {})).join('');
+
+        return `
+        <details class="task-group ${allComplete ? 'all-complete' : ''}" data-classification="${classification}" ${isOpen ? 'open' : ''}>
+            <summary class="task-group-header">
+                <div class="task-group-title">
+                    <h2>${classification}</h2>
+                    <span class="task-group-progress">${completedCount} / ${agents.length}</span>
+                </div>
+                <div class="task-group-bulk-actions">
+                    <label class="custom-checkbox small"><input type="checkbox" class="bulk-audit-check" data-classification="${classification}">
+                        <span class="checkmark"></span> تدقيق الكل
+                    </label>
+                    <label class="custom-checkbox small"><input type="checkbox" class="bulk-competition-check" data-classification="${classification}">
+                        <span class="checkmark"></span> مسابقة الكل
+                    </label>
+                </div>
+                <div class="task-group-indicators">
+                    <i class="fas fa-check-circle group-completion-indicator" title="اكتملت جميع المهام في هذا القسم"></i>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </summary>
+            <div class="task-group-content">${agentCardsHtml}</div>
+        </details>`;
+    }
+
+    function getPageLayoutHtml() {
+        return `
+        <div class="page-header column-header">
+            <div class="header-top-row">
+                <h1>مهمات اليوم</h1>
+                <div class="header-actions-group">
+                    <button id="mark-all-audited-btn" class="btn-primary">
+                        <i class="fas fa-check-double"></i> تمييز الكل كـ "تم التدقيق"
+                    </button>
+                </div>
+            </div>
+            <div class="agent-filters">
+                <div class="filter-search-container">
+                    <input type="search" id="task-search-input" placeholder="بحث بالاسم أو الرقم..." autocomplete="off">
+                    <i class="fas fa-search"></i>
+                    <i class="fas fa-times-circle search-clear-btn" id="task-search-clear"></i>
+                </div>
+            </div>
+        </div>
+        <div id="tasks-content-wrapper"></div>`;
+    }
+
+    function getOverviewHtml(agents, tasksMap) {
+        const total = agents.length;
+        const completed = agents.filter(agent => (tasksMap[agent._id] || {}).audited).length;
+        const progress = total > 0 ? (completed / total) * 100 : 0;
+
+        return `
+        <div class="tasks-overview" id="tasks-overview">
+            <div class="progress-donut-chart" style="--p:${progress};--b:10px;--c:var(--primary-color);">
+                <span>${Math.round(progress)}%</span>
+            </div>
+            <div class="overview-stats">
+                <div class="overview-stat-item" data-stat="total">
+                    <h3>${total}</h3>
+                    <p><i class="fas fa-tasks"></i> إجمالي مهام اليوم</p>
+                </div>
+                <div class="overview-stat-item" data-stat="completed">
+                    <h3>${completed}</h3>
+                    <p><i class="fas fa-check-double"></i> مهام مكتملة</p>
+                </div>
+                <div class="overview-stat-item" data-stat="pending">
+                    <h3>${total - completed}</h3>
+                    <p><i class="fas fa-hourglass-half"></i> مهام متبقية</p>
+                </div>
+            </div>
+        </div>`;
+    }
+
+
+    // --- Main Page Class ---
+
     class TasksPage {
         constructor(container) {
             this.container = container;
-            this.tasksState = { tasks: {} };
-            this.boundHandleClick = this.handleClick.bind(this);
-            this.boundHandleChange = this.handleChange.bind(this);
+            this.agents = [];
+            this.tasksMap = {};
+            this.dayIndex = new Date().getDay();
+            this.searchDebounceTimer = null;
 
-            // The router in main.js will set window.currentTasksPageInstance
-            // The subscription should pass the instance's method directly.
-            if (window.taskStore && typeof window.taskStore.subscribe === 'function') {
-                this.unsubscribe = window.taskStore.subscribe(this.updateUI.bind(this));
-            }
-            console.log('[Tasks Page] Instance created and subscribed to taskStore.');
+            // Bind methods
+            this.boundHandleEvents = this.handleEvents.bind(this);
+            this.boundUpdateUIFromStore = this.updateUIFromStore.bind(this);
         }
 
         async render() {
-            this.container.innerHTML = `
-                <div class="page-header column-header">
-                    <div class="header-top-row">
-                        <h1>مهمات اليوم</h1>
-                        <div class="header-actions-group">
-                            <button id="mark-all-tasks-complete-btn" class="btn-primary"><i class="fas fa-check-double"></i> تمييز الكل كمكتمل</button>
-                        </div>
-                    </div>
-                    <div class="agent-filters">
-                        <div class="filter-search-container">
-                            <input type="search" id="task-search-input" placeholder="بحث بالاسم أو الرقم..." autocomplete="off">
-                            <i class="fas fa-search"></i>
-                            <i class="fas fa-times-circle search-clear-btn" id="task-search-clear"></i>
-                        </div>
-                    </div>
-                </div>
-                <div id="tasks-content-wrapper"></div>
-            `;
+            this.container.innerHTML = getPageLayoutHtml();
+            this.contentWrapper = this.container.querySelector('#tasks-content-wrapper');
             
-            await this.renderTaskList();
             this.setupEventListeners();
+            
+            // Subscribe to store changes AFTER the initial render to avoid premature updates
+            window.taskStore.subscribe(this.boundUpdateUIFromStore);
+
+            await this.fetchAndRenderTasks();
         }
 
-        async renderTaskList() {
-            const wrapper = this.container.querySelector('#tasks-content-wrapper');
-            if (!wrapper) return;
-
-            const hash = window.location.hash;
-            const urlParams = new URLSearchParams(hash.split('?')[1]);
-            const highlightedAgentId = urlParams.get('highlight');
-
-            if (new Date().getDay() === 6) {
-                wrapper.innerHTML = '<p class="no-results-message" style="margin-top: 20px;">لا توجد مهام مجدولة في أيام العطلات.</p>';
+        async fetchAndRenderTasks() {
+            if (this.dayIndex === 6) { // Saturday
+                this.contentWrapper.innerHTML = '<p class="no-results-message">لا توجد مهام مجدولة في أيام العطلات.</p>';
                 return;
             }
 
-            const response = await authedFetch('/api/tasks/today');
-            if (!response.ok) {
-                wrapper.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات المهام.</p>`;
+            try {
+                const response = await authedFetch('/api/tasks/today');
+                if (!response.ok) throw new Error('Failed to fetch tasks');
+                
+                const { agents, tasksMap } = await response.json();
+                this.agents = agents || [];
+                this.tasksMap = tasksMap || {};
+
+                this.renderAllContent();
+
+            } catch (error) {
+                console.error("Error fetching tasks:", error);
+                this.contentWrapper.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات المهام.</p>`;
+            }
+        }
+
+        renderAllContent() {
+            if (this.agents.length === 0) {
+                this.contentWrapper.innerHTML = '<p class="no-results-message">لا توجد مهام مجدولة لهذا اليوم.</p>';
                 return;
             }
-            const { agents: filteredAgents, tasksMap } = await response.json();
 
-            const classifications = ['R', 'A', 'B', 'C'];
-            const openGroups = JSON.parse(localStorage.getItem('openTaskGroups')) || ['R', 'A'];
-            const groupedAgents = classifications.reduce((acc, classification) => {
-                acc[classification] = (filteredAgents || []).filter(a => a.classification === classification);
+            const groupedAgents = CLASSIFICATIONS.reduce((acc, c) => {
+                acc[c] = this.agents.filter(a => a.classification === c);
                 return acc;
             }, {});
 
-            const totalAgentsToday = filteredAgents.length;
-            const completedAgentsToday = filteredAgents.filter(agent => {
-                const task = tasksMap[agent._id] || {}; // Use server-fetched tasksMap
-                return task.audited;
-            }).length;
-            const overallProgress = totalAgentsToday > 0 ? (completedAgentsToday / totalAgentsToday) * 100 : 0;
+            const openGroups = JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY)) || ['R', 'A'];
+            const highlightedAgentId = new URLSearchParams(window.location.hash.split('?')[1]).get('highlight');
 
-            const overviewHtml = `
-                <div class="tasks-overview" id="tasks-overview">
-                    <div class="progress-donut-chart" style="--p:${overallProgress};--b:10px;--c:var(--primary-color);">
-                        <span>${Math.round(overallProgress)}%</span>
-                    </div>
-                    <div class="overview-stats">
-                        <div class="overview-stat-item">
-                            <h3 data-stat="total">${totalAgentsToday}</h3>
-                            <p><i class="fas fa-tasks"></i> إجمالي مهام اليوم</p>
-                        </div>
-                        <div class="overview-stat-item">
-                            <h3 data-stat="completed">${completedAgentsToday}</h3>
-                            <p><i class="fas fa-check-double"></i> مهام مكتملة</p>
-                        </div>
-                        <div class="overview-stat-item">
-                            <h3 data-stat="pending">${totalAgentsToday - completedAgentsToday}</h3>
-                            <p><i class="fas fa-hourglass-half"></i> مهام متبقية</p>
-                        </div>
-                    </div>
-                </div>
-            `;
+            const overviewHtml = getOverviewHtml(this.agents, this.tasksMap);
+            const groupsHtml = CLASSIFICATIONS.map(c => 
+                getTaskGroupHtml(c, groupedAgents[c], this.tasksMap, openGroups, highlightedAgentId)
+            ).join('');
 
-            let groupsHtml = '';
-            if (filteredAgents.length === 0) {
-                groupsHtml = '<p class="no-results-message" style="margin-top: 20px;">لا توجد مهام مجدولة لهذا اليوم.</p>';
-            } else {
-                for (const classification of classifications) {
-                    const group = groupedAgents[classification];
-                    if (group.length > 0) {
-                        let completedCount = 0;
-                        let allTasksInGroupComplete = group.length > 0;
-                        group.forEach(agent => {
-                            const task = tasksMap[agent._id] || {}; // Use server-fetched tasksMap
-                            if (task.audited) {
-                                completedCount++;
-                            } else {
-                                allTasksInGroupComplete = false;
-                            }
-                        });
+            this.contentWrapper.innerHTML = `${overviewHtml}<div id="task-list-container">${groupsHtml}</div>`;
+            
+            this.highlightCard(highlightedAgentId);
+        }
 
-                        const groupContainsHighlight = highlightedAgentId && group.some(agent => agent._id == highlightedAgentId);
-                        const isOpen = openGroups.includes(classification) || groupContainsHighlight;
+        highlightCard(agentId) {
+            if (!agentId) return;
+            const card = this.contentWrapper.querySelector(`.task-card[data-agent-id="${agentId}"]`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.classList.add('highlighted');
+            }
+            // Clean the URL
+            history.replaceState(null, '', '#tasks');
+        }
 
-                        groupsHtml += `
-                        <details class="task-group ${allTasksInGroupComplete ? 'all-complete' : ''}" data-classification="${classification}" ${isOpen ? 'open' : ''}>
-                            <summary class="task-group-header">
-                                <div class="task-group-title">
-                                    <h2>${classification}</h2>
-                                    <span class="task-group-progress">${completedCount} / ${group.length}</span>
-                                </div>
-                                <div class="task-group-bulk-actions">
-                                    <label class="custom-checkbox small"><input type="checkbox" class="bulk-audit-check" data-classification="${classification}"><span class="checkmark"></span> تدقيق الكل</label>
-                                    <label class="custom-checkbox small"><input type="checkbox" class="bulk-competition-check" data-classification="${classification}"><span class="checkmark"></span> مسابقة الكل</label>
-                                </div>
-                                <div class="task-group-indicators">
-                                    <i class="fas fa-check-circle group-completion-indicator" title="اكتملت جميع المهام في هذا القسم"></i>
-                                    <i class="fas fa-chevron-down"></i>
-                                </div>
-                            </summary>
-                            <div class="task-group-content">
-                                ${group.map(agent => {
-                                    const task = tasksMap[agent._id] || { audited: false, competition_sent: false }; // Use server-fetched tasksMap
-                                    const avatarHtml = agent.avatar_url
-                                        ? `<img src="${agent.avatar_url}" alt="Avatar" class="task-agent-avatar" loading="lazy">`
-                                        : `<div class="task-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
-                                    const isAudited = task.audited;
-                                    const isCompetitionSent = task.competition_sent;
-                                    const isComplete = isAudited;
-                                    const isHighlighted = highlightedAgentId && agent._id == highlightedAgentId;
-                                    const depositBonusText = (agent.remaining_deposit_bonus > 0 && agent.deposit_bonus_percentage > 0)
-                                        ? `${agent.remaining_deposit_bonus} ${agent.remaining_deposit_bonus === 1 ? 'مرة' : 'مرات'} بنسبة ${agent.deposit_bonus_percentage}%`
-                                        : 'لا يوجد';
+        setupEventListeners() {
+            this.container.addEventListener('click', this.boundHandleEvents);
+            this.container.addEventListener('change', this.boundHandleEvents);
+            
+            const searchInput = this.container.querySelector('#task-search-input');
+            searchInput.addEventListener('input', () => {
+                clearTimeout(this.searchDebounceTimer);
+                this.searchDebounceTimer = setTimeout(() => this.filterAgents(searchInput.value), 300);
+            });
+            
+            this.container.querySelector('#task-search-clear').addEventListener('click', () => {
+                searchInput.value = '';
+                this.filterAgents('');
+            });
+        }
 
-                                    return `
-                                    <div class="task-card ${isComplete ? 'complete' : ''} ${isHighlighted ? 'highlighted' : ''}" data-agent-id="${agent._id}" data-name="${agent.name.toLowerCase()}" data-original-name="${agent.name}" data-agentid-str="${agent.agent_id}">
-                                        <div class="task-card-header" style="cursor: pointer;">
-                                            <div class="task-card-main">
-                                                ${avatarHtml}
-                                                <div class="task-agent-info">
-                                                    <h3 class="${isComplete ? 'has-checkmark' : ''}">${agent.name}<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i></h3>
-                                                    <p class="task-agent-id" title="نسخ الرقم">${agent.agent_id}</p>
-                                                </div>
-                                            </div>
-                                            <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
-                                        </div>
-                                        <div class="task-card-body">
-                                            <div class="task-stat">
-                                                <label>الرصيد التداولي:</label>
-                                                <span>$${agent.remaining_balance || 0}</span>
-                                            </div>
-                                            <div class="task-stat">
-                                                <label>بونص الإيداع:</label>
-                                                <span>${depositBonusText}</span>
-                                            </div>
-                                        </div>
-                                        <div class="task-card-actions">
-                                            <div class="action-item ${isAudited ? 'done' : ''}">
-                                                <label>التدقيق</label>
-                                                <label class="custom-checkbox toggle-switch">
-                                                    <input type="checkbox" class="audit-check" data-agent-id="${agent._id}" ${isAudited ? 'checked' : ''}>
-                                                    <span class="slider round"></span>
-                                                </label>
-                                            </div>
-                                            <div class="action-item ${isCompetitionSent ? 'done' : ''}">
-                                                <label>المسابقة</label>
-                                                <label class="custom-checkbox toggle-switch">
-                                                    <input type="checkbox" class="competition-check" data-agent-id="${agent._id}" ${isCompetitionSent ? 'checked' : ''}>
-                                                    <span class="slider round"></span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `}).join('')}
-                            </div>
-                        </details>
-                        `;
-                    }
+        handleEvents(e) {
+            const target = e.target;
+            const agentCard = target.closest('.task-card');
+            const agentId = agentCard?.dataset.agentId;
+
+            // --- Change Events (Toggles) ---
+            if (e.type === 'change') {
+                const taskType = target.classList.contains('audit-check') ? 'audited' 
+                               : target.classList.contains('competition-check') ? 'competition_sent' 
+                               : null;
+                if (agentId && taskType) {
+                    window.taskStore.updateTaskStatus(agentId, this.dayIndex, taskType, target.checked);
+                    return;
+                }
+
+                const bulkTaskType = target.classList.contains('bulk-audit-check') ? 'audited' 
+                                   : target.classList.contains('bulk-competition-check') ? 'competition_sent' 
+                                   : null;
+                if (bulkTaskType) {
+                    this.handleBulkUpdate(target.dataset.classification, bulkTaskType, target.checked);
+                    return;
                 }
             }
 
-            wrapper.innerHTML = `${overviewHtml}<div id="task-list-container">${groupsHtml}</div>`;
-
-            this.setupTaskPageInteractions();
-
-            if (highlightedAgentId) {
-                const container = document.getElementById('task-list-container');
-                const highlightedCard = container.querySelector(`.task-card[data-agent-id="${highlightedAgentId}"]`);
-                if (highlightedCard) {
-                    highlightedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // --- Click Events ---
+            if (e.type === 'click') {
+                if (target.closest('.task-card-header')) {
+                    window.location.hash = `#profile/${agentId}`;
+                    return;
                 }
-                history.replaceState(null, '', '#tasks');
+                if (target.id === 'mark-all-audited-btn') {
+                    this.handleMarkAllAudited();
+                    return;
+                }
+                if (target.closest('.task-group-header')) {
+                    this.saveOpenGroupsState();
+                    return;
+                }
             }
+        }
+
+        handleBulkUpdate(classification, taskType, status) {
+            showLoader();
+            const agentsToUpdate = this.agents.filter(a => a.classification === classification);
+            const promises = agentsToUpdate.map(agent => 
+                window.taskStore.updateTaskStatus(agent._id, this.dayIndex, taskType, status)
+            );
+
+            Promise.all(promises)
+                .then(() => showToast(`تم تحديث ${agentsToUpdate.length} وكلاء بنجاح.`, 'success'))
+                .catch(err => {
+                    console.error('Bulk update failed:', err);
+                    showToast('فشل تحديث بعض الوكلاء.', 'error');
+                })
+                .finally(hideLoader);
+        }
+
+        handleMarkAllAudited() {
+            showConfirmationModal('هل أنت متأكد من تمييز جميع المهام كـ "تم التدقيق"؟', () => {
+                showLoader();
+                const promises = this.agents.map(agent => 
+                    window.taskStore.updateTaskStatus(agent._id, this.dayIndex, 'audited', true)
+                );
+
+                Promise.all(promises)
+                    .then(() => showToast('تم تحديث جميع المهام بنجاح.', 'success'))
+                    .catch(err => {
+                        console.error('Mark all audited failed:', err);
+                        showToast('فشل تحديث بعض المهام.', 'error');
+                    })
+                    .finally(hideLoader);
+            });
+        }
+        
+        filterAgents(searchTerm) {
+            const term = searchTerm.toLowerCase().trim();
+            const taskListContainer = this.container.querySelector('#task-list-container');
+            if (!taskListContainer) return;
+
+            this.agents.forEach(agent => {
+                const card = taskListContainer.querySelector(`.task-card[data-agent-id="${agent._id}"]`);
+                if (!card) return;
+
+                const isVisible = term === '' || 
+                                  agent.name.toLowerCase().includes(term) || 
+                                  agent.agent_id.includes(term);
+                card.style.display = isVisible ? '' : 'none';
+            });
+
+            // Update group visibility and progress
+            CLASSIFICATIONS.forEach(c => {
+                const groupEl = taskListContainer.querySelector(`.task-group[data-classification="${c}"]`);
+                if (!groupEl) return;
+
+                const visibleCards = groupEl.querySelectorAll('.task-card[style=""]');
+                groupEl.style.display = visibleCards.length > 0 ? '' : 'none';
+            });
+        }
+
+        saveOpenGroupsState() {
+            const openGroups = Array.from(this.container.querySelectorAll('.task-group[open]'))
+                                    .map(el => el.dataset.classification);
+            localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(openGroups));
+        }
+
+        updateUIFromStore(newState) {
+            this.tasksMap = newState.tasks || {};
+            
+            // Update all cards
+            this.agents.forEach(agent => {
+                const card = this.container.querySelector(`.task-card[data-agent-id="${agent._id}"]`);
+                if (!card) return;
+
+                const task = (this.tasksMap[agent._id] || {})[this.dayIndex] || {};
+                const isAudited = task.audited;
+                const isCompetitionSent = task.competition_sent;
+                const isComplete = isAudited;
+
+                card.classList.toggle('complete', isComplete);
+                card.querySelector('.task-agent-info h3').classList.toggle('has-checkmark', isComplete);
+                
+                const auditCheck = card.querySelector('.audit-check');
+                const competitionCheck = card.querySelector('.competition-check');
+                if (auditCheck) auditCheck.checked = isAudited;
+                if (competitionCheck) {
+                    competitionCheck.checked = isCompetitionSent;
+                    competitionCheck.disabled = !isAudited;
+                }
+
+                auditCheck?.closest('.action-item').classList.toggle('done', isAudited);
+                competitionCheck?.closest('.action-item').classList.toggle('done', isAudited && isCompetitionSent);
+            });
+
+            // Update group progress and overview stats
+            this.updateAllGroupProgress();
+            this.updateOverview();
+        }
+
+        updateAllGroupProgress() {
+            CLASSIFICATIONS.forEach(c => {
+                const groupEl = this.container.querySelector(`.task-group[data-classification="${c}"]`);
+                if (!groupEl) return;
+
+                const groupAgents = this.agents.filter(a => a.classification === c);
+                const completedCount = groupAgents.filter(a => (this.tasksMap[a._id] || {})[this.dayIndex]?.audited).length;
+                
+                groupEl.querySelector('.task-group-progress').textContent = `${completedCount} / ${groupAgents.length}`;
+                groupEl.classList.toggle('all-complete', completedCount === groupAgents.length);
+            });
+        }
+
+        updateOverview() {
+            const overviewEl = this.container.querySelector('#tasks-overview');
+            if (!overviewEl) return;
+
+            const total = this.agents.length;
+            const completed = this.agents.filter(a => (this.tasksMap[a._id] || {})[this.dayIndex]?.audited).length;
+            const progress = total > 0 ? (completed / total) * 100 : 0;
+
+            overviewEl.querySelector('.progress-donut-chart').style.setProperty('--p', progress);
+            overviewEl.querySelector('.progress-donut-chart span').textContent = `${Math.round(progress)}%`;
+            overviewEl.querySelector('[data-stat="total"] h3').textContent = total;
+            overviewEl.querySelector('[data-stat="completed"] h3').textContent = completed;
+            overviewEl.querySelector('[data-stat="pending"] h3').textContent = total - completed;
         }
 
         destroy() {
             console.log('[Tasks Page] Destroying instance and cleaning up listeners.');
-            this.container.removeEventListener('click', this.boundHandleClick);
-            this.container.removeEventListener('change', this.boundHandleChange);
-            if (this.unsubscribe) {
-                this.unsubscribe();
+            this.container.removeEventListener('click', this.boundHandleEvents);
+            this.container.removeEventListener('change', this.boundHandleEvents);
+            clearTimeout(this.searchDebounceTimer);
+            
+            if (window.taskStore && this.boundUpdateUIFromStore) {
+                window.taskStore.unsubscribe(this.boundUpdateUIFromStore);
             }
-            window.currentTasksPageInstance = null;
-        }
-
-        async handleMarkAllTasksComplete() {
-            try {
-                const dayIndex = new Date().getDay();
-                const container = document.getElementById('task-list-container');
-                if (!container) return;
-
-                showConfirmationModal('هل أنت متأكد من تمييز جميع المهام كمكتملة؟', async () => {
-                    showLoader();
-                    const allCards = container.querySelectorAll('.task-card');
-                    const promises = [];
-
-                    for (const card of allCards) {
-                        const agentId = card.dataset.agentId;
-                        if (!agentId) continue;
-
-                        const promise = authedFetch('/api/tasks', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                agentId: agentId,
-                                taskType: 'audited',
-                                status: true,
-                                dayIndex: dayIndex
-                            })
-                        });
-                        promises.push(promise);
-
-                        window.taskStore.updateTaskStatus(agentId, dayIndex, 'audited', true);
-                    }
-
-                    try {
-                        await Promise.all(promises);
-                        showToast('تم تحديث جميع المهام بنجاح', 'success');
-                    } catch (error) {
-                        console.error('Error updating all tasks:', error);
-                        showToast('حدث خطأ أثناء تحديث بعض المهام', 'error');
-                    } finally {
-                        hideLoader();
-                        await this.renderTaskList();
-                    }
-                });
-            } catch (error) {
-                console.error('Error in handleMarkAllTasksComplete:', error);
-                showToast('حدث خطأ أثناء تحديث المهام', 'error');
-            }
-        }
-
-        setupEventListeners() {
-            this.container.addEventListener('click', this.boundHandleClick);
-            this.container.addEventListener('change', this.boundHandleChange);
-
-            const markAllCompleteBtn = document.getElementById('mark-all-tasks-complete-btn');
-            if (markAllCompleteBtn) {
-                markAllCompleteBtn.addEventListener('click', () => this.handleMarkAllTasksComplete());
-            }
-        }
-
-        handleClick(e) {
-            const cardHeader = e.target.closest('.task-card-header');
-            if (cardHeader) {
-                const agentId = cardHeader.closest('.task-card').dataset.agentId;
-                window.location.hash = `#profile/${agentId}`;
-            }
-        }
-
-        handleChange(e) {
-            const auditCheck = e.target.closest('.audit-check');
-            const competitionCheck = e.target.closest('.competition-check');
-            if (!auditCheck && !competitionCheck) return;
-
-            const agentId = e.target.dataset.agentId;
-            const dayIndex = new Date().getDay();
-
-            if (auditCheck) {
-                const isChecked = auditCheck.checked;
-                window.taskStore.updateTaskStatus(agentId, dayIndex, 'audited', isChecked);
-            }
-
-            if (competitionCheck) {
-                const isChecked = competitionCheck.checked;
-                window.taskStore.updateTaskStatus(agentId, dayIndex, 'competition_sent', isChecked);
-            }
-        }
-
-        updateUI(state) {
-            // --- REFACTOR: Instead of a full re-render, perform a "light" update on the UI.
-            // This is more efficient and prevents losing UI state like scroll position or search filters.
-            // It also ensures immediate feedback from changes made on other pages (like Calendar or Profile).
-            this.tasksState = state;
-            const taskList = this.container.querySelector('#task-list-container');
-            if (!taskList) { // If the list isn't rendered yet, do nothing. The initial render will handle it.
-                return;
-            }
-
-            const todayDayIndex = new Date().getDay();
-            const allCards = taskList.querySelectorAll('.task-card');
-
-            allCards.forEach(card => {
-                const agentId = card.dataset.agentId;
-                // Use the new state from the store to get the most up-to-date task status
-                const taskState = ((this.tasksState.tasks || {})[agentId] || {})[todayDayIndex] || { audited: false, competition_sent: false };
-
-                const auditCheck = card.querySelector('.audit-check');
-                const competitionCheck = card.querySelector('.competition-check');
-
-                if (auditCheck) auditCheck.checked = taskState.audited;
-                if (competitionCheck) competitionCheck.checked = taskState.competition_sent;
-
-                // Toggle the 'done' class on the parent container for styling
-                auditCheck?.closest('.action-item').classList.toggle('done', taskState.audited);
-                competitionCheck?.closest('.action-item').classList.toggle('done', taskState.competition_sent);
-
-                // The main task is complete if it's audited
-                const isComplete = taskState.audited;
-                card.classList.toggle('complete', isComplete);
-
-                const nameEl = card.querySelector('.task-agent-info h3');
-                if (nameEl) nameEl.classList.toggle('has-checkmark', isComplete);
-            });
-
-            // After updating individual cards, update the group-level progress and state
-            const allGroups = taskList.querySelectorAll('.task-group');
-            allGroups.forEach(group => {
-                updateTaskGroupState(group);
-            });
-
-            // Finally, update the overall progress donut chart and stats
-            updateOverallProgress();
-        }
-
-        setupTaskPageInteractions() {
-            const container = this.container.querySelector('#tasks-content-wrapper');
-            if (!container) return;
-
-            const allGroups = container.querySelectorAll('.task-group');
-            allGroups.forEach(group => {
-                group.addEventListener('toggle', () => {
-                    const openGroups = Array.from(allGroups).filter(g => g.open).map(g => g.dataset.classification);
-                    localStorage.setItem('openTaskGroups', JSON.stringify(openGroups));
-                });
-            });
         }
     }
 
     window.TasksPage = TasksPage;
-
-    function updateTaskGroupState(groupDetailsElement) {
-        if (!groupDetailsElement) return;
-        const progressSpan = groupDetailsElement.querySelector('.task-group-progress');
-        const cards = groupDetailsElement.querySelectorAll('.task-card');
-        const total = cards.length;
-        let completed = 0;
-        cards.forEach(card => {
-            const auditCheck = card.querySelector('.audit-check');
-            if (auditCheck?.checked) {
-                completed++;
-            }
-        });
-        progressSpan.textContent = `${completed} / ${total}`;
-
-        const allComplete = total > 0 && completed === total;
-        groupDetailsElement.classList.toggle('all-complete', allComplete);
-    }
-
-    async function updateOverallProgress() {
-        const overviewContainer = document.getElementById('tasks-overview');
-        if (!overviewContainer) return;
-
-        const allCards = document.querySelectorAll('#task-list-container .task-card');
-        const total = allCards.length;
-        const completed = document.querySelectorAll('#task-list-container .task-card.complete').length;
-        const overallProgress = total > 0 ? (completed / total) * 100 : 0;
-
-        const donutChart = overviewContainer.querySelector('.progress-donut-chart');
-        const totalEl = overviewContainer.querySelector('[data-stat="total"]');
-        const completedEl = overviewContainer.querySelector('[data-stat="completed"]');
-        const pendingEl = overviewContainer.querySelector('[data-stat="pending"]');
-
-        if (donutChart) {
-            donutChart.style.setProperty('--p', overallProgress);
-            donutChart.querySelector('span').textContent = `${Math.round(overallProgress)}%`;
-        }
-        if (totalEl) totalEl.textContent = total;
-        if (completedEl) completedEl.textContent = completed;
-        if (pendingEl) pendingEl.textContent = total - completed;
-    }
 })();

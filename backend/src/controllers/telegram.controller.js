@@ -19,19 +19,30 @@ exports.postAnnouncement = async (req, res) => {
     try {
         // --- FIX: Handle relative image paths by sending a file buffer ---
         if (imageUrl && imageUrl.startsWith('/')) {
-            // This block handles relative paths (e.g., /uploads/...) which point to local files.
-            // Telegram's servers can't access these directly.
-            // We must read the image from our filesystem and send it as a file buffer.
+            // This block handles relative paths (e.g., /uploads/... or /images/...) which point to local files.
+            // Telegram's servers can't access these directly, so we read the file and send it as a buffer.
             try {
-                // The imageUrl is the relative path from the root of the backend project.
-                // e.g., /uploads/competitions/image.jpg
-                // We need to construct the full path on the filesystem.
-                const imagePath = path.join(__dirname, '..', '..', imageUrl);
+                let imagePath;
+
+                // Check if the path is for a frontend asset or a backend upload
+                if (imageUrl.startsWith('/images/')) {
+                    // Path is relative to the frontend directory
+                    imagePath = path.join(__dirname, '..', '..', '..', 'frontend', imageUrl);
+                } else {
+                    // Assume other paths (like /uploads/) are relative to the backend directory's root
+                    imagePath = path.join(__dirname, '..', '..', imageUrl);
+                }
+
+                console.log(`[Telegram] Attempting to read image from path: ${imagePath}`);
 
                 // Read the file into a buffer
                 const imageBuffer = await fs.readFile(imagePath);
+                console.log(`[Telegram] Image buffer read successfully. Size: ${imageBuffer.length} bytes`);
+
                 // Send the buffer as a photo
                 await bot.sendPhoto(chatId, imageBuffer, { caption: message, parse_mode: 'HTML' });
+                console.log(`[Telegram] Image sent successfully to chat ID: ${chatId}`);
+
             } catch (fileError) {
                 // If reading the local file fails, log the error and do not send to Telegram.
                 console.error(`[Telegram] Could not read local file for path ${imageUrl}. Error: ${fileError.message}`);
