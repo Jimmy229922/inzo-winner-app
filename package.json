@@ -1,0 +1,25 @@
+{
+  "name": "inzo-winner-app",
+  "version": "1.0.0",
+  "description": "هذا الملف يحتوي على التعليمات اللازمة لتشغيل النظام، وهو مقسم حسب دور المستخدم.",
+  "main": "build.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "watch": "nodemon --watch frontend/assets/css --watch frontend/js -e css,js --exec \"node build.js\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jimmy229922/inzo-winner-app.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Jimmy229922/inzo-winner-app/issues"
+  },
+  "homepage": "https://github.com/Jimmy229922/inzo-winner-app#readme",
+  "devDependencies": {
+    "nodemon": "^2.0.15"
+  }
+}

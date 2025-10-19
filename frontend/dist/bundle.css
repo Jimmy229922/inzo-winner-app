@@ -1,0 +1,5457 @@
+/* == base.css == */
+:root {
+    --bg-color: #f4f4f9; /* Light mode background */
+    --animated-bg-color: transparent; /* Default for light mode */
+    --card-bg-color: rgba(255, 255, 255, 0.9);
+    --text-color: #333; /* Light mode text */
+    --text-secondary-color: #6c757d; /* Light mode secondary text */
+    --primary-color: #4CAF50; /* أخضر مائل للزرعي، احترافي */
+    --primary-hover-color: #45a049; /* Darker green for light mode */
+    --accent-color: #F4A261; /* Orange accent for light mode */
+    --border-color: #ddd; /* Light mode border */
+    --input-bg-color: #fff;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --navbar-bg: rgba(255, 255, 255, 0.7);
+}
+
+body.dark-mode {
+    --bg-color: #0D1B2A; /* كحلي داكن جداً */
+    --animated-bg-color: radial-gradient(ellipse at bottom, #1B263B 0%, #0D1B2A 100%); /* تدرج كحلي */
+    --card-bg-color: rgba(27, 38, 59, 0.8); /* كحلي متوسط مع شفافية */
+    --text-color: #FFFFFF; /* أبيض - Text */
+    --text-secondary-color: #778DA9; /* أزرق فاتح أنيق */
+    --primary-color: #4CAF50; /* أخضر احترافي */
+    --primary-hover-color: #45a049; /* أخضر أغمق */
+    --accent-color: #F4A261; /* برتقالي هادي - Accent 2 */
+    --border-color: #415A77; /* أزرق رمادي فاتح */
+    --input-bg-color: #0D1B2A; /* نفس لون الخلفية */
+    --shadow-color: rgba(0, 0, 0, 0.4);
+    --navbar-bg: rgba(27, 38, 59, 0.8); /* Match card background */
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.content-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* تعديل: إزالة الهامش العلوي واستبداله بحشوة علوية */
+    padding: 70px 20px 20px 20px;
+    margin-top: 0;
+    flex-grow: 1;
+}
+
+main, footer {
+    width: 100%;
+    max-width: 800px;
+    background-color: var(--card-bg-color);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px var(--shadow-color); /* تعديل: إزالة الهامش السفلي */
+    margin-bottom: 0;
+    margin-top: 40px; /* NEW: Add consistent top margin for all pages */
+    transition: background-color 0.3s, opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    border: 1px solid var(--border-color);
+}
+
+/* NEW: Scroll to Top Button Styles */
+#scroll-to-top-btn {
+    display: none; /* Hidden by default */
+    position: fixed; /* Fixed position */
+    bottom: 20px; /* Place at the bottom */
+    left: 20px; /* Place at the left (RTL) */
+    z-index: 1000; /* High z-index to be on top */
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 1.5em;
+    cursor: pointer;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    transition: opacity 0.3s, background-color 0.3s, transform 0.3s;
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+#scroll-to-top-btn:hover {
+    background-color: var(--primary-hover-color);
+    transform: scale(1);
+}
+
+#scroll-to-top-btn.show {
+    display: block;
+    opacity: 1;
+    transform: scale(1);
+}
+main.full-width {
+    max-width: none;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* For full-height pages like the calendar */
+#app-content.full-height-content {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+main.page-loading {
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+
+h1, h2 {
+    color: var(--text-color);
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 10px;
+    margin-top: 0; /* تعديل: إزالة الهامش العلوي الافتراضي للعناوين */
+}
+
+button {
+    padding: 10px 20px;
+    background-color: var(--primary-color);
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: background-color 0.3s, transform 0.2s, box-shadow 0.2s;
+}
+
+button:hover {
+    background-color: var(--primary-hover-color);
+}
+
+footer {
+    text-align: center;
+    color: var(--text-secondary-color);
+    background: none;
+    box-shadow: none;
+    border: none;
+}
+
+.error {
+    color: #d9534f;
+    font-weight: bold;
+}
+
+/* Hide Connection Status Bar */
+#connection-status {
+    display: none;
+}
+
+/* Custom Scrollbar Styles */
+::-webkit-scrollbar {
+    width: 8px; /* جعل الشريط أرفع */
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent; /* إخفاء مسار الشريط */
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--text-secondary-color); /* استخدام لون من ألوان السمة */
+    border-radius: 10px;
+    opacity: 0.6;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    opacity: 0.9;
+}
+
+/* General Button Styles */
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+.btn-primary:hover {
+    background-color: var(--primary-hover-color);
+    transform: translateY(-1px);
+}
+.btn-secondary {
+    background-color: var(--text-secondary-color);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+}
+
+/* General Form Layout */
+.form-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.form-group label {
+    font-weight: bold;
+    color: var(--text-secondary-color);
+}
+.form-group input, .form-group select {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    font-size: 1em;
+}
+.form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.btn-secondary {
+    background-color: var(--text-secondary-color);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+}
+
+/* General Form Layout */
+.form-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.form-group label {
+    font-weight: bold;
+    color: var(--text-secondary-color);
+}
+.form-group input, .form-group select {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    font-size: 1em;
+}
+.form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* NEW: General Filter Container Styles */
+.filters-container {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+}
+
+.filter-search-container {
+    position: relative;
+    flex-grow: 1;
+    min-width: 250px;
+}
+
+.item-count-display {
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* NEW: General Filter Container Styles */
+.filters-container {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+}
+
+.filter-search-container {
+    position: relative;
+    flex-grow: 1;
+    min-width: 250px;
+}
+
+.item-count-display {
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* == style.css == */
+
+
+/* == navbar.css == */
+/* Navbar Styles */
+.navbar {
+    display: flex;
+    justify-content: center; /* Center the inner container */
+    align-items: center;
+    padding: 0 20px; /* تعديل: تقليل الحشوة الأفقية لتوفير مساحة أكبر للعناصر */
+    height: 70px; /* تعديل: تصغير ارتفاع الشريط العلوي */
+    background-color: var(--navbar-bg); /* تعديل: تم نقل backdrop-filter للأسفل */
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 2px 10px var(--shadow-color); /* تعديل: إضافة ظل للشريط العلوي */
+    transition: transform 0.3s ease-in-out, background-color 0.3s, border-color 0.3s;
+    backdrop-filter: blur(10px);
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 1100;
+}
+
+/* NEW: The container that holds all navbar content and is centered */
+.navbar-container {
+    width: 100%;
+    max-width: 1600px; /* Increased max-width for a wider look */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px; /* Increased gap for better spacing */
+}
+
+/* تعديل: إضافة حالة الإخفاء للشريط العلوي */
+.navbar.navbar-hidden {
+    transform: translateY(-100%);
+}
+
+.navbar-left, .navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* تعديل: تقليل المسافة بين العناصر */
+    flex-shrink: 0; /* Prevent left/right sections from shrinking */
+}
+
+.navbar a {
+    text-decoration: none;
+    color: var(--text-color);
+    font-weight: 500;
+}
+.navbar-center {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    min-width: 300px; /* Ensure search bar has enough space */
+}
+
+.brand-v2 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.brand-logo {
+    height: 40px; /* تعديل: تصغير حجم الشعار */
+    width: auto;
+}
+
+.brand-text {
+    font-size: 0.75em; /* تعديل: تصغير حجم النص */
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.brand-v2:hover .brand-text {
+    color: var(--primary-color);
+}
+
+.nav-link {
+    padding: 6px 10px; /* تعديل: تقليل الحشوة لتناسب حجم الخط الجديد */
+    border-radius: 6px;
+    transition: color 0.2s, box-shadow 0.2s;
+    box-shadow: inset 0 0px 0 var(--primary-color); /* For transition */
+}
+
+.nav-link:hover, .nav-link.active {
+    color: var(--primary-color);
+    box-shadow: inset 0 -2px 0 var(--primary-color);
+}
+
+.nav-link i {
+    margin-left: 6px; /* RTL: change to margin-left */
+    font-size: 0.85em; /* تعديل: تصغير حجم الأيقونة */
+    opacity: 0.8;
+}
+
+/* Search Container */
+.search-container {
+    position: relative;
+    width: 100%;
+    max-width: 450px; /* Increased width for a more prominent search bar */
+}
+
+.search-input {
+    padding: 8px 40px; /* Adjust padding for icons on both sides */
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    width: 100%;
+    box-sizing: border-box; /* Important for width */
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%, transparent);
+}
+
+.search-icon {
+    position: absolute;
+    right: 15px; /* Position icon on the right for RTL */
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary-color);
+    pointer-events: none; /* Make icon non-interactive */
+}
+
+.search-clear-btn {
+    position: absolute;
+    left: 15px; /* Position clear button on the left for RTL */
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    display: none; /* Hidden by default */
+}
+
+.search-results {
+    position: absolute;
+    top: 110%;
+    left: 0;
+    right: 0;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    z-index: 1001;
+    max-height: 350px;
+    overflow-y: auto;
+    /* تعديل: تغيير طريقة الإخفاء لإضافة تأثير حركة */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out, visibility 0.2s;
+}
+
+/* تعديل: إظهار قائمة البحث عند الحاجة */
+.search-results.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.search-result-item {
+    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-result-item:hover {
+    background-color: var(--bg-color);
+}
+
+.search-result-avatar,
+.search-result-avatar-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.search-result-avatar-placeholder {
+    background-color: var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+    color: var(--text-secondary-color);
+}
+
+.search-result-info {
+    flex-grow: 1;
+}
+
+.search-result-item .agent-name {
+    font-weight: bold;
+    color: var(--text-color);
+    margin: 0 0 4px 0;
+}
+
+.search-result-item .agent-id {
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+    margin: 0;
+}
+
+/* Dropdown Menu Improvements */
+.user-avatar-btn {
+    padding: 0 !important;
+    width: 45px; /* تعديل: تكبير حجم الزر ليتناسب مع زر الإعدادات */
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--border-color);
+    background-color: var(--bg-color);
+    box-shadow: 0 2px 5px var(--shadow-color);
+    transition: all 0.2s ease-in-out;
+}
+
+.user-avatar-btn:hover, .user-avatar-btn.active {
+    border-color: var(--primary-color);
+    transform: translateY(-2px); /* تعديل: إضافة تأثير حركة عند المرور */
+    box-shadow: 0 4px 8px var(--shadow-color) !important;
+}
+
+/* تعديل: ضمان ظهور الصورة بشكل صحيح داخل الدائرة */
+.user-avatar-btn img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* يضمن ملء الصورة للدائرة دون تشويه */
+}
+
+.user-avatar-btn .avatar-placeholder-small {
+    font-size: 1.2em; /* تعديل: تصغير حجم الأيقونة */
+}
+.dropdown-menu {
+    padding: 8px 0; /* Add more vertical padding */
+}
+
+.dropdown-item {
+    display: flex; /* Use flexbox for alignment */
+    align-items: center;
+    gap: 10px;
+}
+
+.dropdown-header {
+    padding: 10px 20px;
+    text-align: right;
+}
+
+.dropdown-header .user-name {
+    margin: 0;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.dropdown-header .user-email {
+    margin: 0;
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.dropdown-item.logout-item:hover {
+    background-color: color-mix(in srgb, var(--accent-color) 15%, transparent);
+    color: var(--accent-color);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background-color: var(--border-color);
+    margin: 8px 0;
+}
+/* Navbar Right */
+.dropdown-header {
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.dropdown-header .user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.dropdown-header .user-info {
+    line-height: 1.3;
+}
+
+
+.nav-item.dropdown {
+    position: relative;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0; /* Default alignment */
+    min-width: 220px;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+}
+
+.dropdown-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* إضافة: إظهار القائمة المنسدلة عند مرور الفأرة */
+.nav-item.dropdown:hover .dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.date-display {
+    color: var(--text-secondary-color);
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.theme-toggle-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary-color);
+    width: 40px; /* تعديل: تصغير حجم الزر */
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 1.2em; /* تعديل: توحيد حجم الأيقونة مع الأزرار الأخرى */
+    padding: 0;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.theme-toggle-btn:hover {
+    background-color: var(--border-color);
+    color: var(--primary-color);
+}
+
+.theme-toggle-btn .fa-sun { display: none; }
+.theme-toggle-btn .fa-moon { display: block; }
+
+body.dark-mode .theme-toggle-btn .fa-sun { display: block; }
+body.dark-mode .theme-toggle-btn .fa-moon { display: none; }
+
+
+/* تعديل: إصلاح القوائم المنسدلة في الجانب الأيمن */
+.navbar-right .dropdown-menu.user-dropdown {
+    left: auto; /* إلغاء المحاذاة لليسار */
+    right: 0; /* محاذاة القائمة إلى يمين الحاوية الخاصة بها */
+    margin-top: 0; /* تعديل: إزالة الهامش العلوي لمنع اختفاء القائمة عند التحرك إليها */
+    transform: translateX(25px); /* تعديل: زيادة إزاحة القائمة لليمين لتحسين المظهر */
+}
+
+/* --- New Navbar Icon Buttons --- */
+.navbar-icon-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary-color);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: inline-flex; /* Use inline-flex for <a> tags */
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 1.2em;
+    padding: 0;
+    text-decoration: none; /* For <a> tags */
+    transition: all 0.2s ease;
+}
+
+.navbar-icon-btn:hover {
+    background-color: var(--border-color);
+    color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px var(--shadow-color);
+}
+
+.navbar-icon-btn.logout-btn:hover {
+    color: #e74c3c;
+    border-color: #e74c3c;
+}
+
+/* تعديل: إخفاء السهم من زر الإعدادات الجديد */
+.nav-item.dropdown .dropdown-toggle#nav-settings-dropdown::after {
+    display: none;
+}
+
+/* == components.css == */
+/* Page Loader Styles */
+.page-loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-color);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+}
+
+.page-loader.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loader-text {
+    color: var(--text-secondary-color);
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+/* Toast Notification Styles */
+#toast-container {
+    position: fixed;
+    top: 80px; /* Below navbar */
+    left: 20px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toast {
+    padding: 15px 20px;
+    border-radius: 8px;
+    color: #fff;
+    font-weight: bold;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: 0;
+    transform: translateX(-100%);
+    animation: slideIn 0.5s forwards, slideOut 0.5s 4.5s forwards;
+}
+
+.toast.success { background-color: #2ecc71; }
+.toast.error { background-color: #e74c3c; }
+.toast.info { background-color: #3498db; }
+.toast.warning { background-color: #f39c12; }
+
+@keyframes slideIn {
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(-120%); }
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+}
+
+.modal {
+    background-color: var(--card-bg-color);
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+    text-align: center;
+    max-width: 400px;
+}
+
+.modal.modal-wide {
+    max-width: 600px;
+    text-align: right;
+}
+
+.modal.modal-wide .modal-message {
+    text-align: right;
+}
+
+.modal.modal-no-actions .modal-actions {
+    display: none;
+}
+
+.modal p {
+    margin-bottom: 20px;
+    font-size: 1.1em;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.modal-actions button:hover {
+    transform: translateY(-2px);
+}
+
+.btn-primary, .btn-secondary, .btn-danger {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+.btn-primary:hover {
+    filter: brightness(110%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.btn-secondary {
+    background-color: var(--card-bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+.btn-secondary:hover {
+    background-color: var(--bg-color);
+    border-color: var(--text-secondary-color);
+}
+
+.btn-danger {
+    background-color: #e74c3c;
+    color: white;
+}
+.btn-danger:hover {
+    background-color: #c0392b;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Form Modal Styles */
+.form-modal-content {
+    background-color: var(--card-bg-color);
+    padding: 20px 30px 30px 30px;
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.form-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+.form-modal-header h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.5em;
+}
+
+.form-modal-header .btn-icon-action {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    padding: 5px;
+}
+
+.form-modal-body {
+    overflow-y: auto;
+    padding-right: 10px; /* space for scrollbar */
+    margin-right: -10px;
+}
+
+.form-modal-body textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+/* Update Progress Modal Styles */
+.update-progress-container {
+    padding: 20px;
+    text-align: center;
+}
+
+.update-icon {
+    font-size: 3em;
+    color: var(--primary-color);
+    margin-bottom: 20px;
+    animation: rocket-fly 2s ease-in-out infinite;
+}
+
+@keyframes rocket-fly {
+    0% { transform: translateY(0) rotate(-5deg); }
+    50% { transform: translateY(-10px) rotate(5deg); }
+    100% { transform: translateY(0) rotate(-5deg); }
+}
+
+.update-progress-container h3 {
+    margin-bottom: 25px;
+    font-size: 1.2em;
+}
+
+.progress-bar-outer {
+    width: 100%;
+    height: 10px;
+    background-color: var(--border-color);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.progress-bar-inner {
+    height: 100%;
+    width: 0%;
+    background-color: var(--primary-color);
+    border-radius: 5px;
+    transition: width 0.5s ease-in-out;
+}
+
+.btn-telegram-bonus {
+    background-color: #0088cc; /* Telegram Blue */
+}
+.btn-telegram-bonus:hover {
+    background-color: #0077b3;
+}
+
+/* Online Status Indicator */
+.online-status-indicator {
+    width: 12px;
+    height: 12px;
+    background-color: #808080; /* Grey for offline */
+    border-radius: 50%;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    border: 2px solid var(--card-bg-color);
+    transition: background-color 0.3s;
+}
+
+.online-status-indicator.online {
+    background-color: #2ecc71; /* Green for online */
+}
+
+
+/* == home.css == */
+/* Home Page / Dashboard Styles */
+.page-header:not(.dashboard-header-card) {
+    margin-top: -20px; /* تعديل: إلغاء الحشوة العلوية لحاوية الصفحة الرئيسية */
+    padding-top: 0;
+}
+
+/* --- NEW: Dashboard Header Card Style --- */
+.dashboard-header-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, var(--bg-color), var(--card-bg-color));
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px 25px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 15px -5px var(--shadow-color);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+.dashboard-header-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary-color) 20%, transparent), transparent);
+    transition: left 0.5s ease-in-out;
+}
+
+.dashboard-header-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px -8px var(--shadow-color);
+    border-color: var(--primary-color);
+}
+
+.dashboard-header-card:hover::before {
+    left: 100%;
+}
+
+.dashboard-header-card h1 {
+    border: none;
+    padding: 0;
+    margin: 0;
+    font-size: 1.8em;
+}
+
+.dashboard-grid-v2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+.dashboard-grid-v2 .stat-card-v2 {
+    animation: fade-in-up 0.5s ease-out forwards;
+    opacity: 0;
+}
+
+/* إضافة: تأثيرات حركية لبطاقات الإحصائيات */
+.dashboard-grid-v2 .stat-card-v2:nth-child(1) { animation-delay: 0.1s; }
+.dashboard-grid-v2 .stat-card-v2:nth-child(2) { animation-delay: 0.2s; }
+.dashboard-grid-v2 .stat-card-v2:nth-child(3) { animation-delay: 0.3s; }
+
+.stat-card-v2 {
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    color: white;
+    text-decoration: none;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card-v2:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+    border-color: color-mix(in srgb, currentColor 50%, transparent);
+    filter: brightness(1.1);
+}
+
+/* Color Themes */
+.stat-card-v2.color-1 { /* Dark Blue to Green */
+    background: linear-gradient(135deg, #1B263B, #4CAF50);
+}
+.stat-card-v2.color-2 { /* Dark Blue to Orange */
+    background: linear-gradient(135deg, #1B263B, #F4A261);
+}
+.stat-card-v2.color-3 { /* Dark Blue to Grey-Blue */
+    background: linear-gradient(135deg, #1B263B, #415A77);
+}
+
+/* --- NEW: Tooltip for Analytics Cards --- */
+.info-tooltip-v2 {
+    position: relative;
+    cursor: help;
+    display: inline-block; /* Ensure it takes space */
+}
+
+.info-tooltip-v2 .fa-info-circle {
+    color: rgba(255, 255, 255, 0.7);
+    transition: color 0.2s;
+}
+
+.info-tooltip-v2:hover .fa-info-circle {
+    color: white;
+}
+
+
+
+.info-tooltip-v2::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%; /* Position above the icon */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px; /* Use a fixed font size for consistency */
+    white-space: nowrap;
+    z-index: 10;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none; /* Prevent tooltip from blocking hover */
+}
+
+.info-tooltip-v2:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+/* --- End Tooltip Styles --- */
+
+.stat-card-v2-icon-bg {
+    position: absolute;
+    top: -20px;
+    right: -20px;
+    font-size: 8em;
+    color: rgba(255, 255, 255, 0.15);
+    transform: rotate(-20deg);
+    z-index: 1;
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.stat-card-v2:hover .stat-card-v2-icon-bg {
+    transform: rotate(-10deg) scale(1.2);
+}
+
+.stat-card-v2-value {
+    font-size: 3em;
+    font-weight: 700;
+    margin: 0;
+    position: relative;
+    z-index: 2;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+}
+
+.stat-card-v2-title {
+    font-size: 1.1em;
+    font-weight: 500;
+    margin: 5px 0 0 0;
+    position: relative;
+    z-index: 2;
+    border: none;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap; /* إضافة: منع التفاف النص في عناوين البطاقات */
+}
+
+/* Fallback for old stat-card styles if needed elsewhere, but new ones are preferred */
+.stat-card {
+    display: none; /* Hide old style */
+}
+
+/* Progress Bar Styles */
+.progress-bar-container {
+    width: 100%;
+    background-color: var(--border-color);
+    border-radius: 8px;
+    padding: 4px;
+    position: relative;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.progress-bar {
+    background: linear-gradient(45deg, var(--primary-hover-color), var(--primary-color));
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.5s ease-in-out;
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.progress-label {
+    position: relative;
+    z-index: 1;
+    color: #fff;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+    font-size: 0.9em;
+}
+
+/* New Home Grid Layout */
+.home-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 30px;
+    margin-top: 30px;
+}
+.home-main-column, .home-side-column {
+    background-color: var(--card-bg-color);
+    padding: 25px;
+    border-radius: 12px;
+}
+/* إضافة: منع التفاف العناوين الرئيسية في الأعمدة */
+.home-main-column h2, .home-side-column h2 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pending-tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.pending-agent-card-v2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: var(--bg-color);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    text-decoration: none;
+    color: var(--text-color);
+    transition: all 0.2s;
+    position: relative; /* تعديل: إضافة position لجعل تحديد موضع الأزرار ممكناً */
+}
+
+/* تعديل: إخفاء الأزرار افتراضياً وتحديد موضعها */
+.pending-agent-actions {
+    position: absolute;
+    left: 12px; /* تعديل: تحديد الموضع على اليسار */
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: var(--card-bg-color);
+    padding: 8px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    z-index: 10;
+}
+
+.pending-agent-card-v2:hover {
+    border-color: var(--primary-color);
+    background-color: var(--card-bg-color);
+}
+
+/* تعديل: إظهار الأزرار عند مرور الماوس */
+.pending-agent-card-v2:hover .pending-agent-actions {
+    opacity: 1;
+    visibility: visible;
+}
+
+.pending-agent-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.pending-agent-info img, .pending-agent-info .avatar-placeholder {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.pending-agent-info .avatar-placeholder {
+    background-color: var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9em;
+}
+
+.pending-agent-info .agent-name-link {
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--text-color);
+}
+
+.pending-agent-info .agent-name-link:hover {
+    color: var(--primary-color);
+}
+
+.agent-name-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.pending-task-icons {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 0.8em;
+}
+
+.pending-icon-audit {
+    color: #f39c12; /* Orange/Yellow */
+}
+
+.pending-icon-comp {
+    color: #3498db; /* Blue */
+}
+
+.pending-agent-actions .btn-small {
+    padding: 5px 10px;
+    font-size: 0.8em;
+}
+
+.no-pending-tasks {
+    color: var(--text-secondary-color);
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}
+
+/* Recent Activity List */
+.recent-activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.activity-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.activity-icon {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+}
+
+.activity-description {
+    margin: 0;
+    font-size: 0.95em;
+}
+
+.activity-description strong {
+    color: var(--primary-color);
+}
+
+.activity-timestamp {
+    margin: 0;
+    font-size: 0.8em;
+    color: var(--text-secondary-color);
+}
+
+.activity-description .agent-name-link {
+    font-weight: bold;
+}
+
+.view-all-container {
+    text-align: center;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.view-all-container .btn-small {
+    width: 100%;
+    justify-content: center;
+}
+/* Responsive adjustments for home grid */
+@media (max-width: 900px) {
+    .home-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.quick-actions {
+    display: flex;
+    gap: 15px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.quick-action-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    text-decoration: none;
+    color: var(--text-color);
+    transition: all 0.2s ease-in-out;
+}
+
+.quick-action-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
+    border-color: var(--primary-color);
+}
+
+.quick-action-card h3 {
+    margin: 0 0 10px 0;
+    padding: 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--primary-color);
+}
+
+.quick-action-card p {
+    margin: 0;
+    color: var(--text-secondary-color);
+    line-height: 1.6; /* إضافة: تحسين تباعد الأسطر للوصف */
+    font-size: 0.9em;
+}
+
+.classification-chart-container {
+    position: relative;
+    height: 200px; /* Adjust as needed */
+    margin-top: 15px;
+}
+
+
+/* Agent Quick Stats */
+.agent-quick-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.quick-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background-color: var(--bg-color);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.quick-stat-item i {
+    font-size: 1.8em;
+    color: var(--primary-color);
+}
+
+.quick-stat-info h4 {
+    margin: 0;
+    font-size: 1.8em;
+}
+
+.quick-stat-info p {
+    margin: 0;
+    color: var(--text-secondary-color);
+}
+
+.classification-breakdown {
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* Fun Zone Game Styles */
+.fun-zone-container {
+    margin-top: 40px;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.fun-zone-container h3 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.game-area {
+    position: relative;
+    height: 250px;
+    background-color: var(--input-bg-color);
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.game-instructions {
+    color: var(--text-secondary-color);
+    font-size: 1.1em;
+    font-weight: 500;
+}
+
+.game-score, .game-timer {
+    position: absolute;
+    top: 15px;
+    background-color: rgba(0,0,0,0.3);
+    color: white;
+    padding: 5px 15px;
+    border-radius: 15px;
+    font-weight: bold;
+}
+
+.game-score {
+    right: 15px;
+}
+
+.game-timer {
+    left: 15px;
+}
+
+.game-target {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    background-color: var(--primary-color);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5em;
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 0 15px color-mix(in srgb, var(--primary-color) 50%, transparent);
+}
+
+.game-target.golden {
+    background-color: #f1c40f;
+    box-shadow: 0 0 20px #f1c40f;
+}
+
+.game-target:hover {
+    transform: scale(1.1);
+    filter: brightness(1.2);
+}
+
+.game-target.hit {
+    animation: hit-effect 0.3s ease-out forwards;
+}
+
+/* إضافة: تعريف الحركة */
+@keyframes fade-in-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- NEW: Small Loader for Skeleton UI --- */
+.loader-container.small-loader {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100px; /* Give it some space */
+}
+
+.loader-container.small-loader .spinner {
+    width: 30px;
+    height: 30px;
+    border-width: 3px;
+}
+
+
+/* == agents.css == */
+/* Manage Agents Page */
+.agent-id-text {
+    cursor: pointer;
+    transition: color 0.2s;    
+    font-size: 0.9em; /* تكبير حجم رقم الوكالة */
+}
+.agent-id-text:hover {
+    color: var(--primary-color);    
+}
+.classification-badge {
+    font-size: 0.7em;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: bold;
+    color: white;
+}
+/* تعديل: جعل الألوان أغمق لتحسين وضوح النص الأبيض */
+.classification-badge.classification-r { background-color: #8e44ad; } /* Darker Purple */
+.classification-badge.classification-a { background-color: #c0392b; } /* Darker Red */
+.classification-badge.classification-b { background-color: #2980b9; } /* Darker Blue */
+.classification-badge.classification-c { background-color: #27ae60; } /* Darker Green */
+
+/* --- Task Group Header Redesign --- */
+.task-group-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 20px;
+    cursor: pointer;
+    background-color: var(--bg-color);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: background-color 0.2s;
+}
+.task-group-header:hover {
+    background-color: var(--card-bg-color);
+}
+.task-group-title {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-grow: 1; /* Pushes other items to the right */
+}
+.task-group-title h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.5em;
+}
+.task-group-progress {
+    background-color: var(--border-color);
+    color: var(--text-secondary-color);
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+.task-group-bulk-actions {
+    display: flex;
+    gap: 20px;
+}
+.task-group-indicators {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    color: var(--text-secondary-color);
+}
+.task-group-indicators .group-completion-indicator {
+    color: #27ae60; /* Green */
+    display: none; /* Hide by default */
+}
+.task-group.all-complete .group-completion-indicator {
+    display: block; /* Show when all tasks are complete */
+}
+
+/* --- Daily Tasks Page - V2 Redesign --- */
+
+.tasks-overview {
+    display: flex;
+    gap: 30px;
+    align-items: center;
+    background-color: var(--card-bg-color);
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+
+@property --p{
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+.progress-donut-chart {
+    --p: 0; /* progress percentage */
+    --b: 12px; /* border thickness */
+    --c: var(--primary-color); /* color */
+    width: 120px;
+    height: 120px;
+    aspect-ratio: 1;
+    position: relative;
+    display: inline-grid;
+    place-content: center;
+    font-size: 1.8em;
+    font-weight: bold;
+    transition: --p 0.5s;
+}
+.progress-donut-chart:before,
+.progress-donut-chart:after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+}
+.progress-donut-chart:before {
+    inset: 0;
+    background:
+        radial-gradient(farthest-side, var(--c) 98%, #0000) top/var(--b) var(--b) no-repeat,
+        conic-gradient(var(--c) calc(var(--p) * 1%), #0000 0);
+    -webkit-mask: radial-gradient(farthest-side, #0000 calc(99% - var(--b)), #000 calc(100% - var(--b)));
+    mask: radial-gradient(farthest-side, #0000 calc(99% - var(--b)), #000 calc(100% - var(--b)));
+}
+.progress-donut-chart:after {
+    inset: calc(50% - var(--b)/2);
+    background: var(--c);
+    transform: rotate(calc(var(--p) * 3.6deg)) translateY(calc(50% - 120px/2));
+}
+
+.overview-stats {
+    display: flex;
+    gap: 40px;
+    flex-grow: 1;
+    justify-content: space-around;
+}
+
+.overview-stat-item {
+    text-align: center;
+}
+
+.overview-stat-item h3 {
+    font-size: 2.5em;
+    margin: 0;
+    color: var(--text-color);
+}
+
+.overview-stat-item p {
+    margin: 0;
+    color: var(--text-secondary-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.task-group-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 0 20px 20px 20px;
+}
+
+.task-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.task-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.task-card.complete {
+    background-color: color-mix(in srgb, #27ae60 15%, var(--card-bg-color)); /* تعديل: زيادة وضوح اللون */
+    border-color: #27ae60;
+}
+.task-card.complete:after {
+    content: none; /* Remove the checkmark icon */
+}
+
+.task-card.highlighted {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent);
+    transform: scale(1.02);
+}
+
+.task-card-header {
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    cursor: pointer;
+}
+
+.task-card-main {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-grow: 1;
+}
+
+.task-agent-avatar, .task-agent-avatar-placeholder {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.task-agent-avatar-placeholder {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    color: var(--text-secondary-color);
+}
+
+.task-agent-info h3 {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.task-agent-info p {
+    margin: 0;
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.task-card-body {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background-color: var(--bg-color);
+    border-top: 1px solid var(--border-color);
+}
+
+.task-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.5em; /* تكبير حجم الخط */
+}
+
+.task-stat label {
+    color: var(--text-secondary-color);
+}
+
+.task-stat span {
+    font-weight: bold;
+    color: var(--text-color);
+    text-align: left;
+}
+
+.task-card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--border-color);
+}
+
+.action-item {
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.3s;
+}
+
+.action-item:first-child {
+    border-left: 1px solid var(--border-color); /* تعديل: تم تغيير الخط الفاصل ليعمل بشكل صحيح مع اتجاه الصفحة */
+}
+
+.action-item label {
+    font-weight: bold;
+    color: var(--text-secondary-color);
+}
+
+.action-item.done {
+    background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+.action-item.done label {
+    color: var(--primary-color);
+}
+
+.task-complete-icon {
+    color: #fff;
+    background-color: #27ae60;
+    border-radius: 50%;
+    font-size: 0.8em;
+    margin-right: 6px;
+    vertical-align: middle;
+    width: 1.5em;
+    height: 1.5em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    visibility: hidden; /* Hide by default */
+}
+
+h3.has-checkmark .task-complete-icon {
+    visibility: visible; /* Show when h3 has the class */
+}
+
+.task-agent-id {
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.task-agent-id:hover {
+    color: var(--primary-color);
+}
+
+/* Re-add toggle switch styles here for self-containment */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--border-color);
+    transition: .4s;
+}
+.slider:before {
+    position: absolute; content: "";
+    height: 20px; width: 20px;
+    left: 4px; bottom: 4px;
+    background-color: white;
+    transition: .4s;
+}
+.toggle-switch input:checked + .slider { background-color: var(--primary-color); }
+.toggle-switch input:checked + .slider:before { transform: translateX(22px); }
+.slider.round { border-radius: 34px; }
+.slider.round:before { border-radius: 50%; }
+
+/* Full Activity Log Page */
+.activity-item-full {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+.activity-item-full:last-child {
+    border-bottom: none;
+}
+
+.activity-item-full .activity-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.2em;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.activity-item-full .activity-content {
+    flex-grow: 1;
+}
+
+.activity-item-full .activity-description {
+    margin: 0 0 5px 0;
+    font-size: 1em;
+}
+
+.activity-item-full .activity-description strong {
+    color: var(--text-color);
+}
+
+.activity-item-full .activity-description .agent-name-link {
+    font-weight: bold;
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.activity-item-full .activity-description .agent-name-link:hover {
+    text-decoration: underline;
+}
+
+.activity-item-full .activity-timestamp {
+    margin: 0;
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+}
+
+/* --- NEW: Enhanced Pagination Styles --- */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 25px;
+}
+
+.page-btn {
+    background-color: var(--bg-color);
+    color: var(--text-secondary-color);
+    border: 1px solid var(--border-color);
+    min-width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    font-weight: bold;
+    transition: all 0.2s ease-in-out;
+}
+
+.page-btn:hover:not(:disabled) {
+    background-color: var(--border-color);
+    color: var(--primary-color);
+}
+
+.page-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px var(--shadow-color);
+}
+
+.page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+
+.pagination-container {
+    margin-top: 20px;
+    text-align: center;
+}
+.slider.round:before { border-radius: 50%; }
+
+/* Full Activity Log Page */
+.activity-item-full {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+.activity-item-full:last-child {
+    border-bottom: none;
+}
+
+.slider.round:before { border-radius: 50%; }
+
+/* == profile.css == */
+/* Agent Profile Page Styles */
+.profile-page-top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.countdown-timer {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 15px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+}
+
+.countdown-timer i {
+    color: var(--primary-color);
+}
+
+.profile-header {
+    display: none; /* Hide old header, we use v2 */
+}
+
+.profile-header-v2 {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    background-color: var(--card-bg-color);
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.profile-avatar {
+    font-size: 4em;
+    color: var(--primary-color);
+    background-color: var(--bg-color);
+    width: 80px; /* تعديل: تصغير حجم الصورة أكثر */
+    height: 80px; /* تعديل: تصغير حجم الصورة أكثر */
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid var(--primary-color);
+    overflow: hidden; /* To contain the image */
+    flex-shrink: 0; /* Prevent shrinking if info text is long */
+    box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-main-info {
+    flex-grow: 1;
+}
+
+.profile-main-info h1 {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin: 0 0 5px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.profile-header-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.profile-header-info h1 {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin: 0;
+}
+
+.profile-main-info p a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: bold;
+}
+.status-badge {
+    font-size: 0.5em;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: bold;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-badge.active {
+    background-color: #2ecc71; /* Green */
+}
+
+.status-badge.inactive {
+    background-color: #f39c12; /* Orange */
+}
+
+.competition-countdown-header {
+    font-size: 0.6em;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+    background-color: var(--bg-color);
+    padding: 4px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.tabs {
+    display: flex;
+    margin-bottom: 20px;
+    background-color: var(--bg-color);
+    border-radius: 8px;
+    padding: 5px;
+}
+
+.tab-link {
+    padding: 8px 16px;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    color: var(--text-secondary-color);
+    font-size: 1.1em;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    flex-grow: 1;
+    text-align: center;
+}
+
+.tab-link.active {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.tab-content {
+    display: none; /* Hidden by default */
+    padding: 20px;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.tab-content.active {
+    display: block; /* Shown when active */
+}
+
+/* Styles for the edit form within the profile header */
+.profile-header .form-layout {
+    flex-grow: 1;
+}
+
+.profile-header .form-actions {
+    align-self: flex-start;
+    margin-top: 0;
+}
+
+.profile-header .profile-header-info {
+    align-items: flex-start; /* Align items to the top */
+}
+
+/* Edit mode for profile header */
+.profile-header-edit-form {
+    display: flex;
+    width: 100%;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.profile-avatar-edit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.profile-avatar-edit img {
+    width: 80px; /* تعديل: تصغير حجم الصورة أكثر */
+    height: 80px; /* تعديل: تصغير حجم الصورة أكثر */
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border-color);
+}
+
+.profile-avatar-edit .btn-secondary {
+    padding: 5px 10px;
+    font-size: 0.8em;
+    width: 100%;
+    justify-content: center;
+}
+
+/* --- NEW: Professional Create/Edit User Modal --- */
+.form-layout-grid {
+    display: grid;
+    grid-template-columns: auto 1fr; /* Avatar | Fields */
+    grid-template-rows: auto auto; /* Content | Actions */
+    grid-template-areas: 
+        "avatar fields"
+        "actions actions";
+    gap: 20px 30px;
+}
+
+.form-grid-avatar { grid-area: avatar; }
+.form-grid-fields { grid-area: fields; }
+.form-grid-actions { 
+    grid-area: actions;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.profile-avatar-edit.large-avatar img {
+    cursor: pointer;
+    width: 128px;
+    height: 128px;
+}
+.profile-avatar-edit.large-avatar .avatar-edit-button {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 32px;
+    height: 32px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 2px solid var(--card-bg-color);
+    box-shadow: 0 2px 5px var(--shadow-color);
+}
+
+/* NEW: Action buttons for avatar editing */
+.avatar-action-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 15px; /* Add space below the avatar */
+}
+.avatar-action-buttons .btn-icon-action {
+    color: white;
+    font-size: 1em;
+}
+
+.avatar-action-buttons .btn-small {
+    padding: 6px 12px !important;
+    font-size: 0.9em !important;
+}
+
+/* NEW: Hover animation for avatar upload */
+.profile-avatar-edit.large-avatar {
+    position: relative;
+    overflow: hidden;
+    border-radius: 50%;
+}
+
+.profile-avatar-edit.large-avatar::after {
+    content: '\f030'; /* Font Awesome camera icon */
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2em;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.profile-avatar-edit.large-avatar:hover::after {
+    opacity: 1;
+}
+.profile-avatar-edit.large-avatar:hover img {
+    transform: scale(1.1);
+    filter: brightness(0.8);
+}
+
+.password-input-wrapper {
+    position: relative;
+}
+.password-toggle-btn {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+}
+.password-strength-meter { height: 5px; background-color: var(--border-color); border-radius: 5px; margin-top: 5px; overflow: hidden; }
+.strength-bar { height: 100%; width: 0; transition: width 0.3s, background-color 0.3s; }
+.strength-bar.strength-1 { width: 25%; background-color: #e74c3c; }
+.strength-bar.strength-2 { width: 50%; background-color: #f39c12; }
+.strength-bar.strength-3 { width: 75%; background-color: #2980b9; }
+.strength-bar.strength-4 { width: 100%; background-color: #27ae60; }
+.password-actions { margin-top: 10px; }
+
+/* NEW: Inline validation error style */
+.validation-error-inline {
+    color: #e74c3c;
+    font-size: 0.85em;
+    font-weight: 500;
+    margin-top: 5px;
+}
+
+/* Log Timeline Styles */
+.log-timeline-v2 {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.log-date-group {
+    position: relative;
+    padding-right: 50px; /* تعديل: إضافة مساحة على اليمين للخط الزمني والأيقونات */
+    border-right: 2px solid var(--border-color); /* تعديل: إضافة الخط الزمني العمودي */
+}
+
+.log-date-header {
+    font-weight: bold;
+    color: var(--text-secondary-color);
+    margin-bottom: 15px;
+    position: relative; /* تعديل: جعل تحديد الموضع ممكناً */
+    right: -62px; /* تعديل: سحب العنوان لليمين ليتوسط الخط الزمني */
+    background-color: var(--card-bg-color);
+    display: inline-block;
+    padding: 2px 10px;
+}
+
+.log-item-v2 {
+    display: flex;
+    gap: 15px;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    position: relative; /* تعديل: جعل تحديد موضع الأيقونة ممكناً */
+}
+
+.log-item-icon-v2 {
+    background-color: var(--bg-color);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: white;
+    font-size: 1.1em;
+    position: absolute; /* تعديل: تحديد موضع الأيقونة بشكل مطلق بالنسبة للعنصر الأب */
+    right: -72px; /* تعديل: وضع الأيقونة في منتصف الخط الزمني */
+    border: 3px solid var(--card-bg-color);
+}
+
+/* Icon Colors */
+.log-icon-create { background-color: #2ecc71; } /* Green */
+.log-icon-delete { background-color: #e74c3c; } /* Red */
+.log-icon-profile { background-color: #3498db; } /* Blue */
+.log-icon-details { background-color: #9b59b6; } /* Purple */
+.log-icon-competition { background-color: #f39c12; } /* Orange */
+.log-icon-generic { background-color: var(--text-secondary-color); } /* Gray */
+
+.log-item-content-v2 {
+    flex-grow: 1;
+    margin-left: -30px; /* Pull content back to align */
+}
+
+.log-description {
+    margin: 0 0 5px 0;
+    font-weight: 500;
+}
+
+.log-timestamp {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+}
+
+/* Details Tab Form Styles */
+.details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px 30px;
+}
+
+.details-group {
+    position: relative; /* For positioning the edit icon */
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.details-group .inline-edit-trigger {
+    position: absolute;
+    top: 5px;
+    left: 0; /* RTL support */
+    cursor: pointer;
+    color: var(--text-secondary-color);
+    padding: 5px;
+    font-size: 0.8em;
+}
+
+.details-group .auto-calculated-indicator {
+    position: absolute;
+    top: 5px;
+    left: 0; /* RTL support */
+    color: var(--text-secondary-color);
+    padding: 5px;
+    font-size: 0.8em;
+    cursor: help;
+}
+
+.details-group p {
+    padding-left: 30px; /* Make space for the icon */
+}
+
+.details-group label {
+    font-weight: bold;
+    color: var(--text-secondary-color);
+    font-size: 0.9em;
+}
+
+.details-group p {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 500;
+    padding: 8px;
+    background-color: var(--bg-color);
+    border-radius: 6px;
+    min-height: 20px;
+}
+
+.details-group input,
+.details-group select {
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    font-size: 1em;
+}
+
+.details-actions {
+    margin-top: 0; /* Removed top margin */
+    display: flex;
+    flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+    gap: 15px;
+}
+
+.details-actions button {
+    flex-grow: 1; /* Make all buttons in this container take equal space */
+}
+
+/* Action Tab Redesign */
+.action-tab-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 30px;
+}
+
+.action-section h2 {
+    font-size: 1.3em;
+    margin-top: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.action-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 15px;
+}
+
+.action-info-card {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.action-info-card i {
+    font-size: 1.8em;
+    color: var(--primary-color);
+    width: 40px;
+    text-align: center;
+}
+
+.action-info-card .info label {
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+    font-weight: bold;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.action-info-card .info p {
+    margin: 0;
+    font-size: 1.5em;
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.action-info-card .info p .sub-value {
+    font-size: 0.6em;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+    margin: 0 5px;
+}
+
+.action-info-card .value-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.day-tag {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.day-tag-none {
+    color: var(--text-secondary-color);
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+.inline-edit-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.details-section-title {
+    grid-column: 1 / -1; /* Span full width */
+    color: var(--primary-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+    margin-top: 20px;
+    margin-bottom: 0;
+}
+
+/* Custom button styles for Telegram actions */
+.btn-telegram-bonus, .btn-telegram-winners {
+    /* Base button styles copied from components.css for consistency */
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
+}
+
+.btn-telegram-bonus {
+    background-color: #3498db; /* Blue */
+}
+
+/* NEW: Profile Settings Page Header */
+.profile-settings-header {
+    display: flex;
+    align-items: center;
+    gap: 25px;
+    background-color: var(--card-bg-color);
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.profile-settings-header .profile-header-info {
+    flex-grow: 1;
+}
+
+.profile-settings-header .profile-name-display {
+    font-size: 1.8em;
+    font-weight: 700;
+    margin: 0 0 5px 0;
+    padding: 0;
+    border: none;
+    color: var(--text-color);
+}
+
+.profile-settings-header .profile-email-display {
+    font-size: 1.1em;
+    color: var(--text-secondary-color);
+    margin: 0;
+}
+.btn-telegram-bonus:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+}
+
+.btn-telegram-winners {
+    background-color: #f39c12; /* Orange */
+    color: white;
+}
+.btn-telegram-winners:hover {
+    background-color: #e67e22;
+    transform: translateY(-2px);
+}
+/* New style for the manual renewal button */
+.btn-renewal {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
+    background-color: #1abc9c; /* Teal */
+}
+.btn-renewal:hover:not(:disabled) {
+    background-color: #16a085;
+    transform: translateY(-2px);
+}
+.btn-renewal:disabled {
+    background-color: var(--border-color);
+    cursor: not-allowed;
+}
+.btn-renewal.ready {
+    animation: pulse-green 2s infinite;
+}
+
+
+.competitions-list-profile {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.competition-card-header .header-right-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.competition-countdown {
+    font-size: 0.85em;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+    background-color: var(--bg-color);
+    padding: 4px 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.competition-countdown.expired {
+    color: #e74c3c;
+}
+
+
+/* New Stepper Styles */
+.stepper-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+
+.stepper-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    z-index: 1;
+    flex-basis: 0;
+    flex-grow: 1;
+}
+
+.step-counter {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--bg-color);
+    border: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: var(--text-secondary-color);
+    transition: all 0.4s ease;
+    margin-bottom: 8px;
+}
+
+.step-name {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    transition: color 0.4s ease;
+}
+
+.stepper-item.completed .step-counter {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+.stepper-item.completed .step-name {
+    color: var(--text-color);
+    font-weight: bold;
+}
+
+.stepper-line {
+    flex-grow: 2;
+    height: 2px;
+    background-color: var(--border-color);
+    transition: background-color 0.4s ease;
+    position: relative;
+}
+
+.stepper-line.completed {
+    background-color: var(--primary-color);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--primary-color) 50%, transparent);
+    transition-delay: 0.2s; /* Add a slight delay to feel more sequential */
+}
+
+.competition-status-tracker {
+    padding: 20px 0;
+}
+
+
+
+.competition-status-tracker {
+    padding: 20px 0;
+}
+
+.competition-progress-bar {
+    position: relative;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.progress-bar-fill {
+    position: absolute;
+    top: 5px; /* Center it vertically on the dots */
+    left: 0;
+    height: 2px;
+    background-color: var(--primary-color);
+    transition: width 0.5s ease-in-out;
+    z-index: 0;
+}
+
+.progress-labels {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+    z-index: 1;
+}
+
+.progress-labels span {
+    font-size: 0.8em;
+    color: var(--text-secondary-color);
+    position: relative;
+    padding-top: 20px; /* Space for the dot */
+}
+
+.progress-labels span::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--border-color);
+    border: 2px solid var(--card-bg-color);
+    transition: background-color 0.4s ease;
+}
+
+.progress-labels .active {
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.progress-labels .active::before {
+    background-color: var(--primary-color);
+}
+
+.competition-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.competition-detail-item {
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+    background-color: var(--bg-color);
+    padding: 8px 12px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.competition-detail-item i {
+    color: var(--primary-color);
+}
+
+.completed-competitions-group {
+    margin-top: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-color);
+}
+
+.completed-competitions-group summary {
+    padding: 12px 15px;
+    font-weight: bold;
+    cursor: pointer;
+    list-style: none; /* Hide default marker */
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.competitions-list-view .competition-card-header {
+    grid-area: header;
+    align-self: end;
+    display: flex; /* لجعل العنوان والزر متجاورين */
+    justify-content: space-between;
+    align-items: center;
+    background: none;
+    padding: 0;
+    border: none;
+}
+
+.competitions-list-view .competition-card-name h3 {
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.competitions-list-view .competition-card-agent-info {
+    grid-area: agent;
+}
+
+.competitions-list-view .competition-card-body {
+    grid-area: body;
+    align-self: start;
+    display: none; /* إخفاء الوصف والتاريخ لزيادة الكثافة */
+}
+
+.competitions-list-view .competition-card-footer {
+    grid-area: actions;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    background: none; /* Remove background from original card style */
+    border: none;
+    padding: 0;
+}
+
+/* جعل أزرار الإجراءات أيقونات فقط */
+.competitions-list-view .competition-card-footer .btn-secondary,
+.competitions-list-view .competition-card-footer .btn-danger {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 1em;
+    justify-content: center;
+}
+
+/* تنسيق زر تبديل الحالة الجديد */
+.small-toggle {
+    width: 40px;
+    height: 22px;
+}
+.small-toggle .slider:before {
+    height: 16px;
+    width: 16px;
+}
+.small-toggle input:checked + .slider:before {
+    transform: translateX(18px);
+}
+
+/* 2. إعادة تصميم معلومات الوكيل في القائمة */
+.table-agent-cell {
+    grid-area: agent;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--text-color);
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+    min-width: 0; /* Prevents overflow */
+}
+
+.table-agent-cell:hover .agent-details span {
+    color: var(--primary-color);
+}
+
+.table-agent-cell .avatar-small,
+.table-agent-cell .avatar-placeholder-small {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.table-agent-cell .avatar-placeholder-small {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+}
+
+/* NEW: Styles for user cell in users management table */
+.table-user-cell {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* تعديل: زيادة المسافة لتناسب حجم الصورة الجديد */
+    text-decoration: none;
+    color: var(--text-color);
+    min-width: 0; /* Prevents overflow */
+}
+
+.table-user-cell .avatar-small {
+    width: 50px; /* تعديل: زيادة حجم الصورة الرمزية */
+    height: 50px; /* تعديل: زيادة حجم الصورة الرمزية */
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid var(--card-bg-color); /* تعديل: تحسين لون الإطار */
+}
+
+.table-user-cell .user-details {
+    line-height: 1.4; /* تعديل: زيادة تباعد الأسطر */
+}
+
+/* NEW: Separate username and email into distinct lines */
+.table-user-cell .user-name {
+    display: block; /* Make it a block element to take a full line */
+    font-weight: 600;
+    color: var(--text-color);
+    font-size: 1.1em; /* تعديل: تكبير حجم خط الاسم */
+}
+
+.table-user-cell .user-email {
+    display: block; /* Make it a block element to take a full line */
+    font-size: 0.9em; /* تعديل: تكبير حجم خط البريد الإلكتروني */
+    color: var(--text-secondary-color);
+}
+
+/* NEW: Realtime online status indicator */
+.user-avatar-container .online-status-indicator {
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background-color: #778DA9; /* Gray for offline */
+    border-radius: 50%;
+    border: 2px solid var(--card-bg-color);
+    transition: background-color 0.3s;
+    z-index: 2;
+}
+
+.user-avatar-container .online-status-indicator.online {
+    background-color: #2ecc71; /* Green for online */
+    box-shadow: 0 0 5px #2ecc71;
+}
+
+
+/* NEW: Styles to identify admin users in the list */
+.table-user-cell .user-avatar-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.table-user-cell .admin-crown-icon {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background-color: #f39c12; /* Orange/Gold color */
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7em;
+    border: 2px solid var(--card-bg-color);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.table-user-cell .admin-badge {
+    background-color: color-mix(in srgb, var(--primary-color) 20%, transparent);
+    color: var(--primary-color);
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* NEW: Styles for the employee badge */
+.table-user-cell .employee-badge {
+    background-color: var(--bg-color);
+    color: var(--text-secondary-color);
+    border: 1px solid var(--border-color);
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* NEW: Styles for the employee badge */
+.table-user-cell .employee-badge {
+    background-color: var(--bg-color);
+    color: var(--text-secondary-color);
+    border: 1px solid var(--border-color);
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* NEW: Style for inactive user rows */
+.modern-table tbody tr.inactive-row {
+    opacity: 0.6;
+    background-color: color-mix(in srgb, #e74c3c 10%, transparent); /* تعديل: زيادة وضوح اللون الأحمر */
+}
+.modern-table tbody tr.inactive-row:hover {
+    opacity: 1;
+    background-color: color-mix(in srgb, #e74c3c 15%, transparent); /* تعديل: زيادة وضوح اللون الأحمر عند المرور */
+}
+
+/* NEW: Style for the text in the main page loader */
+.page-loader p {
+    margin-top: 15px;
+    font-size: 1.1em;
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    animation: fadeIn 0.5s 0.3s ease-in-out both;
+}
+
+/* NEW: Improve layout for action buttons in tables */
+.modern-table .actions-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-start;
+}
+
+/* NEW: Color for the 4th stat card */
+.stat-card-v2.color-4 {
+    background: linear-gradient(135deg, #1B263B, #e74c3c);
+}
+
+/* New Sort Container in header */
+.sort-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sort-container label {
+    color: var(--text-secondary-color);
+    font-weight: 500;
+}
+
+.sort-container select {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg-color);
+    height: auto; /* تعديل الارتفاع */
+    height: 100%;
+    color: var(--text-color);
+}
+
+/* New Bulk Action Bar */
+.bulk-action-bar {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(-20px);
+    visibility: hidden;
+    transition: opacity 0.3s, transform 0.3s, visibility 0.3s;
+}
+
+.bulk-action-bar.visible {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+}
+
+#bulk-action-count {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* New List Header for Select All */
+.list-view-header {
+    display: grid;
+    grid-template-columns: auto 2fr 1fr auto; /* مطابقة لأعمدة البطاقة */
+    gap: 1.5rem;
+    padding: 0 1.5rem;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: var(--text-secondary-color);
+    align-items: center;
+}
+
+.list-view-header .header-agent {
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+
+.list-view-header .header-actions {
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+
+
+/* == competitions.css == */
+/* Competitions Page Styles */
+
+/* --- تحسينات مقترحة لصفحة إدارة المسابقات --- */
+
+/* 1. تحسين تصميم شريط الفلاتر والبحث */
+.filters-container {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.filters-container .filter-search-container {
+    flex-grow: 1;
+}
+
+.filters-container .filter-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 15px;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-label {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    font-weight: 500;
+}
+
+.filters-container .filter-buttons {
+    background-color: var(--bg-color);
+    border-radius: 20px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.filters-container .sort-container {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 15px;
+}
+
+/* 2. تصميم القائمة الجديد */
+.competitions-list-view {
+    display: flex;
+    flex-direction: column;
+    gap: 0; /* No gap for table-like view */
+}
+
+.competitions-list-view .competition-card {
+    display: grid;
+    grid-template-columns: auto 2fr auto 1.5fr auto; /* Checkbox | Name | Status | Agent | Actions */
+    grid-template-areas: "checkbox name status agent footer";
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1rem 1.5rem;
+    background-color: var(--card-bg-color);
+    border: none; /* Remove individual card border */
+    border-bottom: 1px solid var(--border-color); /* Use bottom border for separation */
+    border-radius: 0; /* No radius for table rows */
+    transition: background-color 0.2s;
+}
+/* تعديل: إضافة position: relative لجعل تحديد موضع الأزرار ممكناً */
+.competitions-list-view .competition-card {
+    position: relative;
+}
+
+/* تعديل: إخفاء الأزرار بشكل افتراضي وتحديد موضعها */
+.competitions-list-view .competition-card-footer {
+    position: absolute;
+    left: 20px; /* تعديل: تحديد الموضع على اليسار */
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: var(--card-bg-color);
+    padding: 8px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    z-index: 10;
+}
+
+.competitions-list-view .competition-card:first-of-type {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.competitions-list-view .competition-card:last-of-type {
+    border-bottom: none;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.competitions-list-view .competition-card:hover {
+    background-color: var(--bg-color);
+}
+
+.competitions-list-view .competition-card.selected {
+    background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
+}
+
+/* تعديل: إظهار الأزرار عند مرور الماوس */
+.competitions-list-view .competition-card:hover .competition-card-footer {
+    opacity: 1;
+    visibility: visible;
+}
+
+.competitions-list-view .row-checkbox {
+    grid-area: checkbox;
+}
+
+.competitions-list-view .competition-card-name {
+    grid-area: name;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+
+.competitions-list-view .competition-card-name h3 {
+    margin: 0;
+    font-size: 1.05em;
+}
+
+.competitions-list-view .competition-card-status {
+    grid-area: status;
+    text-align: center;
+}
+
+.competitions-list-view .competition-card-footer {
+    grid-area: footer;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+/* جعل أزرار الإجراءات أيقونات فقط */
+.competitions-list-view .competition-card-footer .btn-secondary,
+.competitions-list-view .competition-card-footer .btn-danger {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 1em;
+    justify-content: center;
+}
+
+/* تنسيق زر تبديل الحالة */
+.small-toggle {
+    width: 40px;
+    height: 22px;
+}
+.small-toggle .slider:before {
+    height: 16px;
+    width: 16px;
+}
+.small-toggle input:checked + .slider:before {
+    transform: translateX(18px);
+}
+
+/* 3. تنسيق خلية الوكيل */
+.table-agent-cell {
+    grid-area: agent;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* تعديل: توسيط محتوى خلية الوكيل */
+    gap: 10px;
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+    text-decoration: none;
+    color: var(--text-color);
+    min-width: 0; /* Prevents overflow */
+}
+
+.table-agent-cell:hover .agent-details span {
+    color: var(--primary-color);
+}
+
+.table-agent-cell .avatar-small,
+.table-agent-cell .avatar-placeholder-small {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.table-agent-cell .avatar-placeholder-small {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+}
+
+/* 4. شريط الإجراءات الجماعية */
+.bulk-action-bar {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(-20px);
+    visibility: hidden;
+    transition: opacity 0.3s, transform 0.3s, visibility 0.3s;
+}
+
+.bulk-action-bar.visible {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+}
+
+#bulk-action-count {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* 5. رأس القائمة */
+.list-view-header {
+    display: grid;
+    grid-template-columns: auto 2fr auto 1.5fr auto; /* مطابقة لأعمدة البطاقة */
+    gap: 1.5rem;
+    padding: 0 1.5rem;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: var(--text-secondary-color);
+    align-items: center;
+}
+
+.list-view-header .header-name {
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+
+.list-view-header .header-status {
+    text-align: center;
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+
+/* تعديل: توسيط عنوان عمود الوكيل */
+.list-view-header .header-agent {
+    text-align: center;
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+
+/* Chart Container on Home Page */
+.chart-container {
+    position: relative;
+    height: 300px; /* Adjust height as needed */
+    background-color: var(--bg-color);
+    padding: 15px;
+    border-radius: 8px;
+}
+
+/* Competitions Grid */
+.competitions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+.competition-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+}
+
+.competition-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.competition-card.selectable {
+    cursor: pointer;
+}
+
+.competition-card.selectable.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 40%, transparent);
+    transform: translateY(-2px);
+}
+
+.competition-card-header {
+    background-color: var(--bg-color);
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.competition-card-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    color: var(--text-color);
+}
+
+.competition-card-body {
+    padding: 20px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.competition-card-body p {
+    margin: 0;
+    color: var(--text-secondary-color);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.competition-card-body p i {
+    margin-top: 4px;
+    color: var(--primary-color);
+}
+
+.competition-card-body p.description {
+    font-style: italic;
+}
+
+.competition-card-body p strong {
+    color: var(--text-color);
+    margin-left: 4px;
+}
+
+.competition-card-footer {
+    padding: 15px 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background-color: var(--bg-color);
+}
+
+.competition-card-footer .btn-secondary,
+.competition-card-footer .btn-danger {
+    padding: 8px 16px;
+    font-size: 0.9em;
+}
+
+/* Status Badge for Active/Inactive state */
+.status-badge {
+    font-size: 0.7em;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: bold;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-badge.active {
+    background-color: #2ecc71; /* Green */
+}
+
+.status-badge.inactive {
+    background-color: #e74c3c; /* Red */
+}
+
+/* Countdown styles */
+.countdown {
+    font-size: 0.9em;
+    font-style: italic;
+    margin-right: 5px;
+}
+.countdown-far {
+    color: var(--text-secondary-color);
+}
+.countdown-near {
+    color: #f39c12; /* Orange */
+    font-weight: bold;
+}
+.countdown-today {
+    color: #e74c3c; /* Red */
+    font-weight: bold;
+}
+.countdown-expired {
+    color: var(--text-secondary-color);
+    text-decoration: line-through;
+}
+
+/* Create Competition Page - Redesigned */
+.create-competition-layout {
+    display: grid;
+    grid-template-columns: 1fr 2fr; /* Agent info on the left, form on the right */
+    gap: 30px;
+    align-items: flex-start;
+}
+
+.competition-form-agent-info.card-style-container {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    margin-bottom: 0; /* remove old margin */
+}
+
+.competition-form-agent-info.card-style-container h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--primary-color);
+}
+
+.agent-info-grid {
+    display: grid;
+    grid-template-columns: 1fr; /* Stack cards vertically */
+    gap: 15px;
+}
+
+#competition-form.card-style-container {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    margin-top: 0; /* remove old margin */
+}
+
+#competition-form.card-style-container h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.form-container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* Toggle Switch for "Active" checkbox */
+.toggle-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 60px;
+    height: 34px;
+    cursor: pointer;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-switch .slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border-color);
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.toggle-switch .slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked + .slider {
+    background-color: var(--primary-color);
+}
+
+.toggle-switch input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+.toggle-switch .label-text {
+    margin-right: 70px; /* Position text to the right of the switch */
+    font-weight: bold;
+}
+
+/* Competition Templates Page - Professional Redesign */
+.templates-layout {
+    padding: 25px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    align-self: flex-start; /* Stick to top */
+    box-shadow: 0 4px 12px var(--shadow-color);
+}
+
+.templates-list-grouped {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.template-group {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+
+.template-group[open] {
+    box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.template-group[open] > .template-group-header {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.template-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    list-style: none; /* Hide default marker */
+}
+.template-group-header::-webkit-details-marker {
+    display: none; /* Hide default marker for Chrome/Safari */
+}
+
+.template-group-header:hover {
+    background-color: var(--bg-color);
+}
+
+.template-group-header h2 {
+    margin: 0;
+    font-size: 1.3em;
+    color: var(--primary-color);
+}
+
+.template-count {
+    background-color: var(--border-color);
+    color: var(--text-secondary-color);
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.template-group-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.template-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s, box-shadow 0.2s;
+    overflow: hidden; /* To contain the footer */
+}
+
+.template-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
+}
+
+.template-card-header {
+    background-color: var(--bg-color);
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.template-card h4 {
+    margin: 0;
+    color: var(--primary-color);
+    font-size: 1.1em;
+}
+
+.template-card-body {
+    padding: 20px;
+    flex-grow: 1; /* Pushes footer to the bottom */
+}
+.template-card p {
+    margin: 0;
+    color: var(--text-secondary-color);
+    font-size: 0.9em;
+    line-height: 1.6;
+}
+
+.template-card-footer {
+    padding: 10px 15px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background-color: var(--bg-color);
+}
+
+.template-card-footer .btn-secondary,
+.template-card-footer .btn-danger {
+    padding: 6px 12px;
+    font-size: 0.85em;
+}
+
+/* Remove old absolute positioning styles */
+.template-card-actions {
+   display: none; /* Replaced by footer */
+}
+
+/* The base .classification-badge is in agents.css */
+.classification-badge.classification-all {
+    background-color: var(--text-secondary-color);
+}
+
+@media (max-width: 900px) {
+    .templates-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 1200px) {
+    .create-competition-layout-v3 {
+        grid-template-columns: 1fr 1.5fr;
+        grid-template-areas: 
+            "agent variables"
+            "preview preview";
+    }
+    .agent-info-v3 { grid-area: agent; }
+    .variables-v3 { grid-area: variables; }
+    .preview-v3 { grid-area: preview; }
+}
+
+@media (max-width: 768px) {
+    .create-competition-layout-v3 {
+        grid-template-columns: 1fr;
+        grid-template-areas: 
+            "agent"
+            "variables"
+            "preview";
+    }
+}
+
+/* New Create Competition Page V3 */
+.create-competition-layout-v3 {
+    display: grid;
+    grid-template-columns: 300px 450px 1fr; /* Agent Info | Variables (fixed) | Preview (flexible) */
+    gap: 25px;
+    align-items: flex-start;
+}
+
+.create-competition-layout-v3 .card-style-container {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    height: 100%; /* Make cards in a row same height */
+}
+
+.preview-v3.card-style-container {
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+}
+
+.create-competition-layout-v3 h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--primary-color);
+    font-size: 1.2em;
+}
+
+.agent-info-v3 .agent-info-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+}
+
+.variables-v3 .override-fields-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.agent-info-v3 .action-info-card.invalid p {
+    color: #e74c3c;
+    animation: pulse-red 0.5s;
+}
+
+.validation-messages {
+    margin-top: 15px; /* Adjusted margin for new position */
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.validation-error {
+    background-color: color-mix(in srgb, #e74c3c 15%, transparent);
+    color: #e74c3c;
+    border: 1px solid color-mix(in srgb, #e74c3c 40%, transparent);
+    border-right: 5px solid #e74c3c;
+    padding: 10px 15px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.variables-v3 #competition-cost-summary {
+    margin-top: 15px;
+    background-color: var(--bg-color);
+    padding: 10px 15px;
+    border-radius: 6px;
+}
+
+.variables-v3 #competition-cost-summary label {
+    color: var(--primary-color);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+}
+@keyframes pulse-red {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+.preview-v3 #competition-form {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.preview-v3 .form-group {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* New Create Competition Page V2 */
+.page-subtitle {
+    text-align: center;
+    font-size: 1.1em;
+    color: var(--text-secondary-color);
+    margin: -10px 0 30px 0;
+}
+
+.agent-name-link-subtitle {
+    text-decoration: none;
+    color: var(--text-color);
+    transition: color 0.2s;
+}
+
+.agent-name-link-subtitle:hover {
+    color: var(--primary-color);
+}
+
+.btn-send-telegram {
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+    font-size: 1.1em;
+}
+
+.telegram-preview-wrapper {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-color);
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 20px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.telegram-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 15px;
+    background-color: var(--border-color);
+    color: var(--text-secondary-color);
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.telegram-preview-header .header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.telegram-preview-header .fa-telegram {
+    color: #2AABEE;
+    font-size: 1.2em;
+}
+
+.telegram-preview-body {
+    padding: 15px;
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.preview-v3 #competition-description {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    resize: none;
+    line-height: 1.7;
+    font-size: 1em;
+    outline: none;
+    padding: 0;
+    min-height: 250px; /* Ensure a good minimum height */
+}
+/* NEW: Styles for image preview in Telegram box */
+.telegram-image-preview-container {
+    position: relative;
+    margin: 10px 15px 0 15px; /* تعديل: إضافة حشوة جانبية */
+    border-radius: 6px; /* تعديل: تقليل الانحناء */
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    width: 120px; /* تعديل: تحديد عرض ثابت */
+    height: 80px; /* تعديل: تحديد ارتفاع ثابت */
+    cursor: pointer; /* تعديل: إظهار مؤشر النقر */
+    transition: transform 0.2s;
+}
+
+.telegram-image-preview-container img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.telegram-image-preview-container .btn-icon-action {
+    position: absolute;
+    top: 5px;
+    left: 5px; /* RTL */
+    background-color: rgba(0,0,0,0.5);
+    color: white;
+}
+.telegram-image-preview-container:hover {
+    transform: scale(1.05);
+}
+
+/* NEW: Styles for the full-screen image modal */
+.image-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    cursor: pointer;
+    animation: fadeIn 0.3s;
+}
+
+.image-modal-content {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    animation: zoomIn 0.3s;
+}
+
+
+/* Navbar Dropdown - Added here as navbar.css is not in context */
+.nav-item.dropdown {
+    position: relative;
+}
+
+.dropdown-menu {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+    position: absolute;
+    left: 0; /* Position the dropdown to the left edge of the button */
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 8px 16px var(--shadow-color);
+    min-width: 200px; /* تعديل: زيادة قيمة z-index لضمان ظهور القائمة في المقدمة */
+    z-index: 1050;
+    padding: 5px 0;
+    margin-top: 5px;
+}
+
+.dropdown-item {
+    display: block;
+    padding: 10px 20px;
+    color: var(--text-color);
+    text-decoration: none;
+    transition: background-color 0.2s;
+    white-space: nowrap; /* Prevent wrapping */
+}
+
+.dropdown-item:hover, .dropdown-item.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.dropdown-toggle::after {
+    content: ' \f078'; /* Font Awesome down arrow */
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    font-size: 0.8em;
+    margin-right: 5px;
+}
+
+.filter-separator {
+    width: 1px;
+    background-color: var(--border-color);
+    margin: 0 10px;
+    align-self: stretch;
+}
+
+/* New Table Styles for Competitions Management */
+.table-responsive-container {
+    overflow-x: auto;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 10px;
+}
+
+.modern-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1.05em; /* زيادة حجم الخط الأساسي للجدول */
+}
+
+.modern-table thead tr {
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.modern-table th {
+    padding: 18px; /* زيادة الحشوة لرأس الجدول */
+    text-align: center; /* توسيط جميع العناوين */
+    font-weight: bold;
+    color: var(--text-color);
+    white-space: nowrap;
+}
+
+.modern-table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s;
+}
+
+.modern-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.modern-table tbody tr:hover {
+    background-color: var(--bg-color);
+}
+
+.modern-table td {
+    padding: 20px 18px; /* زيادة الحشوة لخلايا الجدول */
+    vertical-align: middle;
+    text-align: center; /* توسيط محتوى جميع الخلايا */
+}
+
+.competition-name-cell strong {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 1.05em;
+}
+
+.competition-name-cell small {
+    color: var(--text-secondary-color);
+}
+
+.table-agent-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center; /* توسيط محتوى خلية الوكيل */
+    gap: 10px;
+    text-decoration: none;
+    color: var(--text-color);
+}
+
+.agent-details {
+    display: flex;
+    flex-direction: column;
+    text-align: right;
+}
+
+.agent-name-link {
+    font-size: 1.2em; /* زيادة تكبير حجم اسم الوكيل */
+    font-weight: bold;
+    color: var(--text-color);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+
+.table-agent-cell .avatar-small,
+.table-agent-cell .avatar-placeholder-small {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.table-agent-cell .avatar-placeholder-small {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+}
+
+.actions-cell {
+    display: flex;
+    gap: 10px;
+    justify-content: center; /* توسيط أزرار الإجراءات */
+}
+
+.list-view-header .header-agent {
+    text-align: center;
+    border-right: 1px solid var(--border-color);
+    padding-right: 1.5rem;
+}
+.actions-column {
+    text-align: center !important; /* توسيط عنوان عمود الإجراءات */
+}
+
+.btn-small {
+    padding: 6px 12px !important;
+    font-size: 0.9em !important;
+}
+
+/* Responsive Table */
+@media (max-width: 768px) {
+    .modern-table thead {
+        display: none;
+    }
+    .modern-table, .modern-table tbody, .modern-table tr, .modern-table td {
+        display: block;
+        width: 100%;
+    }
+    .modern-table tr {
+        margin-bottom: 15px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .modern-table td {
+        text-align: left;
+        padding-left: 50%;
+        position: relative;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .modern-table td:last-child {
+        border-bottom: none;
+    }
+    .modern-table td::before {
+        content: attr(data-label);
+        position: absolute;
+        right: 15px;
+        width: 45%;
+        padding-left: 10px;
+        font-weight: bold;
+        text-align: right;
+        color: var(--text-secondary-color);
+    }
+    .actions-cell {
+        justify-content: flex-start;
+    }
+
+/* --- New Styles for Agent Selection on Create Competition Page --- */
+
+.agent-selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.agent-selection-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--text-color);
+    transition: all 0.2s ease-in-out;
+    position: relative;
+}
+
+.agent-selection-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px var(--shadow-color);
+    border-color: var(--primary-color);
+}
+
+.agent-selection-card img,
+.agent-selection-card .avatar-placeholder {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.agent-selection-card .avatar-placeholder {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    color: var(--text-secondary-color);
+}
+
+.agent-selection-card .agent-info h3 {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.agent-selection-card .agent-info p {
+    margin: 0;
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.actions-column {
+    text-align: left !important;
+}
+
+.form-hint {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    margin-top: 8px;
+    background-color: var(--bg-color);
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+.page-notification {
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    border-width: 1px;
+    border-style: solid;
+}
+.page-notification.info {
+    background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    color: var(--primary-color);
+    border-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
+}
+.page-notification.warning {
+    background-color: color-mix(in srgb, #f39c12 15%, transparent);
+    color: #f39c12;
+    border-color: color-mix(in srgb, #f39c12 40%, transparent);
+}
+.page-notification strong {
+    font-size: 1.1em;
+    margin: 0 5px;
+}
+.form-hint.warning {
+    background-color: color-mix(in srgb, #f39c12 20%, transparent);
+    color: #f39c12;
+    font-weight: bold;
+}
+
+/* NEW: Styles for image upload in template modals */
+.template-form-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.image-upload-preview-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+}
+.image-upload-preview-wrapper .image-preview {
+    width: 100%; /* تعديل: جعل الصورة تملأ العرض */
+    max-height: 250px; /* تعديل: زيادة أقصى ارتفاع للصورة */
+    border-radius: 8px;
+    object-fit: cover; /* تعديل: ضمان ملاءمة الصورة بشكل جيد */
+}
+}
+.actions-cell .btn-danger {
+    background-color: transparent;
+    color: #e74c3c;
+    border: 1px solid #e74c3c;
+}
+
+/* NEW: Keyframes for modal animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes zoomIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+
+/* == calendar.css == */
+/* Calendar Page Styles */
+
+.page-header.column-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+}
+
+.header-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.calendar-filters {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.filter-search-container {
+    position: relative;
+    flex-grow: 1;
+}
+
+.calendar-container {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 15px;
+    /* The container itself doesn't need to grow, its content will define the page height */
+}
+
+.day-column {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    /* overflow: hidden; is not needed as the column will expand */
+    /* --- PERFORMANCE OPTIMIZATION --- */
+    content-visibility: auto; /* Tell the browser to skip rendering this element if it's off-screen */
+    contain-intrinsic-size: 1000px; /* Estimate the vertical size to prevent scrollbar jumping */
+}
+
+.day-column.today {
+    background-color: color-mix(in srgb, var(--primary-color) 10%, var(--card-bg-color));
+    border-color: var(--primary-color);
+}
+
+
+.day-column h2 {
+    margin-top: 0;
+    font-size: 1.2em;
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 10px;
+    padding: 15px;
+    margin: 0;
+}
+
+.day-column.today h2 {
+    color: var(--primary-hover-color);
+}
+
+.day-progress {
+    width: calc(100% - 20px);
+    margin: 0 10px 10px 10px;
+    background-color: var(--border-color);
+    border-radius: 8px;
+    height: 20px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.day-progress .progress-bar {
+    background: var(--primary-color);
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.5s ease-in-out;
+}
+
+.filter-search-container .fa-search {
+    position: absolute;
+    right: 15px; /* Position icon on the right for RTL */
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary-color);
+    pointer-events: none; /* Make icon non-interactive */
+}
+
+.filter-search-container input[type="search"] {
+    width: 100%;
+    padding: 8px 40px; /* Adjust padding for icons on both sides */
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-bg-color);
+    color: var(--text-color);
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.filter-search-container input[type="search"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 25%, transparent);
+}
+
+.search-clear-btn {
+    position: absolute;
+    left: 15px; /* Position clear button on the left for RTL */
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    display: none; /* Hidden by default */
+}
+
+.filter-buttons {
+    display: flex;
+    background-color: var(--bg-color);
+    border-radius: 20px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.filter-btn {
+    background-color: transparent;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 16px;
+    cursor: pointer;
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.day-column-content {
+    /* No flex-grow or overflow is needed. It will expand with its content. */
+    padding: 15px;
+    /* Remove padding from the top if the first item has margin-top */
+    padding-top: 0;
+}
+
+.no-tasks-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary-color);
+    padding: 40px 20px;
+    text-align: center;
+}
+
+.no-tasks-placeholder {
+    padding: 40px 20px;
+}
+
+.no-tasks-placeholder {
+    padding: 40px 20px;
+}
+
+.no-tasks {
+    color: var(--text-secondary-color);
+    text-align: center;
+    padding-top: 20px;
+    font-style: italic;
+}
+
+.calendar-agent-item {
+    padding: 15px; /* زيادة الحشوة الداخلية */
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background-color: var(--card-bg-color);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    box-sizing: border-box;
+    /* Use margin-top on all but the first child for consistent spacing */
+    margin-top: 15px;
+}
+
+.calendar-agent-item[style*="display: none"] {
+    display: none !important;
+}
+
+.calendar-agent-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px var(--shadow-color);
+    border-color: var(--primary-color);
+}
+
+.calendar-agent-item.complete {
+    background-color: color-mix(in srgb, #27ae60 15%, var(--card-bg-color)); /* إضافة: لون للمهام المكتملة */
+    border-color: #27ae60;
+}
+
+/* إضافة: تنسيقات السحب والإفلات */
+.calendar-agent-item.dragging {
+    opacity: 0.5;
+    background-color: var(--primary-color);
+    cursor: grabbing;
+}
+
+.day-column.drag-over {
+    background-color: color-mix(in srgb, var(--primary-color) 20%, var(--card-bg-color));
+    border-style: dashed;
+    border-color: var(--primary-hover-color);
+}
+/* نهاية الإضافة */
+
+.calendar-agent-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.calendar-agent-avatar,
+.calendar-agent-avatar-placeholder {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+    background-color: var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary-color);
+}
+
+.calendar-agent-info {
+    flex-grow: 1;
+}
+
+.calendar-agent-item .agent-name {
+    font-weight: bold;
+    color: var(--text-color);
+    display: block;
+    margin-bottom: 4px;
+    margin-top: 0;
+}
+
+.agent-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.calendar-agent-id {
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    cursor: copy;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    display: inline-block;
+    margin: 0;
+}
+.calendar-agent-id:hover {
+    background-color: var(--border-color);
+}
+
+.calendar-agent-actions {
+    display: flex;
+    flex-direction: column; /* تعديل: جعل العناصر تترتب عمودياً */
+    gap: 8px; /* المسافة بين مربعي التدقيق والمسابقة */
+}
+
+/* تعديل: وضع كل إجراء في مربع منفصل */
+.calendar-agent-actions .action-item {
+    flex: 1; /* جعل كل مربع يأخذ نصف المساحة */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--bg-color);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    cursor: pointer; /* NEW: Add pointer cursor to the whole item */
+}
+
+.filter-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+/* Smaller checkboxes for calendar */
+.custom-checkbox.small {
+    font-size: 0.9em;
+}
+
+/* Disabled state for checkboxes in calendar */
+.custom-checkbox input[type="checkbox"]:disabled + .checkmark {
+    background-color: var(--bg-color);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* Search Highlighting */
+.calendar-agent-item mark {
+    background-color: #f1c40f; /* Yellow */
+    color: #333;
+    padding: 0 2px;
+    border-radius: 3px;
+}
+body.dark-mode .calendar-agent-item mark {
+    color: #000;
+}
+
+/* تصغير حجم أزرار الاختيار في صفحة التقويم */
+.calendar-agent-actions .toggle-switch {
+    width: 36px;
+    height: 20px;
+}
+
+.calendar-agent-actions .toggle-switch .slider:before {
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+}
+
+.calendar-agent-actions .toggle-switch input:checked + .slider:before {
+    transform: translateX(16px);
+}
+
+.agent-name .task-complete-icon {
+    display: none; /* Hide by default */
+}
+
+.agent-name.has-checkmark .task-complete-icon {
+    display: inline-flex; /* Show only when the parent has the class */
+}
+.task-complete-icon {
+    color: #fff;
+    background-color: #27ae60;
+    border-radius: 50%;
+    font-size: 0.8em;
+    margin-right: 6px;
+    vertical-align: middle;
+    width: 1.5em;
+    height: 1.5em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* NEW: Classification Badge Styles (copied from agents.css for consistency) */
+.classification-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    font-weight: bold;
+    color: #fff;
+    text-align: center;
+}
+
+.classification-r {
+    background-color: #e74c3c; /* Red */
+}
+
+.classification-a {
+    background-color: #f39c12; /* Orange */
+}
+
+.classification-b {
+    background-color: #3498db; /* Blue */
+}
+
+.classification-c {
+    background-color: #95a5a6; /* Gray */
+}
+
+/* NEW: Countdown Timer Styles */
+.countdown-timer-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-color);
+    padding: 8px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.countdown-timer-container .fa-sync-alt {
+    color: var(--primary-color);
+}
+
+.countdown-timer-container .countdown-time {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+/* == top-agents.css == */
+/* --- Leaderboard Page Styles --- */
+
+/* General Layout & Header */
+.leaderboard-title {
+    color: var(--primary-color);
+    text-shadow: 0 0 10px var(--primary-color);
+}
+
+/* --- NEW: Confetti Animation Styles --- */
+.confetti-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    pointer-events: none; /* Allows clicking through the confetti */
+    z-index: 9999;
+    overflow: hidden;
+}
+
+.confetti {
+    position: absolute;
+    width: 10px;
+    height: 20px;
+    opacity: 0;
+    top: -5%; /* Start above the screen */
+    animation: fall 5s linear forwards;
+}
+
+@keyframes fall {
+    0% {
+        transform: translateY(0vh) rotateZ(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(105vh) rotateZ(720deg);
+        opacity: 0;
+    }
+}
+/* --- NEW: Redesigned Filters (v2) --- */
+.leaderboard-filters-v2 {
+ display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 15px;
+    background-color: var(--card-bg-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.leaderboard-filters-v2 .filter-group {
+    flex: 1;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 15px;
+    min-width: 280px;
+}
+
+.leaderboard-filters-v2 .filter-label {
+ display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--text-secondary-color);
+    margin-bottom: 12px;
+    font-size: 1em;
+}
+
+.leaderboard-filters-v2 .filter-buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.leaderboard-filters-v2 .filter-btn {
+    flex-grow: 1;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease-in-out;
+}
+
+.leaderboard-filters-v2 .filter-btn:hover:not(.active) {
+    background-color: var(--border-color);
+    color: var(--primary-color);
+    transform: translateY(-2px);
+}
+
+.leaderboard-filters-v2 .filter-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    box-shadow: 0 3px 8px color-mix(in srgb, var(--primary-color) 30%, transparent);
+}
+
+/* Classification buttons specific styles */
+.leaderboard-filters-v2 .classification-badge.active.classification-r { background-color: #8e44ad; }
+.leaderboard-filters-v2 .classification-badge.active.classification-a { background-color: #c0392b; }
+.leaderboard-filters-v2 .classification-badge.active.classification-b { background-color: #2980b9; }
+.leaderboard-filters-v2 .classification-badge.active.classification-c { background-color: #27ae60; }
+
+/* Tabs */
+.leaderboard-tabs {
+    display: flex;
+    gap: 10px;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.leaderboard-tab-btn {
+    padding: 10px 20px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary-color);
+    font-size: 1.1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.leaderboard-tab-btn:hover {
+    color: var(--primary-color);
+}
+
+.leaderboard-tab-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+/* Top 3 Podium Section */
+.leaderboard-top-three {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+/* General Card Styles */
+.leaderboard-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+.leaderboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* --- NEW: Podium View Styles --- */
+.leaderboard-podium {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end; /* Align items to the bottom to create the podium effect */
+    gap: 20px;
+    margin-top: 30px;
+    perspective: 1000px; /* NEW: Add perspective for 3D effects */
+    margin-bottom: 20px;
+    padding: 20px;
+}
+
+.leaderboard-podium .leaderboard-card {
+    width: 30%;
+    max-width: 320px;
+    margin: 0;
+    text-align: center;
+    transition: all 0.3s ease-out; /* NEW: Smoother transition */
+}
+
+.leaderboard-podium .leaderboard-card:hover {
+    transform: translateY(-15px);
+}
+
+/* 1st Place (Gold) - Center and Higher */
+.leaderboard-podium .leaderboard-card.gold {
+    order: 2; /* Center item */
+    transform: translateY(-30px); /* Raise it higher */
+    min-height: 350px;
+}
+
+/* 2nd Place (Silver) - Left (visually right in RTL) */
+.leaderboard-podium .leaderboard-card.silver {
+    order: 1; /* First item in flex order */
+    min-height: 310px;
+}
+
+/* 3rd Place (Bronze) - Right (visually left in RTL) */
+.leaderboard-podium .leaderboard-card.bronze {
+    order: 3; /* Last item in flex order */
+    min-height: 290px;
+}
+
+
+/* Top 3 Card Specifics */
+.leaderboard-card.top-rank {
+    border: 1px solid transparent; /* NEW: Transparent border to hold the glow */
+    z-index: 1;
+    background-size: 300% 300%; /* NEW: For background animation */
+    animation: cosmic-flow 20s ease infinite; /* NEW: Background animation */
+}
+
+/* --- NEW: Glare effect on hover --- */
+.leaderboard-card.top-rank::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -150%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.6s ease;
+}
+.leaderboard-card.top-rank:hover::after {
+    left: 150%;
+}
+
+/* --- NEW: Glow and Background styles for each rank --- */
+.leaderboard-card.gold {
+    background-image: radial-gradient(circle at 10% 10%, #4a380f, transparent),
+                      radial-gradient(circle at 80% 90%, #b67d15, transparent),
+                      var(--card-bg-color);
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.4), 0 0 20px rgba(255, 215, 0, 0.3);
+    border-color: rgba(255, 215, 0, 0.3);
+}
+.leaderboard-card.gold:hover {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.6), 0 0 40px rgba(255, 215, 0, 0.4);
+    border-color: rgba(255, 215, 0, 0.6);
+}
+
+.leaderboard-card.silver {
+    background-image: radial-gradient(circle at 90% 20%, #4f5b66, transparent),
+                      radial-gradient(circle at 20% 80%, #888, transparent),
+                      var(--card-bg-color);
+    box-shadow: 0 0 8px rgba(192, 192, 192, 0.3), 0 0 15px rgba(192, 192, 192, 0.2);
+    border-color: rgba(192, 192, 192, 0.2);
+}
+.leaderboard-card.silver:hover {
+    box-shadow: 0 0 15px rgba(192, 192, 192, 0.5), 0 0 30px rgba(192, 192, 192, 0.3);
+    border-color: rgba(192, 192, 192, 0.5);
+}
+
+.leaderboard-card.bronze {
+    background-image: radial-gradient(circle at 85% 15%, #6d4c2c, transparent),
+                      radial-gradient(circle at 15% 85%, #8c582c, transparent),
+                      var(--card-bg-color);
+    box-shadow: 0 0 8px rgba(205, 127, 50, 0.3), 0 0 15px rgba(205, 127, 50, 0.2);
+    border-color: rgba(205, 127, 50, 0.2);
+}
+.leaderboard-card.bronze:hover {
+    box-shadow: 0 0 15px rgba(205, 127, 50, 0.5), 0 0 30px rgba(205, 127, 50, 0.3);
+    border-color: rgba(205, 127, 50, 0.5);
+}
+
+/* --- NEW: Keyframe for background animation --- */
+@keyframes cosmic-flow {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+.glow-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, transparent, #FFD700, transparent);
+    animation: glow-move 4s linear infinite;
+}
+
+@keyframes glow-move {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* Card Sections */
+.leaderboard-rank {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+}
+
+.medal-badge {
+    font-size: 2.5em;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.leaderboard-agent-profile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.leaderboard-avatar, .leaderboard-avatar-placeholder {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid var(--card-bg-color);
+    box-shadow: 0 5px 15px var(--shadow-color); /* ظل عام */
+    transition: box-shadow 0.3s ease;
+}
+
+/* --- NEW: Custom Avatar Borders for Podium --- */
+.leaderboard-card.gold .leaderboard-avatar,
+.leaderboard-card.gold .leaderboard-avatar-placeholder {
+    box-shadow: 0 0 0 4px #FFD700, 0 5px 20px rgba(255, 215, 0, 0.5); /* إطار وظل ذهبي */
+}
+
+.leaderboard-card.silver .leaderboard-avatar,
+.leaderboard-card.silver .leaderboard-avatar-placeholder {
+    box-shadow: 0 0 0 4px #C0C0C0, 0 5px 15px rgba(192, 192, 192, 0.4); /* إطار وظل فضي */
+}
+
+.leaderboard-card.bronze .leaderboard-avatar,
+.leaderboard-card.bronze .leaderboard-avatar-placeholder {
+    box-shadow: 0 0 0 4px #CD7F32, 0 5px 15px rgba(205, 127, 50, 0.4); /* إطار وظل برونزي */
+}
+
+.leaderboard-avatar-placeholder {
+    background-color: var(--bg-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3em;
+    color: var(--text-secondary-color);
+}
+
+.leaderboard-agent-info {
+    margin-top: 5px;
+}
+
+.leaderboard-agent-name {
+    font-size: 1.4em;
+    font-weight: 600;
+    margin: 0;
+}
+
+.leaderboard-agent-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.leaderboard-agent-id {
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.leaderboard-rank-badge {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+.leaderboard-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width: 100%;
+    margin-top: auto; /* Push stats to the bottom */
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.leaderboard-stats-grid .stat-item {
+    text-align: center;
+}
+
+.leaderboard-stats-grid .stat-value {
+    font-size: 1.4em;
+    font-weight: bold;
+    display: block;
+    color: var(--text-color);
+}
+
+.leaderboard-stats-grid .stat-label {
+    font-size: 0.8em;
+    color: var(--text-secondary-color);
+}
+
+.top-agent-banner {
+    position: absolute;
+    top: 10px;
+    right: -40px;
+    background-color: #FFD700;
+    color: #333;
+    padding: 5px 40px;
+    transform: rotate(45deg);
+    font-weight: bold;
+    font-size: 0.8em;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* Trend Icons */
+.trend-up { color: #27ae60; }
+.trend-down { color: #e74c3c; }
+
+/* Divider and Bottom Sections */
+.leaderboard-divider {
+    border: none;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--border-color), transparent);
+    margin: 40px 0;
+}
+
+.leaderboard-bottom-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.leaderboard-list-section .leaderboard-section-title {
+    font-size: 1.5em;
+    color: var(--text-color);
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+}
+
+.leaderboard-simple-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.leaderboard-card-simple {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.leaderboard-card-simple:hover {
+    background-color: var(--bg-color);
+}
+
+.simple-rank {
+    font-weight: bold;
+    color: var(--text-secondary-color);
+    width: 30px;
+    text-align: center;
+}
+
+.leaderboard-avatar-simple, .leaderboard-avatar-placeholder-simple {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.leaderboard-avatar-placeholder-simple {
+    background-color: var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.simple-agent-info {
+    flex-grow: 1;
+}
+
+.simple-agent-name {
+    font-weight: 600;
+}
+
+.simple-agent-id {
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+    display: block;
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+    .leaderboard-bottom-sections {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .leaderboard-filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .leaderboard-card {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    .leaderboard-main, .leaderboard-stats {
+        justify-content: center;
+    }
+}
+

@@ -6,18 +6,8 @@
     <title>نظام الإدارة - inzo</title>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <!-- Main Stylesheets -->
-    <link rel="stylesheet" href="/assets/css/base.css">
-    <link rel="stylesheet" href="/assets/css/style.css">
-    <link rel="stylesheet" href="/assets/css/navbar.css">
-    <link rel="stylesheet" href="/assets/css/components.css"> 
-    <!-- Page-specific Stylesheets -->
-    <link rel="stylesheet" href="/assets/css/home.css">
-    <link rel="stylesheet" href="/assets/css/agents.css">
-    <link rel="stylesheet" href="/assets/css/profile.css">
-    <link rel="stylesheet" href="/assets/css/competitions.css">
-    <link rel="stylesheet" href="/assets/css/calendar.css">
-    <link rel="stylesheet" href="/assets/css/top-agents.css">
+    <!-- Bundled CSS -->
+    <link rel="stylesheet" href="/dist/bundle.css">
 </head>
 
 <body>
@@ -104,22 +94,6 @@
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- 
-      IMPROVEMENT: Replaced document.write with deferred scripts.
-      This improves performance by allowing parallel download and ensures execution order
-      without blocking page rendering. It also enables browser caching.
-    -->
-    <script src="/js/pages/taskStore.js" defer></script>
-    <script src="/js/pages/home.js" defer></script>
-    <script src="/js/pages/agents.js" defer></script>
-    <script src="/js/pages/competitions.js" defer></script>
-    <script src="/js/pages/calendar.js" defer></script>
-    <script src="/js/pages/topAgents.js" defer></script>
-    <script src="/js/pages/profile.js" defer></script>
-    <script src="/js/pages/users.js" defer></script>
-    <script src="/js/pages/tasks.js" defer></script>
-    <script src="/js/pages/addAgent.js" defer></script>
-    <script src="/js/pages/activityLog.js" defer></script>
-    <script src="/js/utils.js" defer></script>
-    <script src="/js/main.js" defer></script>
+    <!-- Bundled JavaScript -->
+    <script src="/dist/bundle.js" defer></script>
 </body>
