@@ -156,7 +156,6 @@
 
             // Bind methods
             this.boundHandleEvents = this.handleEvents.bind(this);
-            this.boundUpdateUIFromStore = this.updateUIFromStore.bind(this);
         }
 
         async render() {
@@ -165,8 +164,8 @@
             
             this.setupEventListeners();
             
-            // Subscribe to store changes AFTER the initial render to avoid premature updates
-            window.taskStore.subscribe(this.boundUpdateUIFromStore);
+            // FIX: Subscription removed to prevent buggy global UI updates.
+            // window.taskStore.subscribe(this.boundUpdateUIFromStore);
 
             await this.fetchAndRenderTasks();
         }
@@ -244,7 +243,7 @@
             });
         }
 
-        handleEvents(e) {
+        async handleEvents(e) {
             const target = e.target;
             const agentCard = target.closest('.task-card');
             const agentId = agentCard?.dataset.agentId;
@@ -255,7 +254,23 @@
                                : target.classList.contains('competition-check') ? 'competition_sent' 
                                : null;
                 if (agentId && taskType) {
-                    window.taskStore.updateTaskStatus(agentId, this.dayIndex, taskType, target.checked);
+                    agentCard.classList.add('is-loading');
+                    agentCard.querySelectorAll('input').forEach(i => i.disabled = true);
+                    try {
+                        await window.taskStore.updateTaskStatus(agentId, this.dayIndex, taskType, target.checked);
+                        this.updateSingleCard(agentId); // FIX: Targeted UI update
+                    } catch (error) {
+                        console.error('Failed to update task', error);
+                        showToast('فشل تحديث المهمة.', 'error');
+                        target.checked = !target.checked; // Revert on error
+                    } finally {
+                        agentCard.classList.remove('is-loading');
+                        // Re-enable controls, considering dependencies
+                        const isAudited = agentCard.querySelector('.audit-check').checked;
+                        agentCard.querySelector('.audit-check').disabled = false;
+                        const compCheck = agentCard.querySelector('.competition-check');
+                        if(compCheck) compCheck.disabled = !isAudited;
+                    }
                     return;
                 }
 
@@ -293,7 +308,10 @@
             );
 
             Promise.all(promises)
-                .then(() => showToast(`تم تحديث ${agentsToUpdate.length} وكلاء بنجاح.`, 'success'))
+                .then(() => {
+                    showToast(`تم تحديث ${agentsToUpdate.length} وكلاء بنجاح.`, 'success');
+                    this.fetchAndRenderTasks(); // FIX: Refresh UI after bulk update
+                })
                 .catch(err => {
                     console.error('Bulk update failed:', err);
                     showToast('فشل تحديث بعض الوكلاء.', 'error');
@@ -309,7 +327,10 @@
                 );
 
                 Promise.all(promises)
-                    .then(() => showToast('تم تحديث جميع المهام بنجاح.', 'success'))
+                    .then(() => {
+                        showToast('تم تحديث جميع المهام بنجاح.', 'success');
+                        this.fetchAndRenderTasks(); // FIX: Refresh UI after bulk update
+                    })
                     .catch(err => {
                         console.error('Mark all audited failed:', err);
                         showToast('فشل تحديث بعض المهام.', 'error');
@@ -349,35 +370,31 @@
             localStorage.setItem(OPEN_GROUPS_KEY, JSON.stringify(openGroups));
         }
 
-        updateUIFromStore(newState) {
-            this.tasksMap = newState.tasks || {};
+        updateSingleCard(agentId) {
+            this.tasksMap = window.taskStore.state.tasks || {}; // Refresh state
+            const card = this.container.querySelector(`.task-card[data-agent-id="${agentId}"]`);
+            if (!card) return;
+
+            const task = (this.tasksMap[agentId] || {})[this.dayIndex] || {};
+            const isAudited = task.audited;
+            const isCompetitionSent = task.competition_sent;
+            const isComplete = isAudited;
+
+            card.classList.toggle('complete', isComplete);
+            card.querySelector('.task-agent-info h3').classList.toggle('has-checkmark', isComplete);
             
-            // Update all cards
-            this.agents.forEach(agent => {
-                const card = this.container.querySelector(`.task-card[data-agent-id="${agent._id}"]`);
-                if (!card) return;
+            const auditCheck = card.querySelector('.audit-check');
+            const competitionCheck = card.querySelector('.competition-check');
+            if (auditCheck) auditCheck.checked = isAudited;
+            if (competitionCheck) {
+                competitionCheck.checked = isCompetitionSent;
+                competitionCheck.disabled = !isAudited;
+            }
 
-                const task = (this.tasksMap[agent._id] || {})[this.dayIndex] || {};
-                const isAudited = task.audited;
-                const isCompetitionSent = task.competition_sent;
-                const isComplete = isAudited;
+            auditCheck?.closest('.action-item').classList.toggle('done', isAudited);
+            competitionCheck?.closest('.action-item').classList.toggle('done', isAudited && isCompetitionSent);
 
-                card.classList.toggle('complete', isComplete);
-                card.querySelector('.task-agent-info h3').classList.toggle('has-checkmark', isComplete);
-                
-                const auditCheck = card.querySelector('.audit-check');
-                const competitionCheck = card.querySelector('.competition-check');
-                if (auditCheck) auditCheck.checked = isAudited;
-                if (competitionCheck) {
-                    competitionCheck.checked = isCompetitionSent;
-                    competitionCheck.disabled = !isAudited;
-                }
-
-                auditCheck?.closest('.action-item').classList.toggle('done', isAudited);
-                competitionCheck?.closest('.action-item').classList.toggle('done', isAudited && isCompetitionSent);
-            });
-
-            // Update group progress and overview stats
+            // Update group and overview stats since a card changed
             this.updateAllGroupProgress();
             this.updateOverview();
         }
@@ -416,6 +433,7 @@
             this.container.removeEventListener('change', this.boundHandleEvents);
             clearTimeout(this.searchDebounceTimer);
             
+            // FIX: Subscription removed
             if (window.taskStore && this.boundUpdateUIFromStore) {
                 window.taskStore.unsubscribe(this.boundUpdateUIFromStore);
             }

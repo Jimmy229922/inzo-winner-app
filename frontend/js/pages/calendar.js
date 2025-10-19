@@ -130,7 +130,7 @@ class CalendarUI {
     }
 
     destroy() {
-        window.taskStore.unsubscribe(this.boundUpdateUIFromState);
+        // window.taskStore.unsubscribe(this.boundUpdateUIFromState); // Removed to fix bug
         clearTimeout(this.searchDebounceTimer);
         if (weeklyResetCountdownInterval) {
             clearInterval(weeklyResetCountdownInterval);
@@ -167,8 +167,9 @@ class CalendarUI {
         this._setupEventListeners();
         setupCalendarFilters(this);
 
-        this.boundUpdateUIFromState = updateCalendarUIFromState.bind(this);
-        window.taskStore.subscribe(this.boundUpdateUIFromState);
+        // The global subscription is removed to fix the bug.
+        // this.boundUpdateUIFromState = updateCalendarUIFromState.bind(this);
+        // window.taskStore.subscribe(this.boundUpdateUIFromState);
     }
 
     _renderDayColumns() {
@@ -242,6 +243,12 @@ class CalendarUI {
                 try {
                     await window.taskStore.resetAllTasks();
                     showToast('تمت إعادة تعيين جميع المهام بنجاح.', 'success');
+
+                    // FIX: Manually re-render the UI without a page reload
+                    this.tasksState = window.taskStore.state; // Get the fresh, reset state
+                    this._renderDayColumns(); // Re-render columns to reset progress bars
+                    this._renderAllAgentCards(); // Re-render agent cards with reset state
+
                 } catch (error) {
                     console.error('Failed to reset all tasks:', error);
                     showToast(`فشل إعادة التعيين: ${error.message}`, 'error');
@@ -267,12 +274,20 @@ class CalendarUI {
         agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = true);
 
         try {
+            // This updates the central store
             await window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, status);
+            
+            // FIX: Now, manually and correctly update the UI for this single item.
+            updateCalendarUIFromState.call(this, { agentId, dayIndex, taskType, status });
+
         } catch (error) {
             console.error(`[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`, error);
             showToast('فشل تحديث حالة المهمة.', 'error');
-        } finally {
-            // The store subscription will handle removing the loading state
+            
+            // Revert UI on error
+            checkbox.checked = !status;
+            agentItem.classList.remove('is-loading');
+            agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
         }
     }
 
@@ -376,44 +391,31 @@ function startWeeklyResetCountdown() {
     weeklyResetCountdownInterval = setInterval(updateTimer, 1000);
 }
 
-function updateCalendarUIFromState(state) {
+function updateCalendarUIFromState({ agentId, dayIndex, taskType, status }) {
     const container = this.calendarContainer;
     if (!container) return;
 
-    this.tasksState = state; // Update the instance's state
+    const agentItem = container.querySelector(`#agent-card-${agentId}-${dayIndex}`);
+    if (!agentItem) return;
 
-    const allItems = container.querySelectorAll('.calendar-agent-item');
-    const updatedDayIndexes = new Set();
+    const taskState = (this.tasksState.tasks[agentId] || {})[dayIndex] || { audited: false, competition_sent: false };
 
-    allItems.forEach(item => {
-        const agentId = item.dataset.agentId;
-        const dayIndex = parseInt(item.dataset.dayIndex, 10);
-        if (isNaN(dayIndex)) return;
+    const checkbox = agentItem.querySelector(`.${taskType === 'audited' ? 'audit-check' : 'competition-check'}`);
+    if (checkbox) checkbox.checked = status;
 
-        // Deep copy to prevent mutation issues, which was the likely cause of the Sunday bug.
-        const taskState = JSON.parse(JSON.stringify((state.tasks[agentId] || {})[dayIndex] || { audited: false, competition_sent: false }));
+    checkbox?.closest('.action-item').classList.toggle('done', status);
 
-        const auditCheck = item.querySelector('.audit-check');
-        const competitionCheck = item.querySelector('.competition-check');
-
-        if (auditCheck) auditCheck.checked = taskState.audited;
-        if (competitionCheck) competitionCheck.checked = taskState.competition_sent;
-
-        auditCheck?.closest('.action-item').classList.toggle('done', taskState.audited);
-        competitionCheck?.closest('.action-item').classList.toggle('done', taskState.competition_sent);
-
+    if (taskType === 'audited') {
         const isComplete = taskState.audited;
-        item.classList.toggle('complete', isComplete);
-        item.classList.remove('is-loading'); // Remove loading state
-        item.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
-
-        const nameEl = item.querySelector('.agent-name');
+        agentItem.classList.toggle('complete', isComplete);
+        const nameEl = agentItem.querySelector('.agent-name');
         if (nameEl) nameEl.classList.toggle('has-checkmark', isComplete);
+    }
 
-        updatedDayIndexes.add(dayIndex);
-    });
+    agentItem.classList.remove('is-loading');
+    agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
 
-    updatedDayIndexes.forEach(dayIndex => updateDayProgressUI.call(this, dayIndex));
+    updateDayProgressUI.call(this, dayIndex);
 }
 
 function updateDayProgressUI(dayIndex) {
