@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-=======
-
->>>>>>> 7708422565db9437b57e744da87bb757ad991291
 // Refactored Tasks Page: Decoupled from Calendar, reliant solely on taskStore.
 (function() {
     // --- Constants and Configuration ---
@@ -17,11 +13,7 @@
 
         const isAudited = task.audited;
         const isCompetitionSent = task.competition_sent;
-<<<<<<< HEAD
-        const isComplete = isAudited && agent.is_auditing_enabled; // Main completion logic
-=======
         const isComplete = isAudited; // Main completion logic
->>>>>>> 7708422565db9437b57e744da87bb757ad991291
 
         const depositBonusText = (agent.remaining_deposit_bonus > 0 && agent.deposit_bonus_percentage > 0)
             ? `${agent.remaining_deposit_bonus} ${agent.remaining_deposit_bonus === 1 ? 'مرة' : 'مرات'} بنسبة ${agent.deposit_bonus_percentage}%`
@@ -60,11 +52,7 @@
                 <div class="action-item ${isAudited && isCompetitionSent ? 'done' : ''}">
                     <label>المسابقة</label>
                     <label class="custom-checkbox toggle-switch">
-<<<<<<< HEAD
-                        <input type="checkbox" class="competition-check" data-agent-id="${agent._id}" ${isCompetitionSent ? 'checked' : ''}>
-=======
                         <input type="checkbox" class="competition-check" data-agent-id="${agent._id}" ${isCompetitionSent ? 'checked' : ''} ${!isAudited ? 'disabled' : ''}>
->>>>>>> 7708422565db9437b57e744da87bb757ad991291
                         <span class="slider round"></span>
                     </label>
                 </div>
@@ -372,11 +360,7 @@
                 const task = (this.tasksMap[agent._id] || {})[this.dayIndex] || {};
                 const isAudited = task.audited;
                 const isCompetitionSent = task.competition_sent;
-<<<<<<< HEAD
-                const isComplete = isAudited && agent.is_auditing_enabled;
-=======
                 const isComplete = isAudited;
->>>>>>> 7708422565db9437b57e744da87bb757ad991291
 
                 card.classList.toggle('complete', isComplete);
                 card.querySelector('.task-agent-info h3').classList.toggle('has-checkmark', isComplete);
@@ -386,10 +370,7 @@
                 if (auditCheck) auditCheck.checked = isAudited;
                 if (competitionCheck) {
                     competitionCheck.checked = isCompetitionSent;
-<<<<<<< HEAD
-=======
                     competitionCheck.disabled = !isAudited;
->>>>>>> 7708422565db9437b57e744da87bb757ad991291
                 }
 
                 auditCheck?.closest('.action-item').classList.toggle('done', isAudited);
@@ -442,8 +423,4 @@
     }
 
     window.TasksPage = TasksPage;
-<<<<<<< HEAD
 })();
-=======
-})();
->>>>>>> 7708422565db9437b57e744da87bb757ad991291
