@@ -216,6 +216,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                         <button id="send-bonus-cliche-btn" class="btn-telegram-bonus"><i class="fas fa-paper-plane"></i> إرسال كليشة البونص</button>
                         <button id="send-winners-cliche-btn" class="btn-telegram-winners"><i class="fas fa-trophy"></i> إرسال كليشة الفائزين</button>
                         ${canManualRenew ? `<button id="manual-renew-btn" class="btn-renewal"><i class="fas fa-sync-alt"></i> تجديد الرصيد يدوياً</button>` : ''}
+                        ${(isSuperAdmin || isAdmin) ? `<button id="toggle-auditing-btn" class="btn-secondary"><i class="fas fa-check-double"></i> <span>${agent.is_auditing_enabled ? 'تعطيل التدقيق' : 'تفعيل التدقيق'}</span></button>` : ''}
                     </div>
                 </div>
             </div>
@@ -254,6 +255,37 @@ async function renderAgentProfilePage(agentId, options = {}) {
         } else {
             createCompBtn.addEventListener('click', () => showToast('ليس لديك صلاحية لإنشاء مسابقة.', 'error'));
         }
+    }
+
+    const toggleAuditingBtn = document.getElementById('toggle-auditing-btn');
+    if (toggleAuditingBtn) {
+        toggleAuditingBtn.addEventListener('click', async () => {
+            const newStatus = !agent.is_auditing_enabled;
+            showConfirmationModal(
+                `هل أنت متأكد من ${newStatus ? 'تفعيل' : 'تعطيل'} التدقيق لهذا الوكيل؟`,
+                async () => {
+                    try {
+                        const response = await authedFetch(`/api/agents/${agent._id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ is_auditing_enabled: newStatus })
+                        });
+                        if (!response.ok) {
+                            throw new Error('Failed to update auditing status.');
+                        }
+                        showToast(`تم ${newStatus ? 'تفعيل' : 'تعطيل'} التدقيق بنجاح.`, 'success');
+                        renderAgentProfilePage(agent._id, { activeTab: 'action' });
+                    } catch (error) {
+                        showToast(error.message, 'error');
+                    }
+                },
+                {
+                    title: `تأكيد ${newStatus ? 'تفعيل' : 'تعطيل'} التدقيق`,
+                    confirmText: 'نعم',
+                    confirmClass: newStatus ? 'btn-success' : 'btn-danger'
+                }
+            );
+        });
     }
 
     // --- NEW: Event listener for the new audit button ---
@@ -1099,7 +1131,7 @@ function renderDetailsView(agent) {
             if (fieldName === 'competition_bonus') displayValue = `$${displayValue}`;
         } else if (fieldName === 'audit_days') {
             // --- تعديل: عرض أيام التدقيق كعلامات (tags) ---
-            const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+            const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة',];
             displayValue = (value && value.length > 0) ? value.sort().map(dayIndex => `<span class="day-tag">${dayNames[dayIndex]}</span>`).join('') : '<span class="day-tag-none">غير محدد</span>';
         } else if (fieldName.includes('_date')) {
             displayValue = value ? new Date(value).toLocaleDateString('ar-EG') : 'لم يحدد';

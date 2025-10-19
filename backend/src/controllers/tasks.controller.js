@@ -70,3 +70,25 @@ exports.updateTask = async (req, res) => {
         res.status(500).json({ message: 'Failed to update task.', error: error.message });
     }
 };
+
+exports.resetAllTasks = async (req, res) => {
+    try {
+        const userId = req.user ? req.user._id : null;
+
+        // This is a destructive operation, but it matches the frontend store's logic of resetting the state.
+        await Task.deleteMany({});
+
+        console.log(`[Task Controller] All tasks have been reset by user ${userId}.`);
+
+        // Log this significant system-wide event
+        if (userId) {
+            await logActivity(userId, null, 'ALL_TASKS_RESET', 'قام المستخدم بإعادة تعيين جميع مهام الأسبوع من صفحة التقويم.');
+        }
+
+        res.status(200).json({ message: 'All tasks have been reset successfully.' });
+
+    } catch (error) {
+        console.error('[Task Controller] Error resetting all tasks:', error);
+        res.status(500).json({ message: 'Failed to reset all tasks.', error: error.message });
+    }
+};

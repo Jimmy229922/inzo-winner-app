@@ -34,6 +34,11 @@ const taskStore = {
      * @param {boolean} status
      */
     async updateTaskStatus(agentId, dayIndex, taskType, status) {
+        console.log(`[TaskStore] updateTaskStatus called with:`, { agentId, dayIndex, taskType, status });
+
+        // Log state before
+        console.log(`[TaskStore] State for agent ${agentId} BEFORE update:`, JSON.parse(JSON.stringify(this.state.tasks[agentId] || {})));
+
         try {
             const response = await authedFetch('/api/tasks', {
                 method: 'POST',
@@ -52,12 +57,15 @@ const taskStore = {
             if (!this.state.tasks[agentId]) {
                 this.state.tasks[agentId] = {};
             }
-            if (!this.state.tasks[agentId][dayIndex]) {
+            if (!Object.prototype.hasOwnProperty.call(this.state.tasks[agentId], dayIndex)) {
                 this.state.tasks[agentId][dayIndex] = { audited: false, competition_sent: false };
             }
 
             // Update the state
             this.state.tasks[agentId][dayIndex][taskType] = status;
+
+            // Log state after
+            console.log(`[TaskStore] State for agent ${agentId} AFTER update:`, JSON.parse(JSON.stringify(this.state.tasks[agentId] || {})));
 
             // Persist and notify
             this._saveState();
@@ -67,6 +75,36 @@ const taskStore = {
             console.error("Error updating task status:", error);
             // Re-throw the error to be caught by the calling UI component
             throw error;
+        }
+    },
+
+    async resetAllTasks() {
+        console.log('[TaskStore] Resetting all tasks.');
+        try {
+            // Perform API call to reset all tasks on the backend
+            const response = await authedFetch('/api/tasks/reset-all', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to reset tasks on server.');
+            }
+
+            // If API call is successful, reset the local state
+            this.state.tasks = {};
+
+            // Persist and notify
+            this._saveState();
+            this._notify();
+            console.log('[TaskStore] All tasks have been reset locally and on the server.');
+
+        } catch (error) {
+            console.error("Error resetting all tasks:", error);
+            throw error; // Re-throw for the UI to handle
         }
     },
 
@@ -111,8 +149,9 @@ const taskStore = {
     },
 
     _notify() {
-        // Call all subscribed callbacks with the new state
-        this._subscribers.forEach(callback => callback(this.state));
+        // Call all subscribed callbacks with a deep clone of the new state to prevent mutation.
+        const stateClone = JSON.parse(JSON.stringify(this.state));
+        this._subscribers.forEach(callback => callback(stateClone));
     },
 
     /**

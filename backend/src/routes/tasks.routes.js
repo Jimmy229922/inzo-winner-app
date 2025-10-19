@@ -5,6 +5,9 @@ const Task = require('../models/Task');
 
 // --- NEW: Route to update a task ---
 router.post('/', tasksController.updateTask);
+
+// --- NEW: Route to reset all tasks ---
+router.post('/reset-all', tasksController.resetAllTasks);
 const Agent = require('../models/agent.model'); // NEW: Import Agent model
 const { logActivity } = require('../utils/logActivity');
 
@@ -20,7 +23,7 @@ router.get('/today', async (req, res) => {
         console.log(`[Tasks] Finding agents for today with query:`, JSON.stringify(query));
         
         const agents = await Agent.find(query)
-            .select('name classification agent_id avatar_url remaining_balance remaining_deposit_bonus deposit_bonus_percentage')
+            .select('name classification agent_id avatar_url remaining_balance remaining_deposit_bonus deposit_bonus_percentage is_auditing_enabled')
             .lean();
         
         console.log(`[Tasks] Found ${agents.length} agents for today.`);

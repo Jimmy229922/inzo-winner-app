@@ -438,7 +438,6 @@ async function handleBulkAddAgents(data) {
         'الاربعاء': 3, 'الأربعاء': 3,
         'الخميس': 4,
         'الجمعة': 5,
-        'السبت': 6
     };
 
     lines.forEach((line, index) => {

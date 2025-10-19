@@ -712,7 +712,7 @@ async function renderCompetitionCreatePage(agentId) {
 
         const tradingWinners = parseInt(tradingWinnersInput.value) || 0;
         const depositWinners = parseInt(depositWinnersInput.value) || 0;
-        const prize = parseFloat(prizeInput.value || 0).toFixed(2);
+        const prize = parseInt(prizeInput.value || 0);
         const duration = durationInput.value;
         const depositBonusPerc = agent.deposit_bonus_percentage || 0;
         
@@ -863,7 +863,7 @@ async function renderCompetitionCreatePage(agentId) {
             const verification = await verifyTelegramChat(agent);
             if (!verification.verified) throw new Error('فشل التحقق من بيانات التلجرام.');
 
-            let finalImageUrl = selectedTemplate.image_url || ''; // Default to template image
+            let finalImageUrl = selectedTemplate.image_url || '/images/competition_bg.jpg'; // Default to template image
 
             if (competitionImageFile) {
                 sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...';
@@ -929,6 +929,9 @@ async function renderCompetitionCreatePage(agentId) {
                 showToast(`تم حفظ المسابقة، لكن فشل الإرسال إلى تلجرام: ${result.message}`, 'warning');
             } else {
                 showToast('تم حفظ المسابقة وإرسالها بنجاح.', 'success');
+                // --- NEW: Automatically toggle the competition icon on success ---
+                const todayDayIndex = new Date().getDay();
+                window.taskStore.updateTaskStatus(agent._id, todayDayIndex, 'competition_sent', true);
             }
             // --- End of FIX ---
 
@@ -1975,6 +1978,4 @@ function displayCompetitionDetails(competition) {
     }
     
     console.log('Competition Processed At:', competition.processed_at);
-    
-    // ...existing code...
 }

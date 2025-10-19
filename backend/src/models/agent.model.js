@@ -28,6 +28,7 @@ const AgentSchema = new mongoose.Schema({
     last_renewal_date: { type: Date, default: null },
     last_competition_date: { type: Date, default: null },
     winner_selection_date: { type: Date, default: null },
+    is_auditing_enabled: { type: Boolean, default: false },
 }, { timestamps: true });
 
 /**
