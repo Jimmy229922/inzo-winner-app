@@ -237,6 +237,7 @@ function displayAgentsPage(paginatedAgents, page, totalCount) {
                     <th>رقم الوكالة</th>
                     <th>التصنيف</th>
                     <th>المرتبة</th>
+                    <th>تاريخ التجديد</th>
                     <th>روابط التلجرام</th>
                     <th class="actions-column">الإجراءات</th>
                 </tr>
@@ -258,6 +259,7 @@ function displayAgentsPage(paginatedAgents, page, totalCount) {
                             <td data-label="رقم الوكالة" class="agent-id-text" title="نسخ الرقم">${agent.agent_id}</td>
                             <td data-label="التصنيف"><span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span></td>
                             <td data-label="المرتبة">${agent.rank || 'غير محدد'}</td>
+                            <td data-label="تاريخ التجديد">${agent.next_renewal_date ? new Date(agent.next_renewal_date).toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'لا يوجد'}</td>
                             <td data-label="روابط التلجرام">
                                 ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank" class="agent-table-link">القناة</a>` : ''}
                                 ${agent.telegram_channel_url && agent.telegram_group_url ? ' | ' : ''}
@@ -340,64 +342,88 @@ async function handleDeleteAllAgents() {
 
 // --- NEW: Bulk Renew Balances Feature ---
 async function handleBulkRenewBalances() {
-    showConfirmationModal(
-        'هل أنت متأكد من رغبتك في تجديد أرصدة جميع الوكلاء؟<br><small>سيتم تحويل <strong>الرصيد المستهلك</strong> إلى <strong>الرصيد المتبقي</strong> لكل وكيل.</small>',
-        async () => {
-            console.log('[Bulk Renew] Starting bulk renewal process from frontend.');
-            // Show a progress modal
-            const progressModalOverlay = showProgressModal(
-                'تجديد الأرصدة الجماعي',
-                `
-                <div class="update-progress-container">
-                    <i class="fas fa-sync-alt fa-spin update-icon"></i>
-                    <h3 id="bulk-renew-status-text">جاري التهيئة...</h3>
-                    <div class="progress-bar-outer">
-                        <div id="bulk-renew-progress-bar-inner" class="progress-bar-inner"></div>
+    try {
+        // --- NEW: Fetch all agents first to get a count and show progress ---
+        showLoader('جاري جلب قائمة الوكلاء...');
+        const response = await authedFetch('/api/agents?limit=10000&select=name'); // Fetch all agents
+        if (!response.ok) {
+            throw new Error('فشل في جلب قائمة الوكلاء للبدء في عملية التجديد.');
+        }
+        const { data: agents } = await response.json();
+        hideLoader();
+
+        if (!agents || agents.length === 0) {
+            showToast('لا يوجد وكلاء نشطون لتجديد أرصدتهم.', 'info');
+            return;
+        }
+
+        const agentCount = agents.length;
+
+        showConfirmationModal(
+            `سيتم تجديد أرصدة <strong>${agentCount}</strong> وكيل. هذه العملية قد تستغرق بعض الوقت. هل أنت متأكد من المتابعة؟`,
+            async () => {
+                console.log('[Bulk Renew] Starting client-side bulk renewal process.');
+                const progressModalOverlay = showProgressModal(
+                    'تجديد الأرصدة الجماعي',
+                    `
+                    <div class="update-progress-container">
+                        <i class="fas fa-sync-alt fa-spin update-icon"></i>
+                        <h3 id="bulk-renew-status-text">جاري التهيئة...</h3>
+                        <div class="progress-bar-outer">
+                            <div id="bulk-renew-progress-bar-inner" class="progress-bar-inner"></div>
+                        </div>
                     </div>
-                </div>
-                `
-            );
+                    `
+                );
 
-            const statusText = document.getElementById('bulk-renew-status-text');
-            const progressBar = document.getElementById('bulk-renew-progress-bar-inner');
-            const updateIcon = progressModalOverlay.querySelector('.update-icon');
+                const statusText = document.getElementById('bulk-renew-status-text');
+                const progressBar = document.getElementById('bulk-renew-progress-bar-inner');
+                const updateIcon = progressModalOverlay.querySelector('.update-icon');
+                let processedCount = 0;
+                let errorCount = 0;
 
-            try {
-                statusText.textContent = 'جاري معالجة طلب التجديد...';
-                progressBar.style.width = '50%';
-                console.log('[Bulk Renew] Sending request to /api/agents/bulk-renew');
+                for (let i = 0; i < agents.length; i++) {
+                    const agent = agents[i];
+                    processedCount++;
+                    const progressPercentage = Math.round((processedCount / agentCount) * 100);
 
-                const response = await authedFetch('/api/agents/bulk-renew', { method: 'POST' });
-                const result = await response.json();
+                    statusText.innerHTML = `(${processedCount}/${agentCount}) جاري تجديد رصيد: <strong>${agent.name}</strong>`;
+                    progressBar.style.width = `${progressPercentage}%`;
 
-                console.log('[Bulk Renew] Received response from backend:', result);
-                if (!response.ok) {
-                    throw new Error(result.message || 'فشل تجديد الأرصدة.');
+                    try {
+                        const renewResponse = await authedFetch(`/api/agents/${agent._id}/renew`, { method: 'POST' });
+                        if (!renewResponse.ok) {
+                            errorCount++;
+                            console.error(`Failed to renew balance for agent ${agent.name}`);
+                        }
+                        // A small delay to prevent overwhelming the server and to make the UI updates visible
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    } catch (err) {
+                        errorCount++;
+                        console.error(`Error renewing balance for agent ${agent.name}:`, err);
+                    }
                 }
 
                 progressBar.style.width = '100%';
-                statusText.innerHTML = `اكتمل التجديد بنجاح.<br><strong>${result.processedCount}</strong> وكيل تم تجديد رصيده.`;
-                updateIcon.className = 'fas fa-check-circle update-icon';
-                progressBar.style.backgroundColor = 'var(--success-color)';
+                updateIcon.className = errorCount > 0 ? 'fas fa-exclamation-triangle update-icon' : 'fas fa-check-circle update-icon';
+                progressBar.style.backgroundColor = errorCount > 0 ? 'var(--warning-color)' : 'var(--success-color)';
+                statusText.innerHTML = `اكتمل التجديد.<br>تمت معالجة <strong>${processedCount}</strong> وكيل.<br>${errorCount > 0 ? `(مع وجود <strong>${errorCount}</strong> أخطاء)` : ''}`;
 
-                console.log(`[Bulk Renew] Success. ${result.processedCount} agents renewed.`);
-                // --- FIX: Correctly call logAgentActivity with the right arguments ---
-                await logAgentActivity(null, null, 'AGENT_BULK_RENEW', `تم تجديد أرصدة ${result.processedCount} وكيل.`);
+                console.log(`[Bulk Renew] Client-side process finished. Processed: ${processedCount}, Errors: ${errorCount}`);
                 await fetchAndDisplayAgents(1); // Refresh the agents list
 
-            } catch (error) {
-                console.error('[Bulk Renew] Frontend error during renewal:', error);
-                statusText.innerHTML = `فشل التجديد.<br><small>${error.message}</small>`;
-                updateIcon.className = 'fas fa-times-circle update-icon';
-                progressBar.style.backgroundColor = 'var(--danger-color)';
-            } finally {
-                // --- NEW: Automatically close the progress modal after 4 seconds ---
                 setTimeout(() => {
                     if (progressModalOverlay) progressModalOverlay.remove();
                 }, 4000);
-            }
-        }, { title: 'تأكيد تجديد الأرصدة', confirmText: 'نعم، جدد الآن', confirmClass: 'btn-renewal' }
-    );
+            },
+            { title: 'تأكيد تجديد الأرصدة', confirmText: 'نعم، جدد الآن', confirmClass: 'btn-renewal' }
+        );
+
+    } catch (error) {
+        hideLoader();
+        showToast(error.message, 'error');
+        console.error('[Bulk Renew] Error setting up bulk renewal:', error);
+    }
 }
 
 async function handleMarkAllTasksComplete() {

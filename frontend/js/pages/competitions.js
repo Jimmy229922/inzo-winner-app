@@ -865,6 +865,17 @@ async function renderCompetitionCreatePage(agentId) {
 
             let finalImageUrl = selectedTemplate.image_url || '/images/competition_bg.jpg'; // Default to template image
 
+            // --- FIX: Handle absolute localhost URLs from old templates ---
+            if (finalImageUrl && finalImageUrl.startsWith('http://localhost')) {
+                try {
+                    const url = new URL(finalImageUrl);
+                    finalImageUrl = url.pathname; // Convert to relative path
+                } catch (e) {
+                    console.error('Could not parse template image URL, leaving as is:', e);
+                }
+            }
+            // --- End of FIX ---
+
             if (competitionImageFile) {
                 sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...';
                 const formData = new FormData();
@@ -879,6 +890,8 @@ async function renderCompetitionCreatePage(agentId) {
                 const uploadResult = await uploadResponse.json();
                 finalImageUrl = uploadResult.imageUrl;
             }
+
+
 
             console.log(`The image URL being sent is: ${finalImageUrl}`);
 
@@ -1407,6 +1420,7 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
                     <div class="form-group">
                         <label for="create-template-question">السؤال (سيكون اسم المسابقة)</label>
                         <textarea id="create-template-question" rows="3" required></textarea>
+                        <div id="template-question-validation" class="validation-error" style="display: none; margin-top: 8px; font-size: 0.9em;"></div>
                     </div>
                     <div class="form-group">
                         <label for="create-template-correct-answer">الإجابة الصحيحة</label>
@@ -1475,11 +1489,56 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
         }
     });
 
+    // --- NEW: Live validation for template question ---
+    const questionInput = document.getElementById('create-template-question');
+    const validationDiv = document.getElementById('template-question-validation');
+    let debounceTimeout;
+
+    questionInput.addEventListener('input', () => {
+        clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(async () => {
+            const questionText = questionInput.value.trim();
+            if (questionText) {
+                try {
+                    const response = await authedFetch(`/api/templates/check-existence?question=${encodeURIComponent(questionText)}`);
+                    if (response.ok) {
+                        const { exists, archived } = await response.json();
+                        if (exists) {
+                            if (archived) {
+                                validationDiv.innerHTML = 'هذا السؤال موجود في قالب محذوف. يمكنك <a href="#archived-templates">استعادته من الأرشيف</a>.';
+                            } else {
+                                validationDiv.textContent = 'هذا السؤال مستخدم بالفعل في قالب آخر.';
+                            }
+                            validationDiv.style.display = 'block';
+                        } else {
+                            validationDiv.style.display = 'none';
+                        }
+                    } else {
+                        validationDiv.style.display = 'none'; // Hide on error
+                    }
+                } catch (error) {
+                    console.error('Error checking template existence:', error);
+                    validationDiv.style.display = 'none'; // Hide on error
+                }
+            } else {
+                validationDiv.style.display = 'none';
+            }
+        }, 500); // 500ms debounce delay
+    });
+
+
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('cancel-create-modal').addEventListener('click', closeModal);
     
     document.getElementById('create-template-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        // --- NEW: Prevent submission if validation error is visible ---
+        if (validationDiv.style.display === 'block') {
+            showToast('لا يمكن حفظ القالب لأن السؤال مستخدم بالفعل.', 'error');
+            return;
+        }
+
         const submitBtn = e.target.querySelector('button[type="submit"]');
         const originalBtnHtml = submitBtn.innerHTML;
         submitBtn.disabled = true;
@@ -1492,7 +1551,7 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
         }
 
         try {
-            let finalImageUrl = 'images/competition_bg.jpg'; // Default image
+            let finalImageUrl = '/images/competition_bg.jpg'; // Default image
 
             if (templateImageFile) {
                 submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...';
@@ -1523,16 +1582,21 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
                 image_url: finalImageUrl // Add the image URL to the payload
             };
 
+            console.log('Creating template with data:', formData);
+
             const response = await authedFetch('/api/templates', {
                 method: 'POST',
                 body: JSON.stringify(formData)
             });
 
+            const result = await response.json();
+
             if (!response.ok) {
-                const result = await response.json();
+                console.error('Template creation failed:', result);
                 throw new Error(result.message || 'فشل حفظ القالب.');
             }
             
+            console.log('Template created successfully:', result);
             showToast('تم حفظ القالب بنجاح.', 'success');
             closeModal();
             if (onSaveCallback) onSaveCallback();
@@ -1871,6 +1935,17 @@ function renderEditTemplateModal(template, onSaveCallback) {
 
         try {
             let finalImageUrl = template.image_url; // Start with the existing image URL
+
+            // Defensively strip origin if it's a localhost URL
+            if (finalImageUrl && finalImageUrl.startsWith('http://localhost')) {
+                try {
+                    const url = new URL(finalImageUrl);
+                    finalImageUrl = url.pathname;
+                } catch (e) {
+                    console.error('Could not parse existing template image URL:', e);
+                }
+            }
+
             console.log('Initial image URL:', finalImageUrl);
             console.log('templateImageFile:', templateImageFile);
 

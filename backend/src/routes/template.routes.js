@@ -6,6 +6,7 @@ const templateController = require('../controllers/template.controller');
 
 router.get('/', templateController.getAllTemplates);
 router.get('/available', templateController.getAvailableTemplates);
+router.get('/check-existence', templateController.checkTemplateExistence);
 router.post('/', templateController.createTemplate);
 router.get('/:id', templateController.getTemplateById);
 router.put('/:id', templateController.updateTemplate);

@@ -1,6 +1,46 @@
 const Agent = require('../models/agent.model');
+const Competition = require('../models/Competition');
+const Task = require('../models/Task');
+const ActivityLog = require('../models/ActivityLog');
 const { logActivity } = require('../utils/logActivity');
 const { translateField, formatValue } = require('../utils/fieldTranslations');
+
+// Helper function to introduce a delay
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Calculates the next renewal date for an agent.
+ * @param {object} agent The agent object, which must have renewal_period and last_renewal_date or createdAt.
+ * @returns {Date|null} The next renewal date or null if not applicable.
+ */
+const calculateNextRenewalDate = (agent) => {
+    if (!agent.renewal_period || agent.renewal_period === 'none') {
+        return null;
+    }
+
+    const lastRenewal = agent.last_renewal_date || agent.createdAt;
+    if (!lastRenewal) return null;
+
+    let nextRenewalDate = new Date(lastRenewal);
+
+    switch (agent.renewal_period) {
+        case 'weekly':
+            nextRenewalDate.setDate(nextRenewalDate.getDate() + 7);
+            break;
+        case 'biweekly':
+            nextRenewalDate.setDate(nextRenewalDate.getDate() + 14);
+            break;
+        case 'monthly': {
+            const originalDay = nextRenewalDate.getDate();
+            nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 1);
+            if (nextRenewalDate.getDate() !== originalDay) {
+                nextRenewalDate.setDate(0); // Set to the last day of the previous month
+            }
+            break;
+        }
+    }
+    return nextRenewalDate;
+};
 
 exports.getAllAgents = async (req, res) => { // NOSONAR
     try {
@@ -45,10 +85,16 @@ exports.getAllAgents = async (req, res) => { // NOSONAR
             .skip((page - 1) * limit)
             .lean();
 
+        // --- NEW: Calculate and add next renewal date to each agent ---
+        const agentsWithNextRenewal = agents.map(agent => ({
+            ...agent,
+            next_renewal_date: calculateNextRenewalDate(agent)
+        }));
+
         const count = await Agent.countDocuments(query);
 
         res.json({
-            data: agents,
+            data: agentsWithNextRenewal,
             count: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page
@@ -158,18 +204,42 @@ exports.deleteAllAgents = async (req, res) => {
 
 exports.deleteAgent = async (req, res) => {
     try {
-        const agent = await Agent.findByIdAndDelete(req.params.id);
+        const agentId = req.params.id;
+        const agent = await Agent.findById(agentId);
+
+        if (!agent) {
+            return res.status(404).json({ message: 'Agent not found.' });
+        }
+
+        // --- NEW: Cascade delete for all associated data ---
+        console.log(`[Delete Agent] Starting cascade delete for agent: ${agent.name} (${agentId})`);
+
+        // 1. Delete Competitions
+        const competitionResult = await Competition.deleteMany({ agent_id: agentId });
+        console.log(`[Delete Agent] Deleted ${competitionResult.deletedCount} competitions.`);
+
+        // 2. Delete Tasks
+        const taskResult = await Task.deleteMany({ agent_id: agentId });
+        console.log(`[Delete Agent] Deleted ${taskResult.deletedCount} tasks.`);
+
+        // 3. Delete Activity Logs related to this agent
+        const logResult = await ActivityLog.deleteMany({ agent_id: agentId });
+        console.log(`[Delete Agent] Deleted ${logResult.deletedCount} activity logs.`);
+
+        // 4. Now, delete the agent itself
+        await Agent.findByIdAndDelete(agentId);
+        console.log(`[Delete Agent] Successfully deleted agent document.`);
 
         // --- FIX: Log this action ---
         const userId = req.user?._id;
-        if (userId && agent) {
-            await logActivity(userId, agent._id, 'AGENT_DELETED', `تم حذف الوكيل: ${agent.name}.`);
+        if (userId) { // Log even if agent object is gone, we have the name
+            await logActivity(userId, agentId, 'AGENT_DELETED', `تم حذف الوكيل: ${agent.name} وكل بياناته المرتبطة.`);
         }
 
-        if (!agent) return res.status(404).json({ message: 'Agent not found.' });
-        res.json({ message: 'Agent deleted successfully.' });
+        res.json({ message: 'Agent and all associated data deleted successfully.' });
     } catch (error) {
-        res.status(500).json({ message: 'Failed to delete agent.', error: error.message });
+        console.error(`[Delete Agent] Error during cascade delete for agent ${req.params.id}:`, error);
+        res.status(500).json({ message: 'Failed to delete agent and associated data.', error: error.message });
     }
 };
 
@@ -186,21 +256,8 @@ exports.renewEligibleAgentBalances = async (onlineClients) => {
     now.setHours(0, 0, 0, 0); // Normalize to the start of the day
 
     for (const agent of agentsToRenew) {
-        const lastRenewal = agent.last_renewal_date || agent.createdAt;
-        let nextRenewalDate = new Date(lastRenewal);
-
-        switch (agent.renewal_period) {
-            case 'weekly':
-                nextRenewalDate.setDate(nextRenewalDate.getDate() + 6);
-                break;
-            case 'biweekly':
-                nextRenewalDate.setDate(nextRenewalDate.getDate() + 13);
-                break;
-            case 'monthly':
-                nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 1);
-                nextRenewalDate.setDate(nextRenewalDate.getDate() - 1);
-                break;
-        }
+        const nextRenewalDate = calculateNextRenewalDate(agent);
+        if (!nextRenewalDate) continue; // Skip if no valid renewal date
 
         nextRenewalDate.setHours(0, 0, 0, 0); // Normalize to the start of the day
 
@@ -264,14 +321,21 @@ exports.bulkRenewBalances = async (req, res) => {
 
             // The new logic: add consumed balance back to remaining and reset consumed.
             const newRemainingBalance = (agent.remaining_balance || 0) + (agent.consumed_balance || 0);
-            
             agent.remaining_balance = newRemainingBalance;
             agent.consumed_balance = 0;
+
+            // --- FIX: Roll over deposit bonus during bulk renewal ---
+            const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) + (agent.used_deposit_bonus || 0);
+            agent.remaining_deposit_bonus = newRemainingDepositBonus;
+            agent.used_deposit_bonus = 0;
             
             // Save each agent individually for better reliability over bulkWrite
             await agent.save();
             
             processedCount++;
+
+            // --- NEW: Add a delay to avoid overwhelming the server ---
+            await sleep(500);
         }
 
         // --- FIX: Log this bulk action ---

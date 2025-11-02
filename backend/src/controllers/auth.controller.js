@@ -44,7 +44,7 @@ exports.login = async (req, res) => {
 
 exports.getMe = async (req, res) => {
     try {
-        console.log(`[AUTH] Fetching profile for user ID: ${req.user.userId}`);
+        // console.log(`[AUTH] Fetching profile for user ID: ${req.user.userId}`);
         const user = await User.findById(req.user.userId).select('-password');
         if (!user) {
             return res.status(404).json({ message: 'User not found.' });

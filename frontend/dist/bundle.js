@@ -971,6 +971,7 @@ function displayAgentsPage(paginatedAgents, page, totalCount) {
                     <th>رقم الوكالة</th>
                     <th>التصنيف</th>
                     <th>المرتبة</th>
+                    <th>تاريخ التجديد</th>
                     <th>روابط التلجرام</th>
                     <th class="actions-column">الإجراءات</th>
                 </tr>
@@ -992,6 +993,7 @@ function displayAgentsPage(paginatedAgents, page, totalCount) {
                             <td data-label="رقم الوكالة" class="agent-id-text" title="نسخ الرقم">${agent.agent_id}</td>
                             <td data-label="التصنيف"><span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span></td>
                             <td data-label="المرتبة">${agent.rank || 'غير محدد'}</td>
+                            <td data-label="تاريخ التجديد">${agent.next_renewal_date ? new Date(agent.next_renewal_date).toLocaleDateString('ar-EG-u-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'لا يوجد'}</td>
                             <td data-label="روابط التلجرام">
                                 ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank" class="agent-table-link">القناة</a>` : ''}
                                 ${agent.telegram_channel_url && agent.telegram_group_url ? ' | ' : ''}
@@ -1074,64 +1076,88 @@ async function handleDeleteAllAgents() {
 
 // --- NEW: Bulk Renew Balances Feature ---
 async function handleBulkRenewBalances() {
-    showConfirmationModal(
-        'هل أنت متأكد من رغبتك في تجديد أرصدة جميع الوكلاء؟<br><small>سيتم تحويل <strong>الرصيد المستهلك</strong> إلى <strong>الرصيد المتبقي</strong> لكل وكيل.</small>',
-        async () => {
-            console.log('[Bulk Renew] Starting bulk renewal process from frontend.');
-            // Show a progress modal
-            const progressModalOverlay = showProgressModal(
-                'تجديد الأرصدة الجماعي',
-                `
-                <div class="update-progress-container">
-                    <i class="fas fa-sync-alt fa-spin update-icon"></i>
-                    <h3 id="bulk-renew-status-text">جاري التهيئة...</h3>
-                    <div class="progress-bar-outer">
-                        <div id="bulk-renew-progress-bar-inner" class="progress-bar-inner"></div>
+    try {
+        // --- NEW: Fetch all agents first to get a count and show progress ---
+        showLoader('جاري جلب قائمة الوكلاء...');
+        const response = await authedFetch('/api/agents?limit=10000&select=name'); // Fetch all agents
+        if (!response.ok) {
+            throw new Error('فشل في جلب قائمة الوكلاء للبدء في عملية التجديد.');
+        }
+        const { data: agents } = await response.json();
+        hideLoader();
+
+        if (!agents || agents.length === 0) {
+            showToast('لا يوجد وكلاء نشطون لتجديد أرصدتهم.', 'info');
+            return;
+        }
+
+        const agentCount = agents.length;
+
+        showConfirmationModal(
+            `سيتم تجديد أرصدة <strong>${agentCount}</strong> وكيل. هذه العملية قد تستغرق بعض الوقت. هل أنت متأكد من المتابعة؟`,
+            async () => {
+                console.log('[Bulk Renew] Starting client-side bulk renewal process.');
+                const progressModalOverlay = showProgressModal(
+                    'تجديد الأرصدة الجماعي',
+                    `
+                    <div class="update-progress-container">
+                        <i class="fas fa-sync-alt fa-spin update-icon"></i>
+                        <h3 id="bulk-renew-status-text">جاري التهيئة...</h3>
+                        <div class="progress-bar-outer">
+                            <div id="bulk-renew-progress-bar-inner" class="progress-bar-inner"></div>
+                        </div>
                     </div>
-                </div>
-                `
-            );
+                    `
+                );
 
-            const statusText = document.getElementById('bulk-renew-status-text');
-            const progressBar = document.getElementById('bulk-renew-progress-bar-inner');
-            const updateIcon = progressModalOverlay.querySelector('.update-icon');
+                const statusText = document.getElementById('bulk-renew-status-text');
+                const progressBar = document.getElementById('bulk-renew-progress-bar-inner');
+                const updateIcon = progressModalOverlay.querySelector('.update-icon');
+                let processedCount = 0;
+                let errorCount = 0;
 
-            try {
-                statusText.textContent = 'جاري معالجة طلب التجديد...';
-                progressBar.style.width = '50%';
-                console.log('[Bulk Renew] Sending request to /api/agents/bulk-renew');
+                for (let i = 0; i < agents.length; i++) {
+                    const agent = agents[i];
+                    processedCount++;
+                    const progressPercentage = Math.round((processedCount / agentCount) * 100);
 
-                const response = await authedFetch('/api/agents/bulk-renew', { method: 'POST' });
-                const result = await response.json();
+                    statusText.innerHTML = `(${processedCount}/${agentCount}) جاري تجديد رصيد: <strong>${agent.name}</strong>`;
+                    progressBar.style.width = `${progressPercentage}%`;
 
-                console.log('[Bulk Renew] Received response from backend:', result);
-                if (!response.ok) {
-                    throw new Error(result.message || 'فشل تجديد الأرصدة.');
+                    try {
+                        const renewResponse = await authedFetch(`/api/agents/${agent._id}/renew`, { method: 'POST' });
+                        if (!renewResponse.ok) {
+                            errorCount++;
+                            console.error(`Failed to renew balance for agent ${agent.name}`);
+                        }
+                        // A small delay to prevent overwhelming the server and to make the UI updates visible
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    } catch (err) {
+                        errorCount++;
+                        console.error(`Error renewing balance for agent ${agent.name}:`, err);
+                    }
                 }
 
                 progressBar.style.width = '100%';
-                statusText.innerHTML = `اكتمل التجديد بنجاح.<br><strong>${result.processedCount}</strong> وكيل تم تجديد رصيده.`;
-                updateIcon.className = 'fas fa-check-circle update-icon';
-                progressBar.style.backgroundColor = 'var(--success-color)';
+                updateIcon.className = errorCount > 0 ? 'fas fa-exclamation-triangle update-icon' : 'fas fa-check-circle update-icon';
+                progressBar.style.backgroundColor = errorCount > 0 ? 'var(--warning-color)' : 'var(--success-color)';
+                statusText.innerHTML = `اكتمل التجديد.<br>تمت معالجة <strong>${processedCount}</strong> وكيل.<br>${errorCount > 0 ? `(مع وجود <strong>${errorCount}</strong> أخطاء)` : ''}`;
 
-                console.log(`[Bulk Renew] Success. ${result.processedCount} agents renewed.`);
-                // --- FIX: Correctly call logAgentActivity with the right arguments ---
-                await logAgentActivity(null, null, 'AGENT_BULK_RENEW', `تم تجديد أرصدة ${result.processedCount} وكيل.`);
+                console.log(`[Bulk Renew] Client-side process finished. Processed: ${processedCount}, Errors: ${errorCount}`);
                 await fetchAndDisplayAgents(1); // Refresh the agents list
 
-            } catch (error) {
-                console.error('[Bulk Renew] Frontend error during renewal:', error);
-                statusText.innerHTML = `فشل التجديد.<br><small>${error.message}</small>`;
-                updateIcon.className = 'fas fa-times-circle update-icon';
-                progressBar.style.backgroundColor = 'var(--danger-color)';
-            } finally {
-                // --- NEW: Automatically close the progress modal after 4 seconds ---
                 setTimeout(() => {
                     if (progressModalOverlay) progressModalOverlay.remove();
                 }, 4000);
-            }
-        }, { title: 'تأكيد تجديد الأرصدة', confirmText: 'نعم، جدد الآن', confirmClass: 'btn-renewal' }
-    );
+            },
+            { title: 'تأكيد تجديد الأرصدة', confirmText: 'نعم، جدد الآن', confirmClass: 'btn-renewal' }
+        );
+
+    } catch (error) {
+        hideLoader();
+        showToast(error.message, 'error');
+        console.error('[Bulk Renew] Error setting up bulk renewal:', error);
+    }
 }
 
 async function handleMarkAllTasksComplete() {
@@ -2344,6 +2370,17 @@ async function renderCompetitionCreatePage(agentId) {
 
             let finalImageUrl = selectedTemplate.image_url || '/images/competition_bg.jpg'; // Default to template image
 
+            // --- FIX: Handle absolute localhost URLs from old templates ---
+            if (finalImageUrl && finalImageUrl.startsWith('http://localhost')) {
+                try {
+                    const url = new URL(finalImageUrl);
+                    finalImageUrl = url.pathname; // Convert to relative path
+                } catch (e) {
+                    console.error('Could not parse template image URL, leaving as is:', e);
+                }
+            }
+            // --- End of FIX ---
+
             if (competitionImageFile) {
                 sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...';
                 const formData = new FormData();
@@ -2358,6 +2395,8 @@ async function renderCompetitionCreatePage(agentId) {
                 const uploadResult = await uploadResponse.json();
                 finalImageUrl = uploadResult.imageUrl;
             }
+
+
 
             console.log(`The image URL being sent is: ${finalImageUrl}`);
 
@@ -2886,6 +2925,7 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
                     <div class="form-group">
                         <label for="create-template-question">السؤال (سيكون اسم المسابقة)</label>
                         <textarea id="create-template-question" rows="3" required></textarea>
+                        <div id="template-question-validation" class="validation-error" style="display: none; margin-top: 8px; font-size: 0.9em;"></div>
                     </div>
                     <div class="form-group">
                         <label for="create-template-correct-answer">الإجابة الصحيحة</label>
@@ -2954,11 +2994,56 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
         }
     });
 
+    // --- NEW: Live validation for template question ---
+    const questionInput = document.getElementById('create-template-question');
+    const validationDiv = document.getElementById('template-question-validation');
+    let debounceTimeout;
+
+    questionInput.addEventListener('input', () => {
+        clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(async () => {
+            const questionText = questionInput.value.trim();
+            if (questionText) {
+                try {
+                    const response = await authedFetch(`/api/templates/check-existence?question=${encodeURIComponent(questionText)}`);
+                    if (response.ok) {
+                        const { exists, archived } = await response.json();
+                        if (exists) {
+                            if (archived) {
+                                validationDiv.innerHTML = 'هذا السؤال موجود في قالب محذوف. يمكنك <a href="#archived-templates">استعادته من الأرشيف</a>.';
+                            } else {
+                                validationDiv.textContent = 'هذا السؤال مستخدم بالفعل في قالب آخر.';
+                            }
+                            validationDiv.style.display = 'block';
+                        } else {
+                            validationDiv.style.display = 'none';
+                        }
+                    } else {
+                        validationDiv.style.display = 'none'; // Hide on error
+                    }
+                } catch (error) {
+                    console.error('Error checking template existence:', error);
+                    validationDiv.style.display = 'none'; // Hide on error
+                }
+            } else {
+                validationDiv.style.display = 'none';
+            }
+        }, 500); // 500ms debounce delay
+    });
+
+
     document.getElementById('close-modal-btn').addEventListener('click', closeModal);
     document.getElementById('cancel-create-modal').addEventListener('click', closeModal);
     
     document.getElementById('create-template-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        // --- NEW: Prevent submission if validation error is visible ---
+        if (validationDiv.style.display === 'block') {
+            showToast('لا يمكن حفظ القالب لأن السؤال مستخدم بالفعل.', 'error');
+            return;
+        }
+
         const submitBtn = e.target.querySelector('button[type="submit"]');
         const originalBtnHtml = submitBtn.innerHTML;
         submitBtn.disabled = true;
@@ -2971,7 +3056,7 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
         }
 
         try {
-            let finalImageUrl = 'images/competition_bg.jpg'; // Default image
+            let finalImageUrl = '/images/competition_bg.jpg'; // Default image
 
             if (templateImageFile) {
                 submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...';
@@ -3002,16 +3087,21 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
                 image_url: finalImageUrl // Add the image URL to the payload
             };
 
+            console.log('Creating template with data:', formData);
+
             const response = await authedFetch('/api/templates', {
                 method: 'POST',
                 body: JSON.stringify(formData)
             });
 
+            const result = await response.json();
+
             if (!response.ok) {
-                const result = await response.json();
+                console.error('Template creation failed:', result);
                 throw new Error(result.message || 'فشل حفظ القالب.');
             }
             
+            console.log('Template created successfully:', result);
             showToast('تم حفظ القالب بنجاح.', 'success');
             closeModal();
             if (onSaveCallback) onSaveCallback();
@@ -3350,6 +3440,17 @@ function renderEditTemplateModal(template, onSaveCallback) {
 
         try {
             let finalImageUrl = template.image_url; // Start with the existing image URL
+
+            // Defensively strip origin if it's a localhost URL
+            if (finalImageUrl && finalImageUrl.startsWith('http://localhost')) {
+                try {
+                    const url = new URL(finalImageUrl);
+                    finalImageUrl = url.pathname;
+                } catch (e) {
+                    console.error('Could not parse existing template image URL:', e);
+                }
+            }
+
             console.log('Initial image URL:', finalImageUrl);
             console.log('templateImageFile:', templateImageFile);
 
@@ -4397,7 +4498,7 @@ function displayTopAgents(sortedAgents, sortKey) {
                 </div>
                 <div class="leaderboard-list-section">
                     <h2 class="leaderboard-section-title"><i class="fas fa-users"></i> 2- الوكلاء الاعتياديين</h2>
-                    <div class="leaderboard-simple-list">${regularRunnersUp.map((agent, index) => renderSimpleCard(agent, index + 1)).join('')}</div>
+                    <div class="leaderboard-simple-list">${regularRunnersUp.map((agent, index) => renderSimpleCard(agent, index + 4 + exclusiveRunnersUp.length)).join('')}</div>
                 </div>
             </div>
         ` : ''}
@@ -5672,7 +5773,7 @@ function renderDetailsView(agent) {
             ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week')}        </div>
         ${isSuperAdmin ? `
             <div class="details-actions" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
-                <button id="trigger-renewal-test-btn" class="btn-danger"><i class="fas fa-history"></i> تجربة التجديد (20 ثانية)</button>
+                <button id="trigger-renewal-test-btn" class="btn-danger"><i class="fas fa-history"></i> تجربة التجديد (3 ثواني)</button>
             </div>
         ` : ''}
     `;
@@ -5703,7 +5804,7 @@ function renderDetailsView(agent) {
     if (testRenewalBtn) {
         testRenewalBtn.addEventListener('click', async () => {
             testRenewalBtn.disabled = true;
-            testRenewalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> سيتم التجديد بعد 20 ثانية...';
+            testRenewalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> سيتم التجديد بعد 3 ثواني...';
 
             setTimeout(async () => {
                 try {
@@ -5716,9 +5817,9 @@ function renderDetailsView(agent) {
                 } catch (error) {
                     showToast(`خطأ: ${error.message}`, 'error');
                     testRenewalBtn.disabled = false;
-                    testRenewalBtn.innerHTML = '<i class="fas fa-history"></i> تجربة التجديد (20 ثانية)';
+                    testRenewalBtn.innerHTML = '<i class="fas fa-history"></i> تجربة التجديد (3 ثواني)';
                 }
-            }, 20000); // 20 seconds delay
+            }, 3000); // 3 seconds delay
         });
     }
 }

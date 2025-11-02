@@ -325,7 +325,7 @@ function displayTopAgents(sortedAgents, sortKey) {
                 </div>
                 <div class="leaderboard-list-section">
                     <h2 class="leaderboard-section-title"><i class="fas fa-users"></i> 2- الوكلاء الاعتياديين</h2>
-                    <div class="leaderboard-simple-list">${regularRunnersUp.map((agent, index) => renderSimpleCard(agent, index + 1)).join('')}</div>
+                    <div class="leaderboard-simple-list">${regularRunnersUp.map((agent, index) => renderSimpleCard(agent, index + 4 + exclusiveRunnersUp.length)).join('')}</div>
                 </div>
             </div>
         ` : ''}

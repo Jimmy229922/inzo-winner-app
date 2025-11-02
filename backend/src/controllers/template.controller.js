@@ -163,3 +163,29 @@ exports.reactivateTemplate = async (req, res) => {
         res.status(500).json({ message: 'Failed to reactivate template.', error: error.message });
     }
 };
+
+// Check if a template with the same question exists
+exports.checkTemplateExistence = async (req, res) => {
+    try {
+        const { question } = req.query;
+        if (!question) {
+            return res.status(400).json({ exists: false, message: 'Question parameter is required.' });
+        }
+
+        // Find a template with the exact same question text, regardless of archive status
+        const template = await CompetitionTemplate.findOne({ question: question });
+
+        if (template) {
+            // If found, indicate if it's archived or active
+            if (template.is_archived) {
+                res.json({ exists: true, archived: true, message: 'A template with this question exists in the archive.' });
+            } else {
+                res.json({ exists: true, archived: false, message: 'A template with this question already exists.' });
+            }
+        } else {
+            res.json({ exists: false });
+        }
+    } catch (error) {
+        res.status(500).json({ message: 'Server error while checking template existence.', error: error.message });
+    }
+};

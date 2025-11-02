@@ -1143,7 +1143,7 @@ function renderDetailsView(agent) {
             ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week')}        </div>
         ${isSuperAdmin ? `
             <div class="details-actions" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
-                <button id="trigger-renewal-test-btn" class="btn-danger"><i class="fas fa-history"></i> تجربة التجديد (20 ثانية)</button>
+                <button id="trigger-renewal-test-btn" class="btn-danger"><i class="fas fa-history"></i> تجربة التجديد (3 ثواني)</button>
             </div>
         ` : ''}
     `;
@@ -1174,7 +1174,7 @@ function renderDetailsView(agent) {
     if (testRenewalBtn) {
         testRenewalBtn.addEventListener('click', async () => {
             testRenewalBtn.disabled = true;
-            testRenewalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> سيتم التجديد بعد 20 ثانية...';
+            testRenewalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> سيتم التجديد بعد 3 ثواني...';
 
             setTimeout(async () => {
                 try {
@@ -1187,9 +1187,9 @@ function renderDetailsView(agent) {
                 } catch (error) {
                     showToast(`خطأ: ${error.message}`, 'error');
                     testRenewalBtn.disabled = false;
-                    testRenewalBtn.innerHTML = '<i class="fas fa-history"></i> تجربة التجديد (20 ثانية)';
+                    testRenewalBtn.innerHTML = '<i class="fas fa-history"></i> تجربة التجديد (3 ثواني)';
                 }
-            }, 20000); // 20 seconds delay
+            }, 3000); // 3 seconds delay
         });
     }
 }

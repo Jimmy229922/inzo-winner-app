@@ -101,7 +101,7 @@ async function startServer() {
     const wss = new WebSocketServer({ server });
 
     wss.on('connection', (ws) => {
-        console.log('[WebSocket] A client connected.');
+        // console.log('[WebSocket] A client connected.');
 
         // Part of the heartbeat mechanism
         ws.isAlive = true;
@@ -120,7 +120,7 @@ async function startServer() {
                     ws.userId = userId;
                     onlineClients.set(userId, ws);
 
-                    console.log(`[WebSocket] User ${userId} authenticated and connected.`);
+                    // console.log(`[WebSocket] User ${userId} authenticated and connected.`);
                     broadcastPresence(); // Notify all clients about the new online user
                 }
             } catch (e) {
@@ -132,10 +132,10 @@ async function startServer() {
         ws.on('close', () => {
             if (ws.userId) {
                 onlineClients.delete(ws.userId);
-                console.log(`[WebSocket] User ${ws.userId} disconnected.`);
+                // console.log(`[WebSocket] User ${ws.userId} disconnected.`);
                 broadcastPresence(); // Notify all clients that a user went offline
             } else {
-                console.log('[WebSocket] An unauthenticated client disconnected.');
+                // console.log('[WebSocket] An unauthenticated client disconnected.');
             }
         });
 

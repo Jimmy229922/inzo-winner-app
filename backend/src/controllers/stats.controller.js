@@ -136,7 +136,7 @@ exports.getAgentAnalytics = async (req, res) => {
  */
 exports.getTopAgents = async (req, res) => {
     try {
-        const { dateRange = 'all', limit = 10 } = req.query;
+        const { dateRange = 'all' } = req.query;
         const now = new Date();
         const query = { status: 'completed' };
 
@@ -144,14 +144,14 @@ exports.getTopAgents = async (req, res) => {
         if (dateRange !== 'all') {
             let startDate;
             switch(dateRange) {
-                case '7d':
-                    startDate = new Date(now.setDate(now.getDate() - 7));
-                    break;
-                case '30d':
-                    startDate = new Date(now.setDate(now.getDate() - 30));
+                case 'week':
+                    const firstDayOfWeek = now.getDate() - now.getDay(); // Sunday is the first day
+                    startDate = new Date(now.getFullYear(), now.getMonth(), firstDayOfWeek);
+                    startDate.setHours(0, 0, 0, 0);
                     break;
                 case 'month':
                     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                    startDate.setHours(0, 0, 0, 0);
                     break;
             }
             if (startDate) {
@@ -159,7 +159,12 @@ exports.getTopAgents = async (req, res) => {
             }
         }
 
-        // جمع الإحصائيات من جدول المسابقات
+        // 1. Get all agents
+        const allAgents = await Agent.find({})
+            .select('name agent_id classification avatar_url rank')
+            .lean();
+
+        // 2. Get competition stats
         const competitionStats = await Competition.aggregate([
             { $match: query },
             {
@@ -171,20 +176,12 @@ exports.getTopAgents = async (req, res) => {
                     total_participants: { $sum: '$participants_count' },
                     last_competition: { $max: '$createdAt' }
                 }
-            },
-            { $sort: { competitions_count: -1, total_participants: -1 } },
-            { $limit: parseInt(limit) }
+            }
         ]);
 
-        // جلب معلومات الوكلاء
-        const agentIds = competitionStats.map(stat => stat._id);
-        const agents = await Agent.find({ _id: { $in: agentIds } })
-            .select('name agent_id classification avatar_url');
-
-        // دمج البيانات
-        const topAgents = competitionStats.map(stat => {
-            const agent = agents.find(a => a._id.toString() === stat._id.toString());
-            if (!agent) return null;
+        // 3. Map agents to their stats
+        const topAgents = allAgents.map(agent => {
+            const stats = competitionStats.find(s => s._id.toString() === agent._id.toString());
 
             return {
                 _id: agent._id,
@@ -192,14 +189,15 @@ exports.getTopAgents = async (req, res) => {
                 agent_id: agent.agent_id,
                 classification: agent.classification,
                 avatar_url: agent.avatar_url,
-                competitions_count: stat.competitions_count,
-                total_views: stat.total_views,
-                total_reactions: stat.total_reactions,
-                total_participants: stat.total_participants,
-                last_competition: stat.last_competition,
-                average_participants: (stat.total_participants / stat.competitions_count).toFixed(1)
+                rank: agent.rank,
+                competitions_count: stats ? stats.competitions_count : 0,
+                total_views: stats ? stats.total_views : 0,
+                total_reactions: stats ? stats.total_reactions : 0,
+                total_participants: stats ? stats.total_participants : 0,
+                last_competition: stats ? stats.last_competition : null,
+                average_participants: stats && stats.competitions_count > 0 ? (stats.total_participants / stats.competitions_count).toFixed(1) : 0
             };
-        }).filter(Boolean);
+        });
 
         res.json(topAgents);
     } catch (error) {
