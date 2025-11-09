@@ -578,9 +578,9 @@ async function renderCompetitionCreatePage(agentId) {
                         <label for="override-duration">مدة المسابقة</label>
                         <select id="override-duration">
                             <option value="" disabled>-- اختر مدة --</option>
-                            <option value="1d" ${agent.competition_duration === '24h' ? 'selected' : ''}>يوم واحد</option>
+                            <option value="1d" ${agent.competition_duration === '24h' || !agent.competition_duration ? 'selected' : ''}>يوم واحد</option>
                             <option value="2d" ${agent.competition_duration === '48h' ? 'selected' : ''}>يومين</option>
-                            <option value="1w">أسبوع</option>
+                            <option value="1w" ${agent.competition_duration === '168h' ? 'selected' : ''}>أسبوع</option>
                         </select>
                     </div>
                     <div class="form-group" style="grid-column: 1 / -1; background-color: var(--bg-color); padding: 10px 15px; border-radius: 6px; margin-top: 10px;">
@@ -897,6 +897,14 @@ async function renderCompetitionCreatePage(agentId) {
 
             sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
 
+            // --- FIX: Map frontend duration values to backend-expected values ---
+            const durationMapping = {
+                '1d': '24h',
+                '2d': '48h',
+                '1w': '168h' // Assuming 1 week is 168 hours for the backend
+            };
+            const backendDuration = durationMapping[durationInput.value] || durationInput.value;
+
             const competitionPayload = {
                 name: selectedTemplate.question,
                 description: descInput.value,
@@ -904,7 +912,7 @@ async function renderCompetitionCreatePage(agentId) {
                 classification: agent.classification,
                 status: 'sent',
                 agent_id: agent._id,
-                duration: durationInput.value,
+                duration: backendDuration,
                 total_cost: totalCost,
                 deposit_winners_count: depositWinnersCount,
                 correct_answer: document.getElementById('override-correct-answer').value,
