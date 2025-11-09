@@ -37,6 +37,8 @@
                         <a href="#archived-templates" id="nav-archived-templates" class="dropdown-item"><i class="fas fa-box-open"></i> أرشيف القوالب</a>
                     </div>
                 </div>
+                <a href="#analytics" id="nav-analytics" class="nav-link"><i class="fas fa-chart-bar"></i> التحليلات</a>
+                <a href="#statistics" id="nav-statistics" class="nav-link"><i class="fas fa-chart-pie"></i> الإحصائيات</a>
             </div>
             <div class="navbar-center">
                 <div class="search-container">
@@ -93,6 +95,11 @@
     <button id="scroll-to-top-btn" title="العودة للأعلى"><i class="fas fa-arrow-up"></i></button>
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js Datalabels plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script>
+        Chart.register(ChartDataLabels);
+    </script>
 
     <!-- Bundled JavaScript -->
     <script src="/dist/bundle.js" defer></script>

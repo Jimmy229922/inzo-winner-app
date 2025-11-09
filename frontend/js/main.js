@@ -21,33 +21,8 @@ window.onerror = function(message, source, lineno, colno, error) {
     navigator.sendBeacon('/api/log-error', blob);
 };
 
-// --- NEW: Centralized helper function for authenticated API calls ---
-async function authedFetch(url, options = {}) {
-    const token = localStorage.getItem('authToken');
-    const headers = new Headers(options.headers || {});
-
-    if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
-    }
-
-    if (options.body && !(options.body instanceof FormData)) {
-        headers.set('Content-Type', 'application/json');
-    }
-
-    const response = await fetch(url, { ...options, headers });
-
-    // Handle token expiration/invalidation globally
-    if (response.status === 401 && !url.includes('/api/auth/login')) {
-        console.warn('[AUTH] Token is invalid or expired. Redirecting to login.');
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('userProfile');
-        window.location.replace('/login.html');
-        // Throw an error to stop further execution in the calling function
-        throw new Error('Unauthorized');
-    }
-
-    return response;
-}
+// --- Use the shared utility for authenticated API calls ---
+window.authedFetch = window.utils.authedFetch;
 
 // Helper function to update the visual status indicator
 function updateStatus(status, message) {
@@ -197,7 +172,10 @@ async function handleRouting() {
         '#archived-templates': { func: renderArchivedTemplatesPage, nav: 'nav-competition-templates' }, // Corrected nav item
         '#users': { func: renderUsersPage, nav: 'nav-users', adminOnly: true },
         '#profile-settings': { func: renderProfileSettingsPage, nav: null }, // NEW: Profile settings page
-        '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },'#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' }
+        '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
+        '#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' },
+        '#analytics': { func: renderAnalyticsPage, nav: 'nav-analytics' },
+        '#statistics': { func: renderStatisticsPage, nav: 'nav-statistics' }
     };
 
     const routeKey = hash.split('/')[0].split('?')[0]; // Get base route e.g., #profile from #profile/123 or #competitions from #competitions/new?agentId=1
@@ -231,7 +209,7 @@ async function handleRouting() {
         }
     }
 
-    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#archived-competitions' || hash === '#users' || hash === '#top-agents') {
+    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#archived-competitions' || hash === '#users' || hash === '#top-agents' || hash === '#analytics' || hash === '#statistics') {
         mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
@@ -429,22 +407,6 @@ function showLoader() {
 
 function hideLoader() {
     document.getElementById('page-loader')?.classList.remove('show');
-}
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    const iconClass = type === 'success' ? 'fa-check-circle' : (type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle');
-    toast.innerHTML = `<i class="fas ${iconClass}"></i> ${message}`;
-    
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.remove();
-    }, 5000); // Remove after 5 seconds
 }
 
 function showConfirmationModal(message, onConfirm, options = {}) {
@@ -694,8 +656,10 @@ function setupNavbar() {
     const navActivityLog = document.getElementById('nav-activity-log');
     const navUsers = document.getElementById('nav-users'); // NEW
     const navProfileSettings = document.getElementById('nav-profile-settings'); // This is a dropdown item
+    const navStatistics = document.getElementById('nav-statistics');
+    const navAnalytics = document.getElementById('nav-analytics'); // NEW
 
-    navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navUsers, navProfileSettings, navActivityLog, document.getElementById('logout-btn')];
+    navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navUsers, navProfileSettings, navActivityLog, navAnalytics, document.getElementById('logout-btn')];
     
     // NEW: Navigation listeners update the hash, which triggers the router
     if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'home'; });
@@ -709,6 +673,8 @@ function setupNavbar() {
     if (navCompetitionTemplates) navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
     if (navActivityLog) navActivityLog.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'activity-log'; });
     if (navUsers) navUsers.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'users'; }); // NEW
+    if (navAnalytics) navAnalytics.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'analytics'; }); // NEW
+    if (navStatistics) navStatistics.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'statistics'; });
 
     // Hide search results when clicking outside
     document.addEventListener('click', (e) => {
@@ -769,6 +735,61 @@ function renderAddUserForm() {
         confirmText: 'إنشاء',
         cancelText: 'إلغاء'
     });
+}
+
+async function renderStatisticsPage() {
+    if (!window.appContent) {
+        console.error("app-content element not found!");
+        return;
+    }
+    try {
+        const response = await fetch('/pages/statistics.html');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const html = await response.text();
+        window.appContent.innerHTML = html;
+        // Dynamically import and initialize the page's script
+            const statsModule = await import('/js/pages/statistics.js');
+        if (statsModule && typeof statsModule.init === 'function') {
+            statsModule.init();
+        } else {
+            console.warn('Statistics initialization function not found.');
+        }
+    } catch (error) {
+        console.error("Failed to load statistics page:", error);
+        window.appContent.innerHTML = `<p class="error-message">فشل تحميل صفحة الإحصائيات: ${error.message}</p>`;
+    }
+}
+
+async function renderAnalyticsPage() {
+    if (!window.appContent) {
+        console.error("app-content element not found!");
+        return;
+    }
+    try {
+        const response = await fetch('/pages/analytics.html');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const html = await response.text();
+        window.appContent.innerHTML = html;
+        // Dynamically import and initialize the analytics page script
+        try {
+            const analyticsModule = await import('/js/pages/analytics.js');
+            if (analyticsModule && typeof analyticsModule.init === 'function') {
+                analyticsModule.init();
+            } else {
+                throw new Error('Analytics dashboard initialization function not found');
+            }
+        } catch (e) {
+            // Re-throw to be caught by outer catch and displayed to the user
+            throw e;
+        }
+    } catch (error) {
+        console.error("Failed to load analytics page:", error);
+        window.appContent.innerHTML = `<p class="error-message">فشل تحميل صفحة التحليلات: ${error.message}</p>`;
+    }
 }
 
 // Main entry point when the page loads
