@@ -778,7 +778,10 @@ async function renderAnalyticsPage() {
         try {
             const analyticsModule = await import('/js/pages/analytics.js');
             if (analyticsModule && typeof analyticsModule.init === 'function') {
-                analyticsModule.init();
+                // Defer initialization to ensure DOM is ready
+                setTimeout(() => {
+                    analyticsModule.init();
+                }, 0);
             } else {
                 throw new Error('Analytics dashboard initialization function not found');
             }

@@ -38,6 +38,8 @@ app.use(
           "'sha256-8wRuEDii/8OrjKP+SkrGmAiY6dnp1/j/6JdNr8TjXtY='",
           // السماح بتنفيذ سكريبت مضمن لتسجيل ChartDataLabels
           "'sha256-2ar/7UBbVZ+sIvKv5KcwpCftABgp+gg1GvE5xLPk8eI='",
+          // السماح بتنفيذ سكريبت مضمن جديد تم اكتشافه
+          "'sha256-SwrHo0hQphrDZYNs4Z6fi3PQudeXxZOydZrc+QiPdIU='",
         ],
         "img-src": ["'self'", "data:", "blob:", "https://ui-avatars.com", "https://via.placeholder.com"],
         // السماح بتحميل ملفات .map من cdn.jsdelivr.net

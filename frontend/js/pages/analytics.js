@@ -7,6 +7,13 @@ if (typeof Chart === 'undefined') {
     throw new Error('Chart.js dependency missing');
 }
 
+// Register the ChartDataLabels plugin
+if (typeof ChartDataLabels !== 'undefined') {
+    Chart.register(ChartDataLabels);
+} else {
+    console.warn('ChartDataLabels plugin not found. Some chart features may be unavailable.');
+}
+
 // Function to safely configure Chart.js
 function configureChartDefaults() {
     if (!window.Chart) {
@@ -116,12 +123,12 @@ async function fetchAnalyticsData(filter) {
         if (filter) {
             if (typeof filter === 'object') {
                 const from = filter.from;
-                const to = filter;
-                const range = filter.range;
+                const to = filter.to;
+                const rangeValue = filter.range; // Renamed to avoid potential conflict, though unlikely
 
                 if (from) qp.set('from', from);
                 if (to) qp.set('to', to);
-                if (range) qp.set('range', range);
+                if (rangeValue) qp.set('range', rangeValue);
             } else { // filter is a string (e.g., '7')
                 qp.set('range', filter);
             }
@@ -173,8 +180,8 @@ function renderMostFrequentCompetitionsChart(data) {
             datasets: [{
                 label: ARABIC_LABELS.count,
                 data: counts,
-                backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(0, 123, 255, 0.6)', // Vibrant blue
+                borderColor: 'rgba(0, 123, 255, 1)', // Vibrant blue
                 borderWidth: 1
             }]
         },
@@ -213,7 +220,7 @@ function renderMostFrequentCompetitionsChart(data) {
                 }
             }
         },
-        plugins: [window.ChartDataLabels]
+        plugins: [ChartDataLabels]
     });
 }
 
@@ -243,8 +250,8 @@ function renderPeakHoursChart(data) {
             datasets: [{
                 label: ARABIC_LABELS.reportCount,
                 data: reportCountsByHour,
-                backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                borderColor: 'rgba(153, 102, 255, 1)',
+                backgroundColor: 'rgba(102, 51, 153, 0.2)', // Complementary purple
+                borderColor: 'rgba(102, 51, 153, 1)', // Complementary purple
                 borderWidth: 2,
                 fill: true,
                 tension: 0.3
@@ -306,8 +313,8 @@ function renderCountryStatsChart(data) {
             datasets: [{
                 label: ARABIC_LABELS.reportCount,
                 data: counts,
-                backgroundColor: 'rgba(255, 159, 64, 0.6)',
-                borderColor: 'rgba(255, 159, 64, 1)',
+                backgroundColor: 'rgba(255, 165, 0, 0.6)', // Orange
+                borderColor: 'rgba(255, 165, 0, 1)', // Orange
                 borderWidth: 1
             }]
         },
@@ -346,7 +353,7 @@ function renderCountryStatsChart(data) {
                 }
             }
         },
-        plugins: [window.ChartDataLabels]
+        plugins: [ChartDataLabels]
     });
 }
 
@@ -371,8 +378,8 @@ function renderTopIPsChart(data) {
             datasets: [{
                 label: ARABIC_LABELS.reportCount,
                 data: counts,
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                borderColor: 'rgba(54, 162, 235, 1)',
+                backgroundColor: 'rgba(30, 144, 255, 0.6)', // Dodger Blue
+                borderColor: 'rgba(30, 144, 255, 1)', // Dodger Blue
                 borderWidth: 1
             }]
         },
@@ -434,7 +441,7 @@ function renderTopIPsChart(data) {
                 }
             }
         },
-        plugins: [window.ChartDataLabels]
+        plugins: [ChartDataLabels]
     });
 }
 
