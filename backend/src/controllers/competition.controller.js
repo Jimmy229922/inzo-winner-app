@@ -15,7 +15,7 @@ function calculateEndsAtUTC(duration, tzOffsetHours = 3) {
     const localToday = new Date();
     localToday.setHours(0, 0, 0, 0);
     const localDayStartMs = localToday.getTime(); // This gives the timestamp for the start of the local day.
-    const durationMap = { '1d': 1, '2d': 2, '1w': 7 };
+    const durationMap = { '24h': 1, '48h': 2, '168h': 7 };
     const durationDays = durationMap[duration];
     if (durationDays === undefined) return null;
 
