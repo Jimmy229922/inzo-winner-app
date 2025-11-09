@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم التحليلات</title>
+    <link rel="stylesheet" href="../assets/css/base.css">
+    <link rel="stylesheet" href="../assets/css/components.css">
+    <link rel="stylesheet" href="../assets/css/analytics.css">
+
+
+</head>
+<body>
+    <div id="main-content" class="analytics-dashboard">
+        <header class="dashboard-header">
+            <h1>لوحة تحكم التحليلات</h1>
+            <div class="date-range-filter">
+                <label for="fromDate">من</label>
+                <input type="date" id="fromDate" />
+                <label for="toDate">إلى</label>
+                <input type="date" id="toDate" />
+                <button id="applyDateFilter" class="btn">تطبيق</button>
+            </div>
+        </header>
+
+        <div class="dashboard-grid">
+            <div class="card chart-card">
+                <h2>المسابقات الأكثر تكرارًا</h2>
+                <div class="chart-container">
+                    <canvas id="mostFrequentCompetitionsChart"></canvas>
+                </div>
+                <div class="loading-spinner" id="mostFrequentCompetitionsLoading"></div>
+                <p class="error-message" id="mostFrequentCompetitionsError"></p>
+            </div>
+
+            <!-- Removed peak hours, country stats and top IPs as requested -->
+
+            <div class="card employee-performance-card" id="employeePerformanceCard">
+                <h2>أداء الموظفين</h2>
+                <div class="table-container">
+                    <table id="employeePerformanceTable">
+                        <thead>
+                            <tr>
+                                <th>الموظف</th>
+                                <th>عدد التقارير</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Employee data will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="loading-spinner" id="employeePerformanceLoading"></div>
+                <p class="error-message" id="employeePerformanceError"></p>
+            </div>
+        </div>
+    </div>
+
+
+</body>
+</html>
