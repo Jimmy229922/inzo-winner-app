@@ -103,6 +103,7 @@ exports.getAllCompetitions = async (req, res) => {
 
 exports.createCompetition = async (req, res) => {
     try {
+        console.log(`[Competition Controller Debug] createCompetition received duration: ${req.body.duration}`);
         const { agent_id, template_id } = req.body;
 
         // --- NEW: Server-side check to prevent duplicate competitions ---
