@@ -56,6 +56,8 @@ exports.getTemplateById = async (req, res) => {
 
 // Create new template
 exports.createTemplate = async (req, res) => {
+    console.log('DEBUG (Backend): Content-Type header:', req.headers['content-type']);
+    console.log('DEBUG (Backend): Raw req.body:', req.body);
     try {
         // FIX: Ensure the 'question' field is populated from 'name' if it's missing.
         const templateData = { ...req.body };

@@ -14,9 +14,17 @@ function calculateEndsAtUTC(duration, tzOffsetHours = 3) {
     // FIX: Correctly get the start of the current local day.
     const localToday = new Date();
     localToday.setHours(0, 0, 0, 0);
-    const localDayStartMs = localToday.getTime(); // This gives the timestamp for the start of the local day.
+    const localDayStartMs = localToday.getTime();
+
+    // --- FIX: Map frontend duration values to backend-expected values ---
+    const durationMapping = {
+        '1d': '24h',
+        '2d': '48h',
+        '1w': '168h'
+    };
+    const backendDuration = durationMapping[duration] || duration;
     const durationMap = { '24h': 1, '48h': 2, '168h': 7 };
-    const durationDays = durationMap[duration];
+    const durationDays = durationMap[backendDuration];
     if (durationDays === undefined) return null;
 
     // The competition ends at the start of the day *after* the duration ends.
@@ -103,7 +111,6 @@ exports.getAllCompetitions = async (req, res) => {
 
 exports.createCompetition = async (req, res) => {
     try {
-        console.log(`[Competition Controller Debug] createCompetition received duration: ${req.body.duration}`);
         const { agent_id, template_id } = req.body;
 
         // --- NEW: Server-side check to prevent duplicate competitions ---

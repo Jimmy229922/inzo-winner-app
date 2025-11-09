@@ -11,4 +11,8 @@ router.get('/agent-analytics/:id', statsController.getAgentAnalytics);
 // GET /api/stats/top-agents - Fetches top performing agents
 router.get('/top-agents', statsController.getTopAgents);
 
+// GET /api/analytics - General analytics used by the frontend analytics dashboard
+// Note: This endpoint is exposed at /api/analytics by mounting in app.js (we'll also support it here for internal use)
+router.get('/analytics', statsController.getAnalytics);
+
 module.exports = router;

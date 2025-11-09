@@ -205,3 +205,96 @@ exports.getTopAgents = async (req, res) => {
         res.status(500).json({ message: 'Server error while fetching top agents.', error: error.message });
     }
 };
+
+/**
+ * @desc    Get general analytics for dashboard
+ * @route   GET /api/analytics
+ * @access  Private
+ */
+exports.getAnalytics = async (req, res) => {
+    try {
+        // Support from/to date filter or fallback to range (days)
+        const { from, to, range = '7' } = req.query;
+        let matchStage = {};
+
+        if (from || to) {
+            // parse YYYY-MM-DD
+            const createdAtFilter = {};
+            if (from) {
+                const f = new Date(from);
+                f.setHours(0,0,0,0);
+                createdAtFilter.$gte = f;
+            }
+            if (to) {
+                const t = new Date(to);
+                t.setHours(23,59,59,999);
+                createdAtFilter.$lte = t;
+            }
+            if (Object.keys(createdAtFilter).length) matchStage.createdAt = createdAtFilter;
+        } else if (range && range !== 'all') {
+            const days = parseInt(range, 10);
+            if (!isNaN(days) && days > 0) {
+                const now = new Date();
+                const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
+                startDate.setHours(0,0,0,0);
+                matchStage.createdAt = { $gte: startDate };
+            }
+        }
+
+        // Only consider competitions that were sent to agents (status: 'sent' and template_id exists)
+        matchStage.status = 'sent';
+        matchStage.template_id = { $ne: null };
+
+        // 1. Most frequent competitions by template
+        const mostFrequent = await Competition.aggregate([
+            { $match: matchStage },
+            { $group: { _id: '$template_id', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: 10 },
+            { $lookup: {
+                from: 'competitiontemplates',
+                localField: '_id',
+                foreignField: '_id',
+                as: 'template'
+            } },
+            { $unwind: { path: '$template', preserveNullAndEmptyArrays: true } },
+            { $project: { template_id: '$_id', template_name: '$template.question', count: 1, _id: 0 } }
+        ]).allowDiskUse(true);
+
+        // 2. Employee performance (by agent) — same as before but scoped to sent competitions
+        const employeePerfAgg = await Competition.aggregate([
+            { $match: matchStage },
+            { $group: {
+                _id: '$agent_id',
+                report_count: { $sum: 1 },
+                total_views: { $sum: '$views_count' },
+                total_participants: { $sum: '$participants_count' }
+            } },
+            { $sort: { report_count: -1 } },
+            { $limit: 20 }
+        ]).allowDiskUse(true);
+
+        const Agent = require('../models/agent.model');
+        const employeePerformance = await Promise.all(employeePerfAgg.map(async e => {
+            let agent = null;
+            try { agent = await Agent.findById(e._id).select('name agent_id avatar_url').lean(); } catch (ignore) {}
+            return {
+                _id: e._id,
+                username: agent ? (agent.name || agent.agent_id) : (e._id ? e._id.toString() : 'unknown'),
+                avatar_url: agent ? agent.avatar_url : null,
+                report_count: e.report_count,
+                total_views: e.total_views || 0,
+                total_participants: e.total_participants || 0
+            };
+        }));
+
+        res.json({
+            most_frequent_competitions: mostFrequent,
+            employee_performance: employeePerformance
+        });
+
+    } catch (error) {
+        console.error('Error fetching analytics:', error);
+        res.status(500).json({ message: 'Server error while fetching analytics.', error: error.message });
+    }
+};

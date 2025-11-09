@@ -2,10 +2,11 @@ const cron = require('node-cron');
 const Task = require('./models/Task'); // FIX: Correct path to model
 const Competition = require('./models/Competition'); // FIX: Correct path to model
 const { logActivity } = require('./utils/logActivity'); // FIX: Correct relative path
-const { postToTelegram } = require('./utils/telegram'); // FIX: Correct relative path
+const { postToTelegram, sendPhotoToTelegram } = require('./utils/telegram'); // FIX: Correct relative path
 const { renewEligibleAgentBalances } = require('./controllers/agent.controller'); // NEW: Import renewal function
 
 let onlineClientsRef; // Reference to online clients map from server.js
+let telegramBotRef; // NEW: Reference to the Telegram bot instance
 
 /**
  * @desc    مهمة مجدولة لإعادة تعيين جميع مهام التقويم الأسبوعية.
@@ -69,9 +70,14 @@ const scheduleExpiredCompetitionCheck = () => {
                                             `مع خالص التقدير،\n` +
                                             `إدارة المسابقات – انزو`;
                     try {
-                        await postToTelegram(clicheText, agent.telegram_chat_id);
-                        console.log(`[CRON] Sent winner selection request for competition ${comp._id} to agent ${agent.name}`);
-                        await logActivity(null, agent._id, 'COMPETITION_EXPIRED', `تم إغلاق المسابقة "${comp.name}" وإرسال طلب اختيار الفائزين تلقائياً.`);
+                        if (telegramBotRef) {
+                            await postToTelegram(telegramBotRef, clicheText, agent.telegram_chat_id);
+                            console.log(`[CRON] Sent winner selection request for competition ${comp._id} to agent ${agent.name}`);
+                            await logActivity(null, agent._id, 'COMPETITION_EXPIRED', `تم إغلاق المسابقة "${comp.name}" وإرسال طلب اختيار الفائزين تلقائياً.`);
+                        } else {
+                            console.warn(`[CRON] Telegram bot not initialized. Skipping message for competition ${comp._id}.`);
+                            await logActivity(null, agent._id, 'TELEGRAM_ERROR', `فشل إرسال إشعار اختيار الفائزين للمسابقة "${comp.name}" (البوت غير مهيأ)`);
+                        }
                     } catch (telegramError) {
                         console.error(`[CRON] Failed to send Telegram message for competition ${comp._id}:`, telegramError);
                         await logActivity(null, agent._id, 'TELEGRAM_ERROR', `فشل إرسال إشعار اختيار الفائزين للمسابقة "${comp.name}"`);
@@ -106,9 +112,10 @@ const scheduleAgentBalanceRenewal = (onlineClients) => {
 /**
  * @desc    يبدأ جميع المهام المجدولة في النظام.
  */
-const startAllSchedulers = (onlineClients) => {
+const startAllSchedulers = (onlineClients, telegramBot) => {
     console.log('[Scheduler] Initializing all background jobs...');
     onlineClientsRef = onlineClients; // Store the reference
+    telegramBotRef = telegramBot; // NEW: Store the Telegram bot reference
     scheduleWeeklyTaskReset();
     scheduleExpiredCompetitionCheck();
     scheduleAgentBalanceRenewal(); // NEW: Start the balance renewal job

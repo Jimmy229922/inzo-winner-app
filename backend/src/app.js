@@ -36,6 +36,8 @@ app.use(
           "'sha256-C+UNglKutB8VZOyHLy9MTyAC11AaepJoYdvIp21CZXY='",
           // السماح بتنفيذ سكريبت مضمن آخر يتم إنشاؤه ديناميكياً (ربما في نافذة منبثقة)
           "'sha256-8wRuEDii/8OrjKP+SkrGmAiY6dnp1/j/6JdNr8TjXtY='",
+          // السماح بتنفيذ سكريبت مضمن لتسجيل ChartDataLabels
+          "'sha256-2ar/7UBbVZ+sIvKv5KcwpCftABgp+gg1GvE5xLPk8eI='",
         ],
         "img-src": ["'self'", "data:", "blob:", "https://ui-avatars.com", "https://via.placeholder.com"],
         // السماح بتحميل ملفات .map من cdn.jsdelivr.net
@@ -60,6 +62,9 @@ app.use('/api/templates', authMiddleware.authenticate, templateRoutes); // إض�
 // --- إضافة: استخدام مسارات تلجرام ---
 // Note: These are not protected by authMiddleware to allow more flexibility if needed later.
 app.use('/api', telegramRoutes);
+// Expose a top-level analytics endpoint that the frontend expects (/api/analytics)
+const statsController = require('./controllers/stats.controller');
+app.get('/api/analytics', authMiddleware.authenticate, statsController.getAnalytics);
 app.use('/api/log-error', errorRoutes); // إضافة: استخدام مسارات الأخطاء
 
 // --- NEW: Run database migrations after routes are set up ---

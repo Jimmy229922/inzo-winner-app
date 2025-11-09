@@ -897,14 +897,6 @@ async function renderCompetitionCreatePage(agentId) {
 
             sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
 
-            // --- FIX: Map frontend duration values to backend-expected values ---
-            const durationMapping = {
-                '1d': '24h',
-                '2d': '48h',
-                '1w': '168h' // Assuming 1 week is 168 hours for the backend
-            };
-            const backendDuration = durationMapping[durationInput.value] || durationInput.value;
-
             const competitionPayload = {
                 name: selectedTemplate.question,
                 description: descInput.value,
@@ -912,7 +904,7 @@ async function renderCompetitionCreatePage(agentId) {
                 classification: agent.classification,
                 status: 'sent',
                 agent_id: agent._id,
-                duration: backendDuration,
+                duration: durationInput.value,
                 total_cost: totalCost,
                 deposit_winners_count: depositWinnersCount,
                 correct_answer: document.getElementById('override-correct-answer').value,
@@ -1551,47 +1543,54 @@ function renderCreateTemplateModal(defaultContent, onSaveCallback) {
         const originalBtnHtml = submitBtn.innerHTML;
         submitBtn.disabled = true;
 
-        const questionText = document.getElementById('create-template-question').value.trim();        
-        if (!questionText) {
-            showToast('حقل السؤال مطلوب.', 'error');
-            submitBtn.disabled = false;
-            return;
-        }
-
-        try {
-            let finalImageUrl = '/images/competition_bg.jpg'; // Default image
-
-            if (templateImageFile) {
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...';
-                const formData = new FormData();
-                formData.append('image', templateImageFile);
-
-                // Re-using the competition image upload endpoint
-                const uploadResponse = await authedFetch('/api/competitions/upload-image', { method: 'POST', body: formData });
-
-                if (!uploadResponse.ok) {
-                    throw new Error('فشل رفع الصورة.');
-                }
-                
-                const uploadResult = await uploadResponse.json();
-                finalImageUrl = uploadResult.imageUrl; // The backend should return the relative path
-            }
-            
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري حفظ القالب...';
-
-            const formData = {
-                name: questionText,
-                classification: document.getElementById('create-template-classification').value,
-                content: document.getElementById('create-template-content').value.trim(),
-                correct_answer: document.getElementById('create-template-correct-answer').value.trim(),
-                usage_limit: document.getElementById('create-template-usage-limit').value ? parseInt(document.getElementById('create-template-usage-limit').value, 10) : null,
-                usage_count: 0,
-                is_archived: false,
-                image_url: finalImageUrl // Add the image URL to the payload
-            };
-
-            console.log('Creating template with data:', formData);
-
+                    const questionText = document.getElementById('create-template-question').value.trim();        
+                    if (!questionText) {
+                        showToast('حقل السؤال مطلوب.', 'error');
+                        submitBtn.disabled = false;
+                        return;
+                    }
+        
+                    // Debugging: Log values before sending
+                    console.log('DEBUG: Question Text (name/question):', questionText);
+                    console.log('DEBUG: Template Content:', document.getElementById('create-template-content').value.trim());
+                    console.log('DEBUG: Correct Answer:', document.getElementById('create-template-correct-answer').value.trim());
+                    console.log('DEBUG: Classification:', document.getElementById('create-template-classification').value);
+                    console.log('DEBUG: Usage Limit:', document.getElementById('create-template-usage-limit').value);
+        
+                    try {
+                        let finalImageUrl = '/images/competition_bg.jpg'; // Default image
+        
+                        if (templateImageFile) {
+                            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري رفع الصورة...';
+                            const formData = new FormData();
+                            formData.append('image', templateImageFile);
+        
+                            // Re-using the competition image upload endpoint
+                            const uploadResponse = await authedFetch('/api/competitions/upload-image', { method: 'POST', body: formData });
+        
+                            if (!uploadResponse.ok) {
+                                throw new Error('فشل رفع الصورة.');
+                            }
+                            
+                            const uploadResult = await uploadResponse.json();
+                            finalImageUrl = uploadResult.imageUrl; // The backend should return the relative path
+                        }
+                        
+                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري حفظ القالب...';
+        
+                        const formData = {
+                            name: questionText,
+                            question: questionText, // FIX: Ensure 'question' field is also sent
+                            classification: document.getElementById('create-template-classification').value,
+                            content: document.getElementById('create-template-content').value.trim(),
+                            correct_answer: document.getElementById('create-template-correct-answer').value.trim(),
+                            usage_limit: document.getElementById('create-template-usage-limit').value ? parseInt(document.getElementById('create-template-usage-limit').value, 10) : null,
+                            usage_count: 0,
+                            is_archived: false,
+                            image_url: finalImageUrl // Add the image URL to the payload
+                        };
+        
+                        console.log('DEBUG: Creating template with data:', formData);
             const response = await authedFetch('/api/templates', {
                 method: 'POST',
                 body: JSON.stringify(formData)

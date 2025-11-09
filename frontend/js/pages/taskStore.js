@@ -6,6 +6,7 @@
  */
 
 const TASK_STATE_KEY = 'inzoTaskState';
+const { authedFetch } = window.utils;
 
 const taskStore = {
     state: {

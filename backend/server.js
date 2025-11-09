@@ -76,24 +76,24 @@ async function startServer() {
     // --- NEW: Initialize Telegram Bot and pass it to the app ---
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) {
-        console.error('[CRITICAL] TELEGRAM_BOT_TOKEN is not set in .env file. Telegram features will fail.');
-    }
-    const bot = new TelegramBot(token); // No polling, we only use it for sending
-    app.locals.telegramBot = bot;
-
-    // --- NEW: Verify the bot token on startup ---
-    try {
-        const me = await bot.getMe();
-        console.log(`[INFO] Telegram bot "${me.first_name}" initialized successfully.`);
-    } catch (error) {
-        console.error(`[CRITICAL] Telegram bot token seems to be invalid. Error: ${error.message}`);
-        console.error('[CRITICAL] Please verify the TELEGRAM_BOT_TOKEN in your .env file.');
-        // We don't exit the process, but the Telegram features will not work.
-        // This allows the rest of the app to run.
+        console.error('[CRITICAL] TELEGRAM_BOT_TOKEN is not set in .env file. Telegram features will be disabled.');
+    } else {
+        try {
+            // Create bot without polling since we only send messages from the server
+            const bot = new TelegramBot(token, { polling: false });
+            // Verify the bot token on startup
+            const me = await bot.getMe();
+            console.log(`[INFO] Telegram bot "${me.first_name}" initialized successfully.`);
+            app.locals.telegramBot = bot;
+        } catch (error) {
+            console.error(`[CRITICAL] Telegram bot initialization failed: ${error.message}`);
+            console.error('[CRITICAL] Please verify the TELEGRAM_BOT_TOKEN in your .env file and ensure network access to Telegram API.');
+            // Do NOT set app.locals.telegramBot so controllers can detect uninitialized bot
+        }
     }
 
     // --- FIX: Start all scheduled jobs from here ---
-    startAllSchedulers(onlineClients);
+    startAllSchedulers(onlineClients, app.locals.telegramBot);
     // --- REFACTOR: Create an HTTP server from the Express app ---
     const server = http.createServer(app);
 
