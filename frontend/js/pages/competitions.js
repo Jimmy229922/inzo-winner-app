@@ -578,7 +578,7 @@ async function renderCompetitionCreatePage(agentId) {
                         <label for="override-duration">مدة المسابقة</label>
                         <select id="override-duration">
                             <option value="" disabled>-- اختر مدة --</option>
-                            <option value="1d" ${agent.competition_duration === '24h' || !agent.competition_duration ? 'selected' : ''}>يوم واحد</option>
+                            <option value="1d" ${agent.competition_duration === '24h' || !agent.competition_duration || (agent.competition_duration !== '48h' && agent.competition_duration !== '168h') ? 'selected' : ''}>يوم واحد</option>
                             <option value="2d" ${agent.competition_duration === '48h' ? 'selected' : ''}>يومين</option>
                             <option value="1w" ${agent.competition_duration === '168h' ? 'selected' : ''}>أسبوع</option>
                         </select>
