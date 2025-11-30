@@ -1,0 +1,136 @@
+/* Toggle Switch Professional Design - Complete Redesign */
+/* Updated: 2025-11-14 - Unified Toggle Design Based on Comparison Mode */
+/* All toggles in the site now use the same exact design - HIGHEST PRIORITY */
+
+/* Base Toggle Switch Styles */
+.toggle-switch {
+    position: relative !important;
+    display: inline-block !important;
+    width: 50px !important;
+    height: 26px !important;
+    flex-shrink: 0 !important;
+    margin: 0 8px !important;
+}
+
+.toggle-switch input {
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Slider Background - Unified for all toggles */
+.toggle-switch .slider,
+.toggle-slider {
+    position: absolute !important;
+    cursor: pointer !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background-color: #e0e0e0 !important;
+    transition: 0.4s !important;
+    border-radius: 34px !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+}
+
+/* Ball (Toggle Knob) - Unified for all toggles */
+.toggle-switch .slider:before,
+.toggle-slider:before {
+    position: absolute !important;
+    content: '\2715' !important; /* Default OFF icon: ✕ */
+    height: 18px !important;
+    width: 18px !important;
+    right: 4px !important;
+    bottom: 4px !important;
+    background-color: white !important;
+    transition: 0.4s !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    color: #e74c3c !important; /* red cross when OFF */
+    box-shadow: none !important;
+    border: none !important;
+}
+
+/* Hover Effects */
+.toggle-switch:hover .slider {
+    box-shadow: 0 0 1px var(--primary-color) !important;
+}
+
+.toggle-switch input:focus + .slider {
+    box-shadow: 0 0 1px var(--primary-color) !important;
+}
+
+/* Checked (ON) State - Unified for all toggles */
+.toggle-switch input:checked + .slider,
+.toggle-switch input:checked + .toggle-slider {
+    background: linear-gradient(135deg, #27ae60 0%, #1e874b 100%) !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Ball Movement in ON State - Unified for all toggles */
+.toggle-switch input:checked + .slider:before,
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(-24px) !important;
+    background-color: white !important;
+    content: '\2713' !important; /* ON icon: ✓ */
+    color: #000 !important; /* Force black checkmark */
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+    font-size: 12px !important;
+}
+
+/* Disabled State */
+.toggle-switch input:disabled + .slider,
+.toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+.toggle-switch input:disabled + .slider:before,
+.toggle-switch input:disabled + .toggle-slider:before {
+    box-shadow: none !important;
+}
+
+/* ===========================================
+   Smooth Animation for All States
+   =========================================== */
+.toggle-switch .slider,
+.toggle-slider {
+    transition: all 0.4s !important;
+}
+
+.toggle-switch .slider:before,
+.toggle-slider:before {
+    transition: all 0.4s !important;
+}
+
+/* Active State (While Clicking) */
+.toggle-switch:active .slider:before {
+    transform: scale(0.95);
+}
+
+.toggle-switch input:checked:active + .slider:before {
+    transform: translateX(-24px) scale(0.95);
+}
+
+/* ===========================================
+   Compatibility with .round class
+   =========================================== */
+.slider.round {
+    border-radius: 34px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}

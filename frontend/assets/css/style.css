@@ -1,0 +1,47 @@
+/* Dark modal specific (rank change) */
+.rank-change-modal-dark .rcm-shell { backdrop-filter: blur(2px); }
+.rank-change-modal-dark textarea:focus { box-shadow:0 0 0 2px rgba(79,163,255,.25); }
+.rank-change-modal-dark .rank-chip { letter-spacing:.3px; }
+
+/* Truncated cells for rank changes table */
+.reason-cell, .action-cell {
+	max-width: 240px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	position: relative;
+}
+.reason-cell:hover, .action-cell:hover { color:#1a73e8; }
+
+/* Activity log redesigned (agent profile) */
+.agent-activity-log {
+	background:#fff;
+	border:1px solid #e5e9f2;
+	border-radius:12px;
+	padding:14px 18px;
+	margin-top:18px;
+}
+.agent-activity-log table { width:100%; border-collapse:collapse; }
+.agent-activity-log th, .agent-activity-log td { padding:8px 10px; font-size:12.5px; text-align:right; }
+.agent-activity-log thead th { background:#f7f9fc; color:#2c3e50; font-weight:600; border-bottom:1px solid #e1e6ec; }
+.agent-activity-log tbody tr { border-bottom:1px solid #f0f3f7; }
+.agent-activity-log tbody tr:hover { background:#f9fbfe; }
+.log-action-type { display:inline-block; padding:3px 8px; border-radius:14px; font-size:11px; background:#eef3f9; color:#234; font-weight:600; }
+.log-time { color:#667; font-size:11px; }
+
+/* Agent activity timeline */
+.agent-activity-log-timeline .timeline-item:hover { background:#f9fbfe; transition:background .2s; }
+.agent-activity-log-timeline .timeline-item .timeline-bullet { transition:transform .25s, box-shadow .25s; }
+.agent-activity-log-timeline .timeline-item:hover .timeline-bullet { transform:scale(1.08); box-shadow:0 0 0 4px rgba(26,115,232,.25); }
+
+/* Unified dark expansion modal styles */
+.dark-expand-modal-wrapper { direction: rtl; text-align: right; font-family: 'Cairo', sans-serif; max-width: 760px; }
+.dark-expand-modal { background:#1f2228; border:1px solid #2d343f; border-radius:12px; overflow:hidden; }
+.dark-expand-modal-header { background:linear-gradient(135deg,#222831,#1b2026); padding:12px 16px; color:#f5f7fa; font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; }
+.dark-expand-modal-body { padding:14px 16px; background:#272c33; max-height:60vh; overflow-y:auto; }
+.dark-expand-modal-body pre { margin:0; white-space:pre-wrap; word-break:break-word; font-family:inherit; color:#e6ebef; line-height:1.6; font-size:13px; }
+
+/* Timeline bullet base styles (ensure consistent appearance) */
+.agent-activity-log-timeline .timeline-bullet { width:12px; height:12px; border-radius:50%; background:#1a73e8; position:relative; box-shadow:0 0 0 3px rgba(26,115,232,.25); }
+.agent-activity-log-timeline .timeline-line { position:absolute; right:5px; top:12px; width:2px; background:linear-gradient(to bottom,#1a73e8,#4fa3ff); height:100%; opacity:.4; }
+

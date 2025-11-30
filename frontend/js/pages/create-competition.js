@@ -1,4 +1,4 @@
-function updateExpectedWinnerDate(duration) {
+﻿function updateExpectedWinnerDate(duration) {
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + parseInt(duration));
     

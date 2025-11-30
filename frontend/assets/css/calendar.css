@@ -3,43 +3,67 @@
 .page-header.column-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 15px;
+    gap: 10px;
+    background: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 10px;
 }
 
 .header-top-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.header-top-row h1 {
+    font-size: 1.2em;
+    background: linear-gradient(135deg, #23D4FE, #00B8E6, #6FE4FF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+    margin: 0;
+    font-weight: 700;
+    text-shadow: 0 2px 10px rgba(35, 212, 254, 0.3);
 }
 
 .calendar-filters {
     display: flex;
-    gap: 20px;
+    gap: 10px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .filter-search-container {
     position: relative;
-    flex-grow: 1;
+    flex: 1 1 180px;
+    min-width: 140px;
+    max-width: 300px;
 }
 
 .calendar-container {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 15px;
-    /* The container itself doesn't need to grow, its content will define the page height */
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+    max-width: 100%;
+    width: 100%;
 }
 
 .day-column {
     background-color: var(--card-bg-color);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 6px;
     display: flex;
     flex-direction: column;
-    /* overflow: hidden; is not needed as the column will expand */
-    /* --- PERFORMANCE OPTIMIZATION --- */
-    content-visibility: auto; /* Tell the browser to skip rendering this element if it's off-screen */
-    contain-intrinsic-size: 1000px; /* Estimate the vertical size to prevent scrollbar jumping */
+    min-width: 0;
+    max-width: 100%;
+    content-visibility: auto;
+    contain-intrinsic-size: 1000px;
 }
 
 .day-column.today {
@@ -50,11 +74,10 @@
 
 .day-column h2 {
     margin-top: 0;
-    font-size: 1.2em;
+    font-size: 0.85em;
     color: var(--primary-color);
     border-bottom: 2px solid var(--border-color);
-    padding-bottom: 10px;
-    padding: 15px;
+    padding: 6px 8px;
     margin: 0;
 }
 
@@ -63,42 +86,54 @@
 }
 
 .day-progress {
-    width: calc(100% - 20px);
-    margin: 0 10px 10px 10px;
+    width: calc(100% - 12px);
+    margin: 0 6px 6px 6px;
     background-color: var(--border-color);
-    border-radius: 8px;
-    height: 20px;
+    border-radius: 5px;
+    height: 16px;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
 }
+
 .day-progress .progress-bar {
-    background: var(--primary-color);
+    background: linear-gradient(90deg, #23D4FE, #00B8E6, #6FE4FF);
     height: 100%;
-    border-radius: 6px;
+    border-radius: 5px;
     transition: width 0.5s ease-in-out;
+    box-shadow: 0 0 15px rgba(35, 212, 254, 0.6);
+}
+
+.day-progress .progress-label {
+    position: absolute;
+    font-size: 0.7em;
+    font-weight: bold;
+    color: var(--text-color);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .filter-search-container .fa-search {
     position: absolute;
-    right: 15px; /* Position icon on the right for RTL */
+    right: 10px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-secondary-color);
-    pointer-events: none; /* Make icon non-interactive */
+    pointer-events: none;
+    font-size: 0.85em;
 }
 
 .filter-search-container input[type="search"] {
     width: 100%;
-    padding: 8px 40px; /* Adjust padding for icons on both sides */
-    border-radius: 20px;
+    padding: 6px 32px;
+    border-radius: 16px;
     border: 1px solid var(--border-color);
     background-color: var(--input-bg-color);
     color: var(--text-color);
     box-sizing: border-box;
     transition: border-color 0.2s, box-shadow 0.2s;
+    font-size: 0.85em;
 }
 
 .filter-search-container input[type="search"]:focus {
@@ -109,37 +144,44 @@
 
 .search-clear-btn {
     position: absolute;
-    left: 15px; /* Position clear button on the left for RTL */
+    left: 10px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-secondary-color);
     cursor: pointer;
-    display: none; /* Hidden by default */
+    display: none;
+    font-size: 0.85em;
 }
 
 .filter-buttons {
     display: flex;
     background-color: var(--bg-color);
-    border-radius: 20px;
-    padding: 4px;
+    border-radius: 16px;
+    padding: 3px;
     border: 1px solid var(--border-color);
+    flex-wrap: wrap;
 }
 
 .filter-btn {
     background-color: transparent;
     border: none;
-    padding: 6px 16px;
-    border-radius: 16px;
+    padding: 4px 10px;
+    border-radius: 12px;
     cursor: pointer;
     color: var(--text-secondary-color);
     font-weight: 500;
     transition: all 0.2s ease;
+    font-size: 0.8em;
+}
+
+.filter-btn.active {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover-color));
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.12);
 }
 
 .day-column-content {
-    /* No flex-grow or overflow is needed. It will expand with its content. */
-    padding: 15px;
-    /* Remove padding from the top if the first item has margin-top */
+    padding: 8px;
     padding-top: 0;
 }
 
@@ -149,37 +191,38 @@
     align-items: center;
     justify-content: center;
     color: var(--text-secondary-color);
-    padding: 40px 20px;
+    padding: 25px 12px;
     text-align: center;
 }
 
-.no-tasks-placeholder {
-    padding: 40px 20px;
+.no-tasks-placeholder i {
+    font-size: 1.8em;
+    margin-bottom: 6px;
 }
 
-.no-tasks-placeholder {
-    padding: 40px 20px;
-}
-
-.no-tasks {
-    color: var(--text-secondary-color);
-    text-align: center;
-    padding-top: 20px;
-    font-style: italic;
+.no-tasks-placeholder p {
+    margin: 0;
+    font-size: 0.85em;
 }
 
 .calendar-agent-item {
-    padding: 15px; /* زيادة الحشوة الداخلية */
+    padding: 6px;
     border-radius: 8px;
-    border: 1px solid var(--border-color);
-    background-color: var(--card-bg-color);
+    border: 1px solid rgba(35, 212, 254, 0.2);
+    background: linear-gradient(135deg, rgba(35, 212, 254, 0.05), rgba(0, 184, 230, 0.05));
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    gap: 4px;
+    transition: all 0.3s ease;
     box-sizing: border-box;
-    /* Use margin-top on all but the first child for consistent spacing */
-    margin-top: 15px;
+    margin-top: 5px;
+    box-shadow: 0 2px 8px rgba(35, 212, 254, 0.1);
+}
+
+.calendar-agent-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(35, 212, 254, 0.3);
+    border-color: #23D4FE;
 }
 
 .calendar-agent-item[style*="display: none"] {
@@ -193,8 +236,9 @@
 }
 
 .calendar-agent-item.complete {
-    background-color: color-mix(in srgb, #27ae60 15%, var(--card-bg-color)); /* إضافة: لون للمهام المكتملة */
-    border-color: #27ae60;
+    background: linear-gradient(135deg, rgba(6, 214, 160, 0.18), rgba(35, 212, 254, 0.1));
+    border-color: #06D6A0;
+    box-shadow: 0 2px 12px rgba(6, 214, 160, 0.3);
 }
 
 /* إضافة: تنسيقات السحب والإفلات */
@@ -214,14 +258,14 @@
 .calendar-agent-main {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 7px;
     cursor: pointer;
 }
 
 .calendar-agent-avatar,
 .calendar-agent-avatar-placeholder {
-    width: 35px;
-    height: 35px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     flex-shrink: 0;
     object-fit: cover;
@@ -230,65 +274,81 @@
     align-items: center;
     justify-content: center;
     color: var(--text-secondary-color);
+    font-size: 0.8em;
 }
 
 .calendar-agent-info {
     flex-grow: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .calendar-agent-item .agent-name {
     font-weight: bold;
     color: var(--text-color);
     display: block;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     margin-top: 0;
+    font-size: 0.95em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .agent-meta {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 4px;
+    gap: 5px;
+    margin-top: 2px;
+    flex-wrap: wrap;
 }
 
 .calendar-agent-id {
     font-size: 0.85em;
     color: var(--text-secondary-color);
     cursor: copy;
-    padding: 2px 4px;
-    border-radius: 4px;
+    padding: 2px 5px;
+    border-radius: 3px;
     transition: background-color 0.2s;
     display: inline-block;
     margin: 0;
+    font-weight: 600;
 }
+
 .calendar-agent-id:hover {
     background-color: var(--border-color);
 }
 
 .calendar-agent-actions {
     display: flex;
-    flex-direction: column; /* تعديل: جعل العناصر تترتب عمودياً */
-    gap: 8px; /* المسافة بين مربعي التدقيق والمسابقة */
+    flex-direction: column;
+    gap: 5px;
 }
 
-/* تعديل: وضع كل إجراء في مربع منفصل */
 .calendar-agent-actions .action-item {
-    flex: 1; /* جعل كل مربع يأخذ نصف المساحة */
+    flex: 1;
     display: flex;
     justify-content: space-between;
     align-items: center;
     background-color: var(--bg-color);
-    padding: 8px 12px;
-    border-radius: 6px;
+    padding: 5px 8px;
+    border-radius: 5px;
     border: 1px solid var(--border-color);
-    cursor: pointer; /* NEW: Add pointer cursor to the whole item */
+    cursor: pointer;
 }
 
-.filter-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+.calendar-agent-actions .action-item label {
+    font-size: 0.8em;
+    cursor: pointer;
+    margin: 0;
 }
+
+.calendar-agent-actions .action-item.done {
+    border-color: #27ae60;
+    background: color-mix(in srgb, #27ae60 12%, var(--bg-color));
+}
+
+
 
 /* Smaller checkboxes for calendar */
 .custom-checkbox.small {
@@ -313,52 +373,50 @@ body.dark-mode .calendar-agent-item mark {
     color: #000;
 }
 
-/* تصغير حجم أزرار الاختيار في صفحة التقويم */
-.calendar-agent-actions .toggle-switch {
-    width: 36px;
-    height: 20px;
-}
-
-.calendar-agent-actions .toggle-switch .slider:before {
-    height: 14px;
-    width: 14px;
-    left: 3px;
-    bottom: 3px;
-}
-
-.calendar-agent-actions .toggle-switch input:checked + .slider:before {
-    transform: translateX(16px);
-}
+/* Toggle switches in calendar now use global toggle-fix.css styles */
 
 .agent-name .task-complete-icon {
-    display: none; /* Hide by default */
+    display: none;
 }
 
 .agent-name.has-checkmark .task-complete-icon {
-    display: inline-flex; /* Show only when the parent has the class */
+    display: inline-flex;
 }
+
 .task-complete-icon {
     color: #fff;
-    background-color: #27ae60;
+    background: linear-gradient(135deg, #06D6A0, #00B8A8);
     border-radius: 50%;
-    font-size: 0.8em;
-    margin-right: 6px;
+    font-size: 0.75em;
+    margin-right: 5px;
     vertical-align: middle;
-    width: 1.5em;
-    height: 1.5em;
+    width: 1.3em;
+    height: 1.3em;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     line-height: 1;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(6, 214, 160, 0.5);
+    animation: pulseGlow 2s infinite;
 }
 
-/* NEW: Classification Badge Styles (copied from agents.css for consistency) */
+@keyframes pulseGlow {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(6, 214, 160, 0.5);
+    }
+    50% { 
+        transform: scale(1.1);
+        box-shadow: 0 4px 16px rgba(6, 214, 160, 0.8);
+    }
+}
+
+/* Classification Badge Styles */
 .classification-badge {
     display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 0.75em;
+    padding: 3px 8px;
+    border-radius: 8px;
+    font-size: 0.8em;
     font-weight: bold;
     color: #fff;
     text-align: center;
@@ -380,24 +438,91 @@ body.dark-mode .calendar-agent-item mark {
     background-color: #95a5a6; /* Gray */
 }
 
-/* NEW: Countdown Timer Styles */
+/* Countdown Timer Styles */
 .countdown-timer-container {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     background-color: var(--bg-color);
-    padding: 8px 12px;
-    border-radius: 20px;
+    padding: 6px 10px;
+    border-radius: 16px;
     border: 1px solid var(--border-color);
-    font-size: 0.9em;
+    font-size: 0.85em;
     color: var(--text-secondary-color);
 }
 
 .countdown-timer-container .fa-sync-alt {
     color: var(--primary-color);
+    font-size: 0.9em;
 }
 
 .countdown-timer-container .countdown-time {
     font-weight: bold;
     color: var(--text-color);
+}
+
+.header-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.header-actions-group .btn {
+    padding: 6px 12px;
+    font-size: 0.85em;
+}
+
+.header-actions-group .info-tooltip {
+    font-size: 0.9em;
+}
+
+.calendar-agent-number {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover-color));
+    color: white;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75em;
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.calendar-agent-item {
+    position: relative;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1400px) {
+    .calendar-container {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .calendar-container {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 600px) {
+    .calendar-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .header-top-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .calendar-filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }

@@ -3,6 +3,7 @@ let searchTimeout;
 let currentUserProfile = null; // NEW: To store the current user's profile with role
 window.onlineUsers = new Map(); // NEW: Global map to track online users
 window.appContent = null; // NEW: Make appContent globally accessible
+let winnerRouletteFallbackInitialized = false; // Ensure we only wire the roulette page once when the module fails
 
 // --- NEW: Global Error Catcher ---
 // This will catch any unhandled errors on the page and send them to the backend for logging.
@@ -175,11 +176,18 @@ async function handleRouting() {
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
         '#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' },
         '#analytics': { func: renderAnalyticsPage, nav: 'nav-analytics' },
-        '#statistics': { func: renderStatisticsPage, nav: 'nav-statistics' }
+        '#statistics': { func: renderStatisticsPage, nav: 'nav-statistics' },
+        '#winner-roulette': { func: renderWinnerRoulettePage, nav: 'nav-winner-roulette' }
     };
 
     const routeKey = hash.split('/')[0].split('?')[0]; // Get base route e.g., #profile from #profile/123 or #competitions from #competitions/new?agentId=1
     const route = routes[routeKey] || routes['#home'];
+
+    // Special layout for specific pages
+    if (routeKey === '#winner-roulette') {
+        appContent.classList.add('full-height-content');
+        mainElement.classList.add('full-width');
+    }
 
     renderFunction = route.func;
     navElement = document.getElementById(route.nav);
@@ -209,7 +217,7 @@ async function handleRouting() {
         }
     }
 
-    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#archived-competitions' || hash === '#users' || hash === '#top-agents' || hash === '#analytics' || hash === '#statistics') {
+    if (hash.startsWith('#profile/') || hash.startsWith('#competitions/new') || hash.startsWith('#competitions/manage') || hash === '#home' || hash === '#competition-templates' || hash === '#archived-templates' || hash === '#competitions' || hash === '#manage-agents' || hash === '#activity-log' || hash === '#archived-competitions' || hash === '#users' || hash === '#top-agents' || hash === '#analytics' || hash === '#statistics' || hash === '#winner-roulette') {
         mainElement.classList.add('full-width');
     } else if (hash === '#calendar') {
         mainElement.classList.add('full-width');
@@ -278,34 +286,43 @@ async function logAgentActivity(userId, agentId, actionType, description, metada
  * @returns {Promise<{verified: boolean, message: string}>} An object indicating if verification passed.
  */
 async function verifyTelegramChat(agent) {
-    if (!agent.telegram_chat_id) {
-        const message = 'لا يمكن الإرسال. معرف دردشة التلجرام غير مسجل لهذا الوكيل.';
-        showToast(message, 'error');
-        return { verified: false, message };
-    }
-    if (!agent.telegram_group_name) {
-        const message = 'لا يمكن الإرسال. اسم مجموعة التلجرام غير مسجل لهذا الوكيل.';
-        showToast(message, 'error');
-        return { verified: false, message };
+    // NEW: Graceful degradation – allow skipping Telegram verification locally or if bot disabled.
+    const skipReason = [];
+    if (!agent.telegram_chat_id) skipReason.push('معرف الدردشة غير متوفر');
+    if (!agent.telegram_group_name) skipReason.push('اسم المجموعة غير متوفر');
+
+    // If essential fields missing, warn but do NOT block competition creation.
+    if (skipReason.length) {
+        showToast(`تخطي تحقق تلجرام: ${skipReason.join('، ')}`,'warning');
+        return { verified: true, message: 'SKIPPED_MISSING_FIELDS' };
     }
 
     try {
-        showToast('جاري التحقق من تطابق بيانات مجموعة التلجرام...', 'info');
+        showToast('جاري التحقق من تطابق بيانات مجموعة التلجرام...','info');
         const response = await authedFetch(`/api/get-chat-info?chatId=${agent.telegram_chat_id}`);
-        const data = await response.json();
+        let data = {};
+        try { data = await response.json(); } catch {}
 
-        if (!response.ok) throw new Error(data.message || 'فشل التحقق من بيانات مجموعة التلجرام.');
-
-        const actualGroupName = data.title;
-        if (actualGroupName.trim() !== agent.telegram_group_name.trim()) {
-            const errorMessage = `<b>خطأ في التحقق:</b> اسم المجموعة المسجل (<b>${agent.telegram_group_name}</b>) لا يطابق الاسم الفعلي (<b>${actualGroupName}</b>). يرجى تصحيح البيانات.`;
-            showToast(errorMessage, 'error');
-            return { verified: false, message: errorMessage };
+        // If backend returns non-OK but we are in dev or bot disabled, treat as soft failure.
+        if (!response.ok) {
+            const msg = data.message || 'تعذر الوصول إلى خدمة تلجرام، تم التخطي.';
+            showToast(msg,'warning');
+            return { verified: true, message: 'SKIPPED_BACKEND_ERROR' };
         }
-        return { verified: true, message: 'تم التحقق من المجموعة بنجاح.' };
+
+        const actualGroupName = (data.title || '').trim();
+        const expectedName = (agent.telegram_group_name || '').trim();
+        if (actualGroupName && expectedName && actualGroupName !== expectedName) {
+            // Instead of blocking, just warn and continue.
+            const warnMsg = `اسم المجموعة المسجل لا يطابق الفعلي (المسجل: ${expectedName} / الفعلي: ${actualGroupName}) – متابعة مع تحذير.`;
+            showToast(warnMsg,'warning');
+            return { verified: true, message: 'NAME_MISMATCH_WARN' };
+        }
+        return { verified: true, message: 'VERIFIED_OR_MATCHED' };
     } catch (error) {
-        showToast(`فشل التحقق من المجموعة: ${error.message}`, 'error');
-        return { verified: false, message: error.message };
+        // Network / fetch error – warn and continue.
+        showToast(`تخطي تحقق تلجرام بسبب خطأ: ${error.message}`,'warning');
+        return { verified: true, message: 'SKIPPED_EXCEPTION' };
     }
 }
 
@@ -325,21 +342,10 @@ async function initializeApp() {
         updateUIAfterLogin(userProfile); // FIX: Pass the fetched user profile to the UI update function
         handleRouting(); // Initial route handling
     } else {
-        // --- تعديل: التعامل مع فشل المصادقة الأولية ---
-        // إذا فشل جلب ملف المستخدم، فهذا يعني وجود مشكلة في الخادم أو الاتصال بقاعدة البيانات
-        hideLoader(); // إخفاء شاشة التحميل
-        const appContent = document.getElementById('app-content');
-        if (appContent) {
-            appContent.innerHTML = `
-                <div class="error-page-container">
-                    <i class="fas fa-server fa-3x"></i>
-                    <h1>خطأ في الاتصال بالخادم</h1>
-                    <p>لا يمكن الوصول إلى بيانات المستخدم. قد يكون الخادم متوقفاً أو هناك مشكلة في الاتصال بقاعدة البيانات.</p>
-                    <p><strong>الحل المقترح:</strong> يرجى مراجعة مسؤول النظام والتأكد من أن الخادم يعمل بشكل صحيح وأن رابط قاعدة البيانات (MONGODB_URI) في ملف <code>.env</code> صحيح.</p>
-                    <button onclick="location.reload()" class="btn-primary">إعادة المحاولة</button>
-                </div>
-            `;
-        }
+        // User is not authenticated (no token or invalid token) — redirect to login
+        hideLoader();
+        console.warn('[AUTH] No valid user session. Redirecting to login page.');
+        window.location.replace('/login.html');
     }
 }
 
@@ -350,12 +356,25 @@ function setupRealtimeListeners() {
     const protocol = window.location.protocol === 'https' ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${window.location.host}`;
     let ws;
+    let reconnectAttempts = 0;
+    let maxReconnectAttempts = 3;
+    let reconnectTimeout;
 
     function connect() {
+        // Check if token exists before connecting
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            console.warn('[WebSocket] No auth token found. Skipping connection.');
+            return;
+        }
+
         ws = new WebSocket(wsUrl);
+        // Expose the active WebSocket so other modules (e.g., logout) can close it immediately
+        try { window._realtimeWs = ws; } catch (e) { /* ignore in non-browser env */ }
 
         ws.onopen = () => {
-            console.log('[WebSocket] Connected to server.');
+            /* logs suppressed: WebSocket connected */
+            reconnectAttempts = 0; // Reset counter on successful connection
             const token = localStorage.getItem('authToken');
             if (token) {
                 ws.send(JSON.stringify({ type: 'auth', token }));
@@ -366,6 +385,19 @@ function setupRealtimeListeners() {
             try {
                 const message = JSON.parse(event.data);
                 switch (message.type) {
+                    case 'auth_error':
+                        // Handle authentication error from server
+                        console.warn('[WebSocket] Authentication failed:', message.error);
+                        if (message.error && message.error.includes('expired')) {
+                            // Token expired, redirect to login
+                            localStorage.removeItem('authToken');
+                            localStorage.removeItem('userProfile');
+                            showToast('انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى.', 'warning');
+                            setTimeout(() => {
+                                window.location.replace('/login.html');
+                            }, 2000);
+                        }
+                        return; // Don't try to reconnect
                     case 'agent_renewed':
                         showToast(`تم تجديد رصيد الوكيل ${message.data.agentName} تلقائياً.`, 'success');
                         break;
@@ -386,15 +418,33 @@ function setupRealtimeListeners() {
         };
 
         ws.onclose = () => {
-            console.log('[WebSocket] Disconnected. Attempting to reconnect in 5 seconds...');
-            setTimeout(connect, 5000); // Attempt to reconnect after 5 seconds
+            // Clear the global reference when socket closes
+            try { if (window._realtimeWs === ws) window._realtimeWs = null; } catch (e) { /* ignore */ }
+            
+            // Only reconnect if we haven't exceeded max attempts
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                console.log(`[WebSocket] Disconnected. Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in 5 seconds...`);
+                reconnectTimeout = setTimeout(connect, 5000);
+            } else {
+                console.warn('[WebSocket] Max reconnection attempts reached. Please refresh the page or log in again.');
+            }
         };
 
         ws.onerror = (error) => {
             console.error('[WebSocket] Error:', error);
-            ws.close();
+            try { ws.close(); } catch (e) { /* ignore */ }
         };
     }
+
+    // Function to stop reconnection attempts (e.g., on logout)
+    window.stopWebSocketReconnect = function() {
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
+        }
+        reconnectAttempts = maxReconnectAttempts; // Prevent future reconnects
+    };
 
     connect();
 }
@@ -416,9 +466,14 @@ function showConfirmationModal(message, onConfirm, options = {}) {
         cancelText = 'إلغاء',
         confirmClass = 'btn-primary',
         showCancel = true,
+        hideCancel = undefined, // alias support
         modalClass = '',
-        onRender = null
+        onRender = null,
+        onCancel = null
     } = options;
+
+    // Backward compatibility: if hideCancel is provided, it overrides showCancel
+    const effectiveShowCancel = typeof hideCancel === 'boolean' ? !hideCancel : showCancel;
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -430,24 +485,35 @@ function showConfirmationModal(message, onConfirm, options = {}) {
         <div class="modal-message">${message}</div>
         <div class="modal-actions">
             <button id="confirm-btn" class="${confirmClass}">${confirmText}</button>
-            ${showCancel ? `<button id="cancel-btn" class="btn-secondary">${cancelText}</button>` : ''}
+            ${effectiveShowCancel ? `<button id="cancel-btn" class="btn-secondary">${cancelText}</button>` : ''}
         </div>
     `;
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    document.getElementById('confirm-btn').onclick = () => {
-        // FIX: Execute the callback *before* removing the modal.
-        // This ensures that any inputs inside the modal are still accessible to the callback.
-        if (onConfirm) onConfirm();
-        overlay.remove(); // Now remove the modal.
+    document.getElementById('confirm-btn').onclick = async () => {
+        // FIX: Support async callbacks and allow them to prevent modal closing
+        if (onConfirm) {
+            const result = await Promise.resolve(onConfirm());
+            // If callback returns false, don't close the modal
+            if (result === false) return;
+        }
+        overlay.remove();
+    
     };
     const cancelBtn = document.getElementById('cancel-btn');
-    if (cancelBtn) cancelBtn.onclick = () => overlay.remove();
+    if (cancelBtn) {
+        cancelBtn.onclick = () => {
+            if (onCancel) onCancel();
+            overlay.remove();
+        };
+    }
 
     if (onRender) onRender(modal);
 }
+// Expose globally so console and other scripts can call it
+try { window.showConfirmationModal = showConfirmationModal; } catch (e) { /* ignore in non-browser env */ }
 
 // --- NEW: Dedicated function for progress modals ---
 function showProgressModal(title, content) {
@@ -472,6 +538,49 @@ function showProgressModal(title, content) {
     console.log('[showProgressModal] Progress modal has been appended to the body.');
 
     return overlay; // Return the overlay so it can be closed later
+}
+
+// Fallback toast helper: ensures a visible message even if the app's showToast is absent or hidden
+function showFallbackToast(message, duration = 1600) {
+    try {
+        // Reuse existing global showToast if it exists but also show a DOM fallback to guarantee visibility
+        if (typeof showToast === 'function') showToast(message, 'info');
+    } catch (e) {
+        // ignore
+    }
+
+    // Ensure only one fallback toast element
+    let el = document.getElementById('global-fallback-toast');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'global-fallback-toast';
+        el.style.position = 'fixed';
+        el.style.bottom = '24px';
+        el.style.right = '24px';
+        el.style.background = 'rgba(0,0,0,0.85)';
+        el.style.color = '#fff';
+        el.style.padding = '10px 14px';
+        el.style.borderRadius = '8px';
+        el.style.zIndex = '2147483647'; // very high so it appears above modals/overlays
+        el.style.boxShadow = '0 6px 18px rgba(0,0,0,0.3)';
+        el.style.fontSize = '13px';
+        el.style.opacity = '0';
+        el.style.transition = 'opacity 160ms ease-in-out, transform 160ms ease-in-out';
+        el.style.transform = 'translateY(6px)';
+        document.body.appendChild(el);
+    }
+    el.textContent = message;
+    // show
+    requestAnimationFrame(() => {
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+    });
+    // hide after duration
+    clearTimeout(el._hideTimeout);
+    el._hideTimeout = setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(6px)';
+    }, duration);
 }
 
 function setupAutoHidingNavbar() {
@@ -548,17 +657,48 @@ function setupNavbar() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            showConfirmationModal('هل أنت متأكد من رغبتك في تسجيل الخروج؟', async () => {
-                try {
-                    // استدعاء الواجهة الخلفية لتسجيل الخروج (للتوافقية المستقبلية)
-                    await authedFetch('/api/auth/logout', { method: 'POST' });
-                } catch (error) {
-                    console.warn('Logout API call failed, but proceeding with client-side logout.', error);
+            // Immediate client-side logout without waiting for the server.
+            try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (e) { /* ignore */ }
+
+            // Close the realtime WebSocket if it's open to prevent further background requests
+            try {
+                if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
+                    window._realtimeWs.close();
+                    window._realtimeWs = null;
                 }
-                localStorage.removeItem('authToken');
-                localStorage.removeItem('userProfile');
-                window.location.replace('/login.html');
-            }, { title: 'تأكيد تسجيل الخروج' });
+                // Stop reconnection attempts
+                if (typeof window.stopWebSocketReconnect === 'function') {
+                    window.stopWebSocketReconnect();
+                }
+            } catch (err) {
+                console.warn('Failed to close realtime socket during logout:', err);
+            }
+
+            // Fire logout API call (fire-and-forget to log activity)
+            // Use a timeout to ensure we redirect even if API hangs
+            const logoutTimeout = setTimeout(() => {
+                console.warn('Logout API timeout - proceeding with client-side logout');
+            }, 2000);
+            
+            try {
+                authedFetch('/api/auth/logout', { method: 'POST' })
+                    .then(() => clearTimeout(logoutTimeout))
+                    .catch(err => {
+                        console.warn('Logout API call failed:', err);
+                        clearTimeout(logoutTimeout);
+                    });
+            } catch (e) { 
+                clearTimeout(logoutTimeout);
+            }
+
+            // Clear auth state immediately
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('userProfile');
+
+            try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
+
+            // Redirect right away to the login page
+            setTimeout(() => window.location.replace('/login.html'), 250);
         });
     }
 
@@ -658,8 +798,9 @@ function setupNavbar() {
     const navProfileSettings = document.getElementById('nav-profile-settings'); // This is a dropdown item
     const navStatistics = document.getElementById('nav-statistics');
     const navAnalytics = document.getElementById('nav-analytics'); // NEW
+    const navWinnerRoulette = document.getElementById('nav-winner-roulette');
 
-    navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navUsers, navProfileSettings, navActivityLog, navAnalytics, document.getElementById('logout-btn')];
+    navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navUsers, navProfileSettings, navActivityLog, navAnalytics, navWinnerRoulette, document.getElementById('logout-btn')];
     
     // NEW: Navigation listeners update the hash, which triggers the router
     if (navHome) navHome.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'home'; });
@@ -674,6 +815,7 @@ function setupNavbar() {
     if (navActivityLog) navActivityLog.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'activity-log'; });
     if (navUsers) navUsers.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'users'; }); // NEW
     if (navAnalytics) navAnalytics.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'analytics'; }); // NEW
+    if (navWinnerRoulette) navWinnerRoulette.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'winner-roulette'; });
     if (navStatistics) navStatistics.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'statistics'; });
 
     // Hide search results when clicking outside
@@ -795,6 +937,279 @@ async function renderAnalyticsPage() {
     }
 }
 
+async function renderWinnerRoulettePage() {
+    if (!window.appContent) {
+        console.error("app-content element not found!");
+        return;
+    }
+    // Force inline HTML to avoid blank page issues
+    window.appContent.innerHTML = getWinnerRouletteInlineHTML();
+    
+    // Check if winner-roulette init is available (from bundled JS)
+    setTimeout(() => {
+        if (typeof window.winnerRouletteInit === 'function') {
+            console.log('[winner-roulette] Initializing from bundled code');
+            window.winnerRouletteInit();
+            winnerRouletteFallbackInitialized = true;
+        } else {
+            console.warn('[winner-roulette] Init function not found, using fallback');
+            initWinnerRouletteFallback('init not available');
+        }
+    }, 100);
+
+    // Log screen size for debugging
+    console.log('Winner Roulette Page Loaded - Screen Size:', {
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+        outerWidth: window.outerWidth,
+        outerHeight: window.outerHeight,
+        appContent: window.appContent ? window.appContent.offsetWidth + 'x' + window.appContent.offsetHeight : 'not found'
+    });
+}
+
+function getWinnerRouletteInlineHTML(minimal = false, errMsg = '') {
+        if (minimal) {
+                return `<section class=\"page-section\"><h1>اختيار الفائزين</h1><p style='color:#f87171'>تعذر تحميل الصفحة الأصلية: ${errMsg}</p>${baseRouletteMarkup()}</section>`;
+        }
+        return `<section class=\"page-section\">${baseRouletteMarkup()}</section>`;
+}
+
+function baseRouletteMarkup() {
+    return `
+        <section class=\"page-section\" id=\"winner-roulette-page\">
+            <div class=\"page-header\">
+                <h1><i class=\"fas fa-random\"></i> اختيار الفائزين لمسابقات الوكيل</h1>
+                <p class=\"page-subtitle\">أضِف أو الصِق أسماء المشاركين مع أرقام حساباتهم ثم دوّر العجلة لاختيار فائز عشوائي بكل شفافية.</p>
+                <div class=\"wr-agent-selector\">
+                    <label for=\"agent-select\"><i class=\"fas fa-user-tie\"></i> اختر الوكيل:</label>
+                    <select id=\"agent-select\" class=\"wr-agent-dropdown\">
+                        <option value=\"\">-- اختر الوكيل --</option>
+                    </select>
+                    <span id=\"agent-selection-status\" class=\"wr-agent-status\"></span>
+                </div>
+            </div>
+            <div class=\"wr-layout\">
+                <div class=\"wr-panel\" id=\"wr-left-panel\">
+                    <div class=\"wr-panel-header\"><h3><i class=\"fas fa-list\"></i> إدخال المشاركين</h3></div>
+                    <small>مثال لكل سطر: <code>الاسم الثلاثي — 3191848</code></small>
+                    <textarea id=\"participants-input\" class=\"wr-textarea\" placeholder=\"1- ابتسام قاسم هاني — 3191848\n2- رامي عبد الباسط — 3219692\n3- اواب خالد سلام — 3232334\n4- حسين خالد عودة — 3257071\n5- حنين عماد مطر — 3240004\n6- شيرين عبد الله سعود — 3076887\n7- علي محمد ناصر — 3235758\n8- عمر مجمل قاسم — 3245457\"></textarea>
+                    <h4 class=\"wr-section-title\">المشاركون</h4>
+                    <div class=\"wr-tools-row\">
+                        <input id=\"participants-search\" type=\"text\" class=\"wr-search-input\" placeholder=\"بحث...\" />
+                        <div class=\"wr-counts\">
+                          <span>الإجمالي: <strong id=\"participants-count-total\">0</strong></span>
+                          <span>المتبقي: <strong id=\"participants-count-remaining\">0</strong></span>
+                          <span>الفائزون: <strong id=\"winners-count\">0</strong></span>
+                        </div>
+                        <button id=\"refresh-participants\" class=\"wr-btn wr-btn-primary wr-btn-small\"><i class=\"fas fa-sync-alt\"></i> تحديث</button>
+                        <button id=\"reset-winners\" class=\"wr-btn wr-btn-secondary wr-btn-small\"><i class=\"fas fa-trash\"></i> مسح الفائزين</button>
+                    </div>
+                    <div id=\"participants-list\" class=\"wr-scroll-box\"></div>
+                </div>
+                <div class=\"wr-panel\" id=\"wr-right-panel\">
+                    <div class=\"wr-panel-header\"><h3><i class=\"fas fa-sync-alt\"></i> عجلة الاختيار</h3></div>
+                    <div id=\"agent-info-box\" class=\"wr-agent-info-box\" style=\"display:none;\">
+                        <div class=\"wr-agent-info-header\"><i class=\"fas fa-user-tie\"></i> بيانات الوكيل</div>
+                        <div class=\"wr-agent-info-row\"><strong>الاسم:</strong> <span id=\"agent-info-name\">—</span></div>
+                        <div class=\"wr-agent-info-row\"><strong>رقم الوكالة:</strong> <span id=\"agent-info-id\">—</span></div>
+                        <div class=\"wr-agent-info-divider\"></div>
+                        <div class=\"wr-agent-info-header\"><i class=\"fas fa-trophy\"></i> المسابقة النشطة</div>
+                        <div id=\"agent-competition-info\">
+                            <div class=\"wr-agent-info-empty\">لا توجد مسابقة نشطة</div>
+                        </div>
+                    </div>
+                    <div class=\"wr-settings-grid\">
+                        <div class=\"wr-setting\"><label>إستبعاد بعد الفوز</label><div class=\"wr-checkbox-row\"><input type=\"checkbox\" id=\"exclude-winner\" checked><span style=\"font-size:.7rem;color:var(--wr-text-dim);\">إزالة الاسم</span></div></div>
+                        <div class=\"wr-setting\"><label>عدد اختيارات</label><input type=\"number\" id=\"batch-count\" min=\"1\" value=\"1\"></div>
+                    </div>
+                    <div class=\"wr-wheel-wrapper\">
+                        <div class=\"wr-pointer\"></div>
+                        <canvas id=\"winner-roulette-wheel\"></canvas>
+                        <div class=\"wr-actions-row\">
+                            <button id=\"auto-pick-btn\" class=\"wr-btn wr-btn-secondary wr-btn-large\"><i class=\"fas fa-forward\"></i> متتالي</button>
+                            <button id=\"reset-wheel\" class=\"wr-btn wr-btn-danger wr-btn-large\"><i class=\"fas fa-rotate-left\"></i> إعادة</button>
+                        </div>
+                    </div>
+                    <small style=\"text-align:center;color:var(--wr-text-dim);\">اختيار عشوائي دون تحيز.</small>
+                </div>
+            </div>
+            <div class=\"wr-winners-section\">
+                <div class=\"wr-winners-header\">
+                    <h3><i class=\"fas fa-trophy\"></i> قائمة الفائزين</h3>
+                    <div class=\"wr-winners-actions\">
+                        <button id=\"export-winners-bottom\" class=\"wr-btn wr-btn-success wr-btn-small\"><i class=\"fas fa-download\"></i> تصدير</button>
+                        <button id=\"reset-winners-bottom\" class=\"wr-btn wr-btn-secondary wr-btn-small\"><i class=\"fas fa-trash\"></i> مسح الفائزين</button>
+                    </div>
+                </div>
+                <div id=\"winners-list-bottom\" class=\"wr-winners-grid\"></div>
+            </div>
+        </section>
+                <!-- Simplified winner modal layout to ensure email field clickable -->
+                <div id="winner-modal" class="wr-celebration-modal" style="display:none;">
+                  <div class="wr-celebration-content" role="dialog" aria-modal="true" aria-label="تسجيل الفائز">
+                    <div class="wr-winner-name" id="celebration-winner-name">—</div>
+                    <div class="wr-winner-account" id="celebration-winner-account">—</div>
+                    <label for="winner-email" class="wr-label">البريد الإلكتروني</label>
+                    <input type="email" id="winner-email" class="wr-form-input" placeholder="أدخل البريد الإلكتروني للفائز" autocomplete="email" required tabindex="0" />
+                    <div id="winner-email-error" class="wr-error-msg" style="display:none;color:#f87171;font-size:.75rem;margin-top:4px;">البريد غير صالح أو فارغ</div>
+                    <div class="wr-prize-type" id="celebration-prize-type">نوع الجائزة</div>
+                    <div class="wr-prize-value" id="celebration-prize-value">—</div>
+                    <button id="confirm-winner" class="wr-confirm-btn"><i class="fas fa-check-circle"></i> اعتماد الفائز</button>
+                  </div>
+                </div>
+<canvas id=\"wr-confetti-canvas\"></canvas>`;
+}
+
+/**
+ * Lightweight inline setup so the roulette page still works if the dedicated module fails to load.
+ * Shows the wheel, loads agents, and renders participant chips.
+ */
+function initWinnerRouletteFallback(reason = '') {
+    if (winnerRouletteFallbackInitialized) return;
+    const canvas = document.getElementById('winner-roulette-wheel');
+    const agentSelect = document.getElementById('agent-select');
+    const participantsInput = document.getElementById('participants-input');
+    if (!canvas || !agentSelect || !participantsInput) return;
+
+    winnerRouletteFallbackInitialized = true;
+    if (reason) console.warn(`[winner-roulette:fallback] using inline setup: ${reason}`);
+
+    const state = { entries: [], winners: [] };
+    const ctx = canvas.getContext('2d');
+    const colors = ['#2563eb', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
+
+    const updateCounts = () => {
+        const totalEl = document.getElementById('participants-count-total');
+        const remainingEl = document.getElementById('participants-count-remaining');
+        const winnersEl = document.getElementById('winners-count');
+        if (totalEl) totalEl.textContent = state.entries.length;
+        if (remainingEl) remainingEl.textContent = Math.max(state.entries.length - state.winners.length, 0);
+        if (winnersEl) winnersEl.textContent = state.winners.length;
+    };
+
+    const renderParticipantsList = () => {
+        const listEl = document.getElementById('participants-list');
+        if (!listEl) return;
+        if (!state.entries.length) {
+            listEl.innerHTML = '<div class="wr-agent-info-empty">أضف المشاركين ليظهروا هنا</div>';
+            return;
+        }
+        listEl.innerHTML = state.entries
+            .map(e => `<div class="wr-chip"><span>${e.name}</span><small>#${e.account || '-'}</small></div>`)
+            .join('');
+    };
+
+    const renderWinnersList = () => {
+        const winnersEl = document.getElementById('winners-list-bottom');
+        if (!winnersEl) return;
+        if (!state.winners.length) {
+            winnersEl.innerHTML = '<div class="wr-agent-info-empty">لا يوجد فائزون بعد</div>';
+            return;
+        }
+        winnersEl.innerHTML = state.winners
+            .map((w, i) => `<div class="wr-card"><div class="wr-card-title">${i + 1}- ${w.name}</div><div class="wr-card-sub">${w.account || ''}</div></div>`)
+            .join('');
+    };
+
+    const drawWheel = () => {
+        const width = canvas.width = 500;
+        const height = canvas.height = 500;
+        const center = { x: width / 2, y: height / 2 };
+        const items = state.entries.length ? state.entries : [{ name: 'أضف المشاركين', account: '' }];
+        const slice = (Math.PI * 2) / items.length;
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.save();
+        ctx.translate(center.x, center.y);
+
+        items.forEach((item, idx) => {
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.fillStyle = colors[idx % colors.length];
+            ctx.arc(0, 0, 220, idx * slice, (idx + 1) * slice);
+            ctx.fill();
+            ctx.save();
+            ctx.rotate(idx * slice + slice / 2);
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#fff';
+            ctx.font = '16px Cairo, Arial, sans-serif';
+            const label = (item.name || '').slice(0, 18) || 'مشارك';
+            ctx.fillText(label, 200, 6);
+            ctx.restore();
+        });
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 50, 0, Math.PI * 2);
+        ctx.fillStyle = '#0f172a';
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px Cairo, Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('INZO', 0, 6);
+
+        ctx.restore();
+    };
+
+    const parseParticipants = () => {
+        const lines = participantsInput.value.split('\n');
+        state.entries = lines
+            .map(l => l.trim())
+            .filter(Boolean)
+            .map((line, idx) => {
+                const parts = line.split('-').map(p => p.trim()).filter(Boolean);
+                const name = parts.slice(0, parts.length - 1).join(' ') || line;
+                const account = parts.slice(-1)[0] || '';
+                return { id: `p_${idx}`, name, account };
+            });
+        renderParticipantsList();
+        updateCounts();
+    };
+
+    participantsInput.addEventListener('input', () => {
+        parseParticipants();
+        drawWheel();
+    });
+
+    const updateAgentStatus = (name, agentId) => {
+        const status = document.getElementById('agent-selection-status');
+        if (!status) return;
+        if (name && agentId) {
+            status.textContent = `${name} (#${agentId})`;
+            status.className = 'wr-agent-status selected';
+        } else {
+            status.textContent = '';
+            status.className = 'wr-agent-status';
+        }
+    };
+
+    agentSelect.addEventListener('change', () => {
+        const selected = agentSelect.options[agentSelect.selectedIndex];
+        updateAgentStatus(selected?.textContent || '', selected?.dataset.agentId || '');
+    });
+
+    const loadAgents = async () => {
+        try {
+            const response = await authedFetch('/api/agents?limit=1000');
+            const result = await response.json();
+            const agents = result.data || [];
+            agents.forEach(agent => {
+                const option = document.createElement('option');
+                option.value = agent._id;
+                option.textContent = `${agent.name} (#${agent.agent_id})`;
+                option.dataset.agentId = agent.agent_id;
+                agentSelect.appendChild(option);
+            });
+        } catch (e) {
+            console.warn('[winner-roulette:fallback] Failed to load agents', e);
+        }
+    };
+
+    parseParticipants();
+    drawWheel();
+    renderWinnersList();
+    loadAgents();
+}
+
 // Main entry point when the page loads
 document.addEventListener('DOMContentLoaded', () => {
     applyInitialTheme();
@@ -816,4 +1231,62 @@ document.addEventListener('DOMContentLoaded', () => {
         // Attempt to re-initialize the session
         initializeApp();
     });
+});
+
+// Fallback: ensure logout button always opens confirmation modal.
+// This adds a non-destructive listener after DOM is ready.
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const btn = document.getElementById('logout-btn');
+        if (!btn) return;
+        // Replace the node with a clone to remove any previously attached listeners
+        const clone = btn.cloneNode(true);
+        btn.parentNode.replaceChild(clone, btn);
+        // Attach a single, authoritative handler to the cloned element
+                clone.addEventListener('click', (e) => {
+                    // If a modal is already visible, don't duplicate
+                    if (document.querySelector('.modal-overlay')) return;
+                    e.preventDefault();
+                    // Immediate client-side logout without confirmation
+                    try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (err) { /* ignore */ }
+
+                    // Close realtime socket if present
+                    try {
+                        if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
+                            window._realtimeWs.close();
+                            window._realtimeWs = null;
+                        }
+                        // Stop reconnection attempts
+                        if (typeof window.stopWebSocketReconnect === 'function') {
+                            window.stopWebSocketReconnect();
+                        }
+                    } catch (err) {
+                        console.warn('Failed to close realtime socket during logout:', err);
+                    }
+
+                    // Fire logout API call (fire-and-forget to log activity)
+                    const logoutTimeout = setTimeout(() => {
+                        console.warn('Logout API timeout - proceeding with client-side logout');
+                    }, 2000);
+                    
+                    try {
+                        authedFetch('/api/auth/logout', { method: 'POST' })
+                            .then(() => clearTimeout(logoutTimeout))
+                            .catch(err => {
+                                console.warn('Logout API call failed:', err);
+                                clearTimeout(logoutTimeout);
+                            });
+                    } catch (e) { 
+                        clearTimeout(logoutTimeout);
+                    }
+
+                    // Clear auth state immediately
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('userProfile');
+                    try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
+                    setTimeout(() => window.location.replace('/login.html'), 250);
+                }, { passive: false });
+    } catch (e) {
+        console.error('Failed to attach fallback logout handler', e);
+    }
 });

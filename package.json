@@ -20,6 +20,6 @@
   },
   "homepage": "https://github.com/Jimmy229922/inzo-winner-app#readme",
   "devDependencies": {
-    "nodemon": "^2.0.15"
+    "nodemon": "^2.0.22"
   }
 }

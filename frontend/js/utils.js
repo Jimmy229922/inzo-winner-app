@@ -1,4 +1,22 @@
 
+
+// Utility functions for the INZO Winner App
+
+// Ensure window.utils exists and expose helpers for destructuring compatibility
+window.utils = window.utils || {};
+
+// Lightweight debug control: enable by setting window.__DEBUG = true or localStorage.debug = 'true'
+function __isDebugEnabled() {
+    try {
+        return !!window.__DEBUG || localStorage.getItem('debug') === 'true';
+    } catch (_) {
+        return !!window.__DEBUG;
+    }
+}
+window.__isDebugEnabled = __isDebugEnabled;
+window.logDebug = function(...args) { if (__isDebugEnabled()) console.debug(...args); };
+window.logTrace = function(...args) { if (__isDebugEnabled()) console.trace(...args); };
+
 function translateTelegramError(errorMessage) {
     if (!errorMessage) {
         return 'فشل إرسال غير معروف.';
@@ -35,3 +53,153 @@ function translateTelegramError(errorMessage) {
     // Default fallback
     return `خطأ من تيليجرام: ${errorMessage}`;
 }
+
+// Safe ID helper: coerce various id-like values to a stable string without throwing.
+function safeId(val) {
+    // Treat null/undefined as empty string
+    if (val === null || typeof val === 'undefined') return '';
+    // If it's an object with a toString (e.g., ObjectId), call it safely
+    try {
+        return String(val);
+    } catch (e) {
+        return '';
+    }
+}
+
+// Global fetch wrapper with proper JSON handling and auth management
+async function authedFetch(url, options = {}) {
+    const token = localStorage.getItem('authToken');
+    
+    // Start with default headers for JSON requests
+    const defaultHeaders = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json;charset=UTF-8'
+    };
+
+    // Merge default headers with provided headers
+    const headers = { ...defaultHeaders, ...(options.headers || {}) };
+    
+    // Add auth token if available
+    if (token) {
+        headers['Authorization'] = 'Bearer ' + token;
+    } else {
+        console.warn('[Auth] No token found for request to:', url);
+    }
+
+    // If body is an object and Content-Type is JSON, stringify it
+    let finalBody = options.body;
+    if (finalBody && typeof finalBody === 'object' && !(finalBody instanceof FormData)) {
+        if (headers['Content-Type'].includes('application/json')) {
+            finalBody = JSON.stringify(finalBody);
+        }
+    }
+
+    // For FormData, remove Content-Type and let browser set it with boundary
+    if (finalBody instanceof FormData) {
+        delete headers['Content-Type'];
+    }
+
+    // Log request details only if debug is enabled
+    if (__isDebugEnabled()) {
+        try {
+            console.log('DEBUG (Frontend): Request', {
+                url,
+                method: options.method || 'GET',
+                headers,
+                finalBodyType: finalBody instanceof FormData ? 'FormData' : typeof finalBody,
+                bodyPreview: finalBody && typeof finalBody === 'string' ? finalBody.slice(0, 200) : null
+            });
+            if (headers['Content-Type'] && headers['Content-Type'].includes('text/plain')) {
+                console.warn('[DEBUG] Request Content-Type is text/plain - server may parse body as plain text. URL:', url);
+            }
+        } catch (e) {
+            console.warn('Failed to log debug request details', e);
+        }
+    }
+
+    const response = await fetch(url, {
+        ...options,
+        headers,
+        body: finalBody
+    });
+
+    // Log non-OK responses (helpful for debugging parsing issues server-side)
+    if (__isDebugEnabled()) {
+        try {
+            if (!response.ok) {
+                // Clone so calling code can still read response
+                const clone = response.clone();
+                clone.text().then(text => {
+                    console.error('[DEBUG] Non-OK response from', url, 'status:', response.status, 'body preview:', text && text.slice(0, 200));
+                }).catch(err => {
+                    console.error('[DEBUG] Failed to read response text for', url, err);
+                });
+            }
+        } catch (e) {
+            console.warn('Failed to log response debug info', e);
+        }
+    }
+
+    // Handle unauthorized responses
+    if (response.status === 401) {
+        console.warn('[Auth] Unauthorized response from:', url);
+        // Clear stored credentials
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userProfile');
+        
+        // Only redirect if we're not already on the login page
+        if (!window.location.pathname.includes('/login')) {
+            window.location.replace('/login.html');
+            throw new Error('Unauthorized: Please log in again.');
+        }
+    }
+
+    return response;
+}
+
+// Expose utilities globally
+window.safeId = safeId;
+window.authedFetch = authedFetch;
+window.translateTelegramError = translateTelegramError;
+window.utils.authedFetch = authedFetch;
+window.utils.translateTelegramError = translateTelegramError;
+
+// Lightweight toast notification helper compatible with components.css styles
+function showToast(message, type = 'info', duration) {
+    try {
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+
+        // Add close button
+        const closeBtn = document.createElement('span');
+        closeBtn.textContent = '×';
+        closeBtn.style.marginRight = '8px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.fontWeight = 'bold';
+        closeBtn.style.fontSize = '20px';
+        closeBtn.onclick = () => {
+            if (container.contains(toast)) container.removeChild(toast);
+        };
+        toast.insertBefore(closeBtn, toast.firstChild);
+
+        container.appendChild(toast);
+    } catch (e) {
+        // Fallback if DOM not ready
+        if (type === 'error' || type === 'warning') {
+            alert(message);
+        } else {
+            console.log(`[${type}] ${message}`);
+        }
+    }
+}
+
+window.showToast = showToast;
+window.utils.showToast = showToast;

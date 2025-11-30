@@ -1,4 +1,4 @@
-// --- NEW: Global Error Catcher for the login page ---
+﻿// --- NEW: Global Error Catcher for the login page ---
 // This ensures errors are caught even before the main application script is loaded.
 window.onerror = function(message, source, lineno, colno, error) {
     const errorData = {
@@ -107,6 +107,10 @@ async function handleLogin(e) {
 
 // --- NEW: Dedicated function for API communication ---
 async function loginUser(email, password) {
+    // Clear any existing auth data before login attempt
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userProfile');
+
     const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -115,20 +119,36 @@ async function loginUser(email, password) {
 
     const result = await response.json();
 
-    console.log('[Login] Server Response:', { status: response.status, ok: response.ok, body: result });
+    console.log('[Login] Server Response:', { 
+        status: response.status, 
+        ok: response.ok, 
+        hasToken: !!result.token,
+        hasUser: !!result.user
+    });
 
     if (!response.ok) {
-        // Throw an error with the message from the server, or a default one
         throw new Error(result.message || 'فشل تسجيل الدخول.');
     }
 
-    // --- FIX: On success, store token, fetch full profile, then return ---
-    const token = result.token;
-    localStorage.setItem('authToken', token);
+    if (!result.token) {
+        throw new Error('لم يتم استلام رمز المصادقة من الخادم.');
+    }
 
-    // Now, fetch the user profile to ensure it's cached correctly before the app initializes
+    // Store the token first
+    localStorage.setItem('authToken', result.token);
+
+    // Store initial user data from login response
+    if (result.user) {
+        localStorage.setItem('userProfile', JSON.stringify({
+            ...result.user,
+            _id: result.user._id,
+            userId: result.user._id
+        }));
+    }
+
+    // Verify token by fetching profile
     const profileResponse = await fetch('/api/auth/me', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${result.token}` }
     });
 
     if (!profileResponse.ok) {

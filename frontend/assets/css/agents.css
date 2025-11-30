@@ -20,6 +20,17 @@
 .classification-badge.classification-b { background-color: #2980b9; } /* Darker Blue */
 .classification-badge.classification-c { background-color: #27ae60; } /* Darker Green */
 
+/* Small icon in front of agent name indicating classification (decorative) */
+.classification-icon {
+    display: none; /* decorative icon removed per user request */
+}
+
+/* Placement tweaks for the badge near agent cards */
+.leaderboard-agent-classification { margin-top: 6px; }
+.simple-agent-classification { margin-left: 8px; display: inline-block; vertical-align: middle; }
+.simple-agent-stats { margin-top: 8px; display: inline-flex; gap: 12px; align-items: center; }
+.simple-stat { background: transparent; color: var(--text-secondary-color); font-weight: 700; }
+
 /* --- Task Group Header Redesign --- */
 .task-group-header {
     display: flex;
@@ -79,11 +90,30 @@
     display: flex;
     gap: 30px;
     align-items: center;
-    background-color: var(--card-bg-color);
-    padding: 20px;
-    border-radius: 12px;
-    margin-bottom: 20px;
-    border: 1px solid var(--border-color);
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    padding: 30px;
+    border-radius: 16px;
+    margin-bottom: 25px;
+    border: none;
+    box-shadow: 0 8px 24px rgba(30, 60, 114, 0.35);
+    position: relative;
+    overflow: hidden;
+}
+
+.tasks-overview::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    animation: pulse 4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.4; }
+    50% { transform: scale(1.1); opacity: 0.7; }
 }
 
 @property --p{
@@ -93,17 +123,20 @@
 }
 .progress-donut-chart {
     --p: 0; /* progress percentage */
-    --b: 12px; /* border thickness */
-    --c: var(--primary-color); /* color */
-    width: 120px;
-    height: 120px;
+    --b: 14px; /* border thickness */
+    --c: #ffffff; /* color */
+    width: 140px;
+    height: 140px;
     aspect-ratio: 1;
     position: relative;
     display: inline-grid;
     place-content: center;
-    font-size: 1.8em;
-    font-weight: bold;
+    font-size: 2em;
+    font-weight: 900;
+    color: #ffffff;
     transition: --p 0.5s;
+    z-index: 1;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
 }
 .progress-donut-chart:before,
 .progress-donut-chart:after {
@@ -130,24 +163,47 @@
     gap: 40px;
     flex-grow: 1;
     justify-content: space-around;
+    z-index: 1;
 }
 
 .overview-stat-item {
     text-align: center;
+    padding: 18px 24px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 14px;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.overview-stat-item:hover {
+    background: rgba(0, 0, 0, 0.4);
+    transform: translateY(-3px);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 .overview-stat-item h3 {
-    font-size: 2.5em;
-    margin: 0;
-    color: var(--text-color);
+    font-size: 3em;
+    margin: 0 0 8px 0;
+    color: #ffffff;
+    font-weight: 900;
+    text-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+    line-height: 1;
 }
 
 .overview-stat-item p {
     margin: 0;
-    color: var(--text-secondary-color);
+    color: rgba(255, 255, 255, 0.95);
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
+    font-weight: 600;
+    font-size: 1em;
+}
+
+.overview-stat-item i {
+    font-size: 1.3em;
 }
 
 .task-group-content {
@@ -158,27 +214,56 @@
 }
 
 .task-card {
+    background: linear-gradient(135deg, rgba(30, 60, 114, 0.05) 0%, rgba(42, 82, 152, 0.02) 100%);
     background-color: var(--card-bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 16px;
     overflow: hidden;
-    transition: all 0.2s;
+    transition: all 0.3s ease;
     display: flex;
     flex-direction: column;
     position: relative;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.task-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    padding: 2px;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
 
 .task-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 5px 15px var(--shadow-color);
+    box-shadow: 0 8px 24px rgba(30, 60, 114, 0.25);
+}
+
+.task-card:hover::before {
+    opacity: 1;
 }
 
 .task-card.complete {
-    background-color: color-mix(in srgb, #27ae60 15%, var(--card-bg-color)); /* تعديل: زيادة وضوح اللون */
+    background: linear-gradient(135deg, rgba(39, 174, 96, 0.15) 0%, rgba(39, 174, 96, 0.05) 100%);
+    background-color: color-mix(in srgb, #27ae60 10%, var(--card-bg-color));
     border-color: #27ae60;
 }
+
+.task-card.complete::before {
+    background: linear-gradient(135deg, #27ae60, #229954);
+    opacity: 0.6;
+}
+
 .task-card.complete:after {
-    content: none; /* Remove the checkmark icon */
+    content: none;
 }
 
 .task-card.highlighted {
@@ -187,12 +272,14 @@
 }
 
 .task-card-header {
-    padding: 15px;
+    padding: 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 15px;
     cursor: pointer;
+    position: relative;
+    background: linear-gradient(135deg, rgba(30, 60, 114, 0.05) 0%, transparent 100%);
 }
 
 .task-card-main {
@@ -203,39 +290,50 @@
 }
 
 .task-agent-avatar, .task-agent-avatar-placeholder {
-    width: 45px;
-    height: 45px;
+    width: 52px;
+    height: 52px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
+    border: 3px solid rgba(30, 60, 114, 0.3);
+    transition: all 0.3s ease;
+}
+
+.task-card:hover .task-agent-avatar,
+.task-card:hover .task-agent-avatar-placeholder {
+    border-color: #1e3c72;
+    transform: scale(1.05);
 }
 
 .task-agent-avatar-placeholder {
-    background-color: var(--bg-color);
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5em;
-    color: var(--text-secondary-color);
+    font-size: 1.6em;
+    color: #ffffff;
 }
 
 .task-agent-info h3 {
-    margin: 0;
-    font-size: 1.1em;
+    margin: 0 0 5px 0;
+    font-size: 1.2em;
+    font-weight: 700;
+    color: var(--text-color);
 }
 
 .task-agent-info p {
     margin: 0;
-    font-size: 0.9em;
+    font-size: 0.95em;
     color: var(--text-secondary-color);
+    font-weight: 500;
 }
 
 .task-card-body {
-    padding: 15px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    background-color: var(--bg-color);
+    gap: 15px;
+    background: linear-gradient(135deg, rgba(30, 60, 114, 0.02) 0%, transparent 100%);
     border-top: 1px solid var(--border-color);
 }
 
@@ -243,68 +341,116 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 1.5em; /* تكبير حجم الخط */
+    font-size: 1em;
+    padding: 12px 15px;
+    background-color: var(--card-bg-color);
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.task-stat:hover {
+    background: linear-gradient(135deg, rgba(30, 60, 114, 0.05) 0%, transparent 100%);
+    border-color: #1e3c72;
 }
 
 .task-stat label {
     color: var(--text-secondary-color);
+    font-weight: 600;
 }
 
 .task-stat span {
-    font-weight: bold;
-    color: var(--text-color);
+    font-weight: 800;
+    color: #1e3c72;
     text-align: left;
+    font-size: 1.1em;
 }
 
 .task-card-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
     border-top: 1px solid var(--border-color);
+    background: linear-gradient(135deg, rgba(30, 60, 114, 0.03) 0%, transparent 100%);
 }
 
 .action-item {
-    padding: 15px;
+    padding: 18px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    transition: background-color 0.3s;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.action-item::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.action-item:hover::before {
+    opacity: 0.05;
 }
 
 .action-item:first-child {
-    border-left: 1px solid var(--border-color); /* تعديل: تم تغيير الخط الفاصل ليعمل بشكل صحيح مع اتجاه الصفحة */
+    border-left: 1px solid var(--border-color);
 }
 
 .action-item label {
-    font-weight: bold;
+    font-weight: 700;
     color: var(--text-secondary-color);
+    position: relative;
+    z-index: 1;
+    font-size: 1.05em;
 }
 
 .action-item.done {
-    background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);
-}
-.action-item.done label {
-    color: var(--primary-color);
+    background: linear-gradient(135deg, rgba(30, 60, 114, 0.15) 0%, rgba(42, 82, 152, 0.1) 100%);
 }
 
-.task-complete-icon {
+.action-item.done label {
+    color: #1e3c72;
+}
+
+.action-item.done::before {
+    opacity: 0.1;
+}
+
+/* Toggle switches now use global toggle-fix.css styles */
+
+.task-agent-info .task-complete-icon {
     color: #fff;
-    background-color: #27ae60;
+    background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
     border-radius: 50%;
-    font-size: 0.8em;
-    margin-right: 6px;
+    font-size: 0.85em;
+    margin-right: 8px;
     vertical-align: middle;
-    width: 1.5em;
-    height: 1.5em;
+    width: 1.6em;
+    height: 1.6em;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    visibility: hidden; /* Hide by default */
+    box-shadow: 0 2px 8px rgba(39, 174, 96, 0.4);
+    animation: checkBounce 0.5s ease-out;
+    visibility: hidden;
+    opacity: 0;
+    transform: scale(0.9);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+}
+
+@keyframes checkBounce {
+    0% { transform: scale(0); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
 }
 
 h3.has-checkmark .task-complete-icon {
-    visibility: visible; /* Show when h3 has the class */
+    visibility: visible;
+    opacity: 1;
+    transform: scale(1);
 }
 
 .task-agent-id {
@@ -316,36 +462,7 @@ h3.has-checkmark .task-complete-icon {
     color: var(--primary-color);
 }
 
-/* Re-add toggle switch styles here for self-containment */
-.toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 50px;
-    height: 28px;
-}
-.toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-color: var(--border-color);
-    transition: .4s;
-}
-.slider:before {
-    position: absolute; content: "";
-    height: 20px; width: 20px;
-    left: 4px; bottom: 4px;
-    background-color: white;
-    transition: .4s;
-}
-.toggle-switch input:checked + .slider { background-color: var(--primary-color); }
-.toggle-switch input:checked + .slider:before { transform: translateX(22px); }
-.slider.round { border-radius: 34px; }
-.slider.round:before { border-radius: 50%; }
+/* Toggle switches now use global toggle-fix.css styles */
 
 /* Full Activity Log Page */
 .activity-item-full {
@@ -358,6 +475,120 @@ h3.has-checkmark .task-complete-icon {
 .activity-item-full:last-child {
     border-bottom: none;
 }
+
+/* Activity Log Table Styles */
+.activity-log-table-container {
+    width: 100%;
+    overflow-x: auto;
+    background: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+    padding: 12px;
+}
+.activity-log-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px; /* more responsive */
+}
+.activity-log-table thead th {
+    background: linear-gradient(180deg, rgba(0,0,0,0.02), transparent);
+    text-align: right; /* align headers to RTL */
+    padding: 12px 16px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-secondary-color);
+    border-bottom: 1px solid var(--border-color);
+}
+.activity-log-table tbody td {
+    padding: 12px 16px;
+    border-bottom: 1px dashed var(--border-color);
+    vertical-align: middle;
+    font-size: 0.95rem;
+    color: var(--text-color);
+}
+.activity-log-table tbody tr:hover {
+    background: color-mix(in srgb, var(--card-bg-color) 85%, transparent);
+}
+.activity-log-meta {
+    color: var(--text-secondary-color);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+}
+
+/* User cell (avatar + name) */
+.user-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid var(--border-color);
+}
+.user-avatar-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--border-color);
+    color: var(--text-secondary-color);
+    font-weight: 700;
+}
+.user-info .user-name {
+    font-weight: 700;
+    color: var(--text-color);
+}
+.activity-log-description {
+    color: var(--text-color);
+}
+
+/* Improved filter visualization (the filters container in activityLog.js uses .filters-container) */
+.filters-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--card-bg-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 14px;
+}
+.filters-container .filter-group { display: flex; flex-direction: column; gap:6px; }
+.no-results-message { padding: 22px; color: var(--text-secondary-color); text-align: center; }
+
+/* Checkbox column styling */
+.activity-log-table thead th input[type="checkbox"] {
+    transform: scale(1.05);
+}
+.log-select-checkbox {
+    width: 18px;
+    height: 18px;
+}
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.btn-danger:hover { background-color: #c82333; }
+.activity-log-timestamp { white-space: nowrap; }
+.activity-log-action { font-weight: 600; color: var(--primary-color); }
+
 
 .activity-item-full .activity-icon {
     width: 40px;
@@ -443,7 +674,6 @@ h3.has-checkmark .task-complete-icon {
     margin-top: 20px;
     text-align: center;
 }
-.slider.round:before { border-radius: 50%; }
 
 /* Full Activity Log Page */
 .activity-item-full {
@@ -457,4 +687,104 @@ h3.has-checkmark .task-complete-icon {
     border-bottom: none;
 }
 
-.slider.round:before { border-radius: 50%; }
+/* Dark Mode Support for New Task Design */
+body.dark-mode .tasks-overview {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    box-shadow: 0 8px 24px rgba(79, 172, 254, 0.3);
+}
+
+body.dark-mode .tasks-overview::before {
+    background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+}
+
+body.dark-mode .progress-donut-chart {
+    --c: #ffffff;
+}
+
+body.dark-mode .task-stat span {
+    color: #4facfe;
+}
+
+body.dark-mode .action-item.done {
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(0, 242, 254, 0.1) 100%);
+}
+
+body.dark-mode .action-item.done label {
+    color: #4facfe;
+}
+
+body.dark-mode .task-card::before {
+    background: linear-gradient(135deg, #4facfe, #00f2fe);
+}
+
+body.dark-mode .task-card.complete::before {
+    background: linear-gradient(135deg, #27ae60, #229954);
+}
+
+body.dark-mode .tasks-overview {
+    background: linear-gradient(135deg, #0f1f3d 0%, #1a3564 100%);
+    box-shadow: 0 8px 24px rgba(15, 31, 61, 0.5);
+}
+
+body.dark-mode .overview-stat-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark-mode .overview-stat-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+body.dark-mode .task-card {
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.05) 0%, rgba(0, 242, 254, 0.02) 100%);
+}
+
+body.dark-mode .task-card::before {
+    background: linear-gradient(135deg, #4facfe, #00f2fe);
+}
+
+body.dark-mode .task-card-header {
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.05) 0%, transparent 100%);
+}
+
+body.dark-mode .task-agent-avatar,
+body.dark-mode .task-agent-avatar-placeholder {
+    border-color: rgba(79, 172, 254, 0.3);
+}
+
+body.dark-mode .task-card:hover .task-agent-avatar,
+body.dark-mode .task-card:hover .task-agent-avatar-placeholder {
+    border-color: #4facfe;
+}
+
+body.dark-mode .task-agent-avatar-placeholder {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+body.dark-mode .task-card-body {
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.02) 0%, transparent 100%);
+}
+
+body.dark-mode .task-stat:hover {
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.08) 0%, transparent 100%);
+    border-color: #4facfe;
+}
+
+body.dark-mode .task-stat span {
+    color: #4facfe;
+}
+
+body.dark-mode .action-item::before {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+body.dark-mode .action-item.done {
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(0, 242, 254, 0.1) 100%);
+}
+
+body.dark-mode .action-item.done label {
+    color: #4facfe;
+}
+
+/* Toggle switches dark mode styles now use global toggle-fix.css */

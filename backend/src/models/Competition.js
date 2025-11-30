@@ -26,7 +26,7 @@ const competitionSchema = new mongoose.Schema({
     },
     duration: {
         type: String,
-        enum: ['1d', '2d', '1w']
+        enum: ['5s', '10s', '1d', '2d', '1w'] // Added '10s' duration for extended testing
     },
     total_cost: {
         type: Number,
@@ -48,6 +48,10 @@ const competitionSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    deposit_bonus_percentage: {
+        type: Number,
+        default: 0
+    },
     correct_answer: {
         type: String
     },
@@ -63,13 +67,35 @@ const competitionSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    // نوع المسابقة (يُشتق من القالب). نخزن القيم بالعربية: 'مميزات' | 'تفاعلية'
+    type: {
+        type: String,
+        trim: true
+    },
     processed_at: {
+        type: Date,
+        default: null
+    },
+    winner_request_sent_at: {
+        type: Date,
+        default: null
+    },
+    winners_selected_at: {
         type: Date,
         default: null
     },
     template_id: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Template'
+        ref: 'CompetitionTemplate'
+    },
+    image_url: {
+        type: String,
+        default: '/images/competition_bg.jpg'
+    },
+    // Idempotency key to stop duplicate competition creation per agent
+    client_request_id: {
+        type: String,
+        trim: true
     }
 }, {
     timestamps: true
@@ -81,5 +107,8 @@ competitionSchema.methods.isExpired = function() {
     now.setHours(0, 0, 0, 0);
     return this.ends_at < now;
 };
+
+// Enforce uniqueness per agent + request when provided (sparse)
+competitionSchema.index({ agent_id: 1, client_request_id: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.models.Competition || mongoose.model('Competition', competitionSchema);

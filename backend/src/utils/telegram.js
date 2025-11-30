@@ -50,4 +50,59 @@ async function sendPhotoToTelegram(bot, imageUrl, caption, chatId) {
     }
 }
 
-module.exports = { postToTelegram, sendPhotoToTelegram };
+/**
+ * Sends a video with a caption to a specified Telegram chat using the provided bot instance.
+ * @param {object} bot The Telegram bot instance.
+ * @param {string} videoUrl The URL of the video to send.
+ * @param {string} caption The caption for the video. Supports HTML formatting.
+ * @param {string|number} chatId The ID of the target chat.
+ * @returns {Promise<object>} The response data from the Telegram API.
+ */
+async function sendVideoToTelegram(bot, videoUrl, caption, chatId) {
+    if (!bot) {
+        throw new Error('Telegram bot instance is not provided.');
+    }
+    if (!chatId) {
+        throw new Error('A valid Chat ID must be provided.');
+    }
+    if (!videoUrl) {
+        throw new Error('A video URL must be provided.');
+    }
+
+    try {
+        const response = await bot.sendVideo(chatId, videoUrl, { caption: caption, parse_mode: 'HTML' });
+        return response;
+    } catch (error) {
+        console.error(`Telegram API Error (sendVideo): ${error.message}`);
+        throw new Error(`Failed to send video to chat ID ${chatId}. Reason: ${error.message}`);
+    }
+}
+
+/**
+ * Sends a group of media (photos or videos) to a specified Telegram chat.
+ * @param {object} bot The Telegram bot instance.
+ * @param {Array<object>} media The array of media objects (type, media, caption, parse_mode).
+ * @param {string|number} chatId The ID of the target chat.
+ * @returns {Promise<object>} The response data from the Telegram API.
+ */
+async function sendMediaGroupToTelegram(bot, media, chatId) {
+    if (!bot) {
+        throw new Error('Telegram bot instance is not provided.');
+    }
+    if (!chatId) {
+        throw new Error('A valid Chat ID must be provided.');
+    }
+    if (!media || !Array.isArray(media) || media.length === 0) {
+        throw new Error('A valid media array must be provided.');
+    }
+
+    try {
+        const response = await bot.sendMediaGroup(chatId, media);
+        return response;
+    } catch (error) {
+        console.error(`Telegram API Error (sendMediaGroup): ${error.message}`);
+        throw new Error(`Failed to send media group to chat ID ${chatId}. Reason: ${error.message}`);
+    }
+}
+
+module.exports = { postToTelegram, sendPhotoToTelegram, sendVideoToTelegram, sendMediaGroupToTelegram };

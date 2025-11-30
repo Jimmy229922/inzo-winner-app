@@ -1,6 +1,9 @@
+﻿const mongoose = require('mongoose');
 const Competition = require('../models/Competition');
 const Agent = require('../models/agent.model');
 const CompetitionTemplate = require('../models/CompetitionTemplate'); // NEW: Import the template model
+const Winner = require('../models/Winner');
+const { logActivity } = require('../utils/logActivity');
 
 /**
  * Calculates the UTC end date for a competition based on local timezone logic.
@@ -88,8 +91,8 @@ exports.getAllCompetitions = async (req, res) => {
             return {
                 ...rest,
                 agents: agent_id || {
-                    name: 'وكيل محذوف',
-                    classification: 'غير متاح',
+                    name: '┘ê┘â┘è┘ä ┘àÏ¡Ï░┘ê┘ü',
+                    classification: 'Ï║┘èÏ▒ ┘àÏ¬ÏºÏ¡',
                     avatar_url: null
                 },
                 id: comp._id
@@ -109,17 +112,158 @@ exports.getAllCompetitions = async (req, res) => {
     }
 };
 
+/**
+ * Returns the latest active competition for a specific agent.
+ */
+exports.getAgentActiveCompetition = async (req, res) => {
+    const { agentId } = req.params;
+
+    try {
+        const competition = await Competition.findOne({ agent_id: agentId, is_active: true })
+            .sort({ createdAt: -1 })
+            .populate('agent_id', 'name avatar_url classification deposit_bonus_percentage')
+            .populate('template_id')
+            .lean();
+
+        if (!competition) {
+            return res.status(404).json({ message: 'No active competition found for this agent.' });
+        }
+
+        const currentWinnersCount = await Winner.countDocuments({ competition_id: competition._id });
+
+        // Prefer competition-specific deposit bonus percentage; fallback to agent's configured percentage
+        const effectiveDepositBonusPct = (competition.deposit_bonus_percentage && Number(competition.deposit_bonus_percentage) > 0)
+            ? Number(competition.deposit_bonus_percentage)
+            : Number(competition.agent_id?.deposit_bonus_percentage || 0);
+
+        const formattedCompetition = {
+            ...competition,
+            template: competition.template_id,
+            trading_winners_count: competition.winners_count || 0,
+            deposit_winners_count: competition.deposit_winners_count || 0,
+            current_winners_count: currentWinnersCount,
+            deposit_bonus_percentage: effectiveDepositBonusPct
+        };
+        delete formattedCompetition.template_id;
+
+        res.json({ competition: formattedCompetition });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error while fetching active competition.', error: error.message });
+    }
+};
+
+/**
+ * Returns a competition by its ID with related metadata.
+ */
+exports.getCompetitionById = async (req, res) => {
+    try {
+        const competition = await Competition.findById(req.params.id)
+            .populate('agent_id', 'name avatar_url classification')
+            .populate('template_id')
+            .lean();
+
+        if (!competition) {
+            return res.status(404).json({ message: 'Competition not found.' });
+        }
+
+        const currentWinnersCount = await Winner.countDocuments({ competition_id: competition._id });
+
+        const formattedCompetition = {
+            ...competition,
+            template: competition.template_id,
+            trading_winners_count: competition.winners_count || 0,
+            deposit_winners_count: competition.deposit_winners_count || 0,
+            current_winners_count: currentWinnersCount
+        };
+        delete formattedCompetition.template_id;
+
+        res.json({ competition: formattedCompetition });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error while fetching competition details.', error: error.message });
+    }
+};
+
 exports.createCompetition = async (req, res) => {
     try {
         const { agent_id, template_id } = req.body;
 
+        // --- PRE-SEND TELEGRAM GROUP VALIDATION ---
+        // قبل إنشاء المسابقة نتأكد أن اسم المجموعة في السيستم يطابق الاسم الحقيقي في التلجرام
+        if (agent_id) {
+            try {
+                const AgentModel = require('../models/agent.model');
+                const agent = await AgentModel.findById(agent_id).lean();
+                if (agent && agent.telegram_chat_id) {
+                    // الحصول على البوت
+                    let botInstance = null;
+                    try { botInstance = require('../services/telegramBot').getBotInstance?.(); } catch(e) { botInstance = null; }
+                    if (botInstance) {
+                        try {
+                            const chatInfo = await botInstance.telegram.getChat(agent.telegram_chat_id);
+                            const realTitle = chatInfo?.title || '';
+                            const storedTitle = agent.telegram_group_name || '';
+                            if (storedTitle && realTitle && storedTitle.trim() !== realTitle.trim()) {
+                                return res.status(409).json({
+                                    message: 'فشل التحقق من اسم مجموعة التليجرام قبل إرسال المسابقة',
+                                    error: 'Telegram group name mismatch',
+                                    stored_group_name: storedTitle,
+                                    actual_group_name: realTitle,
+                                    chat_id: agent.telegram_chat_id
+                                });
+                            }
+                        } catch (tgErr) {
+                            // لو فشل getChat نعيد خطأ واضح لمنع الإرسال الخاطئ
+                            return res.status(400).json({
+                                message: 'تعذر الوصول إلى مجموعة التليجرام الخاصة بالوكيل للتحقق قبل إنشاء المسابقة',
+                                error: tgErr.message,
+                                chat_id: agent.telegram_chat_id
+                            });
+                        }
+                    } else {
+                        // البوت غير مهيأ: السماح بالاستمرار مع تحذير فقط
+                        console.warn('[createCompetition] Telegram bot not initialized – skipping group name verification');
+                        req._telegramGroupCheckSkipped = true;
+                    }
+                } else {
+                    // إذا لا يوجد telegram_chat_id نسمح بإنشاء المسابقة لكن يمكن التنبيه
+                    // لا نوقف العملية هنا لأن بعض الوكلاء قد لا يملكون مجموعة تلجرام.
+                }
+            } catch (validationErr) {
+                return res.status(500).json({
+                    message: 'حدث خطأ أثناء التحقق المسبق من مجموعة التليجرام',
+                    error: validationErr.message
+                });
+            }
+        }
+
+        // Normalize idempotency key if provided by client
+        const clientRequestId = req.body.client_request_id || req.body.clientRequestId;
+        if (clientRequestId && agent_id) {
+            req.body.client_request_id = clientRequestId;
+            const existingByKey = await Competition.findOne({ agent_id, client_request_id: clientRequestId });
+            if (existingByKey) {
+                return res.status(200).json({
+                    data: existingByKey,
+                    duplicate: true,
+                    message: 'Competition already created for this request (idempotent replay).'
+                });
+            }
+        }
+
         // --- NEW: Server-side check to prevent duplicate competitions ---
         if (agent_id && template_id) {
-            const existingCompetition = await Competition.findOne({ agent_id, template_id });
+            const duplicateWindowMs = 2 * 60 * 1000; // 2 minutes
+            const cutoff = new Date(Date.now() - duplicateWindowMs);
+            const existingCompetition = await Competition.findOne({
+                agent_id,
+                template_id,
+                createdAt: { $gte: cutoff }
+            });
             if (existingCompetition) {
                 return res.status(409).json({
-                    message: 'Conflict: A competition with this template has already been sent to this agent.',
-                    error: 'Duplicate competition entry.'
+                    message: 'Conflict: A competition with this template has already been sent to this agent just now.',
+                    error: 'Duplicate competition entry.',
+                    duplicateId: existingCompetition._id
                 });
             }
         }
@@ -133,8 +277,12 @@ exports.createCompetition = async (req, res) => {
         }
         competitionData.ends_at = endsAtUTC;
 
-        const competition = new Competition(competitionData);
+        // Stamp server-side idempotency key when missing (helps future duplicate detection)
+        if (!competitionData.client_request_id) {
+            competitionData.client_request_id = new mongoose.Types.ObjectId().toString();
+        }
 
+        const competition = new Competition(competitionData);
         await competition.save();
 
         // --- NEW: Increment template usage count and archive if limit is reached ---
@@ -172,13 +320,13 @@ exports.updateCompetition = async (req, res) => {
             const changes = Object.entries(req.body).map(([field, newValue]) => {
                 const oldValue = competitionBeforeUpdate[field];
                 if (String(oldValue) !== String(newValue)) {
-                    return `حقل "${field}" تغير من "${oldValue}" إلى "${newValue}"`;
+                    return `Ï¡┘é┘ä "${field}" Ï¬Ï║┘èÏ▒ ┘à┘å "${oldValue}" ÏÑ┘ä┘ë "${newValue}"`;
                 }
                 return null;
             }).filter(Boolean);
 
             if (changes.length > 0) {
-                const description = `تم تحديث مسابقة "${updatedCompetition.name}":\n${changes.join('\n')}`;
+                const description = `Ï¬┘à Ï¬Ï¡Ï»┘èÏ½ ┘àÏ│ÏºÏ¿┘éÏ® "${updatedCompetition.name}":\n${changes.join('\n')}`;
                 await logActivity(userId, updatedCompetition.agent_id, 'COMPETITION_UPDATE', description);
             }
         }
@@ -195,7 +343,7 @@ exports.deleteCompetition = async (req, res) => {
         // --- FIX: Log this action ---
         const userId = req.user?._id;
         if (userId && competition) {
-            await logActivity(userId, competition.agent_id, 'COMPETITION_DELETED', `تم حذف المسابقة: ${competition.name}.`);
+            await logActivity(userId, competition.agent_id, 'COMPETITION_DELETED', `Ï¬┘à Ï¡Ï░┘ü Ïº┘ä┘àÏ│ÏºÏ¿┘éÏ®: ${competition.name}.`);
         }
         if (!competition) return res.status(404).json({ message: 'Competition not found.' });
         res.json({ message: 'Competition deleted successfully.' });

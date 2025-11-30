@@ -20,13 +20,13 @@ router.get('/today', async (req, res) => {
         const query = { 
             audit_days: { $in: [todayIndex] }
         };
-        console.log(`[Tasks] Finding agents for today with query:`, JSON.stringify(query));
+        // console.log(`[Tasks] Finding agents for today with query:`, JSON.stringify(query));
         
         const agents = await Agent.find(query)
             .select('name classification agent_id avatar_url remaining_balance remaining_deposit_bonus deposit_bonus_percentage is_auditing_enabled')
             .lean();
         
-        console.log(`[Tasks] Found ${agents.length} agents for today.`);
+        // console.log(`[Tasks] Found ${agents.length} agents for today.`);
 
         // --- NEW: Fetch today's tasks for these agents ---
         const todayStart = new Date();

@@ -1,0 +1,65 @@
+/* تحسينات مضغوطة لتقليل عرض بطاقات الوكلاء في أيام الثلاثاء والجمعة */
+
+/* تقليل المسافة بين عناصر الأكشن (التدقيق والمسابقة) */
+.calendar-agent-actions {
+    gap: 6px !important; /* مسافة متناسقة بين صفّي التدقيق/المسابقة */
+}
+
+/* تقليل padding وإضافة gap داخلي للتحكم في المسافة */
+.calendar-agent-actions .action-item {
+    padding: 6px 10px !important;
+    border-radius: 6px !important;
+    gap: 8px !important; /* مسافة معقولة بين النص و الزر */
+    justify-content: space-between !important; /* ضع زر التبديل في نهاية السطر */
+}
+
+/* تصغير حجم النص (التدقيق، المسابقة) */
+.calendar-agent-actions .action-item label {
+    font-size: 0.85em !important; /* وضوح أفضل للنص */
+    white-space: nowrap !important;
+}
+
+/* Toggle switches now use global toggle-fix.css styles */
+
+/* تقليل المسافة في agent-meta */
+.agent-meta {
+    gap: 3px !important;
+    margin-top: 1px !important;
+}
+
+/* تكبير classification badge للوضوح */
+.calendar-agent-item .classification-badge {
+    font-size: 0.8em !important;
+    padding: 2px 6px !important;
+    font-weight: 600 !important;
+}
+
+/* تقليل padding في البطاقة الرئيسية */
+.calendar-agent-item {
+    padding: 5px !important;
+    margin-top: 4px !important;
+}
+
+/* تقليل المسافة في agent-header */
+.calendar-agent-item .agent-header {
+    gap: 3px !important;
+}
+
+/* تحسين قابلية القراءة لاسم الوكيل */
+.calendar-agent-item .agent-name {
+    font-size: 0.95em !important;
+    font-weight: 700 !important;
+}
+
+/* === Fix readability and spacing specifically for Tuesday (2) and Friday (5) === */
+/* Bring label and toggle closer and increase label font size for better readability */
+.day-column[data-day-index="2"] .calendar-agent-actions .action-item,
+.day-column[data-day-index="5"] .calendar-agent-actions .action-item {
+    justify-content: space-between !important;
+    gap: 8px !important;
+}
+
+.day-column[data-day-index="2"] .calendar-agent-actions .action-item label,
+.day-column[data-day-index="5"] .calendar-agent-actions .action-item label {
+    font-size: 0.85em !important; /* make "التدقيق" و"المسابقة" easier to read */
+}

@@ -1,4 +1,31 @@
-async function renderHomePage() {
+﻿async function renderHomePage() {
+    // Verify authentication first
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+        window.location.replace('/login.html');
+        return;
+    }
+
+    // Verify user profile exists or fetch it
+    let userProfile = JSON.parse(localStorage.getItem('userProfile'));
+    if (!userProfile) {
+        try {
+            const profileResponse = await fetch('/api/auth/me', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!profileResponse.ok) {
+                throw new Error('Failed to fetch user profile');
+            }
+            userProfile = await profileResponse.json();
+            localStorage.setItem('userProfile', JSON.stringify(userProfile));
+        } catch (error) {
+        /* logs suppressed: profile fetch failed */
+            localStorage.removeItem('authToken');
+            window.location.replace('/login.html');
+            return;
+        }
+    }
+
     const appContent = document.getElementById('app-content');
 
     // 1. عرض هيكل الصفحة فوراً مع مؤشرات تحميل
@@ -9,7 +36,7 @@ async function renderHomePage() {
 
     // 3. تحديث الواجهة بالبيانات
     if (stats) {
-        updateHomePageUI(stats);
+        await updateHomePageUI(stats);
     } else {
         // عرض رسالة خطأ في حاوية الإحصائيات إذا فشل كل شيء
         const statsContainer = document.getElementById('home-stats-container');
@@ -29,7 +56,7 @@ async function fetchHomePageData() {
         }
         return await response.json();
     } catch (error) {
-        console.error('Error fetching home page data:', error);
+    /* logs suppressed: error fetching home page data */
         return null; // Return null to show an error message on the UI
     }
 }
@@ -54,15 +81,11 @@ function renderHomePageSkeleton() {
                 <div id="competitions-chart-container" class="chart-container">${loaderHtml}</div>
             </div>
             <div class="home-side-column">
-                <h2 style="margin-top: 30px;">المهام المتبقية لليوم (<span id="pending-count">...</span>)</h2>
+                <h2>المهام المتبقية لليوم (<span id="pending-count">...</span>)</h2>
                 <div id="pending-tasks-list" class="pending-tasks-list">${loaderHtml}</div>
 
                 <h2 style="margin-top: 30px;">نظرة سريعة على الوكلاء</h2>
                 <div id="agent-quick-stats" class="agent-quick-stats">${loaderHtml}</div>
-            </div>
-            <div class="home-side-column">
-                <h2 style="margin-top: 30px;"><i class="fas fa-star"></i> أبرز الوكلاء أداءً</h2>
-                <div id="top-agents-list" class="top-agents-list">${loaderHtml}</div>
             </div>
         </div>
  
@@ -80,11 +103,18 @@ function renderHomePageSkeleton() {
 }
 
 // --- NEW: Function to render the UI from data (cached or fresh) ---
-function updateHomePageUI(stats) {
-    if (!stats) return;
+async function updateHomePageUI(stats) {
+    /* logs suppressed */
+    
+    if (!stats) {
+    /* logs suppressed: no stats provided */
+        return;
+    }
 
     // استخراج البيانات من نتيجة الـ RPC
     const { total_agents: totalAgents, active_competitions: activeCompetitions, competitions_today_count: competitionsTodayCount, agents_for_today: agentsForToday, new_agents_this_month: newAgentsThisMonth, agents_by_classification: agentsByClassification, tasks_for_today: tasksForToday, top_agents: topAgents } = stats;
+
+    /* logs suppressed: extracted data */
 
     // --- NEW: Welcome Message ---
     const welcomeEl = document.getElementById('welcome-message');
@@ -124,19 +154,47 @@ function updateHomePageUI(stats) {
         if (!pendingList) return; // Exit if the element is not on the page
 
         if (totalTodayAgents > 0) {
+            /* logs suppressed: starting progress calculation */
+            
             // تعديل: استخدام بيانات المهام التي تم جلبها مسبقاً
-            if (tasksForToday) {
-                const tasksMap = (tasksForToday || []).reduce((acc, task) => {
-                    acc[task.agent_id.toString()] = task;
-                    return acc;
-                }, {});
+                // Prefer authoritative task status from /api/tasks/today (returns { tasksMap })
+                let tasksMap = {};
+                try {
+                    /* logs suppressed: fetching tasks */
+                    const todayResp = await authedFetch('/api/tasks/today');
+                    /* logs suppressed: response status */
+                    
+                    if (todayResp.ok) {
+                        const todayData = await todayResp.json();
+                        tasksMap = todayData.tasksMap || {};
+                        /* logs suppressed: tasks fetched successfully */
+                    } else {
+                        /* logs suppressed: failed to fetch tasks */
+                    }
+                } catch (e) {
+                    /* logs suppressed: failed to load /api/tasks/today, will fallback */
+                }
+
+                // Fallback: build a map from stats.tasks_for_today shape if needed
+                if (!tasksMap || Object.keys(tasksMap).length === 0) {
+                    /* logs suppressed: using fallback */
+                    tasksMap = (tasksForToday || []).reduce((acc, task) => {
+                        const key = String(task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? '');
+                        if (key) acc[key] = task;
+                        return acc;
+                    }, {});
+                    /* logs suppressed: fallback map */
+                }
 
                 // A daily task for an agent has two components: audit and competition.
                 const totalTodayActions = totalTodayAgents * 2;
                 let completedActions = 0;
 
+                /* logs suppressed: calculating completed actions */
                 agentsForToday.forEach(agent => {
                     const task = tasksMap[agent._id] || {};
+                    /* logs suppressed: per-agent details */
+                    
                     if (task.audited) {
                         completedActions++;
                     }
@@ -145,10 +203,14 @@ function updateHomePageUI(stats) {
                     }
                 });
 
+                /* logs suppressed: final calculations */
+                
                 const pendingAgents = agentsForToday.filter(agent => {
                     const task = tasksMap[agent._id];
                     return !task || !task.audited || !task.competition_sent;
                 });
+                
+                /* logs suppressed: pending count */
 
                 // ترتيب الوكلاء حسب التصنيف
                 pendingAgents.sort((a, b) => {
@@ -157,10 +219,38 @@ function updateHomePageUI(stats) {
                 });
 
                 const progressPercent = totalTodayActions > 0 ? Math.round((completedActions / totalTodayActions) * 100) : 0;
-                document.getElementById('progress-percentage').textContent = progressPercent;
-                document.getElementById('tasks-progress-bar').style.width = `${progressPercent}%`;
-                document.getElementById('progress-label').textContent = `${completedActions} / ${totalTodayActions}`;
-                document.getElementById('pending-count').textContent = pendingAgents.length;
+                /* logs suppressed: progress percentage */
+                
+                const progressLabel = `${completedActions} / ${totalTodayActions}`;
+                /* logs suppressed: progress label */
+                
+                // Update UI elements
+                const progressPercentEl = document.getElementById('progress-percentage');
+                const progressBarEl = document.getElementById('tasks-progress-bar');
+                const progressLabelEl = document.getElementById('progress-label');
+                const pendingCountEl = document.getElementById('pending-count');
+                
+                /* logs suppressed: updating UI elements */
+                
+                if (progressPercentEl) {
+                    progressPercentEl.textContent = progressPercent;
+                    /* logs suppressed */
+                }
+                
+                if (progressBarEl) {
+                    progressBarEl.style.width = `${progressPercent}%`;
+                    /* logs suppressed */
+                }
+                
+                if (progressLabelEl) {
+                    progressLabelEl.textContent = progressLabel;
+                    /* logs suppressed */
+                }
+                
+                if (pendingCountEl) {
+                    pendingCountEl.textContent = pendingAgents.length;
+                    /* logs suppressed */
+                }
 
                 // عرض قائمة الوكلاء المتبقين
                 if (pendingAgents.length > 0) {
@@ -193,7 +283,7 @@ function updateHomePageUI(stats) {
                                     <span class="agent-name-link">${agent.name}</span>
                                     <div class="pending-task-actions">
                                         ${needsAudit ? '<button class="btn-icon-action home-task-action audit" data-task-type="audit" title="تمييز التدقيق كمكتمل"><i class="fas fa-clipboard-check"></i> <span>تدقيق</span></button>' : ''}
-                                        ${needsCompetition ? '<button class="btn-icon-action home-task-action competition" data-task-type="competition" title="تمييز المسابقة كمكتملة"><i class="fas fa-pen-alt"></i> <span>مسابقة</span></button>' : ''}
+                                        ${needsCompetition ? `<button class="btn-icon-action home-task-action competition" data-task-type="competition" data-auditing-enabled="${agent.is_auditing_enabled}" title="تمييز المسابقة كمكتملة"><i class="fas fa-pen-alt"></i> <span>مسابقة</span></button>` : ''}
                                     </div>
                                 </div>
                             </div>
@@ -226,12 +316,20 @@ function updateHomePageUI(stats) {
                         window.location.hash = `#profile/${card.dataset.agentId}`;
                     }
                 });
-            }
         } else {
             // NEW: Handle the case where there are no tasks scheduled for today at all
+            /* logs suppressed: no agents scheduled */
             pendingList.innerHTML = '<p class="no-pending-tasks">لا توجد مهام مجدولة لهذا اليوم.</p>';
-            document.getElementById('pending-count').textContent = 0;
-            document.getElementById('progress-label').textContent = `0 / 0`;
+            
+            const progressPercentEl = document.getElementById('progress-percentage');
+            const pendingCountEl = document.getElementById('pending-count');
+            const progressLabelEl = document.getElementById('progress-label');
+            
+            if (progressPercentEl) progressPercentEl.textContent = 0;
+            if (pendingCountEl) pendingCountEl.textContent = 0;
+            if (progressLabelEl) progressLabelEl.textContent = '0 / 0';
+            
+            /* logs suppressed: set counters to 0 */
         }
 
     // 3. Render Competitions Chart
@@ -261,36 +359,7 @@ function updateHomePageUI(stats) {
         renderClassificationChart(classificationCounts);
     }
 
-    // 5. Render Top Agents Section
-    const topAgentsContainer = document.getElementById('top-agents-list');
-    if (topAgentsContainer) {
-        if (topAgents && topAgents.length > 0) {
-            const processedTopAgents = topAgents.map(agent => {
-                const totalViews = agent.competitions.reduce((sum, c) => sum + (c.views_count || 0), 0);
-                const totalReactions = agent.competitions.reduce((sum, c) => sum + (c.reactions_count || 0), 0);
-                const totalParticipants = agent.competitions.reduce((sum, c) => sum + (c.participants_count || 0), 0);
-                return { ...agent, totalViews, totalReactions, totalParticipants };
-            }).sort((a, b) => b.totalViews - a.totalViews); // Sort by total views
-
-            topAgentsContainer.innerHTML = (processedTopAgents || []).map((agent, index) => { // FIX: Add null check
-                const avatarHtml = agent.avatar_url
-                    ? `<img src="${agent.avatar_url}" alt="Avatar" class="avatar-small" loading="lazy">`
-                    : `<div class="avatar-placeholder-small"><i class="fas fa-user"></i></div>`;
-                return `
-                    <div class="top-agent-item" data-agent-id="${agent.id}" style="cursor: pointer;">
-                        <span class="rank-number">${index + 1}</span>
-                        ${avatarHtml}
-                        <div class="agent-info">
-                            <span class="agent-name">${agent.name}</span>
-                            <span class="agent-stats" data-agent-id-copy="${agent.agent_id}" title="نسخ الرقم"><i class="fas fa-id-badge"></i> #${agent.agent_id}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        } else {
-            topAgentsContainer.innerHTML = '<p class="no-results-message">لا توجد بيانات لأبرز الوكلاء.</p>';
-        }
-    }
+    // 5. Removed activity distribution section - moved to analytics page only
 }
 
 
@@ -306,6 +375,15 @@ async function handleHomeTaskAction(event) {
         // تعديل: الانتقال إلى صفحة المهام مع التركيز على الوكيل
         window.location.hash = `tasks?highlight=${agentId}`;
     } else if (taskType === 'competition') {
+        const auditingEnabled = button.dataset.auditingEnabled === 'true';
+        if (!auditingEnabled) {
+             if (typeof window.showToast === 'function') {
+                 window.showToast('عذراً، لا يمكن إنشاء مسابقة قبل إتمام عملية التدقيق لهذا الوكيل.', 'error');
+             } else {
+                 alert('عذراً، لا يمكن إنشاء مسابقة قبل إتمام عملية التدقيق لهذا الوكيل.');
+             }
+             return;
+        }
         window.location.hash = `competitions/new?agentId=${agentId}`;
     }
 }
@@ -515,7 +593,7 @@ async function renderTopAgentsSection() {
             '<p class="no-results">لا يوجد وكلاء اعتياديين حالياً</p>';
 
     } catch (error) {
-        console.error('Error loading agents:', error);
+    /* logs suppressed: error loading agents */
         showToast('حدث خطأ أثناء تحميل بيانات الوكلاء', 'error');
     }
 }
@@ -540,4 +618,54 @@ function generateAgentCard(agent) {
             </div>
         </div>
     `;
+}
+
+function renderActivityDistributionChart(data, canvasId = 'activityDistributionChart') {
+    // data expected as array of { _id: 'TYPE', count: Number }
+    const ctx = document.getElementById(canvasId)?.getContext?.('2d');
+    if (!ctx) return;
+
+    const labels = (data || []).map(item => item._id || 'غير معروف');
+    const counts = (data || []).map(item => item.count || 0);
+
+    // fallback colors
+    const colors = ['#4CAF50', '#2196F3', '#F4A261', '#E91E63', '#9C27B0', '#00BCD4', '#FF9800'];
+
+    // Attempt to use ChartDataLabels if available — otherwise, just render a simple pie.
+    const config = {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: counts,
+                backgroundColor: colors,
+                borderColor: 'var(--card-bg-color)',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    };
+
+    // If ChartDataLabels plugin is present, add a formatter for percentages
+    if (window.ChartDataLabels) {
+        config.options.plugins.datalabels = {
+            color: '#fff',
+            font: { weight: 'bold' },
+            formatter: (value, ctx) => {
+                const sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0) || 1;
+                const perc = (value / sum) * 100;
+                return perc > 5 ? perc.toFixed(0) + '%' : '';
+            }
+        };
+        config.plugins = [ChartDataLabels];
+    }
+
+    // eslint-disable-next-line no-new
+    new Chart(ctx, config);
 }

@@ -22,8 +22,14 @@ const upload = multer({ storage: storage });
 
 // Get all competitions with filtering, sorting, and pagination
 router.get('/', competitionController.getAllCompetitions);
+
+// Get active competition for a specific agent
+router.get('/agent/:agentId/active', competitionController.getAgentActiveCompetition);
+
 // --- NEW: Check for competition existence ---
 router.get('/check-existence', competitionController.checkCompetitionExistence);
+
+router.get('/:id', competitionController.getCompetitionById);
 
 // --- NEW: Upload a competition image ---
 router.post('/upload-image', upload.single('image'), competitionController.uploadImage);

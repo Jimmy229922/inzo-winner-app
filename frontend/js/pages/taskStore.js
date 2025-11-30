@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TaskStore: The Single Source of Truth for task state management.
  * This store manages the state, handles updates, and persists data to localStorage.
  * It uses a custom event system to notify components of state changes,
@@ -121,9 +121,12 @@ const taskStore = {
 
             // Merge server tasks into local state
             (serverTasks || []).forEach(task => {
-                const dayIndex = new Date(task.task_date).getUTCDay();
-                const agentId = task.agent_id.toString();
-                
+                // Use local day to match backend week calculation
+                const dayIndex = new Date(task.task_date).getDay();
+                // Safely build agentId from possible fields to avoid calling toString on undefined
+                const agentId = String(task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? '');
+                if (!agentId) return; // skip malformed entries
+
                 if (!this.state.tasks[agentId]) this.state.tasks[agentId] = {};
                 if (!this.state.tasks[agentId][dayIndex]) {
                      this.state.tasks[agentId][dayIndex] = {
@@ -135,6 +138,54 @@ const taskStore = {
             this._saveState();
         } catch (error) {
             console.error("Failed to fetch initial task data:", error);
+        }
+    },
+
+    /**
+     * مزامنة الحالة من الخادم لضمان توحيد العرض بين جميع المستخدمين.
+     * الخادم هو مصدر الحقيقة؛ يتم استبدال الحالة المحلية بحالة الخادم.
+     */
+        async syncWithServer() {
+        try {
+            const response = await authedFetch('/api/calendar/data');
+            if (!response.ok) throw new Error('Failed to sync calendar data');
+            const { tasks: serverTasks } = await response.json();
+
+            const incoming = {};
+            (serverTasks || []).forEach(task => {
+                const dayIndex = new Date(task.task_date).getDay();
+                const agentId = String(task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? '');
+                if (!agentId) return;
+                if (!incoming[agentId]) incoming[agentId] = {};
+                if (!incoming[agentId][dayIndex]) {
+                    incoming[agentId][dayIndex] = {
+                        audited: !!task.audited,
+                        competition_sent: !!task.competition_sent,
+                        _updatedAt: task.updatedAt || task.task_date
+                    };
+                }
+            });
+
+            // Merge instead of replace to avoid wiping optimistic updates
+            Object.keys(incoming).forEach(agentId => {
+                if (!this.state.tasks[agentId]) this.state.tasks[agentId] = {};
+                Object.keys(incoming[agentId]).forEach(dayIdx => {
+                    const inc = incoming[agentId][dayIdx];
+                    const existing = this.state.tasks[agentId][dayIdx];
+                    if (!existing) {
+                        this.state.tasks[agentId][dayIdx] = inc;
+                    } else {
+                        // Always overwrite booleans with server truth
+                        existing.audited = inc.audited;
+                        existing.competition_sent = inc.competition_sent;
+                        existing._updatedAt = inc._updatedAt;
+                    }
+                });
+            });
+            this._saveState();
+            this._notify();
+        } catch (error) {
+            console.error('TaskStore sync failed:', error);
         }
     },
 
@@ -183,5 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
     taskStore.init().then(() => {
         // Dispatch storeReady event after initialization is complete.
         window.dispatchEvent(new Event('storeReady'));
+        // Start periodic server sync to reflect others' changes
+        setInterval(() => taskStore.syncWithServer(), 20000);
     });
 });

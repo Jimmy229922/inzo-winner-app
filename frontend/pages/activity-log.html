@@ -1,0 +1,43 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>سجل نشاط الموقع</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="../dist/bundle.css" />
+  <style>
+    body { background: var(--app-background,#0f172a); font-family: "Tajawal", Arial, sans-serif; margin:0; padding:0; }
+    .standalone-wrapper { max-width:1280px; margin:0 auto; padding:28px 22px 80px; }
+    header.standalone-header { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+    header.standalone-header h1 { font-size:24px; margin:0; display:flex; align-items:center; gap:10px; color: var(--text-color,#fff); }
+    .back-link { text-decoration:none; color:#3498db; font-size:14px; display:inline-flex; align-items:center; gap:6px; }
+    .back-link:hover { text-decoration:underline; }
+    .standalone-note { font-size:12px; color: var(--text-muted,#94a3b8); margin-top:4px; }
+    .floating-hint { position:fixed; inset-inline-end:16px; bottom:16px; background:#1e293b; color:#fff; padding:10px 14px; border-radius:10px; font-size:12px; box-shadow:0 4px 18px rgba(0,0,0,.35); display:flex; align-items:center; gap:8px; }
+    .floating-hint i { color:#3498db; }
+  </style>
+</head>
+<body>
+  <div class="standalone-wrapper">
+    <header class="standalone-header">
+      <h1><i class="fas fa-history"></i> سجل نشاط الموقع</h1>
+      <a href="../index.html#activity-log" class="back-link"><i class="fas fa-arrow-right"></i> الرجوع للنظام الرئيسي</a>
+      <div class="standalone-note">هذه نسخة مستقلة من صفحة السجل للعرض أو الدمج داخل أدوات خارجية.</div>
+    </header>
+    <div id="app-content"></div>
+  </div>
+  <div class="floating-hint"><i class="fas fa-info-circle"></i><span>وضع مستقل: بعض الخصائص (جلسات المستخدم) تتطلب تحميل النظام الكامل.</span></div>
+  <script src="../dist/bundle.js" defer></script>
+  <script>
+    // Force render once bundle/router is ready.
+    window.addEventListener('load', () => {
+      if (typeof renderActivityLogPage === 'function') {
+        try { renderActivityLogPage(); } catch(e){ console.error('Failed standalone render', e); }
+      } else {
+        console.warn('renderActivityLogPage غير متاح بعد التحميل');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -23,11 +23,11 @@ exports.getTodayTasks = async (req, res) => {
         }
 
         const query = { audit_days: { $in: [dayOfWeekIndex] } }; // FIX: Remove status check to include all agents with audit days
-        console.log('[Tasks] Finding agents for today with query:', JSON.stringify(query));
+        // console.log('[Tasks] Finding agents for today with query:', JSON.stringify(query));
         const agentsForToday = await Agent.find(query)
             .select('name agent_id classification avatar_url remaining_balance remaining_deposit_bonus deposit_bonus_percentage')
             .lean();
-        console.log(`[Tasks] Found ${agentsForToday.length} agents for today.`);
+        // console.log(`[Tasks] Found ${agentsForToday.length} agents for today.`);
 
         // --- FIX: If no agents are found, return early with empty data ---
         if (agentsForToday.length === 0) {
@@ -132,6 +132,17 @@ exports.updateTaskStatus = async (req, res) => {
             { $set: update },
             { new: true, upsert: true, lean: true }
         );
+
+        // --- NEW: Update is_auditing_enabled in Agent when audited status changes ---
+        if (taskType === 'audited') {
+            await Agent.findByIdAndUpdate(
+                agentId,
+                { $set: { is_auditing_enabled: status } },
+                { new: true }
+            );
+            console.log(`✓ Updated is_auditing_enabled to ${status} for agent ${agentId}`);
+        }
+        // --- End of new fix ---
 
         // --- FIX: Log the activity after a successful update ---
         const agent = await Agent.findById(agentId).select('name').lean();

@@ -19,7 +19,13 @@ module.exports = async (req, res, next) => {
         if (!admin) {
             return res.status(500).json({ message: 'Super Admin account not found. Please run setup.' });
         }
-        req.user = { ...admin, userId: admin._id }; // Pass the full user object
+        // Ensure all required user fields are included
+        req.user = { 
+            ...admin,
+            _id: admin._id, // Ensure _id is set for Mongoose operations
+            userId: admin._id, // Keep userId for backward compatibility
+            role: admin.role || 'super_admin' 
+        };
         return next();
     }
 
@@ -33,14 +39,23 @@ module.exports = async (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.userId).select('-password').lean();
+        const user = await User.findById(decoded.userId || decoded._id).select('-password').lean();
 
         if (!user) {
+            console.error('[AUTH] User not found for token:', decoded);
             return res.status(401).json({ message: 'Invalid token. User not found.' });
         }
 
-        // Attach the user object to the request
-        req.user = { ...user, userId: user._id };
+        // Ensure all required fields are present in the user object
+        req.user = {
+            ...user,
+            _id: user._id, // Ensure _id is set
+            userId: user._id, // Keep userId for backward compatibility
+            role: user.role || decoded.role // Fallback to token role if needed
+        };
+
+        // Debug log to track user context
+        // console.debug(`[AUTH] User context set: ID=${req.user._id}, Role=${req.user.role}`);
         next();
     } catch (error) {
         console.error('[AUTH] Token verification failed:', error.message);

@@ -50,27 +50,20 @@
     min-width: 300px; /* Ensure search bar has enough space */
 }
 
-.brand-v2 {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
+.brand-v2 { 
+    display: flex !important; 
+    flex-direction: column !important; 
+    align-items: center !important; 
+    gap: 4px !important; 
 }
-
-.brand-logo {
-    height: 40px; /* تعديل: تصغير حجم الشعار */
-    width: auto;
+.brand-logo { height:35px; width:auto; object-fit: contain; }
+.brand-text { 
+    font-size: 11px !important; 
+    font-weight: 500 !important; 
+    color: #f0f0f0 !important; 
+    text-align: center !important; 
 }
-
-.brand-text {
-    font-size: 0.75em; /* تعديل: تصغير حجم النص */
-    font-weight: bold;
-    color: var(--text-color);
-}
-
-.brand-v2:hover .brand-text {
-    color: var(--primary-color);
-}
+.brand-v2:hover .brand-text { color: var(--primary-color); }
 
 .nav-link {
     padding: 6px 10px; /* تعديل: تقليل الحشوة لتناسب حجم الخط الجديد */

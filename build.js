@@ -8,6 +8,7 @@ const distPath = path.join(basePath, 'dist');
 const cssFiles = [
     'assets/css/base.css',
     'assets/css/style.css',
+    'css/styles.css',
     'assets/css/navbar.css',
     'assets/css/components.css',
     'assets/css/home.css',
@@ -15,7 +16,13 @@ const cssFiles = [
     'assets/css/profile.css',
     'assets/css/competitions.css',
     'assets/css/calendar.css',
-    'assets/css/top-agents.css'
+    'assets/css/top-agents.css',
+    'assets/css/activity-log.css',
+    'assets/css/analytics.css',
+    'assets/css/day-competitions.css',
+    'assets/css/logs.css',
+    'assets/css/statistics.css',
+    'assets/css/winner-roulette.css'
 ].map(f => path.join(basePath, f));
 
 // JS files in order
@@ -24,6 +31,7 @@ const jsFiles = [
     'js/pages/home.js',
     'js/pages/agents.js',
     'js/pages/competitions.js',
+    'js/pages/templates.js',
     'js/pages/calendar.js',
     'js/pages/topAgents.js',
     'js/pages/profile.js',
@@ -32,7 +40,8 @@ const jsFiles = [
     'js/pages/addAgent.js',
     'js/pages/activityLog.js',
     'js/pages/analytics.js',
-    'js/utils.js',
+    'js/pages/winner-roulette.js',
+    // 'js/utils.js' is intentionally excluded because build.js injects a small utilities block
     'js/main.js'
 ].map(f => path.join(basePath, f));
 
@@ -56,7 +65,7 @@ async function bundle() {
             }
         }
         const cssBundlePath = path.join(distPath, 'bundle.css');
-        await fs.promises.writeFile(cssBundlePath, cssContent);
+        await fs.promises.writeFile(cssBundlePath, cssContent, { encoding: 'utf8' });
         console.log(`CSS bundle created at: ${cssBundlePath}`);
 
         // --- Bundle JS ---
@@ -112,15 +121,13 @@ async function bundle() {
         for (const file of jsFiles) {
             if (fs.existsSync(file)) {
                 let content = await fs.promises.readFile(file, 'utf8');
-                
-                // Replace export declarations with regular ones
-                content = content.replace(/^\s*export\s+async\s+function\s+authedFetch/gm, 'window.authedFetch = async function');
-                content = content.replace(/^\s*export\s+/gm, '');
-                
+                // Replace export async function authedFetch with window.authedFetch = async function authedFetch
+                content = content.replace(/^\s*export\s+async\s+function\s+authedFetch/gm, 'window.authedFetch = async function authedFetch');
+                // Strip `export` keyword while keeping the declaration (so braces stay balanced)
+                content = content.replace(/^\s*export\s+(?=(async\s+)?function|const|let|var|class)/gm, '');
                 // Remove any remaining import statements
                 content = content.replace(/^\s*import\s+.*?[;\n]/gm, '');
-                
-                jsContent += `    // == ${path.basename(file)} ==\n    ${content.replace(/\n/g, '\n    ')}\n\n`;
+                    jsContent += `// == ${path.basename(file)} ==\n${content}\n\n`;
             } else {
                 console.warn(`Warning: JS file not found, skipping: ${file}`);
             }
@@ -129,7 +136,7 @@ async function bundle() {
         // Close the IIFE
         jsContent += '})(window);\n';
         const jsBundlePath = path.join(distPath, 'bundle.js');
-        await fs.promises.writeFile(jsBundlePath, jsContent);
+        await fs.promises.writeFile(jsBundlePath, jsContent, { encoding: 'utf8' });
         console.log(`JS bundle created at: ${jsBundlePath}`);
 
         console.log('\nBuild complete! Now update your index.html to use the new bundles.');

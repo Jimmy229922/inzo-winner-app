@@ -53,6 +53,16 @@ const userController = {
 
             await user.save();
             user.password = undefined;
+            
+            // Log activity
+            const userId = req.user?._id;
+            if (userId) {
+                const { logActivity } = require('../utils/logActivity');
+                await logActivity(userId, null, 'USER_CREATED', 
+                    `تم إنشاء مستخدم جديد: ${user.full_name} (${user.role})`
+                ).catch(err => console.warn('[User Create] Failed to log activity:', err));
+            }
+            
             res.status(201).json({ user });
         } catch (error) {
             res.status(500).json({ message: 'Server error while creating user.', error: error.message });
@@ -109,6 +119,21 @@ const userController = {
                 return res.status(404).json({ message: 'User not found.' });
             }
 
+            // Log activity
+            const actorId = req.user?._id;
+            if (actorId) {
+                const { logActivity } = require('../utils/logActivity');
+                const changes = [];
+                if (full_name) changes.push(`الاسم`);
+                if (password) changes.push(`كلمة المرور`);
+                if (status) changes.push(`الحالة`);
+                if (permissions) changes.push(`الصلاحيات`);
+                
+                await logActivity(actorId, null, 'USER_UPDATED', 
+                    `تم تحديث بيانات المستخدم: ${user.full_name}${changes.length ? ' (' + changes.join('، ') + ')' : ''}`
+                ).catch(err => console.warn('[User Update] Failed to log activity:', err));
+            }
+
             res.json({ user });
         } catch (error) {
             res.status(500).json({ message: 'Server error while updating user.', error: error.message });
@@ -159,10 +184,52 @@ const userController = {
             if (user.role === 'super_admin') {
                 return res.status(400).json({ message: 'Cannot delete a Super Admin account.' });
             }
+            
+            const userName = user.full_name;
             await user.deleteOne();
+            
+            // Log activity
+            const actorId = req.user?._id;
+            if (actorId) {
+                const { logActivity } = require('../utils/logActivity');
+                await logActivity(actorId, null, 'USER_DELETED', 
+                    `تم حذف المستخدم: ${userName}`
+                ).catch(err => console.warn('[User Delete] Failed to log activity:', err));
+            }
+            
             res.json({ message: 'User deleted successfully.' });
         } catch (error) {
             res.status(500).json({ message: 'Server error while deleting user.', error: error.message });
+        }
+    },
+
+    purgeAllUsers: async (req, res) => {
+        try {
+            // Only super_admin can purge all users
+            if (req.user.role !== 'super_admin') {
+                return res.status(403).json({ message: 'غير مصرح لك بحذف جميع المستخدمين' });
+            }
+
+            const currentUserId = req.user._id || req.user.userId;
+
+            // Delete all users except the current super_admin
+            const result = await User.deleteMany({
+                _id: { $ne: currentUserId }
+            });
+
+            console.log(`[Purge Users] Super admin ${req.user.email} deleted ${result.deletedCount} users`);
+
+            res.json({
+                success: true,
+                message: `تم حذف ${result.deletedCount} حساب بنجاح`,
+                deletedCount: result.deletedCount
+            });
+        } catch (error) {
+            console.error('Error purging users:', error);
+            res.status(500).json({ 
+                message: 'حدث خطأ أثناء حذف المستخدمين',
+                error: error.message 
+            });
         }
     }
 };

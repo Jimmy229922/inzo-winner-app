@@ -4,12 +4,12 @@
     --card-bg-color: rgba(255, 255, 255, 0.9);
     --text-color: #333; /* Light mode text */
     --text-secondary-color: #6c757d; /* Light mode secondary text */
-    --primary-color: #4CAF50; /* أخضر مائل للزرعي، احترافي */
-    --primary-hover-color: #45a049; /* Darker green for light mode */
-    --accent-color: #F4A261; /* Orange accent for light mode */
+    --primary-color: #23D4FE; /* سماوي عصري وحيوي */
+    --primary-hover-color: #00B8E6; /* أغمق قليلاً */
+    --accent-color: #667eea; /* بنفسجي متناسق */
     --border-color: #ddd; /* Light mode border */
     --input-bg-color: #fff;
-    --shadow-color: rgba(0, 0, 0, 0.1);
+    --shadow-color: rgba(35, 212, 254, 0.15);
     --navbar-bg: rgba(255, 255, 255, 0.7);
 }
 
@@ -19,12 +19,12 @@ body.dark-mode {
     --card-bg-color: rgba(27, 38, 59, 0.8); /* كحلي متوسط مع شفافية */
     --text-color: #FFFFFF; /* أبيض - Text */
     --text-secondary-color: #778DA9; /* أزرق فاتح أنيق */
-    --primary-color: #4CAF50; /* أخضر احترافي */
-    --primary-hover-color: #45a049; /* أخضر أغمق */
-    --accent-color: #F4A261; /* برتقالي هادي - Accent 2 */
-    --border-color: #415A77; /* أزرق رمادي فاتح */
+    --primary-color: #23D4FE; /* سماوي مشرق */
+    --primary-hover-color: #6FE4FF; /* أفتح قليلاً */
+    --accent-color: #7c8df8; /* بنفسجي حيوي متناسق */
+    --border-color: rgba(35, 212, 254, 0.3); /* سماوي شفاف */
     --input-bg-color: #0D1B2A; /* نفس لون الخلفية */
-    --shadow-color: rgba(0, 0, 0, 0.4);
+    --shadow-color: rgba(35, 212, 254, 0.3);
     --navbar-bg: rgba(27, 38, 59, 0.8); /* Match card background */
 }
 

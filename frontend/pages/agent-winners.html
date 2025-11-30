@@ -1,0 +1,528 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فائزو الوكيل - لوحة تحكم التحليلات</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../assets/css/base.css">
+    <link rel="stylesheet" href="../assets/css/components.css">
+    <link rel="stylesheet" href="../assets/css/analytics.css">
+    <style>
+        /* Page-scoped dark-mode variables */
+        body.dark-mode {
+            --card-bg: #0f1724;
+            --border-color: #1f2937;
+            --text-color: #e6eef8;
+            --text-secondary: #94a3b8;
+            --primary-color: #60a5fa;
+            --secondary-color: #7c3aed;
+            --input-bg: #0b1220;
+            --table-header-bg: #0b1220;
+            --table-hover-bg: #0b1228;
+            --badge-bg: #111827;
+            --badge-text: #e6eef8;
+            background: #070812;
+            color: var(--text-color);
+        }
+        /* Agent Winners Page Styles */
+        .agent-winners-hero {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+            color: white;
+            padding: 50px 40px;
+            border-radius: 24px;
+            margin-bottom: 35px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                0 25px 50px rgba(99, 102, 241, 0.4),
+                0 0 100px rgba(139, 92, 246, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .agent-winners-hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(255,255,255,0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(139,92,246,0.2) 0%, transparent 50%);
+            animation: heroGlow 15s ease-in-out infinite;
+            opacity: 0.5;
+        }
+        
+        @keyframes heroGlow {
+            0%, 100% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(180deg) scale(1.1); }
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+        }
+
+        .hero-text h1 {
+            font-size: 2.5em;
+            font-weight: 800;
+            margin: 0 0 10px 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .hero-text p {
+            font-size: 1.2em;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        /* Winners Statistics */
+        .winners-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .winner-stat-card {
+            background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(139,92,246,0.05));
+            border: 1px solid rgba(99,102,241,0.2);
+            border-radius: 20px;
+            padding: 30px 25px;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 6px 25px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .winner-stat-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1));
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .winner-stat-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 12px 40px rgba(99,102,241,0.25);
+            border-color: rgba(99,102,241,0.4);
+        }
+        
+        .winner-stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .winner-stat-card .stat-icon {
+            font-size: 3em;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 18px;
+            filter: drop-shadow(0 4px 8px rgba(99,102,241,0.3));
+            position: relative;
+            z-index: 1;
+        }
+
+        .winner-stat-card .stat-value {
+            font-size: 2.2em;
+            font-weight: 800;
+            color: var(--text-color);
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .winner-stat-card .stat-label {
+            font-size: 1em;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        /* Winners Table */
+        .winners-table-container {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .winners-table-header {
+            padding: 25px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+        }
+
+        .winners-table-header h2 {
+            margin: 0 0 20px 0;
+            color: var(--text-color);
+            font-size: 1.5em;
+            font-weight: 700;
+        }
+
+        .winners-table-header .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 14px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 15px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .action-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(45deg, rgba(255,255,255,0.2), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.5);
+        }
+        
+        .action-btn:hover::before {
+            opacity: 1;
+        }
+
+        .send-details-btn:hover {
+            box-shadow: 0 10px 30px rgba(14, 165, 233, 0.5);
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1;
+            min-width: 280px;
+        }
+
+        .search-box i {
+            position: absolute;
+            right: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            font-size: 16px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 14px 50px 14px 18px;
+            border: 2px solid rgba(99,102,241,0.2);
+            border-radius: 14px;
+            background: rgba(99,102,241,0.05);
+            color: var(--text-color);
+            font-size: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #6366f1;
+            background: rgba(99,102,241,0.1);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+        }
+
+        .winners-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .winners-table thead th {
+            background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1));
+            color: var(--text-color);
+            padding: 18px 16px;
+            text-align: right;
+            font-weight: 700;
+            border-bottom: 2px solid rgba(99,102,241,0.3);
+            font-size: 0.95em;
+            letter-spacing: 0.3px;
+        }
+
+        .winners-table tbody td {
+            padding: 16px;
+            border-bottom: 1px solid rgba(99,102,241,0.1);
+            color: var(--text-color);
+            font-size: 0.95em;
+        }
+
+        .winners-table tbody tr {
+            transition: all 0.3s ease;
+        }
+
+        .winners-table tbody tr:hover {
+            background: rgba(99,102,241,0.08);
+            transform: translateX(-3px);
+        }
+
+        .winner-name {
+            font-weight: 700;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 1.05em;
+        }
+
+        .winner-account {
+            background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15));
+            color: #6366f1;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            font-weight: 700;
+            border: 1px solid rgba(99,102,241,0.3);
+        }
+
+        .competition-title {
+            font-weight: 500;
+        }
+
+        .win-date {
+            color: var(--text-secondary);
+            font-size: 0.8em;
+        }
+
+        .winner-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .winner-action-btn {
+            background: rgba(99,102,241,0.05);
+            border: 1px solid rgba(99,102,241,0.3);
+            padding: 8px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.3s ease;
+            color: var(--text-color);
+            font-weight: 600;
+        }
+
+        .winner-action-btn:hover {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            border-color: transparent;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .agent-winners-hero {
+                padding: 30px 20px;
+            }
+
+            .hero-text h1 {
+                font-size: 2em;
+            }
+
+            .winners-stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .winners-table-container {
+                margin: 0 -10px;
+                border-radius: 0;
+            }
+
+            .winners-table {
+                font-size: 0.8em;
+            }
+
+            .winners-table thead th,
+            .winners-table tbody td {
+                padding: 10px;
+            }
+        }
+
+        /* Dark mode support */
+        body.dark-mode .winner-stat-card {
+            background: var(--card-bg);
+            border-color: var(--border-color);
+        }
+
+        body.dark-mode .winners-table-container {
+            background: var(--card-bg);
+            border-color: var(--border-color);
+        }
+        
+        /* Button to view ID image */
+        .btn-view-image {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+        .btn-view-image:hover {
+            background: #2563eb;
+        }
+        
+        /* Loading overlay and confirm modal styles (page-scoped) */
+        #loadingOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(16,24,40,0.95); /* solid dark color */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        #loadingOverlay.hidden { display: none; }
+        #loadingOverlay .spinner {
+            width: 48px;
+            height: 48px;
+            border: 6px solid rgba(255,255,255,0.12);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        #loadingOverlay .loading-text { display: none; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .confirm-modal {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.45);
+            z-index: 10000;
+        }
+        .confirm-modal.hidden { display: none; }
+        .confirm-modal-content {
+            background: #fff;
+            padding: 18px 20px;
+            border-radius: 10px;
+            width: 320px;
+            text-align: center;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+        }
+        .confirm-icon { font-size: 28px; margin-bottom: 8px; color: #ef4444; }
+        .confirm-title { font-weight: 800; margin-bottom: 6px; color: #0f1724; }
+        .confirm-message { color: #334155; margin-bottom: 12px; }
+        .confirm-actions { display: flex; gap: 10px; justify-content: center; }
+        .btn { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .btn-secondary { background: #f3f4f6; color: #111827; border: 1px solid #e5e7eb; }
+        .btn-secondary:hover { filter: brightness(0.98); }
+        .btn-danger { background: #ef4444; color: #fff; border: none; }
+        .btn-danger:hover { filter: brightness(0.95); }
+    </style>
+</head>
+<body class="dark-mode">
+    <div id="main-content" class="agent-winners-page">
+        <!-- Hero Section -->
+        <div class="agent-winners-hero">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <h1><i class="fas fa-trophy"></i> فائزو الوكيل</h1>
+                            <p>عرض وإدارة جميع الفائزين في مسابقات الوكيل</p>
+                            <div style="margin-top:12px; font-size:1.05em;">
+                                <span id="agentHeaderName" style="font-weight:700; margin-right:8px;">—</span>
+                                <span id="agentHeaderCode" style="opacity:0.85;">(#—)</span>
+                            </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Winners Statistics -->
+        <div class="winners-stats-grid" id="winnersStatsGrid">
+            <!-- Statistics will be populated by JavaScript -->
+        </div>
+
+        <!-- Winners Table -->
+        <div class="winners-table-container">
+            <div class="winners-table-header">
+                <h2><i class="fas fa-list"></i> قائمة الفائزين</h2>
+                <div class="header-actions">
+                    <button id="backToCompetitionsBtn" class="action-btn" onclick="console.log('[agent-winners] back button clicked'); (window.goToAgentCompetitions && window.goToAgentCompetitions()) || (window.location.href='agent-competitions.html?agent_id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('agent_id')))">
+                        <i class="fas fa-arrow-right"></i> العودة للمسابقات
+                    </button>
+                    <button id="sendWinnersDetailsBtn" class="action-btn send-details-btn" style="background: linear-gradient(135deg, #0ea5e9, #0284c7);">
+                        <i class="fas fa-id-card"></i> إرسال الهوية والكليشة للوكيل
+                    </button>
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchWinners" placeholder="بحث في الفائزين...">
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="winners-table" id="winnersTable">
+                    <thead>
+                        <tr>
+                            <th>الفائز</th>
+                            <th>رقم الحساب</th>
+                            <th>البريد الإلكتروني</th>
+                            <th>رقم الهوية</th>
+                            <th>صورة الهوية</th>
+                            <th>المسابقة</th>
+                            <th>سؤال المسابقة</th>
+                            <th>تاريخ الفوز</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="winnersTableBody">
+                        <!-- Winners will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay shown when returning to competitions -->
+    <div id="loadingOverlay" class="loading-overlay hidden" aria-hidden="true">
+        <div class="loading-box">
+            <div class="spinner" aria-hidden="true"></div>
+            <div class="loading-text">جاري التحميل...</div>
+        </div>
+    </div>
+
+    <!-- Confirm delete modal -->
+    <div id="confirmDeleteModal" class="confirm-modal hidden" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="confirm-modal-content">
+            <div class="confirm-icon" aria-hidden="true">🗑️</div>
+            <div class="confirm-title">هل أنت متأكد؟</div>
+            <div class="confirm-message">هل تريد حذف هذا الفائز نهائياً؟</div>
+            <div class="confirm-actions">
+                <button id="cancelDeleteBtn" class="btn btn-secondary">إلغاء</button>
+                <button id="confirmDeleteBtn" class="btn btn-danger">حذف</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/utils.js"></script>
+    <script src="../js/pages/agent-winners.js"></script>
+    </body>
+</html>

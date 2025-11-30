@@ -10,6 +10,16 @@ const run = async () => {
     console.log('[Migration] Running: Add default competitions_per_week...');
 
     try {
+        // Wait for mongoose connection to be ready
+        const mongoose = require('mongoose');
+        if (mongoose.connection.readyState !== 1) {
+            console.log('[Migration] Waiting for database connection...');
+            await new Promise((resolve) => {
+                if (mongoose.connection.readyState === 1) resolve();
+                else mongoose.connection.once('connected', resolve);
+            });
+        }
+
         // Find all agents where competitions_per_week is not set or is null
         const agentsToUpdate = await Agent.find({
             competitions_per_week: { $exists: false }

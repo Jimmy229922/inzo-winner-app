@@ -1,0 +1,156 @@
+/* Toggle Switch for Calendar and Daily Tasks Pages */
+/* Separate styling for calendar and tasks toggle buttons */
+/* Created: 2025-11-14 */
+
+/* Base Toggle Switch Styles - Calendar & Tasks */
+.calendar-agent-actions .toggle-switch,
+.task-card-actions .toggle-switch {
+    position: relative !important;
+    display: inline-block !important;
+    width: 50px !important;
+    height: 26px !important;
+    flex-shrink: 0 !important;
+    margin: 0 8px !important;
+}
+
+.calendar-agent-actions .toggle-switch input,
+.task-card-actions .toggle-switch input {
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Slider Background - Calendar & Tasks */
+.calendar-agent-actions .toggle-switch .slider,
+.calendar-agent-actions .toggle-switch .toggle-slider,
+.task-card-actions .toggle-switch .slider,
+.task-card-actions .toggle-switch .toggle-slider {
+    position: absolute !important;
+    cursor: pointer !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background-color: #e0e0e0 !important;
+    transition: 0.4s !important;
+    border-radius: 34px !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+}
+
+/* Ball (Toggle Knob) - Calendar & Tasks */
+.calendar-agent-actions .toggle-switch .slider:before,
+.calendar-agent-actions .toggle-switch .toggle-slider:before,
+.task-card-actions .toggle-switch .slider:before,
+.task-card-actions .toggle-switch .toggle-slider:before {
+    position: absolute !important;
+    content: '\2715' !important; /* Default OFF icon: ✕ */
+    height: 18px !important;
+    width: 18px !important;
+    right: 4px !important;
+    bottom: 4px !important;
+    background-color: white !important;
+    transition: 0.4s !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    color: #e74c3c !important; /* red cross when OFF */
+    box-shadow: none !important;
+    border: none !important;
+}
+
+/* Hover Effects - Calendar & Tasks */
+.calendar-agent-actions .toggle-switch:hover .slider,
+.task-card-actions .toggle-switch:hover .slider {
+    box-shadow: 0 0 1px var(--primary-color) !important;
+}
+
+.calendar-agent-actions .toggle-switch input:focus + .slider,
+.task-card-actions .toggle-switch input:focus + .slider {
+    box-shadow: 0 0 1px var(--primary-color) !important;
+}
+
+/* Checked (ON) State - Calendar & Tasks */
+.calendar-agent-actions .toggle-switch input:checked + .slider,
+.calendar-agent-actions .toggle-switch input:checked + .toggle-slider,
+.task-card-actions .toggle-switch input:checked + .slider,
+.task-card-actions .toggle-switch input:checked + .toggle-slider {
+    background: linear-gradient(135deg, #27ae60 0%, #1e874b 100%) !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Ball Movement in ON State - Calendar & Tasks */
+.calendar-agent-actions .toggle-switch input:checked + .slider:before,
+.calendar-agent-actions .toggle-switch input:checked + .toggle-slider:before,
+.task-card-actions .toggle-switch input:checked + .slider:before,
+.task-card-actions .toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(-24px) !important;
+    background-color: white !important;
+    content: '\2713' !important; /* ON icon: ✓ */
+    color: #000 !important; /* Force black checkmark */
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+    font-size: 12px !important;
+}
+
+/* Disabled State - Calendar & Tasks */
+.calendar-agent-actions .toggle-switch input:disabled + .slider,
+.calendar-agent-actions .toggle-switch input:disabled + .toggle-slider,
+.task-card-actions .toggle-switch input:disabled + .slider,
+.task-card-actions .toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+.calendar-agent-actions .toggle-switch input:disabled + .slider:before,
+.calendar-agent-actions .toggle-switch input:disabled + .toggle-slider:before,
+.task-card-actions .toggle-switch input:disabled + .slider:before,
+.task-card-actions .toggle-switch input:disabled + .toggle-slider:before {
+    box-shadow: none !important;
+}
+
+/* Smooth Animation - Calendar & Tasks */
+.calendar-agent-actions .toggle-switch .slider,
+.calendar-agent-actions .toggle-switch .toggle-slider,
+.task-card-actions .toggle-switch .slider,
+.task-card-actions .toggle-switch .toggle-slider {
+    transition: all 0.4s !important;
+}
+
+.calendar-agent-actions .toggle-switch .slider:before,
+.calendar-agent-actions .toggle-switch .toggle-slider:before,
+.task-card-actions .toggle-switch .slider:before,
+.task-card-actions .toggle-switch .toggle-slider:before {
+    transition: all 0.4s !important;
+}
+
+/* Active State (While Clicking) - Calendar & Tasks */
+.calendar-agent-actions .toggle-switch:active .slider:before,
+.task-card-actions .toggle-switch:active .slider:before {
+    transform: scale(0.95);
+}
+
+.calendar-agent-actions .toggle-switch input:checked:active + .slider:before,
+.task-card-actions .toggle-switch input:checked:active + .slider:before {
+    transform: translateX(-24px) scale(0.95);
+}
+
+/* Compatibility with .round class - Calendar & Tasks */
+.calendar-agent-actions .slider.round,
+.task-card-actions .slider.round {
+    border-radius: 34px;
+}
+
+.calendar-agent-actions .slider.round:before,
+.task-card-actions .slider.round:before {
+    border-radius: 50%;
+}

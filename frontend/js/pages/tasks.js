@@ -1,4 +1,4 @@
-// Refactored Tasks Page: Decoupled from Calendar, reliant solely on taskStore.
+﻿// Refactored Tasks Page: Decoupled from Calendar, reliant solely on taskStore.
 (function() {
     // --- Constants and Configuration ---
     const CLASSIFICATIONS = ['R', 'A', 'B', 'C'];
@@ -203,7 +203,8 @@
                 return acc;
             }, {});
 
-            const openGroups = JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY)) || ['R', 'A'];
+            // Default: open all classifications unless user has saved state
+            const openGroups = JSON.parse(localStorage.getItem(OPEN_GROUPS_KEY)) || CLASSIFICATIONS.slice();
             const highlightedAgentId = new URLSearchParams(window.location.hash.split('?')[1]).get('highlight');
 
             const overviewHtml = getOverviewHtml(this.agents, this.tasksMap);
@@ -254,15 +255,32 @@
                                : target.classList.contains('competition-check') ? 'competition_sent' 
                                : null;
                 if (agentId && taskType) {
+                    // ========== DEBUG CONSOLE LOGS (TASKS PAGE) ==========
+                    console.log('🔄 [TASKS] Toggle Changed!');
+                    console.log('📍 Agent ID:', agentId);
+                    console.log('📅 Day Index:', this.dayIndex);
+                    console.log('🏷️ Task Type:', taskType);
+                    console.log('✅ New Status:', target.checked ? 'ON (checked)' : 'OFF (unchecked)');
+                    console.log('🎯 Checkbox element:', target);
+                    console.log('🔍 Checkbox classes:', target.className);
+                    console.log('📊 Checkbox checked property:', target.checked);
+                    console.log('====================================================');
+                    // =====================================================
+
                     agentCard.classList.add('is-loading');
                     agentCard.querySelectorAll('input').forEach(i => i.disabled = true);
                     try {
+                        console.log('📤 [TASKS] Sending update to server...');
                         await window.taskStore.updateTaskStatus(agentId, this.dayIndex, taskType, target.checked);
+                        console.log('✅ [TASKS] Server update successful!');
                         this.updateSingleCard(agentId); // FIX: Targeted UI update
+                        console.log('🎨 [TASKS] UI updated successfully!');
                     } catch (error) {
-                        console.error('Failed to update task', error);
+                        console.error('❌ [TASKS] Failed to update task', error);
+                        console.error('Error details:', error);
                         showToast('فشل تحديث المهمة.', 'error');
                         target.checked = !target.checked; // Revert on error
+                        console.log('⏪ [TASKS] Reverted checkbox to:', !target.checked);
                     } finally {
                         agentCard.classList.remove('is-loading');
                         // Re-enable controls, considering dependencies

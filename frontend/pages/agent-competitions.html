@@ -1,0 +1,2187 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مسابقات الوكيل - لوحة تحكم التحليلات</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../assets/css/base.css">
+    <link rel="stylesheet" href="../assets/css/components.css">
+    <link rel="stylesheet" href="../assets/css/analytics.css">
+    <style>
+        /* Modern Agent Competitions Page Styles */
+        .agent-competitions-hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(102, 126, 234, 0.3);
+        }
+
+        .agent-competitions-hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="50" cy="10" r="0.5" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.1;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 30px;
+        }
+
+        .hero-text h1 {
+            font-size: 2.5em;
+            font-weight: 800;
+            margin: 0 0 10px 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .hero-text p {
+            font-size: 1.1em;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        .hero-stats {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .hero-stat {
+            text-align: center;
+        }
+
+        .hero-stat .stat-number {
+            font-size: 2em;
+            font-weight: 700;
+            display: block;
+        }
+
+        .hero-stat .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        /* Enhanced Statistics Cards */
+        .statistics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card-v2 {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card-v2::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), #ff6b6b);
+        }
+
+        .stat-card-v2:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+
+        .stat-card-v2 .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, var(--primary-color), #ff6b6b);
+            color: white;
+        }
+
+        .stat-card-v2 .stat-value {
+            font-size: 2.2em;
+            font-weight: 700;
+            color: var(--text-color);
+            margin-bottom: 5px;
+        }
+
+        .stat-card-v2 .stat-label {
+            font-size: 0.95em;
+            color: var(--text-secondary-color);
+            font-weight: 500;
+        }
+
+        .stat-card-v2 .stat-trend {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 10px;
+            font-size: 0.85em;
+        }
+
+        .stat-trend.positive {
+            color: #2ecc71;
+        }
+
+        .stat-trend.negative {
+            color: #e74c3c;
+        }
+
+        /* Enhanced Statistics Grid */
+        .enhanced-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card-v2 {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 25px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .stat-card-v2::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        }
+
+        .stat-card-v2:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+        }
+
+        .stat-card-v2 .stat-icon {
+            font-size: 2.5em;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            opacity: 0.8;
+        }
+
+        .stat-card-v2 .stat-value {
+            font-size: 2.2em;
+            font-weight: 800;
+            color: var(--text-color);
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .stat-card-v2 .stat-label {
+            font-size: 1em;
+            color: var(--text-secondary);
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .stat-card-v2 .stat-trend {
+            font-size: 0.85em;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Filters */
+        .competition-filters {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .competition-filters .filter-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn {
+            background: transparent;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .competition-filter-btn:hover {
+            background: var(--hover-bg);
+            color: var(--primary-color);
+        }
+
+        .competition-filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .competition-filter-btn.active i {
+            color: white !important;
+        }
+
+        .competition-filter-btn i {
+            color: var(--text-secondary);
+            transition: color 0.3s ease;
+        }
+
+        .table-title-and-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        /* Enhanced Table Design */
+        .competitions-table-container {
+            background: var(--card-bg-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .competitions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .competitions-table thead {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+        }
+
+        .competitions-table thead th {
+            padding: 18px 15px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.9em;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .competitions-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .competitions-table tbody tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            transform: scale(1.01);
+        }
+
+        .competitions-table tbody td {
+            padding: 16px 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+
+        .competitions-table .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .status-badge.pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .status-badge.completed {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .status-badge.archived {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        /* Enhanced Action Buttons */
+        .btn-icon-action {
+            background: linear-gradient(135deg, var(--primary-color), #ff6b6b);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9em;
+        }
+
+        .btn-icon-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        }
+
+        .btn-icon-action:active {
+            transform: translateY(0);
+        }
+
+        /* Compliance Badge */
+        .compliance-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            background: rgba(0,0,0,0.05);
+        }
+
+        /* Question Cell Enhancement */
+        .question-cell {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .question-cell:hover {
+            color: var(--primary-color);
+            text-decoration: underline;
+        }
+
+        /* Loading Animation Enhancement */
+        @keyframes shimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+        }
+
+        .loading-skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200px 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        body.dark-mode .loading-skeleton {
+            background: linear-gradient(90deg, rgba(255,255,255,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 75%);
+            background-size: 200px 100%;
+        }
+
+        /* Enhanced Scrollbar */
+        .table-responsive::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .table-responsive::-webkit-scrollbar-track {
+            background: var(--card-bg-color);
+            border-radius: 4px;
+        }
+
+        .table-responsive::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, var(--primary-color), #ff6b6b);
+            border-radius: 4px;
+        }
+
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #ff6b6b, var(--primary-color));
+        }
+    </style>
+</head>
+<body>
+    <div id="main-content" class="agent-competitions-page">
+        <!-- Modern Hero Section -->
+        <div class="agent-competitions-hero">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <h1 id="agentName"></h1>
+                    <p>إدارة ومتابعة جميع المسابقات المرسلة من قبل الوكيل</p>
+                </div>
+                <div class="hero-stats" id="heroStats">
+                    <!-- Stats will be populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Competitions Status Counters -->
+        <div class="competitions-status-counters" id="competitionsStatusCounters"></div>
+
+        <!-- Enhanced Competitions Table -->
+        <div class="competitions-table-container">
+            <div class="card-header" style="padding: 25px; border-bottom: 1px solid var(--border-color);">
+                <div class="table-title-and-actions">
+                    <h2 style="margin: 0; color: var(--text-color); font-size: 1.5em; font-weight: 700;">
+                        <i class="fas fa-trophy" style="color: var(--primary-color); margin-left: 10px;"></i>
+                        جميع المسابقات
+                    </h2>
+                    <div class="header-actions">
+                        <button class="action-btn" id="view-winners-btn" onclick="confirmViewWinners()">
+                            <i class="fas fa-star"></i> عرض الفائزين
+                        </button>
+                        <!-- زر اختيار الفائزين محذوف حسب الطلب -->
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchCompetitions" placeholder="بحث في المسابقات...">
+                        </div>
+                        <div id="view-winners-help" style="margin-right:12px;align-self:center;color:#f97316;display:none;font-weight:600;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Enhanced Competition Status Filters -->
+            <div class="competition-filters">
+                <span class="filter-label">
+                    <i class="fas fa-filter"></i> فلترة حسب الحالة:
+                </span>
+                <button class="competition-filter-btn active" data-filter="all">
+                    <i class="fas fa-list" style="color: #3498db;"></i> الكل
+                </button>
+                <button class="competition-filter-btn" data-filter="active">
+                    <i class="fas fa-play-circle" style="color: #2ecc71;"></i> نشطة
+                </button>
+                <button class="competition-filter-btn" data-filter="awaiting_winners">
+                    <i class="fas fa-clock" style="color: #f1c40f;"></i> بانتظار الفائزين
+                </button>
+                <button class="competition-filter-btn" data-filter="completed">
+                    <i class="fas fa-check-circle" style="color: #9b59b6;"></i> مكتملة
+                </button>
+                <button class="competition-filter-btn" data-filter="archived">
+                    <i class="fas fa-archive" style="color: #e74c3c;"></i> مؤرشفة
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="competitions-table" id="competitionsTable">
+                    <thead>
+                        <tr>
+                            <th><i class="fas fa-hashtag"></i></th>
+                            <th><i class="fas fa-question-circle"></i> السؤال</th>
+                            <th><i class="fas fa-calendar-plus"></i> تاريخ الإرسال</th>
+                            <th><i class="fas fa-calendar-check"></i> تاريخ الانتهاء</th>
+                            <th><i class="fas fa-calendar-day"></i> تاريخ التأكيد</th>
+                            <th><i class="fas fa-check-circle"></i> الالتزام</th>
+                            <th><i class="fas fa-eye"></i> المشاهدات</th>
+                            <th><i class="fas fa-heart"></i> التفاعلات</th>
+                            <th><i class="fas fa-users"></i> المشاركات</th>
+                            <th><i class="fas fa-info-circle"></i> الحالة</th>
+                            <th><i class="fas fa-cog"></i> إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="allCompetitionsTableBody">
+                        <tr class="loading-row">
+                            <td colspan="11" style="text-align: center; padding: 40px;">
+                                <div class="loading-spinner active" style="display: inline-block; margin-left: 10px;"></div>
+                                <p style="display: inline; color: var(--text-secondary-color);">جاري تحميل المسابقات...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+        <script src="../js/utils.js"></script>
+        <script src="../js/pages/agent-competitions.js"></script>
+
+        <script>
+            function confirmViewWinners(){
+                console.log('[agent-competitions] view-winners button clicked');
+                const agentId = new URLSearchParams(window.location.search).get('agent_id');
+                console.log('[agent-competitions] resolved agent_id:', agentId);
+                if(!agentId){ console.warn('[agent-competitions] agent_id missing'); showToast ? showToast('معرف الوكيل غير موجود','error') : alert('معرف الوكيل غير موجود'); return; }
+
+                console.log('[agent-competitions] creating custom confirm overlay');
+                // Create custom confirm overlay so we can handle cancel explicitly
+                const overlay = document.createElement('div');
+                overlay.className = 'wr-confirm-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:10000;';
+
+                const modal = document.createElement('div');
+                modal.className = 'wr-confirm-modal';
+                modal.style.cssText = 'background:var(--card-bg-color);padding:22px;border-radius:12px;max-width:520px;width:90%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.3);';
+
+                modal.innerHTML = `
+                    <div style="font-size:28px;margin-bottom:8px;color:var(--text-color)">تأكيد</div>
+                    <div style="color:var(--text-secondary-color);margin-bottom:18px">سيتم الانتقال إلى صفحة عرض الفائزين. هل تريد المتابعة؟</div>
+                    <div style="display:flex;gap:12px;justify-content:center"> 
+                        <button id="wr-confirm-cancel" class="wr-btn wr-btn-secondary">إلغاء</button>
+                        <button id="wr-confirm-ok" class="wr-btn wr-btn-primary">متابعة</button>
+                    </div>
+                `;
+
+                overlay.appendChild(modal);
+                document.body.appendChild(overlay);
+
+                const helpEl = document.getElementById('view-winners-help');
+
+                function cleanup(){ if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+
+                overlay.addEventListener('click',(e)=>{ if(e.target===overlay){ console.log('[agent-competitions] overlay clicked (outside modal)'); cleanup(); showCancelHelp(); } });
+
+                document.getElementById('wr-confirm-ok').addEventListener('click', ()=>{
+                    console.log('[agent-competitions] user confirmed navigation to agent-winners');
+                    cleanup();
+                    const target = 'agent-winners.html?agent_id=' + encodeURIComponent(agentId);
+                    console.log('[agent-competitions] navigating to', target);
+                    window.location.href = target;
+                });
+
+                document.getElementById('wr-confirm-cancel').addEventListener('click', ()=>{
+                    console.log('[agent-competitions] user canceled navigation to agent-winners');
+                    cleanup(); showCancelHelp();
+                });
+
+                function showCancelHelp(){
+                    console.log('[agent-competitions] showing cancel help message');
+                    if(!helpEl) return;
+                    helpEl.style.display = 'block';
+                    helpEl.innerHTML = `تم الإلغاء. إذا لم يفتح زر \"عرض الفائزين\" <a id="view-winners-help-link" href=\"agent-winners.html?agent_id=${encodeURIComponent(agentId)}\" style=\"color:#064e3b;font-weight:700;margin-right:8px;\">اضغط هنا لفتحه</a>`;
+                    // log clicks on the help link
+                    const helpLink = document.getElementById('view-winners-help-link');
+                    if(helpLink){ helpLink.addEventListener('click', (ev)=>{ console.log('[agent-competitions] help-link clicked, navigating to agent-winners'); }); }
+                    // clear after 10s
+                    setTimeout(()=>{ if(helpEl){ helpEl.style.display='none'; helpEl.innerHTML=''; } }, 10000);
+                }
+            }
+        </script>
+</body>
+</html>
+

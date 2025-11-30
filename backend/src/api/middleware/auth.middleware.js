@@ -15,7 +15,22 @@ const authenticate = function(req, res, next) {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
+
+        // Ensure we accept both legacy { userId } payloads and newer { _id } payloads
+        const effectiveId = decoded._id || decoded.userId;
+        if (!effectiveId) {
+            console.error('[AUTH-ERROR] Token missing user identifier:', decoded);
+            return res.status(401).json({ message: 'Invalid token structure: missing user ID' });
+        }
+
+        // Attach a normalized user object to the request
+        req.user = {
+            ...decoded,
+            _id: effectiveId,
+            userId: effectiveId
+        };
+
+        // console.debug('[AUTH] Token decoded, userId=', effectiveId);
         next();
     } catch (err) {
         console.warn('[AUTH-WARN] Token validation failed:', err.message);

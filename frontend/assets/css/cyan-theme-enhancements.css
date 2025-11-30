@@ -1,0 +1,263 @@
+/* 🎨 Cyan Theme Enhancements - Modern & Vibrant Design */
+/* Created: 2025 - Professional Cyan Theme #23D4FE */
+
+/* ============================================
+   🌊 Global Cyan Accents & Shadows
+   ============================================ */
+
+/* Enhanced Buttons with Cyan Theme */
+.btn-primary,
+.btn.btn-primary {
+    background: linear-gradient(135deg, #23D4FE, #00B8E6);
+    border-color: #23D4FE;
+    color: white;
+    box-shadow: 0 4px 12px rgba(35, 212, 254, 0.3);
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover,
+.btn.btn-primary:hover {
+    background: linear-gradient(135deg, #00B8E6, #0099CC);
+    box-shadow: 0 6px 20px rgba(35, 212, 254, 0.5);
+    transform: translateY(-2px);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(35, 212, 254, 0.4);
+}
+
+/* Enhanced Cards */
+.card,
+.stat-card,
+.chart-card {
+    border: 1px solid rgba(35, 212, 254, 0.2);
+    box-shadow: 0 4px 16px rgba(35, 212, 254, 0.1);
+    transition: all 0.3s ease;
+}
+
+.card:hover,
+.stat-card:hover {
+    box-shadow: 0 8px 24px rgba(35, 212, 254, 0.2);
+    transform: translateY(-2px);
+}
+
+/* ============================================
+   📊 Statistics Cards Enhancement
+   ============================================ */
+
+.stat-card-v2 {
+    background: linear-gradient(135deg, 
+        rgba(35, 212, 254, 0.05), 
+        rgba(0, 184, 230, 0.05));
+    border: 1px solid rgba(35, 212, 254, 0.2);
+    transition: all 0.3s ease;
+}
+
+.stat-card-v2:hover {
+    box-shadow: 0 8px 24px rgba(35, 212, 254, 0.3);
+    transform: translateY(-3px);
+}
+
+.stat-card-v2-icon-bg {
+    background: linear-gradient(135deg, #23D4FE, #00B8E6);
+    box-shadow: 0 4px 16px rgba(35, 212, 254, 0.4);
+}
+
+/* ============================================
+   🎯 Input Fields Enhancement
+   ============================================ */
+
+input:focus,
+textarea:focus,
+select:focus {
+    border-color: #23D4FE;
+    box-shadow: 0 0 0 3px rgba(35, 212, 254, 0.2);
+    outline: none;
+}
+
+input[type="date"]:focus,
+input[type="time"]:focus,
+input[type="search"]:focus {
+    border-color: #23D4FE;
+    box-shadow: 0 0 12px rgba(35, 212, 254, 0.3);
+}
+
+/* ============================================
+   🏷️ Badges Enhancement
+   ============================================ */
+
+.badge-primary,
+.status-badge {
+    background: linear-gradient(135deg, #23D4FE, #00B8E6);
+    color: white;
+    box-shadow: 0 2px 8px rgba(35, 212, 254, 0.3);
+}
+
+/* Classification Badges */
+.classification-badge {
+    border: 1px solid rgba(35, 212, 254, 0.3);
+    box-shadow: 0 2px 6px rgba(35, 212, 254, 0.2);
+}
+
+.classification-badge:hover {
+    box-shadow: 0 4px 12px rgba(35, 212, 254, 0.4);
+    transform: scale(1.05);
+}
+
+/* ============================================
+   📈 Progress Bars Enhancement
+   ============================================ */
+
+.progress-bar,
+.day-progress .progress-bar {
+    background: linear-gradient(90deg, #23D4FE, #00B8E6, #6FE4FF);
+    box-shadow: 0 0 15px rgba(35, 212, 254, 0.6);
+    animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* ============================================
+   🎨 Links & Navigation
+   ============================================ */
+
+a {
+    color: #23D4FE;
+    transition: all 0.2s ease;
+}
+
+a:hover {
+    color: #00B8E6;
+    text-shadow: 0 0 8px rgba(35, 212, 254, 0.5);
+}
+
+.nav-link:hover,
+.nav-link.active {
+    background: linear-gradient(135deg, 
+        rgba(35, 212, 254, 0.15), 
+        rgba(0, 184, 230, 0.1));
+    border-left: 3px solid #23D4FE;
+    box-shadow: 0 2px 8px rgba(35, 212, 254, 0.2);
+}
+
+/* ============================================
+   🌟 Special Effects
+   ============================================ */
+
+/* Glow Effect for Important Elements */
+.glow-effect {
+    box-shadow: 0 0 20px rgba(35, 212, 254, 0.5);
+    animation: glow 2s infinite;
+}
+
+@keyframes glow {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(35, 212, 254, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(35, 212, 254, 0.8);
+    }
+}
+
+/* Pulse Animation */
+.pulse-cyan {
+    animation: pulseCyan 2s infinite;
+}
+
+@keyframes pulseCyan {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+    }
+}
+
+/* ============================================
+   📱 Responsive Enhancements
+   ============================================ */
+
+@media (max-width: 768px) {
+    .stat-card-v2 {
+        box-shadow: 0 4px 12px rgba(35, 212, 254, 0.2);
+    }
+    
+    .btn-primary {
+        box-shadow: 0 2px 8px rgba(35, 212, 254, 0.3);
+    }
+}
+
+/* ============================================
+   🌙 Dark Mode Specific Enhancements
+   ============================================ */
+
+body.dark-mode .card,
+body.dark-mode .stat-card {
+    background: linear-gradient(135deg, 
+        rgba(35, 212, 254, 0.05), 
+        rgba(27, 38, 59, 0.8));
+    border-color: rgba(35, 212, 254, 0.3);
+}
+
+body.dark-mode input:focus,
+body.dark-mode textarea:focus,
+body.dark-mode select:focus {
+    box-shadow: 0 0 16px rgba(35, 212, 254, 0.4);
+}
+
+body.dark-mode .btn-primary {
+    box-shadow: 0 4px 16px rgba(35, 212, 254, 0.4);
+}
+
+/* ============================================
+   🎯 Calendar Specific Enhancements
+   ============================================ */
+
+.day-column {
+    transition: all 0.3s ease;
+}
+
+.day-column:hover {
+    box-shadow: 0 4px 16px rgba(35, 212, 254, 0.3);
+    transform: translateY(-2px);
+}
+
+.day-column.today {
+    background: linear-gradient(135deg, 
+        rgba(35, 212, 254, 0.15), 
+        rgba(0, 184, 230, 0.1));
+    border: 2px solid #23D4FE;
+    box-shadow: 0 0 24px rgba(35, 212, 254, 0.4);
+}
+
+.day-column h2 {
+    background: linear-gradient(90deg, #23D4FE, #00B8E6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 700;
+}
+
+/* ============================================
+   ✨ Floating Action Effects
+   ============================================ */
+
+.floating-action {
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}

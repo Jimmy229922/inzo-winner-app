@@ -1,4 +1,4 @@
-// --- NEW: Handler for presence updates ---
+﻿// --- NEW: Handler for presence updates ---
 const handlePresenceUpdateForUsersPage = () => {
     if (window.updateUserPresenceIndicators) {
         window.updateUserPresenceIndicators();
@@ -28,6 +28,9 @@ async function renderUsersPage() {
     // --- MODIFICATION: Only show the "Add User" button if the user has permission (admin or super_admin) ---
     const canAddUser = isSuperAdmin || isAdmin;
     const addUserButtonHtml = canAddUser ? `<button id="add-new-user-btn" class="btn-primary"><i class="fas fa-user-plus"></i> إضافة مستخدم جديد</button>` : '';
+    
+    // --- NEW: Purge all users button (super_admin only) ---
+    const purgeUsersButtonHtml = isSuperAdmin ? `<button id="purge-all-users-btn" class="btn-danger" style="margin-right: 10px;"><i class="fas fa-trash-alt"></i> حذف جميع الحسابات</button>` : '';
 
     appContent.innerHTML = `
         <!-- NEW: Stats Cards Section -->
@@ -41,7 +44,10 @@ async function renderUsersPage() {
         <div class="page-header column-header">
             <div class="header-top-row">
                 <h1><i class="fas fa-users-cog"></i> إدارة المستخدمين</h1>
-                ${addUserButtonHtml}
+                <div style="display: flex; gap: 10px;">
+                    ${purgeUsersButtonHtml}
+                    ${addUserButtonHtml}
+                </div>
             </div>
             <div class="filters-container">
                 <div class="filter-search-container">
@@ -66,6 +72,12 @@ async function renderUsersPage() {
     const addUserBtn = document.getElementById('add-new-user-btn');
     if (addUserBtn) {
         addUserBtn.addEventListener('click', renderCreateUserModal);
+    }
+    
+    // Add listener for purge all users button (super_admin only)
+    const purgeUsersBtn = document.getElementById('purge-all-users-btn');
+    if (purgeUsersBtn) {
+        purgeUsersBtn.addEventListener('click', handlePurgeAllUsers);
     }
     
     // Attach event listeners for actions (delete, role change) to the persistent container
@@ -1215,6 +1227,69 @@ async function renderProfileSettingsPage() {
         } finally {
             saveBtn.disabled = false;
             saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التغييرات';
+        }
+    });
+}
+// ============================================
+// Purge All Users (Super Admin Only)
+// ============================================
+async function handlePurgeAllUsers() {
+    const modal = document.createElement('div');
+    modal.id = 'purge-all-users-modal';
+    modal.className = 'purge-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> ?????: ??? ???? ????????</h3>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--error-color); font-weight: bold; font-size: 1.1em;"> ????? ???? ???????!</p>
+                <p>??? ??? ??? ??? <strong>???? ?????? ??????????</strong> ?? ??????.</p>
+                <p style="margin-top: 15px;"><strong>??????:</strong> ????? ?????? (Super Admin) ????? ??? ??? ????.</p>
+                <p style="color: var(--error-color); font-weight: bold; margin-top: 15px;"> ??? ??????? ?? ???? ??????? ???!</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary cancel-purge-btn">
+                    <i class="fas fa-times"></i> ?????
+                </button>
+                <button class="btn btn-danger confirm-purge-btn">
+                    <i class="fas fa-trash-alt"></i> ???? ???? ???? ????????
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    setTimeout(() => modal.classList.add('show'), 10);
+    const cancelBtn = modal.querySelector('.cancel-purge-btn');
+    const overlay = modal.querySelector('.modal-overlay');
+    const closeModal = () => { modal.classList.remove('show'); setTimeout(() => modal.remove(), 300); };
+    cancelBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', closeModal);
+    const confirmBtn = modal.querySelector('.confirm-purge-btn');
+    confirmBtn.addEventListener('click', async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ???? ?????...';
+        try {
+            const response = await fetch('/api/users/purge-all', {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer }{localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+            if (response.ok) {
+                showToast(data.message || '?? ??? ???? ???????? ?????', 'success');
+                closeModal();
+                setTimeout(() => renderUsersPage(), 1500);
+            } else {
+                showToast(data.message || '??? ??? ????????', 'error');
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = '<i class="fas fa-trash-alt"></i> ???? ???? ???? ????????';
+            }
+        } catch (error) {
+            console.error('Error purging users:', error);
+            showToast('??? ??? ????? ??? ????????', 'error');
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fas fa-trash-alt"></i> ???? ???? ???? ????????';
         }
     });
 }

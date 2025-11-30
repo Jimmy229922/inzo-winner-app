@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "setup": "node setup.js"
+    "setup": "node setup.js",
+    "migrate:templates": "node scripts/run_migration_fix_template_types.js",
+    "migrate:competitions:types": "node scripts/run_migration_backfill_competition_types.js"
   },
   "keywords": [],
   "author": "",

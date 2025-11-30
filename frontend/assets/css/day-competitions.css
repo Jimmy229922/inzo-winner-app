@@ -1,0 +1,280 @@
+/* Day Competitions Page Styles */
+.day-competitions-page {
+    padding: 20px;
+}
+
+.page-header {
+    background-color: var(--card-bg-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+    border: 1px solid var(--border-color);
+}
+
+.header-top {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.back-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background-color: var(--accent-color);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95em;
+    transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+    background-color: var(--accent-hover-color);
+    transform: translateY(-2px);
+}
+
+.page-header h1 {
+    margin: 0;
+    font-size: 1.8em;
+    color: var(--text-color);
+}
+
+.page-header h1 #dayName {
+    color: var(--accent-color);
+}
+
+.page-stats {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 20px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    min-width: 200px;
+}
+
+.stat-card i {
+    font-size: 2em;
+    color: var(--accent-color);
+}
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.stat-label {
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.stat-value {
+    font-size: 1.8em;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.competitions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+}
+
+.competition-card {
+    background-color: var(--card-bg-color);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.competition-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    border-color: var(--accent-color);
+}
+
+.competition-header {
+    padding: 15px;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.competition-header h3 {
+    margin: 0;
+    font-size: 1.1em;
+    color: var(--text-color);
+    flex: 1;
+    line-height: 1.4;
+}
+
+.competition-status {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.status-sent {
+    background-color: rgba(33, 150, 243, 0.2);
+    color: #2196F3;
+}
+
+.status-active {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: #4CAF50;
+}
+
+.status-awaiting_winners {
+    background-color: rgba(255, 193, 7, 0.2);
+    color: #FFC107;
+}
+
+.status-completed {
+    background-color: rgba(156, 39, 176, 0.2);
+    color: #9C27B0;
+}
+
+.status-archived {
+    background-color: rgba(158, 158, 158, 0.2);
+    color: #9E9E9E;
+}
+
+.competition-image {
+    width: 100%;
+    height: 200px;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.competition-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.competition-card:hover .competition-image img {
+    transform: scale(1.1);
+}
+
+.competition-details {
+    padding: 15px;
+}
+
+.detail-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+}
+
+.detail-row:last-child {
+    margin-bottom: 0;
+}
+
+.detail-row i {
+    width: 20px;
+    text-align: center;
+    color: var(--accent-color);
+}
+
+.detail-row strong {
+    color: var(--text-color);
+}
+
+.competition-stats {
+    display: flex;
+    justify-content: space-around;
+    padding: 15px;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-top: 1px solid var(--border-color);
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.stat-item i {
+    font-size: 1.2em;
+    color: var(--accent-color);
+}
+
+.stat-item span {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.no-data {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    background-color: var(--card-bg-color);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.no-data i {
+    font-size: 4em;
+    color: var(--text-secondary-color);
+    margin-bottom: 20px;
+    display: block;
+}
+
+.no-data p {
+    font-size: 1.2em;
+    color: var(--text-secondary-color);
+    margin: 0;
+}
+
+@media (max-width: 992px) {
+    .competitions-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .day-competitions-page {
+        padding: 15px;
+    }
+
+    .header-top {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .page-header h1 {
+        font-size: 1.4em;
+    }
+
+    .competitions-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .competition-card {
+        max-width: 100%;
+    }
+}

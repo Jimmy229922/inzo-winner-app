@@ -61,9 +61,9 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    opacity: 0;
-    transform: translateX(-100%);
-    animation: slideIn 0.5s forwards, slideOut 0.5s 4.5s forwards;
+    opacity: 1;
+    transform: translateX(0);
+    animation: slideIn 0.5s forwards;
 }
 
 .toast.success { background-color: #2ecc71; }
@@ -82,49 +82,83 @@
 
 /* Modal Styles */
 .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 3000;
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: 90vw !important;
+    max-height: 95vh !important;
+    background-color: transparent !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    z-index: 10000 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
-.modal {
-    background-color: var(--card-bg-color);
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
-    text-align: center;
-    max-width: 400px;
+.modal-overlay .modal {
+    background-color: var(--card-bg-color) !important;
+    padding: 30px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.3) !important;
+    text-align: center !important;
+    width: auto !important;
+    min-width: 350px !important;
+    max-width: 500px !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+    position: relative !important;
+    z-index: 10001 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: block !important;
+    border: 1px solid var(--border-color) !important;
 }
 
-.modal.modal-wide {
-    max-width: 600px;
-    text-align: right;
+.modal-overlay .modal.modal-wide {
+    max-width: 700px !important;
+    text-align: right !important;
 }
 
-.modal.modal-wide .modal-message {
-    text-align: right;
+.modal-overlay .modal.modal-wide .modal-message {
+    text-align: right !important;
+    max-height: 60vh !important;
+    overflow-y: auto !important;
+    padding: 10px !important;
 }
 
-.modal.modal-no-actions .modal-actions {
+.modal-overlay .modal.modal-no-actions .modal-actions {
     display: none;
 }
 
-.modal p {
-    margin-bottom: 20px;
-    font-size: 1.1em;
+.modal-overlay .modal-title {
+    font-size: 1.4em !important;
+    margin-bottom: 15px !important;
+    color: var(--text-color) !important;
+}
+
+.modal-overlay .modal-message {
+    margin-bottom: 20px !important;
+    font-size: 1em !important;
+    line-height: 1.6 !important;
+    color: var(--text-color) !important;
+    word-wrap: break-word !important;
+}
+
+.modal-overlay .modal p {
+    margin-bottom: 15px !important;
+    font-size: 1em !important;
 }
 
 .modal-actions {
     display: flex;
     justify-content: center;
     gap: 15px;
+    margin-top: 20px !important;
+    flex-wrap: wrap !important;
 }
 
 .modal-actions button:hover {
@@ -186,6 +220,12 @@
     flex-direction: column;
 }
 
+/* Wider modal variant for dense forms (templates create/edit) */
+.form-modal-content.modal-fullscreen {
+    max-width: 960px; /* wider */
+    width: 95vw;      /* adapt to viewport */
+}
+
 .form-modal-header {
     display: flex;
     justify-content: space-between;
@@ -220,6 +260,47 @@
 .form-modal-body textarea {
     min-height: 120px;
     resize: vertical;
+}
+.template-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* Stacked variant for edit form when vertical layout preferred */
+.template-form-grid.template-form-stacked {
+    grid-template-columns: 1fr; /* single column */
+}
+
+@media (max-width: 992px) {
+    .form-modal-content.modal-fullscreen { max-width: 90vw; }
+    .template-form-grid { grid-template-columns: 1fr; }
+}
+
+/* Template/Image preview sizing inside modals to prevent horizontal scroll */
+.form-modal-content .image-preview-container {
+    width: 100%;
+    max-width: 100%;
+    height: 240px; /* ثابت لعرض الصورة داخله */
+    overflow: hidden;
+    border: 1px dashed var(--border-color);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--border-color) 10%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.form-modal-content .image-preview-container .image-preview,
+.form-modal-content .image-preview {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain; /* إظهار الصورة كاملة داخل المساحة */
+    background: #111;
+    border: 1px solid var(--border-color);
 }
 
 /* Update Progress Modal Styles */
@@ -284,4 +365,15 @@
 
 .online-status-indicator.online {
     background-color: #2ecc71; /* Green for online */
+}
+
+/* Page sections */
+.page-section {
+    width: 100%;
+    min-height: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
 }

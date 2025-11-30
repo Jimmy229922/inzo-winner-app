@@ -1,11 +1,14 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة تحكم التحليلات</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../assets/css/base.css">
     <link rel="stylesheet" href="../assets/css/components.css">
+    <!-- Global toggle skin to ensure consistent ✓/✕ behavior -->
+    <link rel="stylesheet" href="../assets/css/toggle-fix.css">
     <link rel="stylesheet" href="../assets/css/analytics.css">
 
 
@@ -13,49 +16,613 @@
 <body>
     <div id="main-content" class="analytics-dashboard">
         <header class="dashboard-header">
-            <h1>لوحة تحكم التحليلات</h1>
-            <div class="date-range-filter">
-                <label for="fromDate">من</label>
-                <input type="date" id="fromDate" />
-                <label for="toDate">إلى</label>
-                <input type="date" id="toDate" />
-                <button id="applyDateFilter" class="btn">تطبيق</button>
+            <div class="header-top">
+                <h1>لوحة تحكم التحليلات</h1>
+                <div class="comparison-mode-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="comparisonModeToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="toggle-label">
+                        <i class="fas fa-chart-line"></i> وضع المقارنة
+                    </span>
+                </div>
+            </div>
+            
+            <!-- Normal Filter Section -->
+            <div class="analytics-filters" id="normalFilters">
+                <div class="filter-buttons" id="quick-date-filters">
+                    <button class="filter-btn active" data-range="30">آخر 30 يوم</button>
+                    <button class="filter-btn" data-range="90">آخر 90 يوم</button>
+                    <button class="filter-btn" data-range="year">هذا العام</button>
+                </div>
+                <div class="date-range-filter">
+                    <div class="date-input-group">
+                        <label for="fromDate"><i class="far fa-calendar-alt"></i> من تاريخ</label>
+                        <input type="date" id="fromDate" />
+                    </div>
+                    <div class="date-input-group">
+                        <label for="toDate"><i class="far fa-calendar-alt"></i> إلى تاريخ</label>
+                        <input type="date" id="toDate" />
+                    </div>
+                    <button id="applyDateFilter" class="btn btn-primary">
+                        <i class="fas fa-check"></i> تطبيق الفلتر
+                    </button>
+                    <button id="clearDateFilter" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> مسح الفلتر
+                    </button>
+                </div>
+            </div>
+
+            <!-- Comparison Filter Section (Hidden by default) -->
+            <div class="comparison-filters" id="comparisonFilters" style="display: none;">
+                <!-- Quick Comparison Buttons -->
+                <div class="comparison-quick-filters">
+                    <h3><i class="fas fa-bolt"></i> مقارنات سريعة</h3>
+                    <div class="quick-comparison-buttons">
+                        <button class="comparison-btn" data-comparison="week">
+                            <i class="fas fa-calendar-week"></i>
+                            <span>هذا الأسبوع vs الأسبوع السابق</span>
+                        </button>
+                        <button class="comparison-btn" data-comparison="month">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>هذا الشهر vs الشهر السابق</span>
+                        </button>
+                        <button class="comparison-btn" data-comparison="quarter">
+                            <i class="fas fa-calendar"></i>
+                            <span>هذا الربع vs الربع السابق</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Custom Comparison -->
+                <div class="comparison-custom-filters">
+                    <h3><i class="fas fa-sliders-h"></i> مقارنة مخصصة</h3>
+                    <div class="comparison-periods">
+                        <!-- Period 1 -->
+                        <div class="comparison-period period-1">
+                            <div class="period-header">
+                                <i class="fas fa-circle"></i>
+                                <span>الفترة الأولى</span>
+                            </div>
+                            <div class="period-inputs">
+                                <div class="date-input-group">
+                                    <label for="period1From"><i class="far fa-calendar-alt"></i> من</label>
+                                    <input type="date" id="period1From" />
+                                </div>
+                                <div class="date-input-group">
+                                    <label for="period1To"><i class="far fa-calendar-alt"></i> إلى</label>
+                                    <input type="date" id="period1To" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="comparison-vs">
+                            <i class="fas fa-arrows-alt-h"></i>
+                        </div>
+
+                        <!-- Period 2 -->
+                        <div class="comparison-period period-2">
+                            <div class="period-header">
+                                <i class="fas fa-circle"></i>
+                                <span>الفترة الثانية</span>
+                            </div>
+                            <div class="period-inputs">
+                                <div class="date-input-group">
+                                    <label for="period2From"><i class="far fa-calendar-alt"></i> من</label>
+                                    <input type="date" id="period2From" />
+                                </div>
+                                <div class="date-input-group">
+                                    <label for="period2To"><i class="far fa-calendar-alt"></i> إلى</label>
+                                    <input type="date" id="period2To" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="comparison-actions">
+                        <button id="applyComparisonFilter" class="btn btn-primary">
+                            <i class="fas fa-chart-bar"></i> تطبيق المقارنة
+                        </button>
+                        <button id="clearComparisonFilter" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> مسح المقارنة
+                        </button>
+                    </div>
+                </div>
             </div>
         </header>
 
+        <!-- KPI Cards Section -->
+        <div class="dashboard-grid-v2" id="analytics-kpi-cards">
+            <!-- Skeleton Loaders for KPIs -->
+            <div class="stat-card-v2 loading"><div class="skeleton-line" style="width: 40%;"></div><div class="skeleton-line" style="width: 80%;"></div></div>
+            <div class="stat-card-v2 loading"><div class="skeleton-line" style="width: 40%;"></div><div class="skeleton-line" style="width: 80%;"></div></div>
+            <div class="stat-card-v2 loading"><div class="skeleton-line" style="width: 40%;"></div><div class="skeleton-line" style="width: 80%;"></div></div>
+        </div>
+
         <div class="dashboard-grid">
-            <div class="card chart-card">
-                <h2>المسابقات الأكثر تكرارًا</h2>
-                <div class="chart-container">
-                    <canvas id="mostFrequentCompetitionsChart"></canvas>
+            <!-- Completed Competitions Table -->
+            <div class="card chart-card full-width" id="completedCompetitionsCard">
+                <div class="card-header-with-filter">
+                    <h2><i class="fas fa-trophy"></i> تقرير المسابقات المكتملة</h2>
+                    <div class="section-filters">
+                        <div class="date-range-filter-section">
+                            <div class="date-input-group">
+                                <label><i class="far fa-calendar-alt"></i> من</label>
+                                <input type="date" id="completedCompetitionsFromDate" class="section-date-input" />
+                            </div>
+                            <div class="date-input-group">
+                                <label><i class="far fa-calendar-alt"></i> إلى</label>
+                                <input type="date" id="completedCompetitionsToDate" class="section-date-input" />
+                            </div>
+                            <button id="applyCompletedCompetitionsFilter" class="btn btn-primary btn-sm">
+                                <i class="fas fa-filter"></i> تطبيق
+                            </button>
+                            <button id="clearCompletedCompetitionsFilter" class="btn btn-secondary btn-sm">
+                                <i class="fas fa-times"></i> مسح
+                            </button>
+                        </div>
+                        <div class="competition-filter-buttons">
+                            <button class="competition-filter-btn active" data-filter="all">
+                                <i class="fas fa-list"></i> الكل
+                            </button>
+                            <button class="competition-filter-btn" data-filter="R">
+                                <i class="fas fa-crown"></i> R
+                            </button>
+                            <button class="competition-filter-btn" data-filter="A">
+                                <i class="fas fa-star"></i> A
+                            </button>
+                            <button class="competition-filter-btn" data-filter="B">
+                                <i class="fas fa-certificate"></i> B
+                            </button>
+                            <button class="competition-filter-btn" data-filter="C">
+                                <i class="fas fa-medal"></i> C
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="loading-spinner" id="mostFrequentCompetitionsLoading"></div>
-                <p class="error-message" id="mostFrequentCompetitionsError"></p>
-            </div>
-
-            <!-- Removed peak hours, country stats and top IPs as requested -->
-
-            <div class="card employee-performance-card" id="employeePerformanceCard">
-                <h2>أداء الموظفين</h2>
-                <div class="table-container">
-                    <table id="employeePerformanceTable">
+                <div class="competitions-stats-summary">
+                    <div class="stat-summary-item">
+                        <i class="fas fa-trophy"></i>
+                        <span class="stat-label">إجمالي المسابقات</span>
+                        <span class="stat-value" id="totalCompetitions">0</span>
+                    </div>
+                    <div class="stat-summary-item">
+                        <i class="fas fa-eye"></i>
+                        <span class="stat-label">إجمالي المشاهدات</span>
+                        <span class="stat-value" id="totalViews">0</span>
+                    </div>
+                    <div class="stat-summary-item">
+                        <i class="fas fa-users"></i>
+                        <span class="stat-label">إجمالي المشاركات</span>
+                        <span class="stat-value" id="totalParticipations">0</span>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="competitions-table" id="completedCompetitionsTable">
                         <thead>
                             <tr>
-                                <th>الموظف</th>
-                                <th>عدد التقارير</th>
+                                <th>#</th>
+                                <th><i class="fas fa-question-circle"></i> سؤال المسابقة</th>
+                                <th><i class="fas fa-tag"></i> النوع</th>
+                                <th><i class="fas fa-layer-group"></i> التصنيف</th>
+                                <th><i class="fas fa-paper-plane"></i> مرات الإرسال</th>
+                                <th><i class="fas fa-eye"></i> المشاهدات</th>
+                                <th><i class="fas fa-users"></i> المشاركات</th>
+                                <th><i class="fas fa-percentage"></i> معدل التفاعل</th>
+                                <th><i class="fas fa-calendar"></i> تاريخ الانتهاء</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <!-- Employee data will be inserted here -->
+                        <tbody id="completedCompetitionsTableBody">
+                            <!-- Loading skeleton -->
+                            <tr class="loading-row">
+                                <td colspan="9">
+                                    <div class="loading-spinner active"></div>
+                                    <p>جاري تحميل بيانات المسابقات...</p>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
-                <div class="loading-spinner" id="employeePerformanceLoading"></div>
-                <p class="error-message" id="employeePerformanceError"></p>
+                <div class="table-pagination" id="competitionsPagination">
+                    <button class="pagination-btn" id="prevPage" disabled>
+                        <i class="fas fa-chevron-right"></i> السابق
+                    </button>
+                    <span class="pagination-info">
+                        صفحة <span id="currentPage">1</span> من <span id="totalPages">1</span>
+                    </span>
+                    <button class="pagination-btn" id="nextPage">
+                        التالي <i class="fas fa-chevron-left"></i>
+                    </button>
+                </div>
+                <p class="error-message" id="completedCompetitionsError"></p>
+            </div>
+
+            <div class="card chart-card" id="agentGrowthCard">
+                <div class="card-header-with-filter">
+                    <h2>إحصائيات - عدد المسابقات المرسلة / يوم</h2>
+                    <div class="date-range-filter-section">
+                        <div class="date-input-group">
+                            <label><i class="far fa-calendar-alt"></i> من</label>
+                            <input type="date" id="agentGrowthFromDate" class="section-date-input" />
+                        </div>
+                        <div class="date-input-group">
+                            <label><i class="far fa-calendar-alt"></i> إلى</label>
+                            <input type="date" id="agentGrowthToDate" class="section-date-input" />
+                        </div>
+                        <button id="applyAgentGrowthFilter" class="btn btn-primary btn-sm">
+                            <i class="fas fa-filter"></i> تطبيق
+                        </button>
+                        <button id="clearAgentGrowthFilter" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-times"></i> مسح
+                        </button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="agentGrowthChart"></canvas>
+                </div>
+                <div class="loading-spinner" id="agentGrowthLoading"></div>
+                <p class="error-message" id="agentGrowthError"></p>
+            </div>
+
+            <!-- Granted Balances Section -->
+            <div class="card chart-card" id="grantedBalancesCard">
+                <div class="card-header-with-filter">
+                    <h2>أرصدة ممنوحة</h2>
+                    <div class="date-range-filter-section">
+                        <div class="date-input-group">
+                            <label><i class="far fa-calendar-alt"></i> من</label>
+                            <input type="date" id="grantedBalancesFromDate" class="section-date-input" />
+                        </div>
+                        <div class="date-input-group">
+                            <label><i class="far fa-calendar-alt"></i> إلى</label>
+                            <input type="date" id="grantedBalancesToDate" class="section-date-input" />
+                        </div>
+                        <button id="applyGrantedBalancesFilter" class="btn btn-primary btn-sm">
+                            <i class="fas fa-filter"></i> تطبيق
+                        </button>
+                        <button id="clearGrantedBalancesFilter" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-times"></i> مسح
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Trading Bonus Section -->
+                <div class="granted-balance-section">
+                    <h3>بونص تداولي</h3>
+                    <div class="balance-stats">
+                        <div class="balance-item">
+                            <span class="balance-label">بونص تداولي</span>
+                            <span class="balance-value" id="tradingBonusAmount">$0</span>
+                        </div>
+                        <div class="balance-item">
+                            <span class="balance-label">عدد فائزين</span>
+                            <span class="balance-value" id="tradingBonusWinners">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deposit Bonus Section -->
+                <div class="granted-balance-section">
+                    <h3>بونص إيداع</h3>
+                    <div class="deposit-bonus-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>عدد فائزين</th>
+                                    <th>بونص إيداع</th>
+                                </tr>
+                            </thead>
+                            <tbody id="depositBonusTableBody">
+                                <!-- Will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="loading-spinner" id="grantedBalancesLoading"></div>
+                <p class="error-message" id="grantedBalancesError"></p>
+            </div>
+
+            <!-- Weekly Excellence Section -->
+            <div class="card chart-card" id="weeklyExcellenceCard">
+                <div class="card-header-with-filter">
+                    <h2>التميز الأسبوعي</h2>
+                    <div class="date-range-filter-section">
+                        <div class="date-input-group">
+                            <label><i class="far fa-calendar-alt"></i> من</label>
+                            <input type="date" id="weeklyExcellenceFromDate" class="section-date-input" />
+                        </div>
+                        <div class="date-input-group">
+                            <label><i class="far fa-calendar-alt"></i> إلى</label>
+                            <input type="date" id="weeklyExcellenceToDate" class="section-date-input" />
+                        </div>
+                        <button id="applyWeeklyExcellenceFilter" class="btn btn-primary btn-sm">
+                            <i class="fas fa-filter"></i> تطبيق
+                        </button>
+                        <button id="clearWeeklyExcellenceFilter" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-times"></i> مسح
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="weekly-excellence-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>البند</th>
+                                <th>الأسبوع الحالي</th>
+                                <th>الأسبوع السابق</th>
+                                <th>نسبة التغير</th>
+                            </tr>
+                        </thead>
+                        <tbody id="weeklyExcellenceTableBody">
+                            <!-- Will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="loading-spinner" id="weeklyExcellenceLoading"></div>
+                <p class="error-message" id="weeklyExcellenceError"></p>
+            </div>
+
+            <!-- Agent Rank Changes Section -->
+            <div class="card chart-card full-width" id="rankChangesCard">
+                <div class="card-header-with-filter">
+                    <h2><i class="fas fa-exchange-alt"></i> تغييرات المراتب والتصنيفات</h2>
+                    <div class="date-range-filter-section">
+                        <div class="date-input-group">
+                            <label><i class="far fa-calendar-alt"></i> من</label>
+                            <input type="date" id="rankChangesFromDate" class="section-date-input" />
+                        </div>
+                        <div class="date-input-group">
+                            <label><i class="far fa-calendar-alt"></i> إلى</label>
+                            <input type="date" id="rankChangesToDate" class="section-date-input" />
+                        </div>
+                        <button id="applyRankChangesFilter" class="btn btn-primary btn-sm">
+                            <i class="fas fa-filter"></i> تطبيق
+                        </button>
+                        <button id="clearRankChangesFilter" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-times"></i> مسح
+                        </button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="rank-changes-table" id="rankChangesTable">
+                        <thead>
+                            <tr>
+                                <th><i class="fas fa-hashtag"></i> #</th>
+                                <th><i class="fas fa-user"></i> اسم الوكيل</th>
+                                <th><i class="fas fa-id-card"></i> رقم الوكالة</th>
+                                <th><i class="fas fa-layer-group"></i> التصنيف</th>
+                                <th colspan="2" style="text-align: center;"><i class="fas fa-exchange-alt"></i> التغيير (من ← إلى)</th>
+                                <th><i class="fas fa-comment-dots"></i> السبب</th>
+                                <th><i class="fas fa-tasks"></i> الإجراء</th>
+                                <th><i class="fas fa-calendar"></i> التاريخ</th>
+                                <th><i class="fas fa-cog"></i> إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rankChangesTableBody">
+                            <tr class="loading-row">
+                                <td colspan="10">
+                                    <div class="loading-spinner active"></div>
+                                    <p>جاري تحميل بيانات تغييرات المرتبة...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="error-message" id="rankChangesError"></p>
+            </div>
+
+            <!-- أكثر مسابقات تفاعلاً (منقول تحت تغييرات المراتب) -->
+            <div class="card chart-card full-width interactive-section pro" id="mostInteractiveCompetitionsCard">
+                <div class="card-header-with-filter interactive-header clean pro">
+                        <h2><i class="fas fa-fire"></i> أكثر مسابقات تفاعلاً</h2>
+                        <p class="section-subtitle">القوالب الأكثر استخداماً وتفاعلاً خلال الفترة المحددة.</p>
+                        <div class="section-filters">
+                            <div class="date-range-filter-section">
+                                <div class="date-input-group">
+                                    <label><i class="far fa-calendar-alt"></i> من</label>
+                                    <input type="date" id="mostInteractiveFromDate" class="section-date-input" />
+                                </div>
+                                <div class="date-input-group">
+                                    <label><i class="far fa-calendar-alt"></i> إلى</label>
+                                    <input type="date" id="mostInteractiveToDate" class="section-date-input" />
+                                </div>
+                                <button id="applyMostInteractiveFilter" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-filter"></i> تطبيق
+                                </button>
+                                <button id="clearMostInteractiveFilter" class="btn btn-secondary btn-sm">
+                                    <i class="fas fa-times"></i> مسح
+                                </button>
+                            </div>
+                            <div class="filter-toolbar mini clean pro" dir="rtl">
+                                <div class="toolbar-group">
+                                    <label for="mostInteractiveSortBy"><i class="fas fa-sort"></i> فرز</label>
+                                    <select id="mostInteractiveSortBy" class="input-select">
+                                        <option value="views">المشاهدات</option>
+                                        <option value="reactions">التفاعلات</option>
+                                        <option value="participants">المشاركات</option>
+                                        <option value="sends">مرات الإرسال</option>
+                                    </select>
+                                </div>
+                                <div class="toolbar-group">
+                                    <label for="mostInteractiveLimit"><i class="fas fa-list-ul"></i> العدد</label>
+                                    <select id="mostInteractiveLimit" class="input-select">
+                                        <option value="10">10</option>
+                                        <option value="25">25</option>
+                                        <option value="50" selected>50</option>
+                                        <option value="100">100</option>
+                                    </select>
+                                </div>
+                                <button id="mostInteractiveRefresh" class="btn btn-refresh" title="تحديث القائمة"><i class="fas fa-sync"></i></button>
+                            </div>
+                        </div>
+                    </div>
+            <!-- KPIs removed per request: keeping section lean with table only -->
+                <div class="interactive-list-wrapper clean pro">
+                    <div id="mostInteractiveCompetitionsList" class="interactive-list">
+                        <div class="loading-spinner active" style="margin:10px auto"></div>
+                        <p style="margin:0; color:var(--text-secondary-color)">جاري تحميل بيانات المسابقات الأكثر تفاعلاً...</p>
+                    </div>
+                </div>
+                <p class="error-message" id="mostInteractiveCompetitionsError"></p>
+            </div>
+
+
+            <!-- أبرز الوكلاء لكل تصنيف (ديناميكي) -->
+            <div class="card chart-card full-width" id="topAgentsByClassCard">
+                <div class="card-header-with-filter">
+                    <h2><i class="fas fa-star"></i> أبرز الوكلاء لكل تصنيف</h2>
+                    <div class="date-range-filter-section">
+                        <div class="date-input-group">
+                            <label><i class="far fa-calendar-alt"></i> من</label>
+                            <input type="date" id="topAgentsFromDate" class="section-date-input" />
+                        </div>
+                        <div class="date-input-group">
+                            <label><i class="far fa-calendar-alt"></i> إلى</label>
+                            <input type="date" id="topAgentsToDate" class="section-date-input" />
+                        </div>
+                        <button id="applyTopAgentsFilter" class="btn btn-primary btn-sm">
+                            <i class="fas fa-filter"></i> تطبيق
+                        </button>
+                        <button id="clearTopAgentsFilter" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-times"></i> مسح
+                        </button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="rank-changes-table" id="topAgentsByClassTable" dir="rtl">
+                        <thead>
+                            <tr>
+                                <th>الوكيل</th>
+                                <th>التصنيف</th>
+                                <th>المشاهدات</th>
+                                <th>التفاعلات</th>
+                                <th>المشاركات</th>
+                                <th>المسابقات</th>
+                                <th>النقاط</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topAgentsByClassBody">
+                            <tr class="loading-row"><td colspan="7"><div class="loading-spinner active"></div><p>جاري تحميل أبرز الوكلاء...</p></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="error-message" id="topAgentsByClassError"></p>
+            </div>
+
+            <!-- قسم جديد: الوكلاء والمسابقات المرسلة مع نسبة الالتزام -->
+            <div class="card chart-card full-width" id="agentsCompetitionsCard">
+                <div class="card-header-with-filter">
+                    <h2><i class="fas fa-users-cog"></i> الوكلاء والمسابقات المرسلة</h2>
+                    <div class="section-filters">
+                        <div class="date-range-filter-section">
+                            <div class="date-input-group">
+                                <label><i class="far fa-calendar-alt"></i> من</label>
+                                <input type="date" id="agentsCompetitionsFromDate" class="section-date-input" />
+                            </div>
+                            <div class="date-input-group">
+                                <label><i class="far fa-calendar-alt"></i> إلى</label>
+                                <input type="date" id="agentsCompetitionsToDate" class="section-date-input" />
+                            </div>
+                            <button id="applyAgentsCompetitionsFilter" class="btn btn-primary btn-sm">
+                                <i class="fas fa-filter"></i> تطبيق
+                            </button>
+                            <button id="clearAgentsCompetitionsFilter" class="btn btn-secondary btn-sm">
+                                <i class="fas fa-times"></i> مسح
+                            </button>
+                        </div>
+                        <div class="competition-filter-buttons">
+                            <button class="competition-filter-btn active" data-filter="all">
+                                <i class="fas fa-list"></i> الكل
+                            </button>
+                            <button class="competition-filter-btn" data-filter="R">
+                                <i class="fas fa-crown"></i> R
+                            </button>
+                            <button class="competition-filter-btn" data-filter="A">
+                                <i class="fas fa-star"></i> A
+                            </button>
+                            <button class="competition-filter-btn" data-filter="B">
+                                <i class="fas fa-certificate"></i> B
+                            </button>
+                            <button class="competition-filter-btn" data-filter="C">
+                                <i class="fas fa-medal"></i> C
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- إحصائيات مجمعة -->
+                <div class="agents-competitions-stats-summary">
+                    <div class="stat-summary-item">
+                        <i class="fas fa-users"></i>
+                        <span class="stat-label">إجمالي الوكلاء</span>
+                        <span class="stat-value" id="totalAgentsWithCompetitions">0</span>
+                    </div>
+                    <div class="stat-summary-item">
+                        <i class="fas fa-trophy"></i>
+                        <span class="stat-label">إجمالي المسابقات</span>
+                        <span class="stat-value" id="totalAgentCompetitions">0</span>
+                    </div>
+                    <div class="stat-summary-item">
+                        <i class="fas fa-eye"></i>
+                        <span class="stat-label">إجمالي المشاهدات</span>
+                        <span class="stat-value" id="totalAgentViews">0</span>
+                    </div>
+                    <div class="stat-summary-item">
+                        <i class="fas fa-heart"></i>
+                        <span class="stat-label">إجمالي التفاعلات</span>
+                        <span class="stat-value" id="totalAgentReactions">0</span>
+                    </div>
+                    <div class="stat-summary-item">
+                        <i class="fas fa-users"></i>
+                        <span class="stat-label">إجمالي المشاركات</span>
+                        <span class="stat-value" id="totalAgentParticipants">0</span>
+                    </div>
+                    <div class="stat-summary-item">
+                        <i class="fas fa-check-circle"></i>
+                        <span class="stat-label">متوسط الالتزام</span>
+                        <span class="stat-value" id="averageCompliance">0%</span>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="agents-competitions-table" id="agentsCompetitionsTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-user"></i> اسم الوكيل</th>
+                                <th><i class="fas fa-id-card"></i> رقم الوكالة</th>
+                                <th><i class="fas fa-question-circle"></i> السؤال (أحدث مسابقة)</th>
+                                <th><i class="fas fa-check-double"></i> الالتزام بالجدول</th>
+                                <th><i class="fas fa-eye"></i> المشاهدات</th>
+                                <th><i class="fas fa-heart"></i> التفاعلات</th>
+                                <th><i class="fas fa-users"></i> المشاركات</th>
+                                <th><i class="fas fa-tag"></i> التصنيف</th>
+                            </tr>
+                        </thead>
+                        <tbody id="agentsCompetitionsTableBody">
+                            <tr class="loading-row">
+                                <td colspan="9">
+                                    <div class="loading-spinner active"></div>
+                                    <p>جاري تحميل بيانات الوكلاء والمسابقات...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="error-message" id="agentsCompetitionsError"></p>
             </div>
         </div>
     </div>
 
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/utils.js?v=20251127002"></script>
+    <script src="../js/pages/analytics.js?v=20251127002"></script>
 </body>
 </html>

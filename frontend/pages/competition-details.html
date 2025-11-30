@@ -1,0 +1,651 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تفاصيل المسابقة - INZO Competition System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --dark-bg: #0f0f1e;
+            --card-bg: #1a1a2e;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b3c1;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.4);
+            --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .page-wrapper {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page-header {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        .back-btn {
+            background: var(--primary-gradient);
+            border: none;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .back-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .page-title {
+            flex: 1;
+        }
+
+        .page-title h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .competition-status-badge {
+            display: inline-block;
+            padding: 0.5rem 1.5rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: rgba(56, 239, 125, 0.2);
+            color: #38ef7d;
+            border: 1px solid rgba(56, 239, 125, 0.3);
+        }
+
+        .status-completed {
+            background: rgba(79, 172, 254, 0.2);
+            color: #4facfe;
+            border: 1px solid rgba(79, 172, 254, 0.3);
+        }
+
+        .status-awaiting_winners {
+            background: rgba(245, 87, 108, 0.2);
+            color: #f5576c;
+            border: 1px solid rgba(245, 87, 108, 0.3);
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .image-section {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 25px;
+            padding: 2rem;
+            height: fit-content;
+        }
+
+        .competition-image-container {
+            width: 100%;
+            height: 400px;
+            border-radius: 15px;
+            overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+        }
+
+        .competition-image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .details-section {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .info-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 25px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .info-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .info-card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .info-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .info-label i {
+            color: #667eea;
+        }
+
+        .info-value {
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .stat-card {
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 15px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateY(-3px);
+        }
+
+        .stat-card i {
+            font-size: 2rem;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            display: block;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            display: block;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .description-box {
+            background: rgba(102, 126, 234, 0.05);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            border-radius: 15px;
+            padding: 1.5rem;
+            color: var(--text-secondary);
+            line-height: 1.8;
+            white-space: pre-line;
+        }
+
+        /* Stats Cards Container */
+        .stats-cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, transparent 0%, rgba(255,255,255,0.03) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-xl);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-card.stat-views {
+            border-color: rgba(79, 163, 255, 0.3);
+        }
+
+        .stat-card.stat-views:hover {
+            border-color: rgba(79, 163, 255, 0.6);
+            box-shadow: 0 10px 40px rgba(79, 163, 255, 0.2);
+        }
+
+        .stat-card.stat-reactions {
+            border-color: rgba(245, 87, 108, 0.3);
+        }
+
+        .stat-card.stat-reactions:hover {
+            border-color: rgba(245, 87, 108, 0.6);
+            box-shadow: 0 10px 40px rgba(245, 87, 108, 0.2);
+        }
+
+        .stat-card.stat-participants {
+            border-color: rgba(56, 239, 125, 0.3);
+        }
+
+        .stat-card.stat-participants:hover {
+            border-color: rgba(56, 239, 125, 0.6);
+            box-shadow: 0 10px 40px rgba(56, 239, 125, 0.2);
+        }
+
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .stat-views .stat-icon {
+            background: linear-gradient(135deg, #4fa3ff 0%, #0084ff 100%);
+            box-shadow: 0 8px 20px rgba(79, 163, 255, 0.3);
+        }
+
+        .stat-reactions .stat-icon {
+            background: linear-gradient(135deg, #f5576c 0%, #e91e63 100%);
+            box-shadow: 0 8px 20px rgba(245, 87, 108, 0.3);
+        }
+
+        .stat-participants .stat-icon {
+            background: linear-gradient(135deg, #38ef7d 0%, #11998e 100%);
+            box-shadow: 0 8px 20px rgba(56, 239, 125, 0.3);
+        }
+
+        .stat-icon i {
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        .stat-content {
+            flex: 1;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+
+        .stat-views .stat-value {
+            color: #4fa3ff;
+        }
+
+        .stat-reactions .stat-value {
+            color: #f5576c;
+        }
+
+        .stat-participants .stat-value {
+            color: #38ef7d;
+        }
+
+        .agent-card {
+            background: var(--primary-gradient);
+            border-radius: 15px;
+            padding: 1.5rem;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .agent-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .agent-info h3 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1.2rem;
+        }
+
+        .agent-info p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.35rem 0.85rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: rgba(102, 126, 234, 0.15);
+            color: #667eea;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .badge.standard {
+            background: rgba(56, 239, 125, 0.15);
+            color: #38ef7d;
+            border-color: rgba(56, 239, 125, 0.3);
+        }
+
+        .badge.special {
+            background: rgba(245, 87, 108, 0.15);
+            color: #f5576c;
+            border-color: rgba(245, 87, 108, 0.3);
+        }
+
+        .badge.deposit {
+            background: rgba(56, 239, 125, 0.15);
+            color: #38ef7d;
+            border-color: rgba(56, 239, 125, 0.3);
+        }
+
+        .badge.trading {
+            background: rgba(245, 87, 108, 0.15);
+            color: #f5576c;
+            border-color: rgba(245, 87, 108, 0.3);
+        }
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 4rem;
+        }
+
+        .loading-spinner.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid var(--border-color);
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        .error-message {
+            background: rgba(245, 87, 108, 0.1);
+            border: 1px solid rgba(245, 87, 108, 0.3);
+            color: #f5576c;
+            padding: 1.5rem;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .page-wrapper {
+                padding: 1rem;
+            }
+
+            .page-title h1 {
+                font-size: 1.5rem;
+            }
+
+            .stats-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- Header -->
+        <div class="page-header">
+            <button class="back-btn" id="backBtn">
+                <i class="fas fa-arrow-right"></i>
+            </button>
+            <div class="page-title">
+                <h1 id="pageTitle">تفاصيل المسابقة</h1>
+                <span class="competition-status-badge" id="statusBadge"></span>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading-spinner" id="loadingSpinner">
+            <div class="spinner"></div>
+            <p>جاري تحميل التفاصيل...</p>
+        </div>
+
+        <!-- Error -->
+        <div class="error-message" id="errorMessage"></div>
+
+        <!-- Content -->
+        <div id="content" style="display: none;">
+            <div class="content-grid">
+                <!-- Image Section -->
+                <div class="image-section">
+                    <div class="competition-image-container">
+                        <img id="competitionImage" src="../images/competition_bg.jpg" alt="صورة المسابقة">
+                    </div>
+                </div>
+
+                <!-- Details Section -->
+                <div class="details-section">
+                    <!-- Main Info -->
+                    <div class="info-card">
+                        <h2 id="questionTitle">عنوان المسابقة</h2>
+                        <div class="description-box" id="description">وصف المسابقة...</div>
+                    </div>
+
+                    <!-- Stats Cards -->
+                    <div class="stats-cards-container">
+                        <div class="stat-card stat-views">
+                            <div class="stat-icon">
+                                <i class="fas fa-eye"></i>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-label">المشاهدات</div>
+                                <div class="stat-value" id="statsViews">0</div>
+                            </div>
+                        </div>
+                        <div class="stat-card stat-reactions">
+                            <div class="stat-icon">
+                                <i class="fas fa-heart"></i>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-label">التفاعلات</div>
+                                <div class="stat-value" id="statsReactions">0</div>
+                            </div>
+                        </div>
+                        <div class="stat-card stat-participants">
+                            <div class="stat-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-content">
+                                <div class="stat-label">المشاركات</div>
+                                <div class="stat-value" id="statsParticipants">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Competition Details -->
+                    <div class="info-card">
+                        <h2>تفاصيل المسابقة</h2>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">
+                                    <i class="fas fa-hourglass-half"></i>
+                                    مدة المسابقة
+                                </div>
+                                <div class="info-value" id="duration">-</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">
+                                    <i class="fas fa-calendar-plus"></i>
+                                    تاريخ الإنشاء
+                                </div>
+                                <div class="info-value" id="createdAt">-</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">
+                                    <i class="fas fa-calendar-check"></i>
+                                    تاريخ الانتهاء
+                                </div>
+                                <div class="info-value" id="endsAt">-</div>
+                            </div>
+                            <div class="info-item" id="tradingBonusItem" style="display: none;">
+                                <div class="info-label">
+                                    <i class="fas fa-dollar-sign"></i>
+                                    بونص تداولي
+                                </div>
+                                <div class="info-value" id="tradingBonus">-</div>
+                            </div>
+                            <div class="info-item" id="depositBonusItem" style="display: none;">
+                                <div class="info-label">
+                                    <i class="fas fa-gift"></i>
+                                    بونص الإيداع
+                                </div>
+                                <div class="info-value" id="depositBonus">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Agent Info -->
+                    <div class="info-card">
+                        <h2>معلومات الوكيل</h2>
+                        <div class="agent-card">
+                            <div class="agent-icon">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="agent-info">
+                                <h3 id="agentName">اسم الوكيل</h3>
+                                <p id="agentClassification">التصنيف</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/utils.js?v=20251127002"></script>
+    <script src="../js/pages/competition-details.js?v=20251127002"></script>
+</body>
+</html>

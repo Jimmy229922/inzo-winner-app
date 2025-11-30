@@ -1,22 +1,28 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام الإدارة - inzo</title>
+    <title>IB Competition system</title>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <!-- Bundled CSS -->
-    <link rel="stylesheet" href="/dist/bundle.css">
+    <!-- Bundled CSS (cache-busted) -->
+    <link rel="stylesheet" href="/dist/bundle.css?v=20251130012">
+    <!-- Cyan Theme Enhancements -->
+    <link rel="stylesheet" href="/assets/css/cyan-theme-enhancements.css?v=20251113040">`n    <!-- Calendar Compact CSS -->`n    <link rel="stylesheet" href="/assets/css/calendar-compact.css?v=20251114002">
+    <!-- Toggle Fix CSS - General toggles -->
+    <link rel="stylesheet" href="/assets/css/toggle-fix.css?v=20251114012">
+    <!-- Toggle Calendar & Tasks CSS - MUST BE AFTER toggle-fix to override -->
+    <link rel="stylesheet" href="/assets/css/toggle-calendar-tasks.css?v=20251114003">
 </head>
 
 <body>
-    <!-- New Top Navigation Bar -->
+    <!-- Top Navigation Bar (Updated Branding) -->
     <nav class="navbar">
         <div class="navbar-container">
             <div class="navbar-left">
-                <a href="#home" class="brand-v2">
-                    <img src="images/logo.png" alt="IB Competition Logo" class="brand-logo">
+                <a href="#home" class="brand-v2" title="IB Competition system">
+                    <img src="images/logo.png" alt="IB Competition Logo" class="brand-logo" loading="lazy">
                     <span class="brand-text">IB Competition system</span>
                 </a>
                 <a href="#home" id="nav-home" class="nav-link active"><i class="fas fa-home"></i> الرئيسية</a>
@@ -35,10 +41,11 @@
                         <div class="dropdown-divider"></div>
                         <a href="#competition-templates" id="nav-competition-templates" class="dropdown-item"><i class="fas fa-file-alt"></i> إدارة القوالب</a>
                         <a href="#archived-templates" id="nav-archived-templates" class="dropdown-item"><i class="fas fa-box-open"></i> أرشيف القوالب</a>
+                        <div class="dropdown-divider"></div>
+                        <a href="#winner-roulette" id="nav-winner-roulette" class="dropdown-item"><i class="fas fa-random"></i> اختيار الفائزين</a>
                     </div>
                 </div>
                 <a href="#analytics" id="nav-analytics" class="nav-link"><i class="fas fa-chart-bar"></i> التحليلات</a>
-                <a href="#statistics" id="nav-statistics" class="nav-link"><i class="fas fa-chart-pie"></i> الإحصائيات</a>
             </div>
             <div class="navbar-center">
                 <div class="search-container">
@@ -93,10 +100,31 @@
     <div id="page-loader" class="page-loader show"><div class="spinner"></div><p>جاري التحميل ...</p></div>
 
     <button id="scroll-to-top-btn" title="العودة للأعلى"><i class="fas fa-arrow-up"></i></button>
+
+    <!-- Modal for Activity Log Details -->
+    <div id="activity-log-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>تفاصيل السجل</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Metadata will be inserted here -->
+            </div>
+        </div>
+    </div>
+
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Chart.js Datalabels plugin -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-    <!-- Bundled JavaScript -->
-    <script src="/dist/bundle.js" defer></script>
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <!-- Bundled JavaScript (cache-busted) -->
+    <script src="/dist/bundle.js?v=20251130012" defer></script>
 </body>
+</html>
+
+
+
+

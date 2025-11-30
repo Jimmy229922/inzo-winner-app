@@ -1,4 +1,4 @@
-const AGENTS_PER_PAGE = 10;
+﻿const AGENTS_PER_PAGE = 10;
 
 async function renderManageAgentsPage() {
     // --- NEW: Permission Check ---
@@ -525,8 +525,10 @@ async function handleBulkSendBalances() {
 
                 // --- FIX: Use authedFetch for authenticated requests ---
                 try {
+                    if (!agent.telegram_chat_id) throw new Error('لا يوجد معرف مجموعة تلجرام للوكيل.');
                     const response = await authedFetch('/api/post-announcement', {
                         method: 'POST',
+                        headers: { 'Content-Type': 'application/json;charset=UTF-8' },
                         body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
                     });
 
@@ -621,8 +623,10 @@ async function handleBulkBroadcast() {
                         for (let i = 0; i < eligibleAgents.length; i++) {
                             const agent = eligibleAgents[i];
                             try {
+                                if (!agent.telegram_chat_id) throw new Error('لا يوجد معرف مجموعة تلجرام للوكيل.');
                                 const sendResponse = await authedFetch('/api/post-announcement', {
                                     method: 'POST',
+                                    headers: { 'Content-Type': 'application/json;charset=UTF-8' },
                                     body: JSON.stringify({ message: message, chatId: agent.telegram_chat_id })
                                 });
                                 if (!sendResponse.ok) {

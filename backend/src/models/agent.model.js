@@ -12,7 +12,8 @@ const AgentSchema = new mongoose.Schema({
     telegram_group_name: { type: String, default: null },
     renewal_period: { type: String, default: 'none' },
     audit_days: { type: [Number], default: [] },
-    competition_duration: { type: String, enum: ['24h', '48h', null], default: null },
+    // UPDATED: Allow test duration '5s' in addition to regular durations.
+    competition_duration: { type: String, enum: ['24h', '48h', '5s', null], default: null },
     competitions_per_week: { type: Number, default: 1 },
     competition_bonus: { type: Number, default: 0 },
     deposit_bonus_percentage: { type: Number, default: 0 },

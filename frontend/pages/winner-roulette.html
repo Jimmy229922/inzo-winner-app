@@ -1,0 +1,202 @@
+﻿<section class="page-section" id="winner-roulette-page">
+  <div class="page-header" style="background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1)); padding: 30px 40px; border-radius: 20px; margin-bottom: 25px; border: 1px solid rgba(99,102,241,0.2);">
+    <h1 style="background: linear-gradient(135deg, #6366f1, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 2.2em; margin-bottom: 12px;"><i class="fas fa-random" style="color: #6366f1;"></i> اختيار الفائزين لمسابقات الوكيل</h1>
+    <p class="page-subtitle" style="font-size: 1.1em; color: #9ca3af;">أدخل أو الصق الأسماء مع أرقام الحسابات ثم قم بتدوير العجلة لاختيار فائز عشوائي بشكلٍ شفاف.</p>
+  </div>
+
+  <div class="wr-layout">
+    <div class="wr-panel" id="wr-left-panel">
+      <div class="wr-panel-header">
+        <h3><i class="fas fa-list"></i> إدخال المشاركين</h3>
+      </div>
+      <small>صيغة مقترحة لكل سطر: <code>1- الاسم الثلاثي — 3191848</code> أو <code>الاسم — 3191848</code></small>
+      <textarea id="participants-input" class="wr-textarea" placeholder="1- ابتسام قاسم هاني — 3191848\n2- محمد أحمد علي — 5566123\n3- سارة محمود عبدالله — 7123456"></textarea>
+      <div class="wr-inline-actions">
+        <div class="spacer"></div>
+      </div>
+
+      <h4 class="wr-section-title">المشاركون</h4>
+      <div id="participants-list" class="wr-scroll-box"></div>
+
+      <h4 class="wr-section-title">الفائزون</h4>
+      <div id="winners-list-bottom" class="wr-scroll-box"></div>
+
+      <div class="wr-inline-actions" style="margin-top:4px; gap: 6px; flex-wrap: wrap;">
+        <button id="send-winners-report" class="wr-btn wr-btn-primary"><i class="fas fa-paper-plane"></i> إرسال الكل للوكيل</button>
+        <button id="send-winners-details" class="wr-btn wr-btn-primary" style="background: linear-gradient(135deg,#0ea5e9,#0284c7)"><i class="fas fa-id-card"></i> إرسال الهوية والكليشة للوكيل</button>
+        <button id="export-winners" class="wr-btn wr-btn-success"><i class="fas fa-download"></i> تصدير الفائزين</button>
+        <button id="save-session" class="wr-btn wr-btn-secondary"><i class="fas fa-save"></i> حفظ الجلسة</button>
+                <div class="wr-warning-toggles" style="display:flex; flex-direction:column; gap:4px; margin-top:6px; width:100%;">
+          <label class="wr-toggle-label" style="display:flex; align-items:center; gap:6px; font-size:0.9rem;">
+            <input type="checkbox" id="warn-meet-client">
+            <span>إضافة تنبيه: ⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً</span>
+          </label>
+          <label class="wr-toggle-label" style="display:flex; align-items:center; gap:6px; font-size:0.9rem;">
+            <input type="checkbox" id="warn-prev-winner">
+            <span>إضافة تنبيه: ‼️ فائز سابق ببونص تداولي، تأكد من نشر المسابقة السابقة قبل الاعتماد</span>
+          </label>
+        </div>
+    </div>
+
+    <div class="wr-panel" id="wr-right-panel">
+      <div class="wr-panel-header">
+        <h3><i class="fas fa-sync-alt"></i> عجلة الاختيار</h3>
+      </div>
+      <div class="wr-settings-grid">
+        <div class="wr-setting">
+          <label>الإستبعاد بعد الفوز</label>
+          <div class="wr-checkbox-row">
+            <input type="checkbox" id="exclude-winner" checked>
+            <span style="font-size:.7rem;color:var(--wr-text-dim);">إزالة الاسم بعد اختياره</span>
+          </div>
+        </div>
+        <div class="wr-setting">
+          <label>عدد اختيارات متتالية</label>
+          <input type="number" id="batch-count" min="1" value="1">
+        </div>
+        <div class="wr-setting">
+          <label>سرعة الدوران</label>
+          <select id="spin-speed">
+            <option value="normal">عادي</option>
+            <option value="fast">سريع</option>
+            <option value="slow">بطيء</option>
+          </select>
+        </div>
+        <div class="wr-setting">
+          <label>تأثيرات مرئية</label>
+          <div class="wr-checkbox-row">
+            <input type="checkbox" id="enable-confetti" checked>
+            <span style="font-size:.7rem;color:var(--wr-text-dim);">عرض الكونفتي</span>
+          </div>
+        </div>
+      </div>
+      <div class="wr-wheel-wrapper">
+        <div class="wr-wheel-container">
+          <div class="wr-pointer-new"></div>
+          <canvas id="winner-roulette-wheel"></canvas>
+          <div class="wr-wheel-center">INZO</div>
+        </div>
+        <div class="wr-wheel-base"></div>
+        <div class="wr-actions-row">
+          <button id="auto-pick-btn" class="wr-btn wr-btn-secondary wr-btn-large"><i class="fas fa-forward"></i> اختيار متتالي</button>
+          <button id="reset-wheel" class="wr-btn wr-btn-danger wr-btn-large"><i class="fas fa-rotate-left"></i> إعادة ضبط</button>
+          <button id="open-wheelofnames" class="wr-btn wr-btn-primary wr-btn-large"><i class="fas fa-external-link-alt"></i> Wheel of Names</button>
+        </div>
+      </div>
+      
+      <div class="wr-rules-box">
+        <h4><i class="fas fa-info-circle"></i> قواعد الروليت</h4>
+        <ul>
+          <li>اضغط على الشعار في وسط العجلة لبدء الدوران</li>
+          <li>يتم اختيار الفائز عشوائياً من المشاركين</li>
+          <li>يمكن استبعاد الفائز من الدورات التالية (افتراضياً مفعل)</li>
+          <li>يمكن اختيار عدة فائزين متتالياً</li>
+          <li>جميع الاختيارات تتم بشكل شفاف وعادل</li>
+        </ul>
+      </div>
+      
+      <small style="text-align:center;color:var(--wr-text-dim);">يتم اختيار الفائزين عشوائياً باستخدام توزيع موحد دون تحيز.</small>
+    </div>
+  </div>
+</section>
+
+<div id="winner-modal" class="wr-celebration-modal" style="display: none;">
+  <div class="wr-celebration-content">
+    <h2 class="wr-celebration-title">تسجيل الفائز</h2>
+    
+    <div class="wr-winner-card">
+      <div class="wr-winner-name" id="celebration-winner-name">—</div>
+      <div class="wr-winner-account" id="celebration-winner-account">—</div>
+    </div>
+    
+    <div class="wr-winner-form">
+      <div class="wr-form-group">
+        <label for="winner-email">
+          <i class="fas fa-envelope"></i>
+          البريد الإلكتروني
+        </label>
+        <input 
+          type="email" 
+          id="winner-email" 
+          class="wr-form-input" 
+          placeholder="أدخل البريد الإلكتروني للفائز"
+          autocomplete="email"
+        />
+      </div>
+      
+      <div class="wr-form-group">
+        <label for="winner-national-id">
+          <i class="fas fa-id-card"></i>
+          رقم الهوية الشخصية
+        </label>
+        <input 
+          type="text" 
+          id="winner-national-id" 
+          class="wr-form-input" 
+          placeholder="أدخل رقم الهوية الشخصية"
+        />
+      </div>
+      
+      <div class="wr-form-group">
+        <label for="winner-id-image">
+          <i class="fas fa-image"></i>
+          صورة الهوية الشخصية
+        </label>
+        <input 
+          type="file" 
+          id="winner-id-image" 
+          class="wr-form-input" 
+          accept="image/*"
+        />
+        <small style="color: #888; font-size: 0.85rem; display: block; margin-top: 4px;">
+          اضغط Ctrl+V للصق صورة من الحافظة أو اختر ملف
+        </small>
+      </div>
+      
+      <div class="wr-prize-display">
+        <div class="wr-prize-icon">
+          <i class="fas fa-gift"></i>
+        </div>
+        <div class="wr-prize-details">
+          <div class="wr-prize-type" id="celebration-prize-type">نوع الجائزة</div>
+          <div class="wr-prize-value" id="celebration-prize-value">—</div>
+        </div>
+      </div>
+    </div>
+    
+    <button id="confirm-winner" class="wr-confirm-btn">
+      <i class="fas fa-check-circle"></i>
+      اعتماد الفائز
+    </button>
+  </div>
+</div>
+
+<canvas id="wr-confetti-canvas"></canvas>
+
+<script src="../js/utils.js?v=20251127011"></script>
+<script>
+    console.log('🌐 [HTML] DOMContentLoaded script loaded');
+    
+    // Force clear old winner modal cache
+    window.addEventListener('DOMContentLoaded', function() {
+        console.log('🎬 [HTML] DOMContentLoaded event fired');
+        console.log('🔍 [HTML] Checking for old modal in DOM...');
+        
+        const oldModal = document.getElementById('winner-modal');
+        if (oldModal) {
+            console.log('🗑️ [HTML] Found old cached modal, removing it');
+            console.log('📊 [HTML] Old modal innerHTML length:', oldModal.innerHTML?.length || 0);
+            oldModal.remove();
+            console.log('✅ [HTML] Old modal removed');
+        } else {
+            console.log('✅ [HTML] No old modal found in DOM');
+        }
+        
+        console.log('🎬 [HTML] DOMContentLoaded handler completed');
+    });
+    
+    console.log('✅ [HTML] Script setup complete');
+</script>
+    <script src="../js/pages/winner-roulette.js?v=20251130007"></script>
+
+

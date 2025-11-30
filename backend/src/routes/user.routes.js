@@ -87,6 +87,9 @@ router.route('/')
     .get(authenticate, isAdminOrSuperAdmin, userController.getAllUsers) // FIX: Allow Admins and Super Admins to get all users
     .post(authenticate, isAdminOrSuperAdmin, userController.createUser); // FIX: Allow Admins and Super Admins to create users
 
+// Purge all users route (super_admin only)
+router.delete('/purge-all', authenticate, isSuperAdmin, userController.purgeAllUsers);
+
 router.route('/:id')
     .get(authenticate, userController.getUserById)
     .put(authenticate, canUpdateUser, userController.updateUser)

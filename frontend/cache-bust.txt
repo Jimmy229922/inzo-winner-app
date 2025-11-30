@@ -1,0 +1,12 @@
+﻿
+Saturday, November 30, 2025 - Updated Winner Modal: Removed Scroll & Auto Prize Display
+- Removed scroll from winner modal (full screen display)
+- Added automatic prize value display for all prize types
+- Enhanced prize type selection with deposit_prev validation
+- Updated celebration modal with modern purple theme
+- Enhanced buttons, cards, and interactive elements
+
+
+Saturday, November 16, 2025 - Updated Top Agents Clear Filter Button
+
+

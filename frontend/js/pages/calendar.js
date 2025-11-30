@@ -1,4 +1,4 @@
-const ITEM_HEIGHT = 140; // 130px height + 10px margin-bottom
+﻿const ITEM_HEIGHT = 140; // 130px height + 10px margin-bottom
 const BUFFER_ITEMS = 5; // Render items above and below the viewport for smoother scrolling
 let weeklyResetCountdownInterval = null;
 
@@ -76,8 +76,11 @@ function createAgentItemHtml(agent, dayIndex, isToday, tasksState, number, searc
     applyHighlight(element, searchTerm);
 
     const nameEl = element.querySelector('.agent-name');
-    nameEl.insertAdjacentHTML('beforeend', '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>');
-    nameEl.classList.toggle('has-checkmark', isComplete);
+    // إضافة علامة الصح فقط عند تفعيل التدقيق
+    if (isComplete) {
+        nameEl.insertAdjacentHTML('beforeend', '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>');
+        nameEl.classList.add('has-checkmark');
+    }
 
     return element;
 }
@@ -124,6 +127,7 @@ class CalendarUI {
         this.tasksState = null;
         this.daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة',];
         this.searchDebounceTimer = null;
+        this._syncInterval = null;
 
         this.boundHandleChange = this._handleChange.bind(this);
         this.boundHandleResetAll = this.handleResetAllTasks.bind(this);
@@ -134,6 +138,10 @@ class CalendarUI {
         clearTimeout(this.searchDebounceTimer);
         if (weeklyResetCountdownInterval) {
             clearInterval(weeklyResetCountdownInterval);
+        }
+        if (this._syncInterval) {
+            clearInterval(this._syncInterval);
+            this._syncInterval = null;
         }
         this.calendarContainer.removeEventListener('change', this.boundHandleChange);
         const resetBtn = this.container.querySelector('#reset-all-tasks-btn');
@@ -166,6 +174,22 @@ class CalendarUI {
         this._renderAllAgentCards();
         this._setupEventListeners();
         setupCalendarFilters(this);
+
+        // مزامنة دورية مع الخادم لضمان ظهور تغييرات الجميع للجميع
+        if (this._syncInterval) clearInterval(this._syncInterval);
+        this._syncInterval = setInterval(() => {
+            try {
+                if (window.taskStore && window.taskStore.state) {
+                    const prevState = JSON.stringify(this.tasksState?.tasks || {});
+                    const newState = JSON.stringify(window.taskStore.state.tasks || {});
+                    if (prevState !== newState) {
+                        this.tasksState = window.taskStore.state;
+                        this._renderDayColumns();
+                        this._renderAllAgentCards();
+                    }
+                }
+            } catch (_) { /* ignore */ }
+        }, 20000); // كل 20 ثانية
 
         // The global subscription is removed to fix the bug.
         // this.boundUpdateUIFromState = updateCalendarUIFromState.bind(this);
@@ -269,23 +293,40 @@ class CalendarUI {
         const taskType = checkbox.classList.contains('audit-check') ? 'audited' : 'competition_sent';
         const status = checkbox.checked;
 
+        // ========== DEBUG CONSOLE LOGS ==========
+        console.log('🔄 Toggle Changed!');
+        console.log('📍 Agent ID:', agentId);
+        console.log('📅 Day Index:', dayIndex);
+        console.log('🏷️ Task Type:', taskType);
+        console.log('✅ New Status:', status ? 'ON (checked)' : 'OFF (unchecked)');
+        console.log('🎯 Checkbox element:', checkbox);
+        console.log('🔍 Checkbox classes:', checkbox.className);
+        console.log('📊 Checkbox checked property:', checkbox.checked);
+        console.log('========================================');
+        // ========================================
+
         const agentItem = checkbox.closest('.calendar-agent-item');
         agentItem.classList.add('is-loading');
         agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = true);
 
         try {
             // This updates the central store
+            console.log('📤 Sending update to server...');
             await window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, status);
+            console.log('✅ Server update successful!');
             
             // FIX: Now, manually and correctly update the UI for this single item.
             updateCalendarUIFromState.call(this, { agentId, dayIndex, taskType, status });
+            console.log('🎨 UI updated successfully!');
 
         } catch (error) {
             console.error(`[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`, error);
+            console.error('❌ Error details:', error);
             showToast('فشل تحديث حالة المهمة.', 'error');
             
             // Revert UI on error
             checkbox.checked = !status;
+            console.log('⏪ Reverted checkbox to:', !status);
             agentItem.classList.remove('is-loading');
             agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
         }
@@ -506,6 +547,7 @@ function setupClickAndDragEventListeners(container, calendarData, uiInstance) {
             targetColumn.classList.remove('drag-over');
             const newDayIndex = parseInt(targetColumn.dataset.dayIndex, 10);
             const agentId = draggedItem.dataset.agentId;
+            const agentNameSafe = draggedItem?.dataset?.name || 'هذا الوكيل';
 
             if (sourceDayIndex === newDayIndex) return;
 
@@ -518,7 +560,7 @@ function setupClickAndDragEventListeners(container, calendarData, uiInstance) {
                 }
 
                 showConfirmationModal(
-                    `هل أنت متأكد من نقل الوكيل <strong>${draggedItem.dataset.name}</strong> من يوم <strong>${uiInstance.daysOfWeek[sourceDayIndex]}</strong> إلى يوم <strong>${uiInstance.daysOfWeek[newDayIndex]}</strong>؟`,
+                    `هل أنت متأكد من نقل الوكيل <strong>${agentNameSafe}</strong> من يوم <strong>${uiInstance.daysOfWeek[sourceDayIndex]}</strong> إلى يوم <strong>${uiInstance.daysOfWeek[newDayIndex]}</strong>؟`,
                     async () => {
                         const agentResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
                         const { data: agent } = await agentResponse.json();

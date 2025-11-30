@@ -1,4 +1,4 @@
-const RANKS_DATA = {
+﻿const RANKS_DATA = {
     // الاعتيادية
     'BEGINNING': { competition_bonus: 60, deposit_bonus_percentage: null, deposit_bonus_count: null },
     'GROWTH': { competition_bonus: 100, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
@@ -386,7 +386,7 @@ function renderBulkAddAgentsModal() {
                 </label>
                 <p class="form-hint">
                     يجب أن تكون البيانات مفصولة بمسافة Tab (يمكنك نسخها من جدول Excel).<br>
-                    الترتيب المطلوب للأعمدة: <strong>الاسم، رقم الوكالة، التصنيف، المرتبة، فترة التجديد، أيام التدقيق، رابط القناة، رابط الجروب، معرف الدردشة، اسم المجموعة، مدة المسابقة (24h أو 48h)</strong>
+                    الترتيب المطلوب للأعمدة: <strong>الاسم، رقم الوكالة، التصنيف، المرتبة، فترة التجديد، أيام التدقيق، رابط القناة، رابط الجروب، معرف الدردشة، اسم المجموعة، مدة المسابقة (24h أو 48h أو 5s للاختبار)</strong>
                 </p>
                 <textarea id="bulk-agents-data" rows="15" placeholder="مثال:\nأحمد علي\t12345\tR\tGrowth\tweekly\t1,3,5\thttps://t.me/channel\thttps://t.me/group\t-100123\tGroup Name\t48h"></textarea>
             </div>
@@ -497,12 +497,14 @@ async function handleBulkAddAgents(data) {
         if (competition_duration) {
             // Normalize input: "24 h" -> "24h", "24" -> "24"
             const normalized = competition_duration.trim().replace(/\s/g, ''); 
-            if (normalized.startsWith('24')) {
+            if (normalized === '5s') {
+                processed_competition_duration = '5s';
+            } else if (normalized.startsWith('24')) {
                 processed_competition_duration = '24h';
             } else if (normalized.startsWith('48')) {
                 processed_competition_duration = '48h'; // --- IMPROVEMENT: More specific error message ---
             } else {
-                errors.push(`السطر ${index + 1}: مدة المسابقة "${competition_duration}" غير صالحة. يجب أن تكون '24h' أو '48h'.`);
+                errors.push(`السطر ${index + 1}: مدة المسابقة "${competition_duration}" غير صالحة. يجب أن تكون '24h' أو '48h' أو '5s'.`);
                 return;
             }
         }

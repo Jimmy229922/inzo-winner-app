@@ -841,6 +841,9 @@ async function renderCompetitionCreatePage(agentId) {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        // منع الضغط المزدوج على زر الإرسال
+        if (form.dataset.sending === 'true') return;
+        form.dataset.sending = 'true';
         const sendBtn = e.target.querySelector('.btn-send-telegram');
         const originalBtnHtml = sendBtn.innerHTML;
         sendBtn.disabled = true;
@@ -897,6 +900,10 @@ async function renderCompetitionCreatePage(agentId) {
 
             sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
 
+            // استخدم مفتاح طلب ثابت خلال الإرسال لمنع إنشاء مسابقتين بالخطأ
+            const requestKey = form.dataset.requestId || `comp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            form.dataset.requestId = requestKey;
+
             const competitionPayload = {
                 name: selectedTemplate.question,
                 description: descInput.value,
@@ -911,7 +918,8 @@ async function renderCompetitionCreatePage(agentId) {
                 winners_count: winnersCount,
                 prize_per_winner: prizePerWinner,
                 template_id: selectedTemplate._id,
-                image_url: finalImageUrl
+                image_url: finalImageUrl,
+                client_request_id: requestKey
             };
 
             const compResponse = await authedFetch('/api/competitions', {
@@ -979,6 +987,8 @@ async function renderCompetitionCreatePage(agentId) {
             // Using .hash only changes the URL fragment without reloading, which can show stale cached data.
             // Using .assign() reloads the page, ensuring the latest agent data (with deducted balance) is fetched from the server.
             showToast('اكتملت العملية. جاري الانتقال لصفحة الوكيل...', 'info');
+            form.dataset.sending = 'false';
+            delete form.dataset.requestId;
             window.location.assign(`/#profile/${agent._id}`);
 
         } catch (error) {
@@ -986,6 +996,8 @@ async function renderCompetitionCreatePage(agentId) {
             console.error('Competition creation failed:', error);
             sendBtn.disabled = false;
             sendBtn.innerHTML = originalBtnHtml;
+            form.dataset.sending = 'false';
+            delete form.dataset.requestId;
         }
     });
 }

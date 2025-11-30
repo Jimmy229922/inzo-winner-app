@@ -6,7 +6,12 @@ const { postToTelegram, sendPhotoToTelegram } = require('./utils/telegram'); // 
 const { renewEligibleAgentBalances } = require('./controllers/agent.controller'); // NEW: Import renewal function
 
 let onlineClientsRef; // Reference to online clients map from server.js
-let telegramBotRef; // NEW: Reference to the Telegram bot instance
+let telegramBotRef; // Reference to the Telegram bot instance
+
+// Allow late injection/update of the Telegram bot after startup
+const setTelegramBot = (bot) => {
+    telegramBotRef = bot;
+};
 
 /**
  * @desc    مهمة مجدولة لإعادة تعيين جميع مهام التقويم الأسبوعية.
@@ -44,7 +49,8 @@ const scheduleWeeklyTaskReset = () => {
  * @desc    مهمة مجدولة للتحقق من المسابقات المنتهية كل دقيقة.
  */
 const scheduleExpiredCompetitionCheck = () => {
-    cron.schedule('* * * * *', async () => { // Runs every minute
+    // Run every 5 seconds to support 5s test competitions
+    cron.schedule('*/5 * * * * *', async () => { // Every 5 seconds
         try {
             const now = new Date();
             const expiredCompetitions = await Competition.find({
@@ -58,7 +64,9 @@ const scheduleExpiredCompetitionCheck = () => {
 
             for (const comp of expiredCompetitions) {
                 comp.status = 'awaiting_winners';
-                comp.processed_at = new Date();
+                if (!comp.winner_request_sent_at) {
+                    comp.winner_request_sent_at = new Date();
+                }
                 await comp.save();
 
                 const agent = comp.agent_id;
@@ -113,13 +121,13 @@ const scheduleAgentBalanceRenewal = (onlineClients) => {
  * @desc    يبدأ جميع المهام المجدولة في النظام.
  */
 const startAllSchedulers = (onlineClients, telegramBot) => {
-    console.log('[Scheduler] Initializing all background jobs...');
+    // console.log('[Scheduler] Initializing all background jobs...');
     onlineClientsRef = onlineClients; // Store the reference
-    telegramBotRef = telegramBot; // NEW: Store the Telegram bot reference
+    telegramBotRef = telegramBot; // Store the Telegram bot reference (may be null at boot)
     scheduleWeeklyTaskReset();
     scheduleExpiredCompetitionCheck();
     scheduleAgentBalanceRenewal(); // NEW: Start the balance renewal job
-    console.log('[Scheduler] All background jobs have been started.');
+    // console.log('[Scheduler] All background jobs have been started.');
 };
 
-module.exports = { startAllSchedulers };
+module.exports = { startAllSchedulers, setTelegramBot };

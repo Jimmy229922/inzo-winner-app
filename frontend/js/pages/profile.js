@@ -1,13 +1,86 @@
+﻿// Profile.js - Updated: 2025-11-13 04:36:56
 let competitionCountdownIntervals = [];
 let renewalCountdownInterval = null; // For the new renewal countdown
 let isRenewing = false; // Flag to prevent renewal race condition
 const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
 let profilePageEventListeners = []; // Defensive: To manage event listeners
 
+// دالة للحصول على الوقت النسبي
+function getRelativeTime(date) {
+    const now = new Date();
+    const diff = now - date;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'الآن';
+    if (minutes < 60) return `منذ ${minutes} دقيقة`;
+    if (hours < 24) return `منذ ${hours} ساعة`;
+    if (days < 7) return `منذ ${days} يوم`;
+    return `منذ ${Math.floor(days / 7)} أسبوع`;
+}
+
 function stopCompetitionCountdowns() {
     competitionCountdownIntervals.forEach(clearInterval);
     competitionCountdownIntervals = [];
 }
+
+// --- NEW: Agent activity timeline renderer ---
+function renderAgentActivityTimeline(agentId, container) {
+    fetch(`/api/agents/${agentId}/activity-log`)
+    .then(res => res.json())
+    .then(logs => {
+        if (!logs || logs.length === 0) {
+            container.innerHTML = '<div class="alert alert-info">لا يوجد سجل نشاط لهذا الوكيل.</div>';
+            return;
+        }
+
+        const getIconForAction = (action) => {
+            if (action.includes('تحديث')) return 'fas fa-pencil-alt';
+            if (action.includes('إضافة') || action.includes('تعيين')) return 'fas fa-plus-circle';
+            if (action.includes('حذف')) return 'fas fa-trash-alt';
+            if (action.includes('تسجيل دخول')) return 'fas fa-sign-in-alt';
+            if (action.includes('تغيير رتبة')) return 'fas fa-level-up-alt';
+            return 'fas fa-history'; // Default icon
+        };
+
+        const timelineHtml = `
+            <div class="professional-timeline">
+                ${logs.map(log => {
+                    const date = new Date(log.timestamp).toLocaleString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+                    const iconClass = getIconForAction(log.action);
+                    const details = log.details ? `<p class="timeline-details">${log.details}</p>` : '';
+                    
+                    return `
+                        <div class="timeline-entry">
+                            <div class="timeline-icon">
+                                <i class="${iconClass}"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <p class="timeline-action">${log.action}</p>
+                                <span class="timeline-timestamp">${date}</span>
+                                ${details}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+        
+        container.innerHTML = `
+            <h3 class="section-title-v2">
+                <i class="fas fa-stream icon"></i> سجل النشاط
+            </h3>
+            ${timelineHtml}
+        `;
+    })
+    .catch(err => {
+        console.error('[AgentActivityTimeline] Error:', err);
+        container.innerHTML = '<div class="alert alert-danger">حدث خطأ أثناء تحميل سجل النشاط.</div>';
+    });
+}
+
+// --- END: Agent activity timeline renderer ---
 
 function stopAllProfileTimers() {
     // A single function to clean up all timers when leaving the profile page.
@@ -24,7 +97,232 @@ function stopAllProfileTimers() {
     profilePageEventListeners = [];
 }
 
+// Function to show rank change modal with reason and action inputs
+function showRankChangeModal(agent, newRank, onConfirm, onCancel) {
+    const modalContent = `
+        <div class="rank-change-modal-dark" style="direction:rtl;text-align:right;font-family:'Cairo',sans-serif;">
+            <div class="rcm-shell" style="background:#181a20;border:1px solid #2a2f38;border-radius:14px;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.55);max-width:640px;margin:0 auto;">
+                <div class="rcm-header" style="background:linear-gradient(135deg,#222831,#1b2026);padding:14px 18px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #2d343f;">
+                    <i class="fas fa-layer-group" style="color:#4fa3ff;font-size:18px;"></i>
+                    <h3 style="margin:0;color:#f2f5f7;font-size:17px;font-weight:700;letter-spacing:.5px;">تغيير مرتبة الوكيل</h3>
+                </div>
+                <div class="rcm-body" style="padding:18px 20px;background:#1f2228;max-height:70vh;overflow-y:auto;scrollbar-width:thin;">
+                    <section class="rcm-agent" style="background:#22262d;border:1px solid #303841;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:13.5px;">
+                            <div style="color:#c9d3dc;"><span style="color:#7f8ea3;font-weight:600;">اسم الوكيل:</span> <strong style="color:#fff;">${agent.name}</strong></div>
+                            <div style="color:#c9d3dc;"><span style="color:#7f8ea3;font-weight:600;">رقم الوكالة:</span> <strong style="color:#fff;">${agent.agent_id}</strong></div>
+                            <div style="color:#c9d3dc;"><span style="color:#7f8ea3;font-weight:600;">التصنيف:</span> <strong style="color:#fff;">${agent.classification || agent.class || 'غير محدد'}</strong></div>
+                            <div style="color:#c9d3dc;"><span style="color:#7f8ea3;font-weight:600;">المرتبة الحالية:</span> <span class="rank-chip" style="background:#39424d;color:#fff;padding:2px 10px;border-radius:20px;font-size:12px;">${agent.rank}</span></div>
+                        </div>
+                        <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                            <div style="flex:1;text-align:center;">
+                                <div style="color:#b8c2cc;font-size:11px;margin-bottom:4px;">المرتبة القديمة</div>
+                                <div style="display:inline-block;background:#ffb347;color:#3a2f00;font-weight:600;padding:4px 14px;border-radius:30px;font-size:13px;min-width:110px;">${agent.rank}</div>
+                            </div>
+                            <i class="fas fa-chevron-left" style="color:#4fa3ff;font-size:20px;"></i>
+                            <div style="flex:1;text-align:center;">
+                                <div style="color:#b8c2cc;font-size:11px;margin-bottom:4px;">المرتبة الجديدة</div>
+                                <div style="display:inline-block;background:#2fbf71;color:#fff;font-weight:600;padding:4px 14px;border-radius:30px;font-size:13px;min-width:110px;">${newRank}</div>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="rcm-inputs" style="display:flex;flex-direction:column;gap:18px;">
+                        <div class="rcm-field" style="display:flex;flex-direction:column;gap:6px;">
+                            <label for="rankChangeReason" style="color:#d2d8df;font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:6px;">
+                                <i class="fas fa-question-circle" style="color:#4fa3ff;"></i>
+                                ما هو سبب تغيير المرتبة؟
+                            </label>
+                            <textarea id="rankChangeReason" rows="3" placeholder="مثال: زيادة التفاعل والمشاركات، عدم التعاون، زيادة عدد العملاء..." style="background:#272c33;color:#f5f7fa;border:1px solid #323b45;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;outline:none;transition:border .2s, background .2s;" required></textarea>
+                        </div>
+                        <div class="rcm-field" style="display:flex;flex-direction:column;gap:6px;">
+                            <label for="rankChangeAction" style="color:#d2d8df;font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:6px;">
+                                <i class="fas fa-tasks" style="color:#4fa3ff;"></i>
+                                ما هو الإجراء المتخذ؟
+                            </label>
+                            <textarea id="rankChangeAction" rows="3" placeholder="مثال: ترقية التصنيف من C إلى B، حرمان من المسابقات، ترقية المرتبة إلى Silver..." style="background:#272c33;color:#f5f7fa;border:1px solid #323b45;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;outline:none;transition:border .2s, background .2s;" required></textarea>
+                        </div>
+                        <div style="text-align:center;margin-top:-4px;">
+                            <span style="color:#ff7675;font-size:12.5px;display:inline-flex;align-items:center;gap:6px;">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                يجب إدخال السبب والإجراء لحفظ التغيير
+                            </span>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>`;
+
+    showConfirmationModal(modalContent, async () => {
+        const reason = document.getElementById('rankChangeReason').value.trim();
+        const action = document.getElementById('rankChangeAction').value.trim();
+
+        if (!reason || !action) {
+            showToast('يرجى إدخال السبب والإجراء', 'error');
+            return false; // Prevent modal from closing
+        }
+
+        if (onConfirm) {
+            await onConfirm(reason, action);
+        }
+        return true; // Allow modal to close
+    }, {
+        title: 'تغيير مرتبة الوكيل',
+        confirmText: '<i class="fas fa-check"></i> حفظ التغيير',
+        cancelText: '<i class="fas fa-times"></i> إلغاء',
+        onCancel: onCancel
+    });
+
+    // CSP-safe: attach focus/blur styling listeners after modal mounts
+    setTimeout(() => {
+        const reasonEl = document.getElementById('rankChangeReason');
+        const actionEl = document.getElementById('rankChangeAction');
+        const bind = (el) => {
+            if (!el) return;
+            const onFocus = () => (el.style.borderColor = '#4fa3ff');
+            const onBlur = () => (el.style.borderColor = '#323b45');
+            el.addEventListener('focus', onFocus);
+            el.addEventListener('blur', onBlur);
+            // track for cleanup when leaving profile page
+            if (window.profilePageEventListeners) {
+                window.profilePageEventListeners.push({ element: el, type: 'focus', handler: onFocus });
+                window.profilePageEventListeners.push({ element: el, type: 'blur', handler: onBlur });
+            }
+        };
+        bind(reasonEl);
+        bind(actionEl);
+    }, 0);
+}
+
+// Function to show classification change modal with reason and action inputs
+function showClassificationChangeModal(agent, newClassification, onConfirm, onCancel) {
+    console.log('🎯 [showClassificationChangeModal] ========== FUNCTION CALLED ==========');
+    console.log('🎯 [showClassificationChangeModal] Agent:', agent);
+    console.log('🎯 [showClassificationChangeModal] Agent Name:', agent?.name);
+    console.log('🎯 [showClassificationChangeModal] Old Classification:', agent?.classification);
+    console.log('🎯 [showClassificationChangeModal] New Classification:', newClassification);
+    console.log('🎯 [showClassificationChangeModal] onConfirm type:', typeof onConfirm);
+    console.log('🎯 [showClassificationChangeModal] onCancel type:', typeof onCancel);
+    console.log('🎯 [showClassificationChangeModal] showConfirmationModal exists?', typeof showConfirmationModal);
+    console.log('🎯 [showClassificationChangeModal] =======================================');
+    
+    const modalContent = `
+        <div class="classification-change-modal-dark" style="direction:rtl;text-align:right;font-family:'Cairo',sans-serif;">
+            <div class="ccm-shell" style="background:#181a20;border:1px solid #2a2f38;border-radius:14px;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.55);max-width:640px;margin:0 auto;">
+                <div class="ccm-header" style="background:linear-gradient(135deg,#222831,#1b2026);padding:14px 18px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #2d343f;">
+                    <i class="fas fa-tag" style="color:#4fa3ff;font-size:18px;"></i>
+                    <h3 style="margin:0;color:#f2f5f7;font-size:17px;font-weight:700;letter-spacing:.5px;">تغيير تصنيف الوكيل</h3>
+                </div>
+                <div class="ccm-body" style="padding:18px 20px;background:#1f2228;max-height:70vh;overflow-y:auto;scrollbar-width:thin;">
+                    <section class="ccm-agent" style="background:#22262d;border:1px solid #303841;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:13.5px;">
+                            <div style="color:#c9d3dc;"><span style="color:#7f8ea3;font-weight:600;">اسم الوكيل:</span> <strong style="color:#fff;">${agent.name}</strong></div>
+                            <div style="color:#c9d3dc;"><span style="color:#7f8ea3;font-weight:600;">رقم الوكالة:</span> <strong style="color:#fff;">${agent.agent_id}</strong></div>
+                            <div style="color:#c9d3dc;"><span style="color:#7f8ea3;font-weight:600;">المرتبة:</span> <strong style="color:#fff;">${agent.rank || 'غير محدد'}</strong></div>
+                            <div style="color:#c9d3dc;"><span style="color:#7f8ea3;font-weight:600;">التصنيف الحالي:</span> <span class="classification-chip" style="background:#39424d;color:#fff;padding:2px 10px;border-radius:20px;font-size:12px;">${agent.classification}</span></div>
+                        </div>
+                        <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                            <div style="flex:1;text-align:center;">
+                                <div style="color:#b8c2cc;font-size:11px;margin-bottom:4px;">التصنيف القديم</div>
+                                <div style="display:inline-block;background:#ffb347;color:#3a2f00;font-weight:600;padding:4px 14px;border-radius:30px;font-size:13px;min-width:110px;">${agent.classification}</div>
+                            </div>
+                            <i class="fas fa-chevron-left" style="color:#4fa3ff;font-size:20px;"></i>
+                            <div style="flex:1;text-align:center;">
+                                <div style="color:#b8c2cc;font-size:11px;margin-bottom:4px;">التصنيف الجديد</div>
+                                <div style="display:inline-block;background:#2fbf71;color:#fff;font-weight:600;padding:4px 14px;border-radius:30px;font-size:13px;min-width:110px;">${newClassification}</div>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="ccm-inputs" style="display:flex;flex-direction:column;gap:18px;">
+                        <div class="ccm-field" style="display:flex;flex-direction:column;gap:6px;">
+                            <label for="classificationChangeReason" style="color:#d2d8df;font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:6px;">
+                                <i class="fas fa-question-circle" style="color:#4fa3ff;"></i>
+                                ما هو سبب تغيير التصنيف؟
+                            </label>
+                            <textarea id="classificationChangeReason" rows="3" placeholder="مثال: زيادة التفاعل والمشاركات، عدم الالتزام، تحسين الأداء..." style="background:#272c33;color:#f5f7fa;border:1px solid #323b45;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;outline:none;transition:border .2s, background .2s;" required></textarea>
+                        </div>
+                        <div class="ccm-field" style="display:flex;flex-direction:column;gap:6px;">
+                            <label for="classificationChangeAction" style="color:#d2d8df;font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:6px;">
+                                <i class="fas fa-tasks" style="color:#4fa3ff;"></i>
+                                ما هو الإجراء المتخذ؟
+                            </label>
+                            <textarea id="classificationChangeAction" rows="3" placeholder="مثال: ترقية التصنيف من C إلى B، تخفيض التصنيف من A إلى B، تغيير عدد المسابقات..." style="background:#272c33;color:#f5f7fa;border:1px solid #323b45;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;outline:none;transition:border .2s, background .2s;" required></textarea>
+                        </div>
+                        <div style="text-align:center;margin-top:-4px;">
+                            <span style="color:#ff7675;font-size:12.5px;display:inline-flex;align-items:center;gap:6px;">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                يجب إدخال السبب والإجراء لحفظ التغيير
+                            </span>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>`;
+
+    console.log('🎨 [showClassificationChangeModal] Modal HTML created successfully');
+    console.log('🎨 [showClassificationChangeModal] About to call showConfirmationModal...');
+    console.log('🎨 [showClassificationChangeModal] showConfirmationModal function:', showConfirmationModal);
+    
+    showConfirmationModal(modalContent, async () => {
+        console.log('💾 [Classification Modal] ========== CONFIRM CLICKED ==========');
+        const reason = document.getElementById('classificationChangeReason')?.value?.trim();
+        const action = document.getElementById('classificationChangeAction')?.value?.trim();
+
+        console.log('💾 [Classification Modal] Reason:', reason);
+        console.log('💾 [Classification Modal] Action:', action);
+
+        if (!reason || !action) {
+            console.log('❌ [Classification Modal] Missing reason or action - showing error');
+            showToast('يرجى إدخال السبب والإجراء', 'error');
+            return false; // Prevent modal from closing
+        }
+
+        console.log('✅ [Classification Modal] Valid input - calling onConfirm callback');
+        if (onConfirm) {
+            await onConfirm(reason, action);
+        }
+        console.log('✅ [Classification Modal] onConfirm completed - closing modal');
+        return true; // Allow modal to close
+    }, {
+        title: 'تغيير تصنيف الوكيل',
+        confirmText: '<i class="fas fa-check"></i> حفظ التغيير',
+        cancelText: '<i class="fas fa-times"></i> إلغاء',
+        onCancel: onCancel
+    });
+
+    console.log('🎉 [showClassificationChangeModal] showConfirmationModal called successfully!');
+    console.log('🎉 [showClassificationChangeModal] Modal should be visible now!');
+
+    // CSP-safe: attach focus/blur styling listeners after modal mounts
+    setTimeout(() => {
+        const reasonEl = document.getElementById('classificationChangeReason');
+        const actionEl = document.getElementById('classificationChangeAction');
+        const bind = (el) => {
+            if (!el) return;
+            const onFocus = () => (el.style.borderColor = '#4fa3ff');
+            const onBlur = () => (el.style.borderColor = '#323b45');
+            el.addEventListener('focus', onFocus);
+            el.addEventListener('blur', onBlur);
+            // track for cleanup when leaving profile page
+            if (window.profilePageEventListeners) {
+                window.profilePageEventListeners.push({ element: el, type: 'focus', handler: onFocus });
+                window.profilePageEventListeners.push({ element: el, type: 'blur', handler: onBlur });
+            }
+        };
+        bind(reasonEl);
+        bind(actionEl);
+    }, 0);
+}
+
 async function renderAgentProfilePage(agentId, options = {}) {
+    // Defensive: Guard against undefined/empty agentId early
+    if (!agentId || agentId === 'undefined') {
+        const appContent = document.getElementById('app-content');
+        if (appContent) {
+                appContent.innerHTML = `<div class="error-card"><i class="fas fa-exclamation-triangle"></i><p>معرّف الوكيل غير صالح أو مفقود.</p></div>`;
+            }
+            console.warn('[Profile] Invalid agentId supplied to renderAgentProfilePage:', agentId);
+            return;
+        }
     isRenewing = false; // Reset the flag on each render
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = '';
@@ -213,6 +511,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                     <h2><i class="fas fa-rocket"></i> إجراءات سريعة</h2>
                     <div class="details-actions">
                         <button id="create-agent-competition" class="btn-primary"><i class="fas fa-magic"></i> إنشاء مسابقة</button>
+                        <button id="select-agent-winners" class="btn-winners"><i class="fas fa-trophy"></i> اختيار الفائزين</button>
                         <button id="send-bonus-cliche-btn" class="btn-telegram-bonus"><i class="fas fa-paper-plane"></i> إرسال كليشة البونص</button>
                         <button id="send-winners-cliche-btn" class="btn-telegram-winners"><i class="fas fa-trophy"></i> إرسال كليشة الفائزين</button>
                         ${canManualRenew ? `<button id="manual-renew-btn" class="btn-renewal"><i class="fas fa-sync-alt"></i> تجديد الرصيد يدوياً</button>` : ''}
@@ -250,10 +549,22 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const createCompBtn = document.getElementById('create-agent-competition');
     if (createCompBtn) {
         if (canCreateComp) { // This will be migrated later
-            createCompBtn.addEventListener('click', () => window.location.hash = `competitions/new?agentId=${agent._id}`);
+            createCompBtn.addEventListener('click', () => {
+                // التحقق من تفعيل التدقيق قبل السماح بإنشاء مسابقة
+                if (!agent.is_auditing_enabled) {
+                    showToast('عذراً، لا يمكن إنشاء مسابقة قبل إتمام عملية التدقيق لهذا الوكيل.', 'error');
+                    return;
+                }
+                window.location.hash = `competitions/new?agentId=${agent._id}`;
+            });
         } else {
             createCompBtn.addEventListener('click', () => showToast('ليس لديك صلاحية لإنشاء مسابقة.', 'error'));
         }
+    }
+
+    const selectWinnersBtn = document.getElementById('select-agent-winners');
+    if (selectWinnersBtn) {
+        selectWinnersBtn.addEventListener('click', () => window.location.hash = `winner-roulette?agent_id=${agent._id}`);
     }
 
     // --- NEW: Event listener for the new audit button ---
@@ -278,17 +589,34 @@ async function renderAgentProfilePage(agentId, options = {}) {
             statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق مطلوب اليوم';
             auditBtn.title = newAuditStatus ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
  
-            // 2. Dispatch the update to the central store.
-            // This will handle the backend call and notify other subscribed components (like calendar).
+            // 2. Call the new backend endpoint to toggle is_auditing_enabled
             try {
+                // First, toggle the is_auditing_enabled field in the database
+                const auditingResponse = await authedFetch(`/api/agents/${agent._id}/toggle-auditing`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_auditing_enabled: newAuditStatus })
+                });
+
+                if (!auditingResponse.ok) {
+                    const errorData = await auditingResponse.json();
+                    throw new Error(errorData.message || 'فشل تحديث حالة التدقيق في قاعدة البيانات');
+                }
+
+                // Then, update the daily task status
                 await window.taskStore.updateTaskStatus(agent._id, todayDayIndex, 'audited', newAuditStatus);
-                // --- FIX: Log this important activity ---
-                const logMessage = `تم ${newAuditStatus ? 'تفعيل' : 'إلغاء تفعيل'} مهمة "التدقيق" للوكيل ${agent.name} من ملفه الشخصي.`;
+                
+                // Log this important activity
+                const logMessage = `تم ${newAuditStatus ? 'تفعيل' : 'إلغاء تفعيل'} التدقيق للوكيل ${agent.name}`;
                 await logAgentActivity(currentUserProfile?._id, agent._id, 'TASK_UPDATE', logMessage);
 
                 showToast('تم تحديث حالة التدقيق بنجاح.', 'success');
+                
+                // Update local agent object
+                agent.is_auditing_enabled = newAuditStatus;
             } catch (error) {
-                showToast('فشل تحديث حالة التدقيق.', 'error');
+                console.error('[Audit Toggle Error]:', error);
+                showToast(error.message || 'فشل تحديث حالة التدقيق.', 'error');
                 // Revert UI on error
                 statusContainer.classList.toggle('pending', wasAudited);
                 statusContainer.classList.toggle('audited', !wasAudited);
@@ -461,8 +789,10 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
              <textarea class="modal-textarea-preview" readonly>${clicheText}</textarea>`,
             async () => {
                 try {
-                    const response = await authedFetch('/api/post-announcement', { // This will be migrated later
+                    if (!agent.telegram_chat_id) throw new Error('معرف مجموعة تلجرام غير موجود لهذا الوكيل.');
+                    const response = await authedFetch('/api/post-announcement', { // This will be migrated لاحقاً
                         method: 'POST',
+                        headers: { 'Content-Type': 'application/json;charset=UTF-8' },
                         body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
                     });
                     if (!response.ok) {
@@ -515,8 +845,10 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
             async () => {
                 // Send to backend on confirmation
                 try {
-                    const response = await authedFetch('/api/post-announcement', { // This will be migrated later
+                    if (!agent.telegram_chat_id) throw new Error('معرف مجموعة تلجرام غير موجود لهذا الوكيل.');
+                    const response = await authedFetch('/api/post-announcement', { // This will be migrated لاحقاً
                         method: 'POST',
+                        headers: { 'Content-Type': 'application/json;charset=UTF-8' },
                         body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
                     });
                     const result = await response.json();
@@ -561,6 +893,12 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
         link.addEventListener('click', () => {
             const tabId = link.dataset.tab;
 
+            // If clicking on "المسابقات" tab, redirect to agent-competitions page
+            if (tabId === 'agent-competitions') {
+                window.location.href = `/pages/agent-competitions.html?agent_id=${agent._id}`;
+                return;
+            }
+
             // Deactivate all
             tabLinks.forEach(l => l.classList.remove('active'));
             tabContents.forEach(c => c.classList.remove('active'));
@@ -596,15 +934,22 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
 
     if (logTabContent) {
         if (agentLogs && agentLogs.length > 0) {
-            logTabContent.innerHTML = generateAgentActivityLogHTML(agentLogs); // Use the dedicated function for agent profile
+            const { html, initFunction } = generateAgentActivityLogHTML(agentLogs);
+            logTabContent.innerHTML = html;
+            // Execute initialization function after HTML is inserted
+            setTimeout(() => initFunction(), 0);
         } else {
             logTabContent.innerHTML = '<h2>سجل النشاط</h2><p>لا توجد سجلات حالياً لهذا الوكيل.</p>';
         }
     }
     // This will be migrated later
     if (analyticsTabContent && (isSuperAdmin || isAdmin)) {
-        // Render analytics tab content
-        renderAgentAnalytics(agent, analyticsTabContent);
+        // --- FIX: Check if agent exists before rendering analytics ---
+        if (agent && agent._id) {
+            renderAgentAnalytics(agent, analyticsTabContent);
+        } else {
+            analyticsTabContent.innerHTML = '<p class="error">بيانات الوكيل غير متوفرة.</p>';
+        }
     }
     if (agentCompetitionsContent) {
         if (agentCompetitions && agentCompetitions.length > 0) {
@@ -680,6 +1025,8 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                                 <p class="competition-detail-item"><i class="fas fa-eye"></i><strong>المشاهدات:</strong> ${formatNumber(comp.views_count)}</p>
                                 <p class="competition-detail-item"><i class="fas fa-heart"></i><strong>التفاعلات:</strong> ${formatNumber(comp.reactions_count)}</p>
                                 <p class="competition-detail-item"><i class="fas fa-user-check"></i><strong>المشاركات:</strong> ${formatNumber(comp.participants_count)}</p>
+                                <p class="competition-detail-item"><i class="fas fa-gift"></i><strong>عدد فائزين بونص الإيداع:</strong> ${comp.deposit_winners_count || 0}</p>
+                                <p class="competition-detail-item"><i class="fas fa-percent"></i><strong>نسبة بونص الإيداع:</strong> ${typeof comp.deposit_bonus_percentage === 'number' ? `${comp.deposit_bonus_percentage}%` : '-'}</p>
                                 <p class="competition-detail-item"><i class="fas fa-key"></i><strong>الإجابة الصحيحة:</strong> ${comp.correct_answer || '<em>غير محددة</em>'}</p>
                             </div>
                         </div>
@@ -748,18 +1095,34 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                         const reactions = document.getElementById('comp-reactions-count').value;
                         const participants = document.getElementById('comp-participants-count').value;
 
+                        const parsedViews = Number(views);
+                        const parsedReactions = Number(reactions);
+                        const parsedParticipants = Number(participants);
+
                         const updateData = {
                             status: 'completed',
                             is_active: false,
-                            views_count: parseInt(views, 10),
-                            reactions_count: parseInt(reactions, 10),
-                            participants_count: parseInt(participants, 10)
+                            // Ensure numeric values are valid non-negative integers
+                            views_count: Number.isFinite(parsedViews) && parsedViews >= 0 ? parsedViews : 0,
+                            reactions_count: Number.isFinite(parsedReactions) && parsedReactions >= 0 ? parsedReactions : 0,
+                            participants_count: Number.isFinite(parsedParticipants) && parsedParticipants >= 0 ? parsedParticipants : 0,
+                            // Record processing timestamp for analytics and auditing
+                            processed_at: new Date().toISOString()
                         };
 
-                        const response = await authedFetch(`/api/competitions/${id}`, { method: 'PUT', body: JSON.stringify(updateData) });
+                        const response = await authedFetch(`/api/competitions/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json;charset=UTF-8' },
+                            body: JSON.stringify(updateData)
+                        });
 
                         if (!response.ok) {
-                            showToast('فشل إكمال المسابقة.', 'error');
+                            let serverMsg = 'فشل إكمال المسابقة.';
+                            try {
+                                const txt = await response.text();
+                                serverMsg = (JSON.parse(txt).message) || serverMsg;
+                            } catch (_) {}
+                            showToast(serverMsg, 'error');
                         } else {
                             showToast('تم إكمال المسابقة بنجاح.', 'success');
                             // --- FIX: Add correct logging for competition completion ---
@@ -893,19 +1256,110 @@ function renderEditProfileHeader(agent) {
     });
 
     saveBtn.addEventListener('click', async () => {
+        console.log('🚀 [SAVE BUTTON] Clicked! Starting save process...');
+        console.log('🚀 [SAVE BUTTON] Agent object:', agent);
+        
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
         // --- تعديل: قراءة أيام التدقيق المحددة ---
         const selectedDays = Array.from(document.querySelectorAll('#header-edit-audit-days .day-toggle-input:checked')).map(input => parseInt(input.value, 10));
 
+        const newClassification = document.getElementById('header-edit-classification').value;
+        const oldClassification = agent.classification;
+
+        console.log('📊 [DEBUG] ===== تفاصيل التصنيف =====');
+        console.log('📊 [DEBUG] Old Classification:', oldClassification, '(Type:', typeof oldClassification, ')');
+        console.log('📊 [DEBUG] New Classification:', newClassification, '(Type:', typeof newClassification, ')');
+        console.log('📊 [DEBUG] Are they different?', newClassification !== oldClassification);
+        console.log('📊 [DEBUG] Strict comparison:', newClassification, '!==', oldClassification, '=', (newClassification !== oldClassification));
+        console.log('📊 [DEBUG] showClassificationChangeModal exists?', typeof showClassificationChangeModal);
+        console.log('📊 [DEBUG] showClassificationChangeModal function:', showClassificationChangeModal);
+
+        // Check if classification changed
+        if (newClassification !== oldClassification) {
+            console.log('✅ [DEBUG] Classification HAS CHANGED! Showing modal...');
+            console.log('✅ [DEBUG] Calling showClassificationChangeModal NOW...');
+            console.log('✅ [DEBUG] Modal should appear in 3... 2... 1...');
+            
+            // Show classification change modal
+            showClassificationChangeModal(agent, newClassification, async (reason, action) => {
+                console.log('[Header Edit Classification Change] Modal confirmed with reason:', reason, 'action:', action);
+                
+                // --- تحديث: تحديث competitions_per_week تلقائياً بناءً على التصنيف الجديد ---
+                let competitionsPerWeek = agent.competitions_per_week || 1; // القيمة الافتراضية
+                if (newClassification === 'R' || newClassification === 'A') {
+                    competitionsPerWeek = 2;
+                } else if (newClassification === 'B' || newClassification === 'C') {
+                    competitionsPerWeek = 1;
+                }
+                
+                const updatedData = {
+                    name: document.getElementById('header-edit-name').value,
+                    telegram_channel_url: document.getElementById('header-edit-channel').value,
+                    telegram_group_url: document.getElementById('header-edit-group').value,
+                    telegram_chat_id: document.getElementById('header-edit-chatid').value,
+                    telegram_group_name: document.getElementById('header-edit-groupname').value,
+                    classification: newClassification,
+                    competitions_per_week: competitionsPerWeek, // تحديث عدد المسابقات الأسبوعية
+                    audit_days: selectedDays
+                };
+
+                try {
+                    const response = await authedFetch(`/api/agents/${agent._id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(updatedData)
+                    });
+
+                    if (!response.ok) {
+                        const result = await response.json();
+                        throw new Error(result.message || 'فشل تحديث البيانات.');
+                    }
+
+                    // Record classification change
+                    const classificationChangeResponse = await authedFetch(`/api/agents/${agent._id}/classification-change`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            old_classification: oldClassification,
+                            new_classification: newClassification,
+                            reason: reason,
+                            action_taken: action
+                        })
+                    });
+
+                    if (!classificationChangeResponse.ok) {
+                        console.error('Failed to record classification change:', await classificationChangeResponse.text());
+                    }
+
+                    showToast('تم تحديث التصنيف وتسجيل السبب والإجراء بنجاح.', 'success');
+                    renderAgentProfilePage(agent._id);
+
+                } catch (error) {
+                    showToast(`فشل الحفظ: ${error.message}`, 'error');
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-check"></i> حفظ';
+                }
+            }, () => {
+                // On cancel, re-enable save button
+                console.log('❌ [MODAL] User cancelled classification change');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-check"></i> حفظ';
+            });
+            
+            console.log('⏸️ [DEBUG] Returning early - waiting for modal interaction');
+            return; // IMPORTANT: Stop here and wait for modal
+        }
+
+        console.log('ℹ️ [DEBUG] Classification NOT changed - proceeding with normal save');
+        // Normal save flow (no classification change)
         const updatedData = {
             name: document.getElementById('header-edit-name').value,
             telegram_channel_url: document.getElementById('header-edit-channel').value,
             telegram_group_url: document.getElementById('header-edit-group').value,
             telegram_chat_id: document.getElementById('header-edit-chatid').value,
             telegram_group_name: document.getElementById('header-edit-groupname').value,
-            classification: document.getElementById('header-edit-classification').value,
+            classification: newClassification,
             audit_days: selectedDays
         };
 
@@ -921,11 +1375,6 @@ function renderEditProfileHeader(agent) {
             }
 
             showToast('تم تحديث بيانات الوكيل بنجاح.', 'success');
-            // --- FIX: Backend already logs this. No need to log from frontend. ---
-            // The backend provides a more reliable and detailed log for this action.
-            // await logAgentActivity(agent._id, 'PROFILE_UPDATE', 'تم تحديث بيانات الملف الشخصي للوكيل.');
-
-            // Re-render the entire page to reflect changes everywhere
             renderAgentProfilePage(agent._id);
 
         } catch (error) {
@@ -983,91 +1432,338 @@ function startCompetitionCountdowns() {
 }
 
 /**
- * Generates the HTML for an agent's activity log, grouped by date.
- * This function is now self-contained within the profile page script.
+ * Generates an advanced activity log table with filtering, sorting, pagination, and statistics.
  * @param {Array} logs - The array of log objects for the agent.
- * @returns {string} The generated HTML string.
+ * @returns {Object} Object containing html string and initialization function
  */
 function generateAgentActivityLogHTML(logs) {
     const getLogIconDetails = (actionType) => {
-        if (actionType.includes('CREATED')) return { icon: 'fa-user-plus', colorClass: 'log-icon-create' };
-        if (actionType.includes('DELETED')) return { icon: 'fa-user-slash', colorClass: 'log-icon-delete' };
-        if (actionType.includes('PROFILE_UPDATE')) return { icon: 'fa-user-edit', colorClass: 'log-icon-profile' };
-        if (actionType.includes('MANUAL_RENEWAL')) return { icon: 'fa-sync-alt', colorClass: 'log-icon-renewal' };
-        if (actionType.includes('DETAILS_UPDATE')) return { icon: 'fa-cogs', colorClass: 'log-icon-details' };
-        if (actionType.includes('COMPETITION_CREATED')) return { icon: 'fa-trophy', colorClass: 'log-icon-competition' };
-        if (actionType.includes('WINNERS_SELECTION_REQUESTED')) return { icon: 'fa-question-circle', colorClass: 'log-icon-telegram' };
-        // Add more specific icons for agent profile if needed
-        return { icon: 'fa-history', colorClass: 'log-icon-generic' };
+        if (actionType.includes('CREATED')) return { icon: 'fa-user-plus', colorClass: 'icon-create', label: 'إنشاء', type: 'CREATE', bgColor: '#10b981' };
+        if (actionType.includes('DELETED')) return { icon: 'fa-user-slash', colorClass: 'icon-delete', label: 'حذف', type: 'DELETE', bgColor: '#ef4444' };
+        if (actionType.includes('PROFILE_UPDATE') || actionType.includes('UPDATED')) return { icon: 'fa-user-edit', colorClass: 'icon-update', label: 'تحديث', type: 'UPDATE', bgColor: '#3b82f6' };
+        if (actionType.includes('MANUAL_RENEWAL') || actionType.includes('RENEWAL')) return { icon: 'fa-sync-alt', colorClass: 'icon-renewal', label: 'تجديد', type: 'RENEWAL', bgColor: '#8b5cf6' };
+        if (actionType.includes('DETAILS_UPDATE')) return { icon: 'fa-cogs', colorClass: 'icon-details', label: 'تعديل تفاصيل', type: 'DETAILS', bgColor: '#f59e0b' };
+        if (actionType.includes('COMPETITION')) return { icon: 'fa-trophy', colorClass: 'icon-competition', label: 'مسابقة', type: 'COMPETITION', bgColor: '#f97316' };
+        if (actionType.includes('RANK_CHANGE')) return { icon: 'fa-layer-group', colorClass: 'icon-rank', label: 'تغيير مرتبة', type: 'RANK', bgColor: '#ec4899' };
+        if (actionType.includes('TELEGRAM') || actionType.includes('WINNERS_SELECTION')) return { icon: 'fa-paper-plane', colorClass: 'icon-telegram', label: 'تلجرام', type: 'TELEGRAM', bgColor: '#06b6d4' };
+        if (actionType.includes('VIEWED') || actionType.includes('VIEW')) return { icon: 'fa-eye', colorClass: 'icon-view', label: 'مشاهدة', type: 'VIEW', bgColor: '#64748b' };
+        return { icon: 'fa-history', colorClass: 'icon-generic', label: 'نشاط', type: 'OTHER', bgColor: '#6b7280' };
     };
 
-    const groupLogsByDate = (logs) => {
-        const groups = {};
-        const today = new Date();
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const todayStr = today.toISOString().split('T')[0];
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+    // Generate unique ID for this log instance
+    const logId = `activity-log-${Date.now()}`;
 
-        logs.forEach(log => {
-            try {
-                if (!log.createdAt) {
-                    console.warn('Agent log entry missing createdAt:', log);
-                    return;
-                }
-                const logDate = new Date(log.createdAt);
-                if (isNaN(logDate.getTime())) {
-                    console.warn('Invalid date in agent log:', log.createdAt);
-                    return;
-                }
-                const logDateStr = logDate.toISOString().split('T')[0];
-                let dateKey;
-                if (logDateStr === todayStr) dateKey = 'اليوم';
-                else if (logDateStr === yesterdayStr) dateKey = 'الأمس';
-                else dateKey = logDate.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
-                if (!groups[dateKey]) groups[dateKey] = [];
-                groups[dateKey].push(log);
-            } catch (error) {
-                console.error('Error processing agent log entry:', error, log);
-            }
-        });
-        return groups;
-    };
+    // إحصائيات سريعة للأنشطة
+    const stats = logs.reduce((acc, log) => {
+        const type = getLogIconDetails(log.action_type).type;
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+    }, {});
 
-    const groupedLogs = groupLogsByDate(logs);
-    let html = '<h2>سجل النشاط الخاص بالوكيل</h2><div class="log-timeline-v2" id="agent-log-timeline">';
+    const totalActivities = logs.length;
+    const recentActivities = logs.filter(log => (Date.now() - new Date(log.createdAt).getTime()) < 24 * 60 * 60 * 1000).length;
 
-    for (const date in groupedLogs) {
-        html += `
-            <div class="log-date-group">
-                <div class="log-date-header">${date}</div>
-                ${groupedLogs[date].map(log => {
-                    return `
-                        <div class="log-item-v2">
-                            <div class="log-item-icon-v2 ${getLogIconDetails(log.action_type).colorClass}"><i class="fas ${getLogIconDetails(log.action_type).icon}"></i></div>
-                            <div class="log-item-content-v2">
-                                <p class="log-description">${log.description}</p>
-                                <p class="log-timestamp">
-                                    <i class="fas fa-user"></i> ${log.user_name || 'نظام'}
-                                    <span class="log-separator"></span>
-                                    <i class="fas fa-clock"></i> ${new Date(log.createdAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
-                                </p>
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
+    const html = `
+        <div class="activity-log-header" style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);border:1px solid #475569;border-radius:12px;padding:20px;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:15px;margin-bottom:15px;">
+                <div style="width:50px;height:50px;background:linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-history" style="color:#fff;font-size:22px;"></i>
+                </div>
+                <div>
+                    <h3 style="margin:0;color:#fff;font-size:20px;font-weight:600;">سجل الأنشطة والعمليات</h3>
+                    <p style="margin:5px 0 0;color:#94a3b8;font-size:14px;">تتبع جميع العمليات والتغييرات على حساب الوكيل</p>
+                </div>
             </div>
-        `;
-    }
 
-    html += '</div>';
-    return html;
+            <div class="activity-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;">
+                <div class="stat-item" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:20px;font-weight:700;color:#3b82f6;margin-bottom:4px;">${totalActivities}</div>
+                    <div style="font-size:12px;color:#94a3b8;">إجمالي الأنشطة</div>
+                </div>
+                <div class="stat-item" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:20px;font-weight:700;color:#10b981;margin-bottom:4px;">${recentActivities}</div>
+                    <div style="font-size:12px;color:#94a3b8;">آخر 24 ساعة</div>
+                </div>
+                <div class="stat-item" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:20px;font-weight:700;color:#f59e0b;margin-bottom:4px;">${stats.UPDATE || 0}</div>
+                    <div style="font-size:12px;color:#94a3b8;">التحديثات</div>
+                </div>
+                <div class="stat-item" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:20px;font-weight:700;color:#8b5cf6;margin-bottom:4px;">${stats.COMPETITION || 0}</div>
+                    <div style="font-size:12px;color:#94a3b8;">المسابقات</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="activity-log-table-container" id="${logId}-container" style="background:#0f172a;border:1px solid #334155;border-radius:12px;padding:20px;margin-bottom:20px;"></div>
+
+        <div class="activity-log-pagination" id="${logId}-pagination" style="display:flex;justify-content:center;gap:10px;padding:15px;"></div>
+    `;
+
+    // Initialization function that will be called after HTML is inserted
+    const initFunction = () => {
+        let currentPage = 1;
+        const itemsPerPage = 15;
+
+        function groupLogsByDate(arr) {
+            const groups = {};
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const todayStr = today.toISOString().split('T')[0];
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+            arr.forEach(log => {
+                try {
+                    if (!log.createdAt) return;
+                    const logDate = new Date(log.createdAt);
+                    if (isNaN(logDate.getTime())) return;
+                    const logDateStr = logDate.toISOString().split('T')[0];
+                    let dateKey;
+                    if (logDateStr === todayStr) dateKey = '📅 اليوم';
+                    else if (logDateStr === yesterdayStr) dateKey = '📅 الأمس';
+                    else dateKey = `📅 ${logDate.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}`;
+                    if (!groups[dateKey]) groups[dateKey] = [];
+                    groups[dateKey].push(log);
+                } catch (error) {
+                    console.error('Error processing log:', error);
+                }
+            });
+            return groups;
+        }
+
+        function renderTable() {
+            const container = document.getElementById(logId + '-container');
+            if (!container) return;
+
+            // Always sort by newest first
+            const sorted = [...logs].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const pageLogs = sorted.slice(startIndex, endIndex);
+            const groupedLogs = groupLogsByDate(pageLogs);
+
+            let tableHtml = '';
+
+            if (Object.keys(groupedLogs).length === 0) {
+                tableHtml = `
+                    <div class="no-logs-message" style="text-align:center;padding:60px 20px;color:#64748b;">
+                        <div style="font-size:48px;margin-bottom:15px;">📋</div>
+                        <h4 style="margin:0 0 10px;color:#94a3b8;">لا توجد سجلات نشاط</h4>
+                        <p style="margin:0;font-size:14px;">لم يتم تسجيل أي أنشطة لهذا الوكيل بعد</p>
+                    </div>`;
+            } else {
+                for (const date in groupedLogs) {
+                    tableHtml += `
+                        <div class="log-date-group" style="margin-bottom:25px;">
+                            <div class="log-date-header" style="background:linear-gradient(135deg, #374151 0%, #4b5563 100%);color:#fff;padding:12px 20px;border-radius:8px;margin-bottom:15px;font-weight:600;font-size:16px;display:flex;align-items:center;gap:10px;">
+                                <span>${date}</span>
+                                <span style="background:#6b7280;color:#fff;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:500;">${groupedLogs[date].length} نشاط</span>
+                            </div>
+
+                            <div class="activity-cards" style="display:grid;gap:12px;">`;
+
+                    groupedLogs[date].forEach((log) => {
+                        const iconDetails = getLogIconDetails(log.action_type);
+                        const fullTime = new Date(log.createdAt).toLocaleString('ar-EG', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                        });
+                        const relativeTime = getRelativeTime(new Date(log.createdAt));
+                        const isRecent = (Date.now() - new Date(log.createdAt).getTime()) < 5 * 60 * 1000;
+
+                        // تحسين عرض الوصف
+                        const rawDesc = log.description || '';
+                        const cleanDesc = rawDesc.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:#3b82f6;text-decoration:underline;">رابط</a>');
+                        const maxLen = 150;
+                        const isLong = cleanDesc.length > maxLen;
+                        const shortText = isLong ? cleanDesc.slice(0, maxLen) + '...' : cleanDesc;
+
+                        tableHtml += `
+                            <div class="activity-card ${isRecent ? 'activity-recent' : ''}" style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);border:1px solid #475569;border-radius:12px;padding:20px;position:relative;overflow:hidden;">
+                                ${isRecent ? '<div class="recent-indicator" style="position:absolute;top:0;left:0;width:4px;height:100%;background:linear-gradient(to bottom, #10b981, #059669);"></div>' : ''}
+
+                                <div class="activity-header" style="display:flex;align-items:center;gap:15px;margin-bottom:15px;">
+                                    <div class="activity-icon" style="width:45px;height:45px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:${iconDetails.bgColor};color:#fff;font-size:18px;">
+                                        <i class="fas ${iconDetails.icon}"></i>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <div class="activity-type" style="font-weight:600;color:#fff;font-size:16px;margin-bottom:2px;">${iconDetails.label}</div>
+                                        <div class="activity-meta" style="display:flex;gap:15px;font-size:13px;color:#94a3b8;">
+                                            <span><i class="fas fa-user"></i> ${log.user_name || 'النظام'}</span>
+                                            <span><i class="fas fa-clock"></i> ${fullTime}</span>
+                                            <span style="color:#64748b;">${relativeTime}</span>
+                                        </div>
+                                    </div>
+                                    <button class="activity-details-btn" data-log='${JSON.stringify(log)}' style="background:#374151;border:1px solid #4b5563;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:12px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#374151'">
+                                        <i class="fas fa-info-circle"></i> تفاصيل
+                                    </button>
+                                </div>
+
+                                <div class="activity-description" style="color:#cbd5e1;font-size:14px;line-height:1.5;">
+                                    ${shortText}
+                                    ${isLong ? `<button class="desc-toggle" style="background:none;border:none;color:#3b82f6;font-size:13px;cursor:pointer;margin-left:5px;" data-full="${cleanDesc.replace(/"/g,'&quot;')}" data-short="${shortText}">المزيد</button>` : ''}
+                                </div>
+                            </div>`;
+                    });
+
+                    tableHtml += `
+                            </div>
+                        </div>`;
+                }
+            }
+
+            container.innerHTML = tableHtml;
+
+            // Add event listeners for detail buttons
+            container.querySelectorAll('.activity-details-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const log = JSON.parse(e.currentTarget.dataset.log);
+                    showLogDetailsModal(log);
+                });
+            });
+
+            // Toggle full/short description
+            container.querySelectorAll('.desc-toggle').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const full = e.currentTarget.dataset.full;
+                    const short = e.currentTarget.dataset.short;
+                    const descDiv = e.currentTarget.parentElement;
+                    const isExpanded = descDiv.innerHTML.includes('إخفاء');
+
+                    if (isExpanded) {
+                        descDiv.innerHTML = short + ` <button class="desc-toggle" style="background:none;border:none;color:#3b82f6;font-size:13px;cursor:pointer;margin-left:5px;" data-full="${full}" data-short="${short}">المزيد</button>`;
+                    } else {
+                        descDiv.innerHTML = full + ` <button class="desc-toggle" style="background:none;border:none;color:#3b82f6;font-size:13px;cursor:pointer;margin-left:5px;" data-full="${full}" data-short="${short}">إخفاء</button>`;
+                    }
+                });
+            });
+
+            renderPagination();
+        }
+
+        function renderPagination() {
+            const pagination = document.getElementById(logId + '-pagination');
+            if (!pagination) return;
+
+            const totalPages = Math.ceil(logs.length / itemsPerPage);
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let paginationHtml = `
+                <div class="pagination-info" style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 15px;color:#94a3b8;font-size:13px;">
+                    عرض ${((currentPage - 1) * itemsPerPage) + 1} - ${Math.min(currentPage * itemsPerPage, logs.length)} من ${logs.length} نشاط
+                </div>
+                <div class="pagination-buttons" style="display:flex;gap:5px;">
+                    <button class="pagination-btn" data-page="1" ${currentPage === 1 ? 'disabled' : ''} style="background:#374151;border:1px solid #4b5563;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px;cursor:pointer;${currentPage === 1 ? 'opacity:0.5;cursor:not-allowed;' : ''}">
+                        <i class="fas fa-angle-double-right"></i>
+                    </button>
+                    <button class="pagination-btn" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''} style="background:#374151;border:1px solid #4b5563;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px;cursor:pointer;${currentPage === 1 ? 'opacity:0.5;cursor:not-allowed;' : ''}">
+                        <i class="fas fa-angle-right"></i>
+                    </button>`;
+
+            for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+                paginationHtml += `<button class="pagination-btn ${i === currentPage ? 'active' : ''}" data-page="${i}" style="background:${i === currentPage ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)' : '#374151'};border:1px solid ${i === currentPage ? '#3b82f6' : '#4b5563'};color:#fff;padding:8px 12px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:${i === currentPage ? '600' : '400'};">${i}</button>`;
+            }
+
+            paginationHtml += `
+                    <button class="pagination-btn" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''} style="background:#374151;border:1px solid #4b5563;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px;cursor:pointer;${currentPage === totalPages ? 'opacity:0.5;cursor:not-allowed;' : ''}">
+                        <i class="fas fa-angle-left"></i>
+                    </button>
+                    <button class="pagination-btn" data-page="${totalPages}" ${currentPage === totalPages ? 'disabled' : ''} style="background:#374151;border:1px solid #4b5563;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px;cursor:pointer;${currentPage === totalPages ? 'opacity:0.5;cursor:not-allowed;' : ''}">
+                        <i class="fas fa-angle-double-left"></i>
+                    </button>
+                </div>`;
+
+            pagination.innerHTML = paginationHtml;
+
+            // Add click handlers for pagination buttons
+            pagination.querySelectorAll('.pagination-btn:not([disabled])').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const page = parseInt(e.currentTarget.dataset.page);
+                    if (page && page !== currentPage) {
+                        currentPage = page;
+                        renderTable();
+                        document.getElementById(logId + '-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            });
+        }
+
+        function showLogDetailsModal(log) {
+            const iconDetails = getLogIconDetails(log.action_type);
+            const fullTime = new Date(log.createdAt).toLocaleString('ar-EG', {
+                dateStyle: 'full',
+                timeStyle: 'medium'
+            });
+
+            const modalContent = `
+                <div class="log-details-modal" style="background:#0f172a;border:1px solid #334155;border-radius:12px;padding:0;">
+                    <div class="log-detail-header" style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);padding:20px;border-radius:12px 12px 0 0;display:flex;align-items:center;gap:15px;">
+                        <div style="width:50px;height:50px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:${iconDetails.bgColor};color:#fff;font-size:20px;">
+                            <i class="fas ${iconDetails.icon}"></i>
+                        </div>
+                        <div>
+                            <h3 style="margin:0;color:#fff;font-size:18px;">${iconDetails.label}</h3>
+                            <p style="margin:5px 0 0;color:#94a3b8;font-size:14px;">تفاصيل العملية</p>
+                        </div>
+                    </div>
+                    <div class="log-detail-body" style="padding:25px;">
+                        <div class="detail-row" style="margin-bottom:20px;">
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                <i class="fas fa-align-right" style="color:#3b82f6;width:16px;"></i>
+                                <strong style="color:#fff;font-size:14px;">الوصف:</strong>
+                            </div>
+                            <p style="color:#cbd5e1;font-size:14px;line-height:1.6;margin:0;padding:15px;background:#1e293b;border:1px solid #334155;border-radius:8px;">${log.description}</p>
+                        </div>
+                        <div class="detail-row" style="margin-bottom:20px;">
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                <i class="fas fa-user" style="color:#10b981;width:16px;"></i>
+                                <strong style="color:#fff;font-size:14px;">المستخدم:</strong>
+                            </div>
+                            <p style="color:#cbd5e1;font-size:14px;margin:0;">${log.user_name || 'النظام'}</p>
+                        </div>
+                        <div class="detail-row" style="margin-bottom:20px;">
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                <i class="fas fa-clock" style="color:#f59e0b;width:16px;"></i>
+                                <strong style="color:#fff;font-size:14px;">التاريخ والوقت:</strong>
+                            </div>
+                            <p style="color:#cbd5e1;font-size:14px;margin:0;">${fullTime}</p>
+                        </div>
+                        <div class="detail-row">
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                <i class="fas fa-tag" style="color:#8b5cf6;width:16px;"></i>
+                                <strong style="color:#fff;font-size:14px;">نوع الإجراء:</strong>
+                            </div>
+                            <p style="color:#cbd5e1;font-size:14px;margin:0;">${iconDetails.label}</p>
+                        </div>
+                    </div>
+                </div>`;
+
+            showConfirmationModal(modalContent, null, {
+                title: 'تفاصيل السجل',
+                showCancel: false,
+                confirmText: 'إغلاق',
+                confirmClass: 'btn-secondary'
+            });
+        }
+
+        // Initial render
+        renderTable();
+    };
+
+    return { html, initFunction };
 }
 
 function renderDetailsView(agent) {
     // --- NEW: Permission Check ---
     const isSuperAdmin = currentUserProfile?.role === 'super_admin';
     const isAdmin = currentUserProfile?.role === 'admin';
+    // Local broader edit flag used in other places — ensure it's defined here to avoid ReferenceError
+    const canEditProfile = isSuperAdmin || isAdmin;
     // --- MODIFICATION: Allow anyone who can view financials to also edit them, as per user request. ---
     const userPerms = currentUserProfile?.permissions || {};
     const canEditFinancials = isSuperAdmin || isAdmin || userPerms.agents?.view_financials;
@@ -1084,10 +1780,13 @@ function renderDetailsView(agent) {
         let displayValue;
         let iconHtml = '';
 
-        // --- تعديل: إظهار أيقونة التعديل لأيام التدقيق أيضاً ---
+        // --- تعديل: إظهار أيقونة التعديل لأيام التدقيق ولحقل التصنيف للمشرفين ---
         const isAuditDays = fieldName === 'audit_days';
-        if (canEditFinancials || (isAuditDays && canEditProfile)) { // canEditProfile is a broader permission
-             iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
+        const isClassificationField = fieldName === 'classification';
+        // Show edit icon for financial editors OR for audit_days when broader profile edit is allowed
+        // Additionally, allow admins/super_admins (canEditProfile) to edit classification
+        if (canEditFinancials || (isAuditDays && canEditProfile) || (isClassificationField && canEditProfile)) {
+            iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
         }
 
 
@@ -1119,6 +1818,7 @@ function renderDetailsView(agent) {
         <div class="details-grid">
             <h3 class="details-section-title">الإعدادات الأساسية</h3>
             ${createFieldHTML('المرتبة', agent.rank, 'rank')}
+            ${createFieldHTML('التصنيف', agent.classification, 'classification')}
             ${createFieldHTML('بونص المسابقات (تداولي)', agent.competition_bonus, 'competition_bonus')}
             ${createFieldHTML('مرات بونص الإيداع', agent.deposit_bonus_count, 'deposit_bonus_count')}
             ${createFieldHTML('نسبة بونص الإيداع', agent.deposit_bonus_percentage, 'deposit_bonus_percentage')}
@@ -1154,6 +1854,8 @@ function renderDetailsView(agent) {
     // Clear the container's content and re-add the event listener.
     // This prevents replacing the container itself, which caused content to leak across pages.
     container.innerHTML = htmlContent;
+    // Debug helper: log classification to confirm render and help debug caching issues
+    try { console.debug(`[Profile] renderDetailsView: agent ${agent?._id || '<no-id>'} classification=`, agent?.classification); } catch (_) {}
     const eventHandler = (e) => {
         const trigger = e.target.closest('.inline-edit-trigger'); // Defensive: Use closest to handle clicks on icon
         if (trigger) { // Permission is checked inside renderInlineEditor
@@ -1172,37 +1874,38 @@ function renderDetailsView(agent) {
     // --- NEW: Add listener for the test renewal button ---
     const testRenewalBtn = document.getElementById('trigger-renewal-test-btn');
     if (testRenewalBtn) {
-        testRenewalBtn.addEventListener('click', async () => {
+        testRenewalBtn.addEventListener('click', () => {
+            if (testRenewalBtn.disabled) return; // Prevent double clicks
             testRenewalBtn.disabled = true;
-            testRenewalBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> سيتم التجديد بعد 3 ثواني...';
-
+            testRenewalBtn.innerHTML = '<i class="fas fa-hourglass-half"></i> جارٍ التنفيذ...';
             setTimeout(async () => {
                 try {
                     const response = await authedFetch(`/api/agents/${agent._id}/renew`, { method: 'POST' });
                     const result = await response.json();
-                    if (!response.ok) throw new Error(result.message || 'فشل تجديد رصيد الوكيل.');
                     
-                    showToast(`تم تجديد رصيد الوكيل ${agent.name} بنجاح.`, 'success');
-                    renderAgentProfilePage(agent._id, { activeTab: 'details' }); // Refresh to see changes
+                    // Normalize message for comparison
+                    const msg = result && result.message ? result.message.trim() : '';
+                    
+                    // Fix: Check response.ok or result.message for success
+                    if (response.ok || (msg && msg.includes('Agent balance renewed successfully'))) {
+                        showToast('تم تجديد الوكيل بنجاح!', 'success');
+                        renderAgentProfilePage(agent._id, { activeTab: 'details' });
+                    } else {
+                        throw new Error(msg || 'فشل التجديد');
+                    }
                 } catch (error) {
+                    console.error('Renewal test error:', error);
                     showToast(`خطأ: ${error.message}`, 'error');
+                } finally {
                     testRenewalBtn.disabled = false;
-                    testRenewalBtn.innerHTML = '<i class="fas fa-history"></i> تجربة التجديد (3 ثواني)';
+                    testRenewalBtn.innerHTML = '<i class="fas fa-sync-alt"></i> اختبار التجديد اليدوي';
                 }
-            }, 3000); // 3 seconds delay
+            }, 5000);
         });
     }
 }
 
-async function renderInlineEditor(groupElement, agent) {
-    // --- NEW: Permission Check ---
-    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
-    const isAdmin = currentUserProfile?.role === 'admin';
-    const userPerms = currentUserProfile?.permissions || {};
-    const canEditFinancials = isSuperAdmin || isAdmin || userPerms.agents?.view_financials;
-    
-    const fieldName = groupElement.dataset.field;
-    const originalContent = groupElement.innerHTML;
+function enableInlineEdit(groupElement, fieldName, agent) {
     const currentValue = agent[fieldName];
     const label = groupElement.querySelector('label').textContent;
     let editorHtml = '';
@@ -1244,8 +1947,16 @@ async function renderInlineEditor(groupElement, agent) {
         case 'winner_selection_date': // تعديل: السماح بتعديل تاريخ اختيار الفائز
             editorHtml = `<input type="date" id="inline-edit-input" value="${currentValue || ''}">`;
             break;
-        case 'competition_duration': // تعديل: السماح بتعديل مدة المسابقة
-            editorHtml = `<select id="inline-edit-input"><option value="24h" ${currentValue === '24h' ? 'selected' : ''}>24 ساعة</option><option value="48h" ${currentValue === '48h' ? 'selected' : ''}>48 ساعة</option></select>`;
+        case 'competition_duration': // تعديل: السماح بتعديل مدة المسابقة (إضافة 5 ثواني للاختبار)
+            editorHtml = `<select id="inline-edit-input">
+                <optgroup label="⚡ تجريبي">
+                    <option value="5s" ${currentValue === '5s' ? 'selected' : ''}>5 ثواني (اختبار سريع)</option>
+                </optgroup>
+                <optgroup label="⏳ مدة قياسية">
+                    <option value="24h" ${currentValue === '24h' ? 'selected' : ''}>24 ساعة</option>
+                    <option value="48h" ${currentValue === '48h' ? 'selected' : ''}>48 ساعة</option>
+                </optgroup>
+            </select>`;
             break;
         case 'audit_days':
             editorHtml = `
@@ -1333,33 +2044,133 @@ async function renderInlineEditor(groupElement, agent) {
         }
 
         if (fieldName === 'rank') {
-            const rankData = RANKS_DATA[newValue] || {};
-            updateData.rank = newValue;
-            updateData.competition_bonus = rankData.competition_bonus;
-            updateData.deposit_bonus_percentage = rankData.deposit_bonus_percentage;
-            updateData.deposit_bonus_count = rankData.deposit_bonus_count;
-            // When rank changes, it might affect balances
-            // --- تعديل: منطق خاص لمرتبة "بدون مرتبة حصرية" ---
-            if (newValue === 'بدون مرتبة حصرية') {
-                updateData.competition_bonus = 60;
-                updateData.remaining_balance = 60 - (currentAgent.consumed_balance || 0)
-                updateData.deposit_bonus_percentage = null;
-                updateData.deposit_bonus_count = null;
-            } else {
+            // Check if rank actually changed
+            if (newValue === currentAgent.rank) {
+                showToast('المرتبة لم تتغير.', 'info');
+            console.log('[Rank Change] Showing modal for rank change from', currentAgent.rank, 'to', newValue);
+            
+                renderDetailsView(agent);
+                return;
+            }
+
+            // Show modal to get reason and action before saving
+            showRankChangeModal(currentAgent, newValue, async (reason, action) => {
+                console.log('[Rank Change] Modal confirmed with reason:', reason, 'action:', action);
+                const rankData = RANKS_DATA[newValue] || {};
+                updateData.rank = newValue;
                 updateData.competition_bonus = rankData.competition_bonus;
-                updateData.remaining_balance = (rankData.competition_bonus || 0) - (currentAgent.consumed_balance || 0);
-            }
-            updateData.remaining_deposit_bonus = (rankData.deposit_bonus_count || 0) - (currentAgent.used_deposit_bonus || 0);
+                updateData.deposit_bonus_percentage = rankData.deposit_bonus_percentage;
+                updateData.deposit_bonus_count = rankData.deposit_bonus_count;
+                // When rank changes, it might affect balances
+                // --- تعديل: منطق خاص لمرتبة "بدون مرتبة حصرية" ---
+                if (newValue === 'بدون مرتبة حصرية') {
+                    updateData.competition_bonus = 60;
+                    updateData.remaining_balance = 60 - (currentAgent.consumed_balance || 0)
+                    updateData.deposit_bonus_percentage = null;
+                    updateData.deposit_bonus_count = null;
+                } else {
+                    updateData.competition_bonus = rankData.competition_bonus;
+                    updateData.remaining_balance = (rankData.competition_bonus || 0) - (currentAgent.consumed_balance || 0);
+                }
+                updateData.remaining_deposit_bonus = (rankData.deposit_bonus_count || 0) - (currentAgent.used_deposit_bonus || 0);
+
+                // Save the agent update first
+                try {
+                    const response = await authedFetch(`/api/agents/${agent._id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updateData)
+                    });
+                    if (!response.ok) throw new Error((await response.json()).message || 'فشل تحديث المرتبة.');
+                    const { data: updatedAgent } = await response.json();
+
+                    // Record the rank change with reason and action
+                    const rankChangeResponse = await authedFetch(`/api/agents/${agent._id}/rank-change`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            old_rank: currentAgent.rank,
+                            new_rank: newValue,
+                            reason: reason,
+                            action_taken: action
+                        })
+                    });
+
+                    if (!rankChangeResponse.ok) {
+                        console.error('Failed to record rank change:', await rankChangeResponse.text());
+                    }
+
+                    showToast('تم تحديث المرتبة وتسجيل السبب والإجراء بنجاح.', 'success');
+                    renderAgentProfilePage(agent._id, { activeTab: 'details' });
+                } catch (e) {
+                    showToast(`فشل تحديث المرتبة: ${e.message}`, 'error');
+                    renderDetailsView(agent);
+                }
+            }, () => {
+                // On cancel, revert to original view
+                renderDetailsView(agent);
+            });
+            return; // Don't proceed with normal save flow
         } else if (fieldName === 'classification') {
-            updateData.classification = newValue;
-            // --- NEW: Automatically update competitions_per_week based on classification ---
-            const newClassification = newValue.toUpperCase();
-            if (newClassification === 'R' || newClassification === 'A') {
-                updateData.competitions_per_week = 2;
-            } else if (newClassification === 'B' || newClassification === 'C') {
-                updateData.competitions_per_week = 1;
+            // Check if classification actually changed
+            if (newValue === currentAgent.classification) {
+                showToast('التصنيف لم يتغير.', 'info');
+                renderDetailsView(agent);
+                return;
             }
-            updateData.remaining_deposit_bonus = (rankData.deposit_bonus_count || 0) - (currentAgent.used_deposit_bonus || 0);
+
+            // Show modal to get reason and action before saving
+            showClassificationChangeModal(currentAgent, newValue, async (reason, action) => {
+                console.log('[Classification Change] Modal confirmed with reason:', reason, 'action:', action);
+                
+                updateData.classification = newValue;
+                // --- Automatically update competitions_per_week based on classification ---
+                const newClassification = newValue.toUpperCase();
+                if (newClassification === 'R' || newClassification === 'A') {
+                    updateData.competitions_per_week = 2;
+                } else if (newClassification === 'B' || newClassification === 'C') {
+                    updateData.competitions_per_week = 1;
+                }
+
+                // Save the agent update first
+                try {
+                    const response = await authedFetch(`/api/agents/${agent._id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updateData)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('فشل تحديث التصنيف.');
+                    }
+
+                    // Now record the classification change with reason and action
+                    const classificationChangeResponse = await authedFetch(`/api/agents/${currentAgent._id}/classification-change`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            old_classification: currentAgent.classification,
+                            new_classification: newValue,
+                            reason: reason,
+                            action_taken: action
+                        })
+                    });
+
+                    if (!classificationChangeResponse.ok) {
+                        console.error('Failed to record classification change:', await classificationChangeResponse.text());
+                    }
+
+                    showToast('تم تحديث التصنيف وتسجيل السبب والإجراء بنجاح.', 'success');
+                    renderAgentProfilePage(agent._id, { activeTab: 'details' });
+                } catch (e) {
+                    showToast(`فشل تحديث التصنيف: ${e.message}`, 'error');
+                    renderDetailsView(agent);
+                }
+            }, () => {
+                // On cancel, revert to original view
+                renderDetailsView(agent);
+            });
+            return; // Don't proceed with normal save flow
         } else {
             // --- NEW: Automatically update competition_duration when competitions_per_week changes ---
             if (fieldName === 'competitions_per_week') {
@@ -1475,6 +2286,14 @@ async function renderInlineEditor(groupElement, agent) {
             renderDetailsView(agent); // Revert on error
         }
     });
+}
+
+// FIX: Missing function referenced by inline edit trigger
+function renderInlineEditor(groupElement, agent) {
+    if (!groupElement) return;
+    const fieldName = groupElement.dataset.field;
+    if (!fieldName) return;
+    enableInlineEdit(groupElement, fieldName, agent);
 }
 
 function calculateNextRenewalDate(agent) {
@@ -1625,141 +2444,405 @@ function displayNextRenewalDate(agent) {
 
 // --- NEW: Agent Analytics Section ---
 async function renderAgentAnalytics(agent, container, dateRange = 'all') {
-    container.innerHTML = '<div class="loader-container"><div class="spinner"></div></div>'; // This will be migrated later
-    let competitions = [];
-    let error = null;
-
+    // Loader while fetching
+    container.innerHTML = '<div class="loader-container"><div class="spinner"></div></div>';
+    let data = null;
     try {
         const queryParams = new URLSearchParams({ dateRange });
-        const response = await authedFetch(`/api/stats/agent-analytics/${agent._id}?${queryParams.toString()}`);
-        if (!response.ok) {
-            const result = await response.json();
-            throw new Error(result.message || 'فشل تحميل بيانات التحليلات.');
-        }
-        const result = await response.json();
-        competitions = result.competitions;
+        const resp = await authedFetch(`/api/stats/agent-analytics/${agent._id}?${queryParams.toString()}`);
+        const json = await resp.json();
+        if (!resp.ok) throw new Error(json.message || 'خطأ في جلب بيانات الوكيل');
+        data = json.data;
     } catch (e) {
-        error = e;
-    }
-
-    if (error) {
+        console.error('[AgentAnalytics] Failed:', e);
         container.innerHTML = '<p class="error">فشل تحميل بيانات التحليلات.</p>';
         return;
     }
 
-    // --- NEW: Calculate KPIs ---
-    const totalCompetitions = competitions.length;
-    const totalViews = competitions.reduce((sum, c) => sum + (c.views_count || 0), 0);
-    const totalReactions = competitions.reduce((sum, c) => sum + (c.reactions_count || 0), 0);
-    const totalParticipants = competitions.reduce((sum, c) => sum + (c.participants_count || 0), 0);
-    const avgViews = totalCompetitions > 0 ? totalViews / totalCompetitions : 0;
-
-    // --- NEW: Calculate Growth Rate ---
-    let growthRate = 0;
-    if (competitions.length >= 2) {
-        const latest = competitions[0];
-        const previous = competitions[1];
-        const latestTotal = (latest.views_count || 0) + (latest.reactions_count || 0) + (latest.participants_count || 0);
-        const previousTotal = (previous.views_count || 0) + (previous.reactions_count || 0) + (previous.participants_count || 0);
-        if (previousTotal > 0) {
-            growthRate = ((latestTotal - previousTotal) / previousTotal) * 100;
-        }
-    }
-
-    const kpiCardsHtml = `
-        <div class="dashboard-grid-v2" style="margin-bottom: 20px;">
-            <div class="stat-card-v2 color-1">
-                <div class="stat-card-v2-icon-bg"><i class="fas fa-eye"></i></div>
-                <p class="stat-card-v2-value">${formatNumber(totalViews)}</p>
-                <h3 class="stat-card-v2-title">إجمالي المشاهدات</h3>
-            </div>
-            <div class="stat-card-v2 color-2">
-                <div class="stat-card-v2-icon-bg"><i class="fas fa-heart"></i></div>
-                <p class="stat-card-v2-value">${formatNumber(totalReactions)}</p>
-                <h3 class="stat-card-v2-title">إجمالي التفاعلات</h3>
-            </div>
-            <div class="stat-card-v2 color-3">
-                <div class="stat-card-v2-icon-bg"><i class="fas fa-users"></i></div>
-                <p class="stat-card-v2-value">${formatNumber(totalParticipants)}</p>
-                <h3 class="stat-card-v2-title">إجمالي المشاركات</h3>
-            </div>
-            <div class="stat-card-v2 color-4">
-                <div class="stat-card-v2-icon-bg"><i class="fas fa-chart-line"></i></div>
-                <p class="stat-card-v2-value">${growthRate.toFixed(1)}%</p>
-                <h3 class="stat-card-v2-title">معدل النمو</h3>
-            </div>
-        </div>
-    `;
-
-    // --- NEW: Date Filter and Export Buttons ---
-    const analyticsHeaderHtml = `
-        <div class="analytics-header">
-            <h2><i class="fas fa-chart-line"></i> تحليلات أداء المسابقات</h2>
-            <div class="analytics-actions">
-                <div class="filter-buttons">
-                    <button class="filter-btn ${dateRange === 'all' ? 'active' : ''}" data-range="all">الكل</button>
-                    <button class="filter-btn ${dateRange === '7d' ? 'active' : ''}" data-range="7d">آخر 7 أيام</button>
-                    <button class="filter-btn ${dateRange === '30d' ? 'active' : ''}" data-range="30d">آخر 30 يوم</button>
-                    <button class="filter-btn ${dateRange === 'month' ? 'active' : ''}" data-range="month">هذا الشهر</button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    // --- NEW: Event listener for date filters ---
-    container.addEventListener('click', (e) => {
-        if (e.target.matches('.filter-btn')) {
-            const newRange = e.target.dataset.range;
-            renderAgentAnalytics(agent, container, newRange);
-        }
-    });
-
-    // --- FIX: Render chart after the container is in the DOM ---
-    renderAgentAnalyticsChart(competitions, dateRange, agent);
-
-    if (competitions.length === 0) {
-        container.innerHTML = `${analyticsHeaderHtml}<p class="no-results-message">لا توجد بيانات تحليلية في النطاق الزمني المحدد.</p>`;
+    if (!data || !data.stats) {
+        container.innerHTML = '<p>لا توجد بيانات تحليلية في النطاق الزمني المحدد.</p>';
         return;
     }
 
-    container.innerHTML = `
-        ${analyticsHeaderHtml}
-        ${kpiCardsHtml}
-        <div class="analytics-container">
-            <div class="chart-container" style="height: 350px; margin-bottom: 30px;">
-                <canvas id="agent-analytics-chart"></canvas>
+    const competitions = (data.stats.competitions || []).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const latest = competitions.slice(0, 10);
+
+    const analyticsHeaderHtml = `
+        <div class="analytics-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding:20px;background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border-radius:12px;border:1px solid #2a2d3a;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:40px;height:40px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-chart-line" style="color:#fff;font-size:18px;"></i>
+                </div>
+                <div>
+                    <h3 style="margin:0;color:#fff;font-size:18px;font-weight:600;">تحليلات الوكيل المتقدمة</h3>
+                    <p style="margin:4px 0 0;color:#a1a1aa;font-size:13px;">بيانات شاملة ومفصلة لأداء الوكيل</p>
+                </div>
             </div>
-            <div class="table-responsive-container">
-                <table class="modern-table">
-                    <thead>
-                        <tr>
-                            <th>اسم المسابقة</th>
-                            <th>تاريخ الإنشاء</th>
-                            <th>المشاهدات</th>
-                            <th>التفاعلات</th>
-                            <th>المشاركات</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${competitions.map(c => `
-                            <tr>
-                                <td data-label="اسم المسابقة">${c.name}</td>
-                                <td data-label="تاريخ الإنشاء">${new Date(c.created_at).toLocaleDateString('ar-EG')}</td>
-                                <td data-label="المشاهدات">${formatNumber(c.views_count)}</td>
-                                <td data-label="التفاعلات">${formatNumber(c.reactions_count)}</td>
-                                <td data-label="المشاركات">${formatNumber(c.participants_count)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+            <div class="date-range-selector" style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="range-btn dark-range-btn ${dateRange === '30' ? 'active' : ''}" data-range="30" style="background:#2a2d3a;color:#e2e8f0;border:1px solid #404040;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;transition:all 0.2s;cursor:pointer;">آخر 30 يوم</button>
+                <button class="range-btn dark-range-btn ${dateRange === '90' ? 'active' : ''}" data-range="90" style="background:#2a2d3a;color:#e2e8f0;border:1px solid #404040;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;transition:all 0.2s;cursor:pointer;">آخر 90 يوم</button>
+                <button class="range-btn dark-range-btn ${dateRange === '365' ? 'active' : ''}" data-range="365" style="background:#2a2d3a;color:#e2e8f0;border:1px solid #404040;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;transition:all 0.2s;cursor:pointer;">آخر سنة</button>
+                <button class="range-btn dark-range-btn ${dateRange === 'all' ? 'active' : ''}" data-range="all" style="background:#2a2d3a;color:#e2e8f0;border:1px solid #404040;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;transition:all 0.2s;cursor:pointer;">كل الوقت</button>
             </div>
-        </div>
-    `;
+        </div>`;
+
+    const kpisHtml = `
+        <div class="agent-kpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+            <div class="kpi-card dark-kpi-card" style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);border:1px solid #475569;border-radius:12px;padding:20px;text-align:center;position:relative;overflow:hidden;">
+                <div class="kpi-icon" style="width:48px;height:48px;background:linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;position:relative;z-index:2;">
+                    <i class="fas fa-trophy" style="color:#fff;font-size:20px;"></i>
+                </div>
+                <div class="kpi-glow" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, rgba(59,130,246,0.1) 0%, rgba(29,78,216,0.05) 100%);border-radius:12px;"></div>
+                <div style="font-size:13px;color:#94a3b8;font-weight:500;margin-bottom:8px;position:relative;z-index:2;">إجمالي المسابقات</div>
+                <div style="font-weight:700;font-size:28px;color:#f1f5f9;position:relative;z-index:2;">${data.stats.total_competitions}</div>
+                <div style="position:absolute;top:-20px;right:-20px;width:60px;height:60px;background:radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%);border-radius:50%;"></div>
+            </div>
+            <div class="kpi-card dark-kpi-card" style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);border:1px solid #475569;border-radius:12px;padding:20px;text-align:center;position:relative;overflow:hidden;">
+                <div class="kpi-icon" style="width:48px;height:48px;background:linear-gradient(135deg, #10b981 0%, #059669 100%);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;position:relative;z-index:2;">
+                    <i class="fas fa-play-circle" style="color:#fff;font-size:20px;"></i>
+                </div>
+                <div class="kpi-glow" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, rgba(16,185,129,0.1) 0%, rgba(5,150,105,0.05) 100%);border-radius:12px;"></div>
+                <div style="font-size:13px;color:#94a3b8;font-weight:500;margin-bottom:8px;position:relative;z-index:2;">المسابقات النشطة</div>
+                <div style="font-weight:700;font-size:28px;color:#f1f5f9;position:relative;z-index:2;">${data.stats.active_competitions}</div>
+                <div style="position:absolute;top:-20px;right:-20px;width:60px;height:60px;background:radial-gradient(circle, rgba(16,185,129,0.1) 0%, transparent 70%);border-radius:50%;"></div>
+            </div>
+            <div class="kpi-card dark-kpi-card" style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);border:1px solid #475569;border-radius:12px;padding:20px;text-align:center;position:relative;overflow:hidden;">
+                <div class="kpi-icon" style="width:48px;height:48px;background:linear-gradient(135deg, #f59e0b 0%, #d97706 100%);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;position:relative;z-index:2;">
+                    <i class="fas fa-eye" style="color:#fff;font-size:20px;"></i>
+                </div>
+                <div class="kpi-glow" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, rgba(245,158,11,0.1) 0%, rgba(217,119,6,0.05) 100%);border-radius:12px;"></div>
+                <div style="font-size:13px;color:#94a3b8;font-weight:500;margin-bottom:8px;position:relative;z-index:2;">إجمالي المشاهدات</div>
+                <div style="font-weight:700;font-size:28px;color:#f1f5f9;position:relative;z-index:2;">${data.stats.total_views}</div>
+                <div style="position:absolute;top:-20px;right:-20px;width:60px;height:60px;background:radial-gradient(circle, rgba(245,158,11,0.1) 0%, transparent 70%);border-radius:50%;"></div>
+            </div>
+            <div class="kpi-card dark-kpi-card" style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);border:1px solid #475569;border-radius:12px;padding:20px;text-align:center;position:relative;overflow:hidden;">
+                <div class="kpi-icon" style="width:48px;height:48px;background:linear-gradient(135deg, #ec4899 0%, #be185d 100%);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;position:relative;z-index:2;">
+                    <i class="fas fa-heart" style="color:#fff;font-size:20px;"></i>
+                </div>
+                <div class="kpi-glow" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, rgba(236,72,153,0.1) 0%, rgba(190,24,93,0.05) 100%);border-radius:12px;"></div>
+                <div style="font-size:13px;color:#94a3b8;font-weight:500;margin-bottom:8px;position:relative;z-index:2;">عدد التفاعلات</div>
+                <div style="font-weight:700;font-size:28px;color:#f1f5f9;position:relative;z-index:2;">${data.stats.total_reactions || 0}</div>
+                <div style="position:absolute;top:-20px;right:-20px;width:60px;height:60px;background:radial-gradient(circle, rgba(236,72,153,0.1) 0%, transparent 70%);border-radius:50%;"></div>
+            </div>
+            <div class="kpi-card dark-kpi-card" style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);border:1px solid #475569;border-radius:12px;padding:20px;text-align:center;position:relative;overflow:hidden;">
+                <div class="kpi-icon" style="width:48px;height:48px;background:linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;position:relative;z-index:2;">
+                    <i class="fas fa-users" style="color:#fff;font-size:20px;"></i>
+                </div>
+                <div class="kpi-glow" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, rgba(139,92,246,0.1) 0%, rgba(124,58,237,0.05) 100%);border-radius:12px;"></div>
+                <div style="font-size:13px;color:#94a3b8;font-weight:500;margin-bottom:8px;position:relative;z-index:2;">عدد المشاركين</div>
+                <div style="font-weight:700;font-size:28px;color:#f1f5f9;position:relative;z-index:2;">${data.stats.total_participants}</div>
+                <div style="position:absolute;top:-20px;right:-20px;width:60px;height:60px;background:radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%);border-radius:50%;"></div>
+            </div>
+            <div class="kpi-card dark-kpi-card" style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);border:1px solid #475569;border-radius:12px;padding:20px;text-align:center;position:relative;overflow:hidden;">
+                <div class="kpi-icon" style="width:48px;height:48px;background:linear-gradient(135deg, #ef4444 0%, #dc2626 100%);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;position:relative;z-index:2;">
+                    <i class="fas fa-medal" style="color:#fff;font-size:20px;"></i>
+                </div>
+                <div class="kpi-glow" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, rgba(239,68,68,0.1) 0%, rgba(220,38,38,0.05) 100%);border-radius:12px;"></div>
+                <div style="font-size:13px;color:#94a3b8;font-weight:500;margin-bottom:8px;position:relative;z-index:2;">عدد الفائزين</div>
+                <div style="font-weight:700;font-size:28px;color:#f1f5f9;position:relative;z-index:2;">${data.stats.total_winners}</div>
+                <div style="position:absolute;top:-20px;right:-20px;width:60px;height:60px;background:radial-gradient(circle, rgba(239,68,68,0.1) 0%, transparent 70%);border-radius:50%;"></div>
+            </div>
+            <div class="kpi-card dark-kpi-card" style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);border:1px solid #475569;border-radius:12px;padding:20px;text-align:center;position:relative;overflow:hidden;">
+                <div class="kpi-icon" style="width:48px;height:48px;background:linear-gradient(135deg, #22c55e 0%, #16a34a 100%);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;position:relative;z-index:2;">
+                    <i class="fas fa-rocket" style="color:#fff;font-size:20px;"></i>
+                </div>
+                <div class="kpi-glow" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, rgba(34,197,94,0.1) 0%, rgba(22,163,74,0.05) 100%);border-radius:12px;"></div>
+                <div style="font-size:13px;color:#94a3b8;font-weight:500;margin-bottom:8px;position:relative;z-index:2;">معدل النمو</div>
+                <div style="font-weight:700;font-size:28px;color:#f1f5f9;position:relative;z-index:2;">${(() => {
+                    const views = data.stats.total_views || 0;
+                    const participants = data.stats.total_participants || 0;
+                    const reactions = data.stats.total_reactions || 0;
+                    const competitions = data.stats.total_competitions || 1;
+                    
+                    // حساب معدل النمو الاحترافي
+                    // 1. معدل التحويل من المشاهدات إلى المشاركات (40% من الوزن)
+                    const participationRate = views > 0 ? (participants / views) * 100 : 0;
+                    
+                    // 2. معدل التفاعل لكل مشاهدة (30% من الوزن)
+                    const reactionRate = views > 0 ? (reactions / views) * 100 : 0;
+                    
+                    // 3. متوسط المشاركين لكل مسابقة (30% من الوزن)
+                    const avgParticipantsPerComp = competitions > 0 ? participants / competitions : 0;
+                    
+                    // 4. حساب النمو الإجمالي كمتوسط مرجح
+                    const growthScore = (participationRate * 0.4) + (reactionRate * 0.3) + (avgParticipantsPerComp * 2 * 0.3);
+                    
+                    return growthScore.toFixed(1) + '%';
+                })()}</div>
+                <div style="font-size:11px;color:#64748b;margin-top:6px;position:relative;z-index:2;">نمو احترافي شامل</div>
+                <div style="position:absolute;top:-20px;right:-20px;width:60px;height:60px;background:radial-gradient(circle, rgba(34,197,94,0.1) 0%, transparent 70%);border-radius:50%;"></div>
+            </div>
+        </div>`;
+
+    const tableHtml = `
+        <div class="agent-competitions dark-table-container" style="background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:1px solid #2a2d3a;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden;">
+            <div class="table-header" style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div style="width:40px;height:40px;background:linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-list" style="color:#fff;font-size:18px;"></i>
+                </div>
+                <div>
+                    <h4 style="margin:0;color:#fff;font-size:18px;font-weight:600;">آخر 10 مسابقات</h4>
+                    <p style="margin:4px 0 0;color:#a1a1aa;font-size:13px;">تفاصيل المسابقات الأخيرة والأداء</p>
+                </div>
+            </div>
+            <div class="table-glow" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, rgba(255,107,107,0.05) 0%, transparent 70%);pointer-events:none;"></div>
+            ${latest.length === 0 ? '<p style="margin:0;color:#94a3b8;text-align:center;padding:40px;">لا توجد مسابقات.</p>' : `
+            <div style="overflow-x:auto;border-radius:8px;background:#0f172a;border:1px solid #334155;">
+            <table style="width:100%;border-collapse:collapse;min-width:720px;">
+                <thead>
+                    <tr style="background:linear-gradient(135deg, #1e293b 0%, #334155 100%);color:#f1f5f9;font-size:13px;font-weight:600;">
+                        <th style="padding:16px 20px;text-align:right;border-bottom:1px solid #475569;">السؤال / الاسم</th>
+                        <th style="padding:16px 20px;text-align:right;border-bottom:1px solid #475569;">التاريخ</th>
+                        <th style="padding:16px 20px;text-align:right;border-bottom:1px solid #475569;">المشاهدات</th>
+                        <th style="padding:16px 20px;text-align:right;border-bottom:1px solid #475569;">المشاركون</th>
+                        <th style="padding:16px 20px;text-align:right;border-bottom:1px solid #475569;">الفائزون</th>
+                        <th style="padding:16px 20px;text-align:right;border-bottom:1px solid #475569;">الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${latest.map(c => {
+                        const title = c.name || c.question || 'بدون عنوان';
+                        const safeTitle = title.replace(/[<>]/g, s => ({'<':'&lt;','>':'&gt;'}[s]));
+                        const statusText = c.status === 'completed' ? 'مكتملة' : (c.status === 'active' ? 'نشطة' : 'غير محدد');
+                        const statusColor = c.status === 'completed' ? '#10b981' : (c.status === 'active' ? '#f59e0b' : '#6b7280');
+                        return `
+                        <tr style="border-bottom:1px solid #334155;font-size:13px;background:#1e293b;color:#e2e8f0;" class="table-row">
+                            <td class="comp-title-cell" data-full="${safeTitle}" style="padding:14px 20px;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:#60a5fa;" title="انقر لعرض النص الكامل">${safeTitle}</td>
+                            <td style="padding:14px 20px;color:#cbd5e1;">${c.createdAt ? new Date(c.createdAt).toLocaleDateString('ar-EG') : '-'}</td>
+                            <td style="padding:14px 20px;font-weight:600;color:#3b82f6;">${c.views_count || 0}</td>
+                            <td style="padding:14px 20px;color:#cbd5e1;">${c.participants_count || 0}</td>
+                            <td style="padding:14px 20px;color:#cbd5e1;">${c.winners_count || 0}</td>
+                            <td style="padding:14px 20px;">
+                                <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:500;background:${statusColor}20;color:${statusColor};border:1px solid ${statusColor}30;">
+                                    <div style="width:6px;height:6px;border-radius:50%;background:${statusColor};"></div>
+                                    ${statusText}
+                                </span>
+                            </td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+            </div>`}
+        </div>`;
+
+    const series = competitions.filter(c => c.createdAt).slice(-30).map(c => ({
+        date: new Date(c.createdAt).toLocaleDateString('ar-EG'),
+        views: c.views_count || 0,
+        participants: c.participants_count || 0
+    }));
+    const chartHtml = series.length > 1 ? `
+        <div class="chart-container dark-chart-container" style="background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:1px solid #2a2d3a;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden;">
+            <div class="chart-header" style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div style="width:40px;height:40px;background:linear-gradient(135deg, #a855f7 0%, #9333ea 100%);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-chart-bar" style="color:#fff;font-size:18px;"></i>
+                </div>
+                <div>
+                    <h4 style="margin:0;color:#fff;font-size:18px;font-weight:600;">تطور المشاهدات والمشاركات</h4>
+                    <p style="margin:4px 0 0;color:#a1a1aa;font-size:13px;">تحليل الأداء عبر الوقت</p>
+                </div>
+            </div>
+            <div class="chart-glow" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, rgba(168,85,247,0.05) 0%, transparent 70%);pointer-events:none;"></div>
+            <div style="position:relative;z-index:2;background:#0f172a;border-radius:8px;padding:16px;border:1px solid #334155;">
+                <canvas id="agentCompetitionsTrend" height="220"></canvas>
+            </div>
+        </div>` : '';
+
+    container.innerHTML = analyticsHeaderHtml + kpisHtml + chartHtml + tableHtml;
+
+    // Add event listeners for range buttons
+    container.querySelectorAll('.dark-range-btn').forEach(btn => {
+        // Set initial active state styling
+        if (btn.classList.contains('active')) {
+            btn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            btn.style.borderColor = '#667eea';
+            btn.style.color = '#fff';
+            btn.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+        }
+        
+        btn.addEventListener('click', () => {
+            // Remove active styling from all buttons
+            container.querySelectorAll('.dark-range-btn').forEach(b => {
+                b.classList.remove('active');
+                b.style.background = '#2a2d3a';
+                b.style.borderColor = '#404040';
+                b.style.color = '#e2e8f0';
+                b.style.boxShadow = 'none';
+            });
+            // Add active styling to clicked button
+            btn.classList.add('active');
+            btn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            btn.style.borderColor = '#667eea';
+            btn.style.color = '#fff';
+            btn.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+            // Re-render analytics with new date range
+            renderAgentAnalytics(agent, container, btn.dataset.range);
+        });
+    });
+
+    // Add hover effects for KPI cards
+    container.querySelectorAll('.dark-kpi-card').forEach(card => {
+        card.addEventListener('mouseenter', () => {
+            card.style.transform = 'translateY(-4px)';
+            card.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.3)';
+            card.style.borderColor = '#64748b';
+        });
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'translateY(0)';
+            card.style.boxShadow = 'none';
+            card.style.borderColor = '#475569';
+        });
+    });
+
+    // Add hover effects for table rows
+    container.querySelectorAll('.table-row').forEach(row => {
+        row.addEventListener('mouseenter', () => {
+            row.style.background = '#334155';
+        });
+        row.addEventListener('mouseleave', () => {
+            row.style.background = '#1e293b';
+        });
+    });
+
+    // Attach click handlers for competition question/name expansion
+    container.querySelectorAll('.comp-title-cell').forEach(cell => {
+        cell.addEventListener('click', () => {
+            const full = cell.getAttribute('data-full');
+            if (!full) return;
+            if (typeof showConfirmationModal === 'function') {
+                const body = `
+                    <div class='dark-expand-modal-wrapper'>
+                        <div class='dark-expand-modal'>
+                            <div class='dark-expand-modal-header'>
+                                <i class='fas fa-question-circle' style='color:#ff9800'></i> السؤال / الاسم الكامل
+                            </div>
+                            <div class='dark-expand-modal-body'>
+                                <pre>${full}</pre>
+                            </div>
+                        </div>
+                    </div>`;
+                showConfirmationModal(body, async () => true, { title:'', confirmText:'<i class="fas fa-times"></i> إغلاق', showCancel:false });
+            } else { alert(full); }
+        });
+    });
+
+    if (chartHtml) {
+        try {
+            const ctx = document.getElementById('agentCompetitionsTrend').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: { 
+                    labels: series.map(p => p.date), 
+                    datasets: [
+                        { 
+                            label: 'مشاهدات', 
+                            data: series.map(p => p.views), 
+                            borderColor: '#3b82f6', 
+                            backgroundColor: 'rgba(59,130,246,0.1)', 
+                            tension: 0.4, 
+                            fill: true,
+                            pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#1e40af',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        { 
+                            label: 'مشاركون', 
+                            data: series.map(p => p.participants), 
+                            borderColor: '#f59e0b', 
+                            backgroundColor: 'rgba(245,158,11,0.1)', 
+                            tension: 0.4, 
+                            fill: true,
+                            pointBackgroundColor: '#f59e0b',
+                            pointBorderColor: '#d97706',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: { 
+                        legend: { 
+                            position: 'top',
+                            labels: {
+                                color: '#e2e8f0',
+                                font: {
+                                    size: 12,
+                                    weight: '500'
+                                },
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#f1f5f9',
+                            bodyColor: '#cbd5e1',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            padding: 12
+                        }
+                    }, 
+                    scales: { 
+                        x: { 
+                            grid: { 
+                                color: 'rgba(51, 65, 85, 0.3)',
+                                borderColor: '#334155'
+                            },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        }, 
+                        y: { 
+                            beginAtZero: true, 
+                            grid: { 
+                                color: 'rgba(51, 65, 85, 0.3)',
+                                borderColor: '#334155'
+                            },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        } 
+                    },
+                    elements: {
+                        point: {
+                            hoverBorderWidth: 3
+                        }
+                    }
+                }
+            });
+        } catch (e) { console.warn('Chart render failed', e); }
+    }
 }
 
 function renderAgentAnalyticsChart(competitions, dateRange, agent) {
     const ctx = document.getElementById('agent-analytics-chart')?.getContext('2d');
     if (!ctx) return;
+
+    // --- FIX: Ensure competitions is always an array ---
+    if (!Array.isArray(competitions)) {
+        competitions = [];
+    }
+
+    // --- FIX: Ensure agent exists ---
+    if (!agent) {
+        console.warn('[Analytics] Agent is undefined, cannot render chart');
+        return;
+    }
 
     // Determine the date range for the chart labels
     const chartLabels = [];
@@ -1770,9 +2853,12 @@ function renderAgentAnalyticsChart(competitions, dateRange, agent) {
     if (dateRange === '30d') daysInChart = 30;
     else if (dateRange === 'month') daysInChart = today.getDate();
     else if (dateRange === 'all') {
-        const oldestDate = new Date(agent.created_at); // Use agent creation date
-        const diffTime = Math.abs(today - oldestDate);
-        daysInChart = Math.max(7, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1); // +1 to include today
+        // --- FIX: Check if agent.created_at exists ---
+        if (agent.created_at) {
+            const oldestDate = new Date(agent.created_at); // Use agent creation date
+            const diffTime = Math.abs(today - oldestDate);
+            daysInChart = Math.max(7, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1); // +1 to include today
+        }
     }
 
     for (let i = daysInChart - 1; i >= 0; i--) {

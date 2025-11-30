@@ -10,51 +10,65 @@ exports.postAnnouncement = async (req, res) => {
     const bot = req.app.locals.telegramBot;
 
     if (!bot) {
-        return res.status(500).json({ message: 'Telegram bot is not initialized on the server.' });
+        return res.status(503).json({ 
+            message: 'Telegram bot is not initialized on the server.',
+            hint: 'Please check TELEGRAM_BOT_TOKEN in .env or contact administrator.'
+        });
     }
     if (!message || !chatId) {
         return res.status(400).json({ message: 'Message and Chat ID are required.' });
     }
 
     try {
-        // --- FIX: Handle relative image paths by sending a file buffer ---
+        // --- FIX: Handle relative image paths safely and fall back to text-only send ---
+        // Telegram cannot reach local URLs, so we resolve the file on disk and send the buffer.
         if (imageUrl && imageUrl.startsWith('/')) {
-            // This block handles relative paths (e.g., /uploads/... or /images/...) which point to local files.
-            // Telegram's servers can't access these directly, so we read the file and send it as a buffer.
+            // Remove the leading slash so path.join does not discard the base path
+            const normalizedPath = imageUrl.replace(/^\/+/, '');
+            let imagePath;
+
+            if (imageUrl.startsWith('/images/')) {
+                // Frontend assets (e.g. /images/competition_bg.jpg)
+                imagePath = path.join(__dirname, '..', '..', '..', 'frontend', normalizedPath);
+            } else {
+                // Backend uploads (e.g. /uploads/...)
+                imagePath = path.join(__dirname, '..', '..', normalizedPath);
+            }
+
+            console.log(`[Telegram] Attempting to read image from path: ${imagePath}`);
+
             try {
-                let imagePath;
-
-                // Check if the path is for a frontend asset or a backend upload
-                if (imageUrl.startsWith('/images/')) {
-                    // Path is relative to the frontend directory
-                    imagePath = path.join(__dirname, '..', '..', '..', 'frontend', imageUrl);
-                } else {
-                    // Assume other paths (like /uploads/) are relative to the backend directory's root
-                    imagePath = path.join(__dirname, '..', '..', imageUrl);
-                }
-
-                console.log(`[Telegram] Attempting to read image from path: ${imagePath}`);
-
-                // Read the file into a buffer
                 const imageBuffer = await fs.readFile(imagePath);
                 console.log(`[Telegram] Image buffer read successfully. Size: ${imageBuffer.length} bytes`);
 
-                // Send the buffer as a photo
-                await bot.sendPhoto(chatId, imageBuffer, { caption: message, parse_mode: 'HTML' });
-                console.log(`[Telegram] Image sent successfully to chat ID: ${chatId}`);
+                const filename = path.basename(imagePath);
+                const ext = path.extname(filename).toLowerCase();
+                let contentType = 'application/octet-stream';
+                if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+                else if (ext === '.png') contentType = 'image/png';
+                else if (ext === '.gif') contentType = 'image/gif';
 
+                await bot.sendPhoto(
+                    chatId,
+                    imageBuffer,
+                    { caption: message, parse_mode: 'HTML' },
+                    { filename, contentType }
+                );
+                console.log(`[Telegram] Image sent successfully to chat ID: ${chatId}`);
             } catch (fileError) {
-                // If reading the local file fails, log the error and do not send to Telegram.
+                // If the image cannot be read (wrong path / missing file), log and fall back to text-only message.
                 console.error(`[Telegram] Could not read local file for path ${imageUrl}. Error: ${fileError.message}`);
-                // We can't fall back to sending the URL because it's not a valid URL.
-                // We'll let the generic error handler below catch this and inform the user.
-                throw new Error(`Server could not process image file: ${fileError.message}`);
+                await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+                return res.status(200).json({
+                    message: 'Message sent to Telegram without image (image file not found on server).',
+                    hint: 'Verify the competition image path is accessible to the backend.'
+                });
             }
         } else if (imageUrl) {
-            // This handles absolute remote URLs (e.g., from a CDN).
+            // Absolute remote URL
             await bot.sendPhoto(chatId, imageUrl, { caption: message, parse_mode: 'HTML' });
         } else {
-            // Handle a text-only message if no imageUrl is provided.
+            // Text-only message
             await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
         }
 
@@ -83,7 +97,10 @@ exports.getChatInfo = async (req, res) => {
     const bot = req.app.locals.telegramBot;
 
     if (!bot) {
-        return res.status(500).json({ message: 'Telegram bot is not initialized on the server.' });
+        return res.status(503).json({ 
+            message: 'Telegram bot is not initialized on the server.',
+            hint: 'Please check TELEGRAM_BOT_TOKEN in .env or contact administrator.'
+        });
     }
     if (!chatId) {
         return res.status(400).json({ message: 'Chat ID is required.' });
