@@ -133,6 +133,26 @@ function updateUIAfterLogin(user) {
     if (usersNavItem && (user.role === 'super_admin' || user.role === 'admin')) {
         usersNavItem.style.display = 'block';
     }
+
+    // NEW: Show/Hide Question Suggestions links based on role
+    const navQuestionsDropdownContainer = document.getElementById('nav-questions-dropdown-container');
+    const navAdminQuestionSuggestions = document.getElementById('nav-admin-question-suggestions');
+    
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+    
+    if (navQuestionsDropdownContainer) {
+        navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all employees
+    }
+    
+    if (navAdminQuestionSuggestions) {
+        navAdminQuestionSuggestions.style.display = isAdmin ? 'block' : 'none'; // Show admin link only for admins
+    }
+
+    // NEW: Show/Hide Tasks & Calendar dropdown for admins only
+    const navTasksCalendarDropdownContainer = document.getElementById('nav-tasks-calendar-dropdown-container');
+    if (navTasksCalendarDropdownContainer) {
+        navTasksCalendarDropdownContainer.style.display = isAdmin ? 'block' : 'none';
+    }
 }
 // NEW: Router function to handle page navigation based on URL hash
 async function handleRouting() {
@@ -799,6 +819,44 @@ function setupNavbar() {
     const navStatistics = document.getElementById('nav-statistics');
     const navAnalytics = document.getElementById('nav-analytics'); // NEW
     const navWinnerRoulette = document.getElementById('nav-winner-roulette');
+
+    // NEW: Tasks & Calendar Dropdown Navigation (for admins only)
+    const navTasksCalendarDropdownContainer = document.getElementById('nav-tasks-calendar-dropdown-container');
+    const navTasksCalendarDropdown = document.getElementById('nav-tasks-calendar-dropdown');
+
+    if (currentUserProfile && navTasksCalendarDropdownContainer) {
+        const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
+        navTasksCalendarDropdownContainer.style.display = isAdmin ? 'block' : 'none';
+    }
+
+    if (navTasksCalendarDropdown) {
+        navTasksCalendarDropdown.addEventListener('click', (e) => {
+            e.preventDefault();
+        });
+    }
+
+    // NEW: Question Suggestions Dropdown Navigation
+    const navQuestionsDropdownContainer = document.getElementById('nav-questions-dropdown-container');
+    const navQuestionsDropdown = document.getElementById('nav-questions-dropdown');
+    const navAdminQuestionSuggestionsMenu = document.getElementById('nav-admin-question-suggestions');
+
+    // Show/Hide dropdown based on role
+    if (currentUserProfile && navQuestionsDropdownContainer) {
+        const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
+        
+        navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all employees
+        
+        if (navAdminQuestionSuggestionsMenu) {
+            navAdminQuestionSuggestionsMenu.style.display = isAdmin ? 'block' : 'none'; // Show admin link only for admins
+        }
+    }
+
+    // Prevent dropdown toggle from navigating
+    if (navQuestionsDropdown) {
+        navQuestionsDropdown.addEventListener('click', (e) => {
+            e.preventDefault();
+        });
+    }
 
     navLinks = [navHome, navTasks, navManageAgents, navTopAgents, navManageCompetitions, navArchivedCompetitions, navCompetitionTemplates, navCalendar, navUsers, navProfileSettings, navActivityLog, navAnalytics, navWinnerRoulette, document.getElementById('logout-btn')];
     

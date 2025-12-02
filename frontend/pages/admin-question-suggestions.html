@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة اقتراحات الأسئلة - Inzo Winner</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        /* Pills Navigation Custom */
+        .nav-pills-custom .pill-link {
+            background: #141937;
+            margin-left: .75rem;
+            border-radius: 30px;
+            padding: 8px 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #d0d4e6 !important;
+            border: 1px solid #2a3155;
+            transition: background .25s, color .25s, box-shadow .25s;
+        }
+        .nav-pills-custom .pill-link:hover {
+            background: #1f2647;
+            color: #fff !important;
+            box-shadow: 0 0 0 2px rgba(102,118,234,.3);
+        }
+        .nav-pills-custom .pill-link.active {
+            background: linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+            color: #fff !important;
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102,118,234,.4);
+        }
+        .navbar-brand {
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .navbar-brand i { color: #ffd54f; }
+                body {
+                    background: #0a0e27;
+                    color: #e0e0e0;
+                    min-height: 100vh;
+                }
+
+        .admin-page {
+            padding: 30px 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(240, 147, 251, 0.3);
+        }
+
+        .page-header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: #1a1f3a;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            text-align: center;
+                    border: 1px solid #2a3155;
+        }
+
+        .stat-card .icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .label {
+            color: #666;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .filter-bar {
+            background: #1a1f3a;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            border: 1px solid #2a3155;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .admin-filter-btn {
+            padding: 10px 20px;
+            border: 2px solid #2a3155;
+            background: #0f1429;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+                    color: #e0e0e0;
+        }
+
+        .admin-filter-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .admin-filter-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .admin-suggestion-card {
+            background: #1a1f3a;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+            overflow: hidden;
+            border-right: 5px solid #2a3155;
+            transition: all 0.3s;
+        }
+
+        .admin-suggestion-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+        }
+
+        .admin-suggestion-card.pending { border-right-color: #ffc107; }
+        .admin-suggestion-card.approved { border-right-color: #28a745; }
+        .admin-suggestion-card.rejected { border-right-color: #dc3545; }
+        .admin-suggestion-card.needs_revision { border-right-color: #17a2b8; }
+
+        .admin-suggestion-card .card-header {
+            padding: 15px 20px;
+            background: #141937;
+            border-bottom: 2px solid #2a3155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .employee-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+
+        .employee-info .date {
+            font-size: 0.85rem;
+            color: #999;
+            font-weight: normal;
+        }
+
+        .badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .category-badge, .difficulty-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .category-badge {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .difficulty-badge.easy { background: #c8e6c9; color: #2e7d32; }
+        .difficulty-badge.medium { background: #fff9c4; color: #f57f17; }
+        .difficulty-badge.hard { background: #ffcdd2; color: #c62828; }
+
+        .admin-suggestion-card .card-body {
+            padding: 20px;
+        }
+
+        .section-title {
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .answer-section .section-title {
+            color: #4caf50;
+        }
+
+        .question-section, .answer-section {
+            margin-bottom: 20px;
+        }
+
+        .question-text {
+            background: #0f1429;
+            padding: 15px;
+            border-radius: 8px;
+            color: #e0e0e0;
+            border-right: 4px solid #667eea;
+        }
+
+        .answer-text {
+            background: #1a2f1a;
+            padding: 15px;
+            border-radius: 8px;
+            color: #4caf50;
+            border-right: 4px solid #4caf50;
+        }
+
+        .previous-evaluation {
+            background: #2a2410;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+                    border: 1px solid #3d3520;
+        }
+
+        .rating-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            font-size: 1.2rem;
+        }
+
+        .feedback-text {
+            color: #666;
+            margin: 10px 0;
+        }
+
+        .reviewer-info {
+            font-size: 0.85rem;
+            color: #999;
+        }
+
+        .admin-suggestion-card .card-footer {
+            padding: 15px 20px;
+            background: #141937;
+            border-top: 2px solid #2a3155;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+        }
+
+        .btn-success { background: #28a745; color: white; }
+        .btn-warning { background: #ffc107; color: #333; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-outline-danger { background: white; color: #dc3545; border: 2px solid #dc3545; }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+
+        /* Evaluation Modal Overrides (Higher Specificity) */
+        #evaluationModal .modal-content {
+            background: #121528 !important;
+            color: #fff !important;
+            border: 1px solid #2a3155 !important;
+        }
+        #evaluationModal .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            color: #fff !important;
+        }
+        #evaluationForm label.form-label { color: #fff !important; }
+        /* تمييز اسم الموظف داخل نافذة التقييم */
+        #evaluationForm #evalEmployeeName {
+            color: #ffd54f !important; /* ذهبي لافت */
+            font-weight: 700;
+            letter-spacing: .5px;
+        }
+        #evaluationForm p.question-text,
+        #evaluationForm p.answer-text {
+            background: #0f1429 !important;
+            color: #e0e0e0 !important;
+            border: 1px solid #2a3155 !important;
+            padding: 12px 15px;
+            border-radius: 8px;
+        }
+        #evaluationForm .form-control {
+            background: #0a0f1d !important;
+            color: #fff !important;
+            border: 1px solid #444 !important;
+        }
+        #evaluationForm .form-control:focus {
+            outline: none;
+            border-color: #888 !important;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.18);
+            background: #0a0f1d !important;
+            color: #fff !important;
+        }
+        #evaluationForm textarea::placeholder,
+        #evaluationForm input::placeholder {
+            color: #d0d0d0 !important;
+            opacity: .85;
+        }
+        #evaluationForm .btn-success { background: #28a745 !important; border: none; }
+        #evaluationForm .btn-secondary { background: #6c757d !important; border: none; }
+        /* تمييز اسم المراجع (الإدمن) داخل البطاقات السابقة */
+        .previous-evaluation .reviewer-info {
+            color: #76c7ff !important; /* أزرق فاتح مميز */
+            font-weight: 600;
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        @media (max-width: 768px) {
+            .filter-buttons {
+                flex-direction: column;
+            }
+            
+            .admin-filter-btn {
+                width: 100%;
+            }
+            
+            .admin-suggestion-card .card-footer {
+                flex-wrap: wrap;
+            }
+            
+            .btn {
+                flex: 1;
+                min-width: 120px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="../index.html">
+                <i class="fas fa-trophy"></i> Inzo Winner
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto nav-pills-custom">
+                    <li class="nav-item">
+                        <a class="nav-link pill-link" href="../index.html">
+                            <i class="fas fa-home"></i> الرئيسية
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pill-link active" href="admin-question-suggestions.html">
+                            <i class="fas fa-tasks"></i> إدارة الاقتراحات
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="admin-page">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1><i class="fas fa-tasks"></i> إدارة اقتراحات الأسئلة</h1>
+            <p>مراجعة وتقييم الأسئلة المقترحة من الموظفين</p>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="icon" style="color: #6c757d;"><i class="fas fa-inbox"></i></div>
+                <div class="label">إجمالي الاقتراحات</div>
+                <div class="value" id="totalCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon" style="color: #ffc107;"><i class="fas fa-clock"></i></div>
+                <div class="label">قيد المراجعة</div>
+                <div class="value" id="pendingCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon" style="color: #28a745;"><i class="fas fa-check-circle"></i></div>
+                <div class="label">مقبولة</div>
+                <div class="value" id="approvedCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon" style="color: #dc3545;"><i class="fas fa-times-circle"></i></div>
+                <div class="label">مرفوضة</div>
+                <div class="value" id="rejectedCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon" style="color: #17a2b8;"><i class="fas fa-edit"></i></div>
+                <div class="label">تحتاج تعديل</div>
+                <div class="value" id="revisionCount">0</div>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+            <h3 style="margin-bottom: 15px;"><i class="fas fa-filter"></i> تصفية حسب الحالة</h3>
+            <div class="filter-buttons">
+                <button class="admin-filter-btn active" data-status="pending">
+                    <i class="fas fa-clock"></i> قيد المراجعة
+                </button>
+                <button class="admin-filter-btn" data-status="approved">
+                    <i class="fas fa-check-circle"></i> مقبولة
+                </button>
+                <button class="admin-filter-btn" data-status="rejected">
+                    <i class="fas fa-times-circle"></i> مرفوضة
+                </button>
+                <button class="admin-filter-btn" data-status="needs_revision">
+                    <i class="fas fa-edit"></i> تحتاج تعديل
+                </button>
+                <button class="admin-filter-btn" data-status="">
+                    <i class="fas fa-list"></i> الكل
+                </button>
+            </div>
+        </div>
+
+        <!-- Suggestions Container -->
+        <div id="adminSuggestionsContainer">
+            <!-- Will be populated by JS -->
+        </div>
+    </div>
+
+    <!-- Evaluation Modal -->
+    <div class="modal fade" id="evaluationModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-clipboard-check"></i> تقييم الاقتراح</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="evaluationForm">
+                        <input type="hidden" id="evalSuggestionId">
+                        
+                        <div class="mb-3">
+                            <label class="form-label"><strong>اسم الموظف:</strong></label>
+                            <p id="evalEmployeeName" class="text-muted"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label"><strong>السؤال:</strong></label>
+                            <p id="evalQuestion" class="question-text"></p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label"><strong>الإجابة:</strong></label>
+                            <p id="evalAnswer" class="answer-text"></p>
+                        </div>
+
+                        <hr>
+
+                        <div class="mb-3">
+                            <label for="evalStatus" class="form-label">
+                                <i class="fas fa-flag"></i> الحالة <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-control" id="evalStatus" required>
+                                <option value="approved">قبول</option>
+                                <option value="rejected">رفض</option>
+                                <option value="needs_revision">يحتاج تعديل</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="evalRating" class="form-label">
+                                <i class="fas fa-star"></i> التقييم (1-5)
+                            </label>
+                            <select class="form-control" id="evalRating">
+                                <option value="">بدون تقييم</option>
+                                <option value="1">1 - ضعيف</option>
+                                <option value="2">2 - مقبول</option>
+                                <option value="3">3 - جيد</option>
+                                <option value="4">4 - جيد جداً</option>
+                                <option value="5">5 - ممتاز</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="evalFeedback" class="form-label">
+                                <i class="fas fa-comment"></i> الملاحظات والتوجيهات <span class="text-danger">*</span>
+                            </label>
+                            <textarea 
+                                class="form-control" 
+                                id="evalFeedback" 
+                                rows="4"
+                                placeholder="اكتب ملاحظاتك هنا..."
+                                required
+                            ></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="evalNotes" class="form-label">
+                                <i class="fas fa-sticky-note"></i> ملاحظات داخلية (للإدارة فقط)
+                            </label>
+                            <textarea 
+                                class="form-control" 
+                                id="evalNotes" 
+                                rows="3"
+                                placeholder="ملاحظات خاصة بالإدارة..."
+                            ></textarea>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> إلغاء
+                            </button>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> حفظ التقييم
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/pages/admin-question-suggestions.js"></script>
+</body>
+</html>

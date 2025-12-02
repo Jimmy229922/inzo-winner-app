@@ -41,6 +41,8 @@ const jsFiles = [
     'js/pages/activityLog.js',
     'js/pages/analytics.js',
     'js/pages/winner-roulette.js',
+    'js/pages/question-suggestions.js',
+    'js/pages/admin-question-suggestions.js',
     // 'js/utils.js' is intentionally excluded because build.js injects a small utilities block
     'js/main.js'
 ].map(f => path.join(basePath, f));

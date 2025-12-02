@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 
-const authenticate = function(req, res, next) {
+const authenticate = async function(req, res, next) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -23,14 +24,17 @@ const authenticate = function(req, res, next) {
             return res.status(401).json({ message: 'Invalid token structure: missing user ID' });
         }
 
-        // Attach a normalized user object to the request
-        req.user = {
-            ...decoded,
-            _id: effectiveId,
-            userId: effectiveId
-        };
+        // Fetch full user details from database using the existing User model
+        const User = mongoose.model('User');
+        const user = await User.findById(effectiveId).select('-password');
+        
+        if (!user) {
+            return res.status(401).json({ message: 'User not found' });
+        }
 
-        // console.debug('[AUTH] Token decoded, userId=', effectiveId);
+        // Attach the full user object to the request
+        req.user = user;
+
         next();
     } catch (err) {
         console.warn('[AUTH-WARN] Token validation failed:', err.message);

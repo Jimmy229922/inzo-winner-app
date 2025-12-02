@@ -20,6 +20,7 @@ const authMiddleware = require('./api/middleware/auth.middleware');
 const activityLogger = require('./middleware/activityLog.middleware');
 const runMigrations = require('./migration-runner'); // FIX: Correct path for migration runner
 const winnerRoutes = require('./routes/winner.routes');
+const questionSuggestionRoutes = require('./routes/questionSuggestion.routes'); // نظام اقتراح الأسئلة
 
 const app = express();
 
@@ -171,6 +172,8 @@ app.use('/api', telegramRoutes);
 app.use('/api/stats', authMiddleware.authenticate, activityLogger, statsRoutes);
 // Integrations (Wheel of Names, etc.)
 app.use('/api/integrations', authMiddleware.authenticate, activityLogger, integrationsRoutes);
+// نظام اقتراح الأسئلة
+app.use('/api/question-suggestions', questionSuggestionRoutes);
 // Expose a top-level analytics endpoint that the frontend expects (/api/analytics)
 const statsController = require('./controllers/stats.controller');
 app.get('/api/analytics', authMiddleware.authenticate, activityLogger, statsController.getAnalytics);

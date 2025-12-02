@@ -7,7 +7,7 @@
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <!-- Bundled CSS (cache-busted) -->
-    <link rel="stylesheet" href="/dist/bundle.css?v=20251130012">
+    <link rel="stylesheet" href="/dist/bundle.css?v=20251130019">
     <!-- Cyan Theme Enhancements -->
     <link rel="stylesheet" href="/assets/css/cyan-theme-enhancements.css?v=20251113040">`n    <!-- Calendar Compact CSS -->`n    <link rel="stylesheet" href="/assets/css/calendar-compact.css?v=20251114002">
     <!-- Toggle Fix CSS - General toggles -->
@@ -26,13 +26,25 @@
                     <span class="brand-text">IB Competition system</span>
                 </a>
                 <a href="#home" id="nav-home" class="nav-link active"><i class="fas fa-home"></i> الرئيسية</a>
-                <a href="#tasks" id="nav-tasks" class="nav-link"><i class="fas fa-tasks"></i> المهام اليومية</a>
-                <a href="#calendar" id="nav-calendar" class="nav-link"><i class="fas fa-calendar-alt"></i> التقويم</a>
+                <div class="nav-item dropdown" id="nav-tasks-calendar-dropdown-container" style="display: none;">
+                    <a href="#" class="nav-link dropdown-toggle" id="nav-tasks-calendar-dropdown"><i class="fas fa-calendar-check"></i> المهام والتقويم</a>
+                    <div class="dropdown-menu">
+                        <a href="#tasks" id="nav-tasks" class="dropdown-item"><i class="fas fa-tasks"></i> المهام اليومية</a>
+                        <a href="#calendar" id="nav-calendar" class="dropdown-item"><i class="fas fa-calendar-alt"></i> التقويم</a>
+                    </div>
+                </div>
                 <a href="#manage-agents" id="nav-manage-agents" class="nav-link"><i class="fas fa-users-cog"></i> إدارة الوكلاء</a>
                 <a href="#top-agents" class="nav-link" id="nav-top-agents">
                     <i class="fas fa-star"></i>
                     <span>أبرز الوكلاء</span>
                 </a>
+                <div class="nav-item dropdown" id="nav-questions-dropdown-container" style="display: none;">
+                    <a href="#" class="nav-link dropdown-toggle" id="nav-questions-dropdown"><i class="fas fa-lightbulb"></i> اقتراحات الأسئلة</a>
+                    <div class="dropdown-menu">
+                        <a href="pages/question-suggestions.html" id="nav-question-suggestions" class="dropdown-item"><i class="fas fa-plus-circle"></i> إضافة اقتراح</a>
+                        <a href="pages/admin-question-suggestions.html" id="nav-admin-question-suggestions" class="dropdown-item" style="display: none;"><i class="fas fa-clipboard-check"></i> إدارة الاقتراحات</a>
+                    </div>
+                </div>
                 <div class="nav-item dropdown">
                     <a href="#competitions" class="nav-link dropdown-toggle" id="nav-competitions-dropdown"><i class="fas fa-trophy"></i> المسابقات</a>
                     <div class="dropdown-menu">
@@ -121,7 +133,7 @@
     <!-- SheetJS for Excel export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <!-- Bundled JavaScript (cache-busted) -->
-    <script src="/dist/bundle.js?v=20251130012" defer></script>
+    <script src="/dist/bundle.js?v=20251130019" defer></script>
 </body>
 </html>
 
