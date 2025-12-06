@@ -578,6 +578,8 @@ async function renderCompetitionCreatePage(agentId) {
                         <label for="override-duration">مدة المسابقة</label>
                         <select id="override-duration">
                             <option value="" disabled>-- اختر مدة --</option>
+                            <option value="5s">5 ثواني</option>
+                            <option value="10s">10 ثواني</option>
                             <option value="1d" ${agent.competition_duration === '24h' || !agent.competition_duration || (agent.competition_duration !== '48h' && agent.competition_duration !== '168h') ? 'selected' : ''}>يوم واحد</option>
                             <option value="2d" ${agent.competition_duration === '48h' ? 'selected' : ''}>يومين</option>
                             <option value="1w" ${agent.competition_duration === '168h' ? 'selected' : ''}>أسبوع</option>
@@ -751,9 +753,17 @@ async function renderCompetitionCreatePage(agentId) {
             if (duration === '1d') daysToAdd = 1;
             else if (duration === '2d') daysToAdd = 2;
             else if (duration === '1w') daysToAdd = 7;
-            endDate.setDate(endDate.getDate() + daysToAdd);
-            const formattedEndDate = endDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            displayDuration = `من تاريخ اليوم وحتى نهاية يوم ${formattedEndDate}`;
+            else if (duration === '10s') {
+                displayDuration = 'تنتهي بعد 10 ثواني من لحظة الإرسال';
+            } else if (duration === '5s') {
+                displayDuration = 'تنتهي بعد 5 ثوانٍ من لحظة الإرسال';
+            }
+
+            if (!displayDuration) {
+                endDate.setDate(endDate.getDate() + daysToAdd);
+                const formattedEndDate = endDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                displayDuration = `من تاريخ اليوم وحتى نهاية يوم ${formattedEndDate}`;
+            }
         }
 
         if (displayDuration) content = content.replace(/⏳ مدة المسابقة: {{competition_duration}}/g, `⏳ مدة المسابقة:\n${displayDuration}`);
@@ -914,13 +924,22 @@ async function renderCompetitionCreatePage(agentId) {
                 duration: durationInput.value,
                 total_cost: totalCost,
                 deposit_winners_count: depositWinnersCount,
+                trading_winners_count: winnersCount,
+                required_winners: winnersCount + depositWinnersCount,
                 correct_answer: document.getElementById('override-correct-answer').value,
-                winners_count: winnersCount,
                 prize_per_winner: prizePerWinner,
                 template_id: selectedTemplate._id,
                 image_url: finalImageUrl,
                 client_request_id: requestKey
             };
+
+            console.log('🎯 [Create Competition] Payload being sent to backend:', {
+                trading_winners_count: competitionPayload.trading_winners_count,
+                deposit_winners_count: competitionPayload.deposit_winners_count,
+                required_winners: competitionPayload.required_winners,
+                total_cost: competitionPayload.total_cost,
+                prize_per_winner: competitionPayload.prize_per_winner
+            });
 
             const compResponse = await authedFetch('/api/competitions', {
                 method: 'POST',
@@ -932,6 +951,14 @@ async function renderCompetitionCreatePage(agentId) {
                 const result = await compResponse.json();
                 throw new Error(result.message || 'فشل حفظ المسابقة.');
             }
+
+            const savedCompetition = await compResponse.json();
+            console.log('✅ [Create Competition] Competition saved successfully:', {
+                id: savedCompetition.data?._id,
+                trading_winners_count: savedCompetition.data?.trading_winners_count,
+                deposit_winners_count: savedCompetition.data?.deposit_winners_count,
+                required_winners: savedCompetition.data?.required_winners
+            });
 
             // --- FIX: Re-add Telegram sending logic after successful save ---
             const telegramResponse = await authedFetch('/api/post-announcement', {

@@ -51,239 +51,276 @@
  * mimicking a Redux/Context pattern in vanilla JavaScript.
  */
 
-const TASK_STATE_KEY = 'inzoTaskState';
 const { authedFetch } = window.utils;
 
 const taskStore = {
-    state: {
-        // tasks: { agentId: { dayIndex: { audited: bool, competition_sent: bool } } }
-        tasks: {},
-    },
-    _subscribers: [], // NEW: To hold all callback functions
+  state: {
+    // tasks: { agentId: { dayIndex: { audited: bool, competition_sent: bool } } }
+    tasks: {},
+  },
+  _subscribers: [], // NEW: To hold all callback functions
 
-    /**
-     * Initializes the store by loading data from localStorage and fetching initial data.
-     * This acts as the "hydration" step.
-     */
-    async init() {
-        this._loadState();
-        await this._fetchInitialData();
-        // Notify all components that the initial state is ready.
-        this._notify();
-    },
+  /**
+   * Initializes the store by loading data from localStorage and fetching initial data.
+   * This acts as the "hydration" step.
+   */
+  async init() {
+    // Do not hydrate from localStorage — server is source-of-truth
+    await this._fetchInitialData();
+    // Notify all components that the initial state is ready.
+    this._notify();
+  },
 
-    /**
-     * The main dispatcher function to update task status.
-     * This is the equivalent of a reducer action.
-     * @param {string} agentId
-     * @param {number} dayIndex
-     * @param {'audited' | 'competition_sent'} taskType
-     * @param {boolean} status
-     */
-    async updateTaskStatus(agentId, dayIndex, taskType, status) {
-        console.log(`[TaskStore] updateTaskStatus called with:`, { agentId, dayIndex, taskType, status });
+  /**
+   * The main dispatcher function to update task status.
+   * This is the equivalent of a reducer action.
+   * @param {string} agentId
+   * @param {number} dayIndex
+   * @param {'audited' | 'competition_sent'} taskType
+   * @param {boolean} status
+   */
+  async updateTaskStatus(agentId, dayIndex, taskType, status) {
+    console.log(`[TaskStore] updateTaskStatus called with:`, {
+      agentId,
+      dayIndex,
+      taskType,
+      status,
+    });
 
-        // Log state before
-        console.log(`[TaskStore] State for agent ${agentId} BEFORE update:`, JSON.parse(JSON.stringify(this.state.tasks[agentId] || {})));
+    // Log state before
+    console.log(
+      `[TaskStore] State for agent ${agentId} BEFORE update:`,
+      JSON.parse(JSON.stringify(this.state.tasks[agentId] || {}))
+    );
 
-        try {
-            const response = await authedFetch('/api/tasks', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ agentId, dayIndex, taskType, status })
-            });
+    try {
+      const response = await authedFetch("/api/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ agentId, dayIndex, taskType, status }),
+      });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to update task on the server.');
-            }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || "Failed to update task on the server."
+        );
+      }
 
-            // Ensure the agent and day objects exist
-            if (!this.state.tasks[agentId]) {
-                this.state.tasks[agentId] = {};
-            }
-            if (!Object.prototype.hasOwnProperty.call(this.state.tasks[agentId], dayIndex)) {
-                this.state.tasks[agentId][dayIndex] = { audited: false, competition_sent: false };
-            }
+      // Consume returned saved task from server (backend returns { message, task })
+      let savedTask = null;
+      try {
+        const respBody = await response.json();
+        savedTask = respBody.task || null;
+      } catch (_) {
+        // ignore parse errors, fallback to using current time below
+      }
 
-            // Update the state
-            this.state.tasks[agentId][dayIndex][taskType] = status;
+      // Ensure the agent and day objects exist
+      if (!this.state.tasks[agentId]) {
+        this.state.tasks[agentId] = {};
+      }
+      if (
+        !Object.prototype.hasOwnProperty.call(
+          this.state.tasks[agentId],
+          dayIndex
+        )
+      ) {
+        this.state.tasks[agentId][dayIndex] = {
+          audited: false,
+          competition_sent: false,
+        };
+      }
 
-            // Log state after
-            console.log(`[TaskStore] State for agent ${agentId} AFTER update:`, JSON.parse(JSON.stringify(this.state.tasks[agentId] || {})));
+      // Update the state and set a reliable _updatedAt value from server when available
+      this.state.tasks[agentId][dayIndex][taskType] = status;
+      this.state.tasks[agentId][dayIndex]._updatedAt =
+        savedTask && savedTask.updatedAt
+          ? savedTask.updatedAt
+          : new Date().toISOString();
 
-            // Persist and notify
-            this._saveState();
-            this._notify();
+      // Log state after
+      console.log(
+        `[TaskStore] State for agent ${agentId} AFTER update:`,
+        JSON.parse(JSON.stringify(this.state.tasks[agentId] || {}))
+      );
 
-        } catch (error) {
-            console.error("Error updating task status:", error);
-            // Re-throw the error to be caught by the calling UI component
-            throw error;
-        }
-    },
-
-    async resetAllTasks() {
-        console.log('[TaskStore] Resetting all tasks.');
-        try {
-            // Perform API call to reset all tasks on the backend
-            const response = await authedFetch('/api/tasks/reset-all', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to reset tasks on server.');
-            }
-
-            // If API call is successful, reset the local state
-            this.state.tasks = {};
-
-            // Persist and notify
-            this._saveState();
-            this._notify();
-            console.log('[TaskStore] All tasks have been reset locally and on the server.');
-
-        } catch (error) {
-            console.error("Error resetting all tasks:", error);
-            throw error; // Re-throw for the UI to handle
-        }
-    },
-
-    /**
-     * Fetches the initial data (agents and tasks for the week) from the backend.
-     * It merges the backend state with the local state, giving precedence to local changes.
-     */
-    async _fetchInitialData() {
-        try {
-            const response = await authedFetch('/api/calendar/data');
-            if (!response.ok) throw new Error('Failed to fetch calendar data');
-            const { tasks: serverTasks } = await response.json();
-
-            // Merge server tasks into local state
-            (serverTasks || []).forEach(task => {
-                // Use local day to match backend week calculation
-                const dayIndex = new Date(task.task_date).getDay();
-                // Safely build agentId from possible fields to avoid calling toString on undefined
-                const agentId = String(task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? '');
-                if (!agentId) return; // skip malformed entries
-
-                if (!this.state.tasks[agentId]) this.state.tasks[agentId] = {};
-                if (!this.state.tasks[agentId][dayIndex]) {
-                     this.state.tasks[agentId][dayIndex] = {
-                        audited: task.audited,
-                        competition_sent: task.competition_sent
-                    };
-                }
-            });
-            this._saveState();
-        } catch (error) {
-            console.error("Failed to fetch initial task data:", error);
-        }
-    },
-
-    /**
-     * مزامنة الحالة من الخادم لضمان توحيد العرض بين جميع المستخدمين.
-     * الخادم هو مصدر الحقيقة؛ يتم استبدال الحالة المحلية بحالة الخادم.
-     */
-        async syncWithServer() {
-        try {
-            const response = await authedFetch('/api/calendar/data');
-            if (!response.ok) throw new Error('Failed to sync calendar data');
-            const { tasks: serverTasks } = await response.json();
-
-            const incoming = {};
-            (serverTasks || []).forEach(task => {
-                const dayIndex = new Date(task.task_date).getDay();
-                const agentId = String(task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? '');
-                if (!agentId) return;
-                if (!incoming[agentId]) incoming[agentId] = {};
-                if (!incoming[agentId][dayIndex]) {
-                    incoming[agentId][dayIndex] = {
-                        audited: !!task.audited,
-                        competition_sent: !!task.competition_sent,
-                        _updatedAt: task.updatedAt || task.task_date
-                    };
-                }
-            });
-
-            // Merge instead of replace to avoid wiping optimistic updates
-            Object.keys(incoming).forEach(agentId => {
-                if (!this.state.tasks[agentId]) this.state.tasks[agentId] = {};
-                Object.keys(incoming[agentId]).forEach(dayIdx => {
-                    const inc = incoming[agentId][dayIdx];
-                    const existing = this.state.tasks[agentId][dayIdx];
-                    if (!existing) {
-                        this.state.tasks[agentId][dayIdx] = inc;
-                    } else {
-                        // Always overwrite booleans with server truth
-                        existing.audited = inc.audited;
-                        existing.competition_sent = inc.competition_sent;
-                        existing._updatedAt = inc._updatedAt;
-                    }
-                });
-            });
-            this._saveState();
-            this._notify();
-        } catch (error) {
-            console.error('TaskStore sync failed:', error);
-        }
-    },
-
-    _loadState() {
-        const storedState = localStorage.getItem(TASK_STATE_KEY);
-        if (storedState) {
-            this.state = JSON.parse(storedState);
-        }
-    },
-
-    _saveState() {
-        localStorage.setItem(TASK_STATE_KEY, JSON.stringify(this.state));
-    },
-
-    _notify() {
-        // Call all subscribed callbacks with a deep clone of the new state to prevent mutation.
-        const stateClone = JSON.parse(JSON.stringify(this.state));
-        this._subscribers.forEach(callback => callback(stateClone));
-    },
-
-    /**
-     * Subscribes a callback function to state changes.
-     * @param {Function} callback
-     */
-    subscribe(callback) {
-        if (!this._subscribers.includes(callback)) {
-            this._subscribers.push(callback);
-        }
-    },
-
-    /**
-     * Unsubscribes a callback function from state changes.
-     * @param {Function} callback
-     */
-    unsubscribe(callback) {
-        this._subscribers = this._subscribers.filter(cb => cb !== callback);
+      // Notify UI subscribers (do not persist locally; server is authoritative)
+      this._notify();
+    } catch (error) {
+      console.error("Error updating task status:", error);
+      // Re-throw the error to be caught by the calling UI component
+      throw error;
     }
+  },
+
+  async resetAllTasks() {
+    console.log("[TaskStore] Resetting all tasks.");
+    try {
+      // Perform API call to reset all tasks on the backend
+      const response = await authedFetch("/api/tasks/reset-all", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || "Failed to reset tasks on server."
+        );
+      }
+
+      // If API call is successful, reset the in-memory state (server will reflect this)
+      this.state.tasks = {};
+      this._notify();
+      console.log(
+        "[TaskStore] All tasks have been reset locally and on the server."
+      );
+    } catch (error) {
+      console.error("Error resetting all tasks:", error);
+      throw error; // Re-throw for the UI to handle
+    }
+  },
+
+  /**
+   * Fetches the initial data (agents and tasks for the week) from the backend.
+   * It merges the backend state with the local state, giving precedence to local changes.
+   */
+  async _fetchInitialData() {
+    try {
+      console.log('[TaskStore] 🔄 Fetching initial data from server...');
+      const response = await authedFetch("/api/calendar/data");
+      if (!response.ok) throw new Error("Failed to fetch calendar data");
+      const { tasks: serverTasks } = await response.json();
+      
+      console.log('[TaskStore] 📦 Received tasks from server:', serverTasks.length, 'tasks');
+      console.log('[TaskStore] 📋 First 3 tasks:', serverTasks.slice(0, 3));
+
+      // Build authoritative in-memory state based on server tasks only.
+      const incoming = {};
+      (serverTasks || []).forEach((task) => {
+        // --- FIX: Use explicit day_index if available, else fallback to date parsing ---
+        let dayIndex;
+        if (task.day_index !== undefined && task.day_index !== null) {
+            dayIndex = task.day_index;
+        } else {
+            dayIndex = new Date(task.task_date).getDay();
+        }
+        
+        const agentId = String(
+          task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? ""
+        );
+        if (!agentId) return;
+        if (!incoming[agentId]) incoming[agentId] = {};
+        incoming[agentId][dayIndex] = {
+          audited: !!task.audited,
+          competition_sent: !!task.competition_sent,
+          _updatedAt: task.updatedAt || task.task_date,
+        };
+      });
+
+      // Replace in-memory state with server state (server is source-of-truth)
+      this.state.tasks = incoming;
+      console.log('[TaskStore] ✅ Initial state loaded. Total agents with tasks:', Object.keys(incoming).length);
+      console.log('[TaskStore] 📊 State snapshot:', JSON.stringify(incoming).substring(0, 500));
+    } catch (error) {
+      console.error("[TaskStore] ❌ Failed to fetch initial task data:", error);
+    }
+  },
+
+  /**
+   * مزامنة الحالة من الخادم لضمان توحيد العرض بين جميع المستخدمين.
+   * الخادم هو مصدر الحقيقة؛ يتم استبدال الحالة المحلية بحالة الخادم.
+   */
+  async syncWithServer() {
+    try {
+      console.log('[TaskStore] 🔄 Syncing with server...');
+      const response = await authedFetch("/api/calendar/data");
+      if (!response.ok) throw new Error("Failed to sync calendar data");
+      const { tasks: serverTasks } = await response.json();
+      console.log('[TaskStore] 📦 Sync received:', serverTasks.length, 'tasks');
+      // Rebuild authoritative state from server and replace in-memory state.
+      const incoming = {};
+      (serverTasks || []).forEach((task) => {
+        // --- FIX: Use explicit day_index if available, else fallback to date parsing ---
+        let dayIndex;
+        if (task.day_index !== undefined && task.day_index !== null) {
+            dayIndex = task.day_index;
+        } else {
+            dayIndex = new Date(task.task_date).getDay();
+        }
+
+        const agentId = String(
+          task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? ""
+        );
+        if (!agentId) return;
+        if (!incoming[agentId]) incoming[agentId] = {};
+        incoming[agentId][dayIndex] = {
+          audited: !!task.audited,
+          competition_sent: !!task.competition_sent,
+          _updatedAt: task.updatedAt || task.task_date,
+        };
+      });
+
+      this.state.tasks = incoming;
+      console.log('[TaskStore] ✅ Sync complete. Total agents:', Object.keys(incoming).length);
+      this._notify();
+    } catch (error) {
+      console.error("[TaskStore] ❌ Sync failed:", error);
+    }
+  },
+
+  _loadState() {
+    // intentionally noop — local persistence removed, server is authoritative
+  },
+
+  _saveState() {
+    // intentionally noop — local persistence removed, server is authoritative
+  },
+
+  _notify() {
+    // Call all subscribed callbacks with a deep clone of the new state to prevent mutation.
+    const stateClone = JSON.parse(JSON.stringify(this.state));
+    this._subscribers.forEach((callback) => callback(stateClone));
+  },
+
+  /**
+   * Subscribes a callback function to state changes.
+   * @param {Function} callback
+   */
+  subscribe(callback) {
+    if (!this._subscribers.includes(callback)) {
+      this._subscribers.push(callback);
+    }
+  },
+
+  /**
+   * Unsubscribes a callback function from state changes.
+   * @param {Function} callback
+   */
+  unsubscribe(callback) {
+    this._subscribers = this._subscribers.filter((cb) => cb !== callback);
+  },
 };
 
 // Make it globally accessible immediately
-window.taskStore = taskStore; 
+window.taskStore = taskStore;
 
 // Initialize the store only after the main document is fully loaded and parsed.
 // This ensures that functions from other scripts (like authedFetch) are available.
-document.addEventListener('DOMContentLoaded', () => {
-    taskStore.init().then(() => {
-        // Dispatch storeReady event after initialization is complete.
-        window.dispatchEvent(new Event('storeReady'));
-        // Start periodic server sync to reflect others' changes
-        setInterval(() => taskStore.syncWithServer(), 20000);
-    });
+document.addEventListener("DOMContentLoaded", () => {
+  taskStore.init().then(() => {
+    // Dispatch storeReady event after initialization is complete.
+    window.dispatchEvent(new Event("storeReady"));
+    // Start periodic server sync to reflect others' changes
+    setInterval(() => taskStore.syncWithServer(), 20000);
+  });
 });
+
 
 // == home.js ==
 ﻿async function renderHomePage() {
@@ -474,8 +511,8 @@ async function updateHomePageUI(stats) {
                     /* logs suppressed: fallback map */
                 }
 
-                // A daily task for an agent has two components: audit and competition.
-                const totalTodayActions = totalTodayAgents * 2;
+                // A daily task for an agent counts as complete when audited only
+                const totalTodayActions = totalTodayAgents; // Count auditing only
                 let completedActions = 0;
 
                 /* logs suppressed: calculating completed actions */
@@ -486,16 +523,14 @@ async function updateHomePageUI(stats) {
                     if (task.audited) {
                         completedActions++;
                     }
-                    if (task.competition_sent) {
-                        completedActions++;
-                    }
+                    // Competition is not counted in progress anymore
                 });
 
                 /* logs suppressed: final calculations */
                 
                 const pendingAgents = agentsForToday.filter(agent => {
                     const task = tasksMap[agent._id];
-                    return !task || !task.audited || !task.competition_sent;
+                    return !task || !task.audited; // Only check audited status
                 });
                 
                 /* logs suppressed: pending count */
@@ -2314,6 +2349,8 @@ async function renderCompetitionCreatePage(agentId) {
                         <label for="override-duration">مدة المسابقة</label>
                         <select id="override-duration">
                             <option value="" disabled>-- اختر مدة --</option>
+                            <option value="5s">5 ثواني</option>
+                            <option value="10s">10 ثواني</option>
                             <option value="1d" ${agent.competition_duration === '24h' || !agent.competition_duration || (agent.competition_duration !== '48h' && agent.competition_duration !== '168h') ? 'selected' : ''}>يوم واحد</option>
                             <option value="2d" ${agent.competition_duration === '48h' ? 'selected' : ''}>يومين</option>
                             <option value="1w" ${agent.competition_duration === '168h' ? 'selected' : ''}>أسبوع</option>
@@ -2487,9 +2524,17 @@ async function renderCompetitionCreatePage(agentId) {
             if (duration === '1d') daysToAdd = 1;
             else if (duration === '2d') daysToAdd = 2;
             else if (duration === '1w') daysToAdd = 7;
-            endDate.setDate(endDate.getDate() + daysToAdd);
-            const formattedEndDate = endDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            displayDuration = `من تاريخ اليوم وحتى نهاية يوم ${formattedEndDate}`;
+            else if (duration === '10s') {
+                displayDuration = 'تنتهي بعد 10 ثواني من لحظة الإرسال';
+            } else if (duration === '5s') {
+                displayDuration = 'تنتهي بعد 5 ثوانٍ من لحظة الإرسال';
+            }
+
+            if (!displayDuration) {
+                endDate.setDate(endDate.getDate() + daysToAdd);
+                const formattedEndDate = endDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                displayDuration = `من تاريخ اليوم وحتى نهاية يوم ${formattedEndDate}`;
+            }
         }
 
         if (displayDuration) content = content.replace(/⏳ مدة المسابقة: {{competition_duration}}/g, `⏳ مدة المسابقة:\n${displayDuration}`);
@@ -2650,13 +2695,22 @@ async function renderCompetitionCreatePage(agentId) {
                 duration: durationInput.value,
                 total_cost: totalCost,
                 deposit_winners_count: depositWinnersCount,
+                trading_winners_count: winnersCount,
+                required_winners: winnersCount + depositWinnersCount,
                 correct_answer: document.getElementById('override-correct-answer').value,
-                winners_count: winnersCount,
                 prize_per_winner: prizePerWinner,
                 template_id: selectedTemplate._id,
                 image_url: finalImageUrl,
                 client_request_id: requestKey
             };
+
+            console.log('🎯 [Create Competition] Payload being sent to backend:', {
+                trading_winners_count: competitionPayload.trading_winners_count,
+                deposit_winners_count: competitionPayload.deposit_winners_count,
+                required_winners: competitionPayload.required_winners,
+                total_cost: competitionPayload.total_cost,
+                prize_per_winner: competitionPayload.prize_per_winner
+            });
 
             const compResponse = await authedFetch('/api/competitions', {
                 method: 'POST',
@@ -2668,6 +2722,14 @@ async function renderCompetitionCreatePage(agentId) {
                 const result = await compResponse.json();
                 throw new Error(result.message || 'فشل حفظ المسابقة.');
             }
+
+            const savedCompetition = await compResponse.json();
+            console.log('✅ [Create Competition] Competition saved successfully:', {
+                id: savedCompetition.data?._id,
+                trading_winners_count: savedCompetition.data?.trading_winners_count,
+                deposit_winners_count: savedCompetition.data?.deposit_winners_count,
+                required_winners: savedCompetition.data?.required_winners
+            });
 
             // --- FIX: Re-add Telegram sending logic after successful save ---
             const telegramResponse = await authedFetch('/api/post-announcement', {
@@ -4664,87 +4726,118 @@ let weeklyResetCountdownInterval = null;
  * @param {string} searchTerm The search term to highlight.
  */
 function applyHighlight(element, searchTerm) {
-    const nameEl = element.querySelector('.agent-name');
-    const idEl = element.querySelector('.calendar-agent-id');
-    const originalName = element.dataset.name;
-    const originalId = '#' + element.dataset.agentidStr;
+  const nameEl = element.querySelector(".agent-name");
+  const idEl = element.querySelector(".calendar-agent-id");
+  const originalName = element.dataset.name;
+  const originalId = "#" + element.dataset.agentidStr;
 
-    const regex = searchTerm ? new RegExp(searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi') : null;
+  const regex = searchTerm
+    ? new RegExp(searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&"), "gi")
+    : null;
 
-    nameEl.innerHTML = searchTerm ? originalName.replace(regex, '<mark>$&</mark>') : originalName;
-    idEl.innerHTML = searchTerm ? originalId.replace(regex, '<mark>$&</mark>') : originalId;
+  nameEl.innerHTML = searchTerm
+    ? originalName.replace(regex, "<mark>$&</mark>")
+    : originalName;
+  idEl.innerHTML = searchTerm
+    ? originalId.replace(regex, "<mark>$&</mark>")
+    : originalId;
 }
 
-function createAgentItemHtml(agent, dayIndex, isToday, tasksState, number, searchTerm = '') {
-    // Read state directly from the centralized store's state
-    const agentTasks = tasksState.tasks[agent._id] || {};
-    const task = agentTasks[dayIndex] || { audited: false, competition_sent: false };
+function createAgentItemHtml(
+  agent,
+  dayIndex,
+  isToday,
+  tasksState,
+  number,
+  searchTerm = ""
+) {
+  // Read state directly from the centralized store's state
+  const agentTasks = tasksState.tasks[agent._id] || {};
+  const task = agentTasks[dayIndex] || {
+    audited: false,
+    competition_sent: false,
+  };
 
-    const isComplete = task.audited; // Visual completion now only requires audit
-    const avatarHtml = agent.avatar_url
-        ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar" loading="lazy">`
-        : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
+  const isComplete = task.audited; // Visual completion now only requires audit
+  const avatarHtml = agent.avatar_url
+    ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar" loading="lazy">`
+    : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
 
-    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
-    const cursorStyle = isSuperAdmin ? 'cursor: grab;' : 'cursor: pointer;';
+  const isSuperAdmin = currentUserProfile?.role === "super_admin";
+  const cursorStyle = isSuperAdmin ? "cursor: grab;" : "cursor: pointer;";
 
-    const element = document.createElement('div');
-    element.id = `agent-card-${agent._id}-${dayIndex}`;
-    element.className = `calendar-agent-item ${isComplete ? 'complete' : ''}`;
-    element.dataset.agentId = agent._id;
-    element.dataset.classification = agent.classification;
-    element.dataset.name = agent.name;
-    element.dataset.agentidStr = agent.agent_id;
-    element.dataset.dayIndex = dayIndex;
-    element.style.cssText = cursorStyle;
-    if (isSuperAdmin) element.setAttribute('draggable', 'true');
+  const element = document.createElement("div");
+  element.id = `agent-card-${agent._id}-${dayIndex}`;
+  element.className = `calendar-agent-item ${isComplete ? "complete" : ""}`;
+  element.dataset.agentId = agent._id;
+  element.dataset.classification = agent.classification;
+  element.dataset.name = agent.name;
+  element.dataset.agentidStr = agent.agent_id;
+  element.dataset.dayIndex = dayIndex;
+  element.style.cssText = cursorStyle;
+  if (isSuperAdmin) element.setAttribute("draggable", "true");
 
-    element.innerHTML = `
+  element.innerHTML = `
         <div class="calendar-agent-number">${number}</div>
         <div class="calendar-agent-main">
             ${avatarHtml}
             <div class="calendar-agent-info">
                 <span class="agent-name"></span>
                 <div class="agent-meta">
-                    <p class="calendar-agent-id" title="نسخ الرقم" data-agent-id-copy="${agent.agent_id}"></p>
-                    <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
+                    <p class="calendar-agent-id" title="نسخ الرقم" data-agent-id-copy="${
+                      agent.agent_id
+                    }"></p>
+                    <span class="classification-badge classification-${agent.classification.toLowerCase()}">${
+    agent.classification
+  }</span>
                 </div>
             </div>
         </div>
         <div class="calendar-agent-actions">
-            <div class="action-item ${task.audited ? 'done' : ''}">
+            <div class="action-item ${task.audited ? "done" : ""}">
                 <label>التدقيق</label>
                 <label class="custom-checkbox toggle-switch">
-                    <input type="checkbox" class="audit-check" data-agent-id="${agent._id}" data-day-index="${dayIndex}" ${task.audited ? 'checked' : ''}>
+                    <input type="checkbox" class="audit-check" data-agent-id="${
+                      agent._id
+                    }" data-day-index="${dayIndex}" ${
+    task.audited ? "checked" : ""
+  }>
                     <span class="slider round"></span>
                 </label>
             </div>
-            <div class="action-item ${task.competition_sent ? 'done' : ''}">
+            <div class="action-item ${task.competition_sent ? "done" : ""}">
                 <label>المسابقة</label>
                 <label class="custom-checkbox toggle-switch">
-                    <input type="checkbox" class="competition-check" data-agent-id="${agent._id}" data-day-index="${dayIndex}" ${task.competition_sent ? 'checked' : ''}>
+                    <input type="checkbox" class="competition-check" data-agent-id="${
+                      agent._id
+                    }" data-day-index="${dayIndex}" ${
+    task.competition_sent ? "checked" : ""
+  }>
                     <span class="slider round"></span>
                 </label>
             </div>
         </div>
     `;
 
-    applyHighlight(element, searchTerm);
+  applyHighlight(element, searchTerm);
 
-    const nameEl = element.querySelector('.agent-name');
-    // إضافة علامة الصح فقط عند تفعيل التدقيق
-    if (isComplete) {
-        nameEl.insertAdjacentHTML('beforeend', '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>');
-        nameEl.classList.add('has-checkmark');
-    }
+  const nameEl = element.querySelector(".agent-name");
+  // إضافة علامة الصح فقط عند تفعيل التدقيق
+  if (isComplete) {
+    nameEl.insertAdjacentHTML(
+      "beforeend",
+      '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>'
+    );
+    nameEl.classList.add("has-checkmark");
+  }
 
-    return element;
+  return element;
 }
 
 class CalendarUI {
-    constructor(container) {
-        this.container = container;
-        this.container.innerHTML = `
+  constructor(container) {
+    this.container = container;
+    this.container.innerHTML = `
         <div class="page-header column-header">
             <div class="header-top-row">
                 <h1>تقويم المهام الأسبوعي</h1>
@@ -4778,90 +4871,155 @@ class CalendarUI {
         </div>
         <div id="calendar-container" class="calendar-container"></div>
         `;
-        this.calendarContainer = this.container.querySelector('#calendar-container');
-        this.calendarData = [];
-        this.tasksState = null;
-        this.daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة',];
-        this.searchDebounceTimer = null;
-        this._syncInterval = null;
+    this.calendarContainer = this.container.querySelector(
+      "#calendar-container"
+    );
+    this.calendarData = [];
+    this.tasksState = null;
+    this.daysOfWeek = [
+      "الأحد",
+      "الاثنين",
+      "الثلاثاء",
+      "الأربعاء",
+      "الخميس",
+      "الجمعة"
+    ];
+    this.searchDebounceTimer = null;
+    this._syncInterval = null;
 
-        this.boundHandleChange = this._handleChange.bind(this);
-        this.boundHandleResetAll = this.handleResetAllTasks.bind(this);
+    this.boundHandleChange = this._handleChange.bind(this);
+    this.boundHandleResetAll = this.handleResetAllTasks.bind(this);
+    this.boundUpdateUIFromState = this.updateCalendarUIFromState.bind(this);
+  }
+
+  destroy() {
+    if (window.taskStore && this.boundUpdateUIFromState) {
+        window.taskStore.unsubscribe(this.boundUpdateUIFromState);
     }
-
-    destroy() {
-        // window.taskStore.unsubscribe(this.boundUpdateUIFromState); // Removed to fix bug
-        clearTimeout(this.searchDebounceTimer);
-        if (weeklyResetCountdownInterval) {
-            clearInterval(weeklyResetCountdownInterval);
-        }
-        if (this._syncInterval) {
-            clearInterval(this._syncInterval);
-            this._syncInterval = null;
-        }
-        this.calendarContainer.removeEventListener('change', this.boundHandleChange);
-        const resetBtn = this.container.querySelector('#reset-all-tasks-btn');
-        if (resetBtn) {
-            resetBtn.removeEventListener('click', this.boundHandleResetAll);
-        }
-        console.log('[Calendar Page] Instance destroyed and listeners cleaned up.');
+    clearTimeout(this.searchDebounceTimer);
+    if (weeklyResetCountdownInterval) {
+      clearInterval(weeklyResetCountdownInterval);
     }
+    if (this._syncInterval) {
+      clearInterval(this._syncInterval);
+      this._syncInterval = null;
+    }
+    this.calendarContainer.removeEventListener(
+      "change",
+      this.boundHandleChange
+    );
+    const resetBtn = this.container.querySelector("#reset-all-tasks-btn");
+    if (resetBtn) {
+      resetBtn.removeEventListener("click", this.boundHandleResetAll);
+    }
+    console.log("[Calendar Page] Instance destroyed and listeners cleaned up.");
+  }
 
-    async render() {
-        const response = await authedFetch('/api/calendar/data');
-        if (!response.ok) {
-            throw new Error((await response.json()).message || 'فشل جلب بيانات التقويم');
-        }
-        const { agents } = await response.json();
+  async render() {
+    const response = await authedFetch("/api/calendar/data");
+    if (!response.ok) {
+      throw new Error(
+        (await response.json()).message || "فشل جلب بيانات التقويم"
+      );
+    }
+    const { agents } = await response.json();
 
+    this.tasksState = window.taskStore.state;
+
+    // Ensure we have the most recent authoritative task state from the server
+    // (in case taskStore.init/localStorage raced with page rendering)
+    try {
+      if (
+        window.taskStore &&
+        typeof window.taskStore.syncWithServer === "function"
+      ) {
+        await window.taskStore.syncWithServer();
         this.tasksState = window.taskStore.state;
-
-        this.calendarData = this.daysOfWeek.map(() => []);
-        agents.forEach(agent => {
-            const dayIndices = agent.audit_days || [];
-            dayIndices.forEach(dayIndex => {
-                if (dayIndex >= 0 && dayIndex < 6) { // Corrected to include Saturday
-                    this.calendarData[dayIndex].push(agent);
-                }
-            });
-        });
-
-        this._renderDayColumns();
-        this._renderAllAgentCards();
-        this._setupEventListeners();
-        setupCalendarFilters(this);
-
-        // مزامنة دورية مع الخادم لضمان ظهور تغييرات الجميع للجميع
-        if (this._syncInterval) clearInterval(this._syncInterval);
-        this._syncInterval = setInterval(() => {
-            try {
-                if (window.taskStore && window.taskStore.state) {
-                    const prevState = JSON.stringify(this.tasksState?.tasks || {});
-                    const newState = JSON.stringify(window.taskStore.state.tasks || {});
-                    if (prevState !== newState) {
-                        this.tasksState = window.taskStore.state;
-                        this._renderDayColumns();
-                        this._renderAllAgentCards();
-                    }
-                }
-            } catch (_) { /* ignore */ }
-        }, 20000); // كل 20 ثانية
-
-        // The global subscription is removed to fix the bug.
-        // this.boundUpdateUIFromState = updateCalendarUIFromState.bind(this);
-        // window.taskStore.subscribe(this.boundUpdateUIFromState);
+      }
+    } catch (e) {
+      console.warn("[Calendar] Failed to sync store during render:", e);
     }
 
-    _renderDayColumns() {
-        this.calendarContainer.innerHTML = '';
-        this.daysOfWeek.forEach((dayName, index) => {
-            const isToday = new Date().getDay() === index;
-            const { completedTasks, totalTasks, progressPercent } = this._calculateDayProgress(index);
+    this.calendarData = this.daysOfWeek.map(() => []);
+    
+    // --- FIX: Build calendar data from ALL agents, showing them on ALL days where they have tasks ---
+    agents.forEach((agent) => {
+      // Check if agent has any tasks in the store
+      const agentTasks = this.tasksState.tasks[agent._id] || {};
+      const daysWithTasks = Object.keys(agentTasks).map(d => parseInt(d, 10));
+      
+      // FIX: Always use audit_days as the source of truth for which days to show agent
+      // Tasks are just status indicators, not day assignment
+      const dayIndices = agent.audit_days || [];
+      dayIndices.forEach((dayIndex) => {
+        if (dayIndex >= 0 && dayIndex <= 5) {
+          // Ensure the array exists before checking
+          if (!this.calendarData[dayIndex]) {
+            this.calendarData[dayIndex] = [];
+          }
+          const alreadyAdded = this.calendarData[dayIndex].some(a => a._id === agent._id);
+          if (!alreadyAdded) {
+            this.calendarData[dayIndex].push(agent);
+          }
+        }
+      });
+    });
 
-            const columnEl = document.createElement('div');
-            columnEl.className = `day-column ${isToday ? 'today' : ''}`;
-            columnEl.dataset.dayIndex = index;
-            columnEl.innerHTML = `
+    this._renderDayColumns();
+    this._renderAllAgentCards();
+    this._setupEventListeners();
+    setupCalendarFilters(this);
+
+    // مزامنة دورية مع الخادم لضمان ظهور تغييرات الجميع للجميع
+    if (this._syncInterval) clearInterval(this._syncInterval);
+    this._syncInterval = setInterval(() => {
+      try {
+        if (window.taskStore && window.taskStore.state) {
+          const prevState = JSON.stringify(this.tasksState?.tasks || {});
+          const newState = JSON.stringify(window.taskStore.state.tasks || {});
+          if (prevState !== newState) {
+            this.tasksState = window.taskStore.state;
+            this._renderDayColumns();
+            this._renderAllAgentCards();
+          }
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }, 20000); // كل 20 ثانية
+
+    // The global subscription is enabled
+    if (window.taskStore) {
+        window.taskStore.subscribe(this.boundUpdateUIFromState);
+    }
+  }
+
+  updateCalendarUIFromState(newState) {
+      console.log('[Calendar] Received store update');
+      this.tasksState = newState;
+      // Re-render columns to reflect changes
+      // We could optimize this to only update changed cells, but re-rendering columns is fast enough
+      this._renderDayColumns();
+      this._renderAllAgentCards();
+      
+      // Re-apply filters if any
+      const searchInput = document.getElementById("calendar-search-input");
+      if (searchInput && searchInput.value) {
+          searchInput.dispatchEvent(new Event('input'));
+      }
+  }
+
+  _renderDayColumns() {
+    this.calendarContainer.innerHTML = "";
+    this.daysOfWeek.forEach((dayName, index) => {
+      const isToday = new Date().getDay() === index;
+      const { completedTasks, totalTasks, progressPercent } =
+        this._calculateDayProgress(index);
+
+      const columnEl = document.createElement("div");
+      columnEl.className = `day-column ${isToday ? "today" : ""}`;
+      columnEl.dataset.dayIndex = index;
+      columnEl.innerHTML = `
                 <h2>${dayName}</h2>
                 <div class="day-progress">
                     <div class="progress-bar" style="width: ${progressPercent}%"></div>
@@ -4869,441 +5027,548 @@ class CalendarUI {
                 </div>
                 <div class="day-column-content"></div>
             `;
-            this.calendarContainer.appendChild(columnEl);
+      this.calendarContainer.appendChild(columnEl);
+    });
+  }
+
+  _calculateDayProgress(dayIndex) {
+    const dailyAgents = this.calendarData[dayIndex] || [];
+    const totalTasks = dailyAgents.length;
+    let completedTasks = 0;
+    dailyAgents.forEach((agent) => {
+      const task = (this.tasksState.tasks[agent._id] || {})[dayIndex] || {};
+      if (task.audited) {
+        completedTasks++;
+      }
+    });
+    const progressPercent =
+      totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+    return { completedTasks, totalTasks, progressPercent };
+  }
+
+  _renderAllAgentCards() {
+    this.calendarData.forEach((agentsForDay, dayIndex) => {
+      const columnEl = this.calendarContainer.querySelector(
+        `.day-column[data-day-index="${dayIndex}"]`
+      );
+      if (!columnEl) return;
+
+      const contentContainer = columnEl.querySelector(".day-column-content");
+      contentContainer.innerHTML = "";
+
+      if (agentsForDay.length > 0) {
+        const fragment = document.createDocumentFragment();
+        const isToday = new Date().getDay() === dayIndex;
+        agentsForDay.forEach((agent, index) => {
+          const agentElement = createAgentItemHtml(
+            agent,
+            dayIndex,
+            isToday,
+            this.tasksState,
+            index + 1,
+            ""
+          );
+          fragment.appendChild(agentElement);
         });
-    }
+        contentContainer.appendChild(fragment);
+      } else {
+        contentContainer.innerHTML =
+          '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
+      }
+    });
+  }
 
-    _calculateDayProgress(dayIndex) {
-        const dailyAgents = this.calendarData[dayIndex] || [];
-        const totalTasks = dailyAgents.length;
-        let completedTasks = 0;
-        dailyAgents.forEach(agent => {
-            const task = (this.tasksState.tasks[agent._id] || {})[dayIndex] || {};
-            if (task.audited) {
-                completedTasks++;
-            }
-        });
-        const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-        return { completedTasks, totalTasks, progressPercent };
-    }
+  _setupEventListeners() {
+    this.calendarContainer.addEventListener("change", this.boundHandleChange);
+    this.container
+      .querySelector("#reset-all-tasks-btn")
+      .addEventListener("click", this.boundHandleResetAll);
+    setupClickAndDragEventListeners(
+      this.calendarContainer,
+      this.calendarData,
+      this
+    );
+  }
 
-    _renderAllAgentCards() {
-        this.calendarData.forEach((agentsForDay, dayIndex) => {
-            const columnEl = this.calendarContainer.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
-            if (!columnEl) return;
-
-            const contentContainer = columnEl.querySelector('.day-column-content');
-            contentContainer.innerHTML = '';
-
-            if (agentsForDay.length > 0) {
-                const fragment = document.createDocumentFragment();
-                const isToday = new Date().getDay() === dayIndex;
-                agentsForDay.forEach((agent, index) => {
-                    const agentElement = createAgentItemHtml(agent, dayIndex, isToday, this.tasksState, index + 1, '');
-                    fragment.appendChild(agentElement);
-                });
-                contentContainer.appendChild(fragment);
-            } else {
-                contentContainer.innerHTML = '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
-            }
-        });
-    }
-
-    _setupEventListeners() {
-        this.calendarContainer.addEventListener('change', this.boundHandleChange);
-        this.container.querySelector('#reset-all-tasks-btn').addEventListener('click', this.boundHandleResetAll);
-        setupClickAndDragEventListeners(this.calendarContainer, this.calendarData, this);
-    }
-
-    async handleResetAllTasks() {
-        showConfirmationModal(
-            'هل أنت متأكد من إعادة تعيين جميع المهام (التدقيق والمسابقة) لهذا الأسبوع؟ لا يمكن التراجع عن هذا الإجراء.',
-            async () => {
-                showLoader();
-                try {
-                    await window.taskStore.resetAllTasks();
-                    showToast('تمت إعادة تعيين جميع المهام بنجاح.', 'success');
-
-                    // FIX: Manually re-render the UI without a page reload
-                    this.tasksState = window.taskStore.state; // Get the fresh, reset state
-                    this._renderDayColumns(); // Re-render columns to reset progress bars
-                    this._renderAllAgentCards(); // Re-render agent cards with reset state
-
-                } catch (error) {
-                    console.error('Failed to reset all tasks:', error);
-                    showToast(`فشل إعادة التعيين: ${error.message}`, 'error');
-                } finally {
-                    hideLoader();
-                }
-            },
-            { title: 'تأكيد إعادة تعيين الكل', confirmText: 'نعم، أعد التعيين', confirmClass: 'btn-danger' }
-        );
-    }
-
-    async _handleChange(e) {
-        const checkbox = e.target;
-        if (!checkbox.matches('.audit-check, .competition-check')) return;
-
-        const agentId = checkbox.dataset.agentId;
-        const dayIndex = parseInt(checkbox.dataset.dayIndex, 10);
-        const taskType = checkbox.classList.contains('audit-check') ? 'audited' : 'competition_sent';
-        const status = checkbox.checked;
-
-        // ========== DEBUG CONSOLE LOGS ==========
-        console.log('🔄 Toggle Changed!');
-        console.log('📍 Agent ID:', agentId);
-        console.log('📅 Day Index:', dayIndex);
-        console.log('🏷️ Task Type:', taskType);
-        console.log('✅ New Status:', status ? 'ON (checked)' : 'OFF (unchecked)');
-        console.log('🎯 Checkbox element:', checkbox);
-        console.log('🔍 Checkbox classes:', checkbox.className);
-        console.log('📊 Checkbox checked property:', checkbox.checked);
-        console.log('========================================');
-        // ========================================
-
-        const agentItem = checkbox.closest('.calendar-agent-item');
-        agentItem.classList.add('is-loading');
-        agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = true);
-
+  async handleResetAllTasks() {
+    showConfirmationModal(
+      "هل أنت متأكد من إعادة تعيين جميع المهام (التدقيق والمسابقة) لهذا الأسبوع؟ لا يمكن التراجع عن هذا الإجراء.",
+      async () => {
+        showLoader();
         try {
-            // This updates the central store
-            console.log('📤 Sending update to server...');
-            await window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, status);
-            console.log('✅ Server update successful!');
-            
-            // FIX: Now, manually and correctly update the UI for this single item.
-            updateCalendarUIFromState.call(this, { agentId, dayIndex, taskType, status });
-            console.log('🎨 UI updated successfully!');
+          await window.taskStore.resetAllTasks();
+          showToast("تمت إعادة تعيين جميع المهام بنجاح.", "success");
 
+          // FIX: Manually re-render the UI without a page reload
+          this.tasksState = window.taskStore.state; // Get the fresh, reset state
+          this._renderDayColumns(); // Re-render columns to reset progress bars
+          this._renderAllAgentCards(); // Re-render agent cards with reset state
         } catch (error) {
-            console.error(`[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`, error);
-            console.error('❌ Error details:', error);
-            showToast('فشل تحديث حالة المهمة.', 'error');
-            
-            // Revert UI on error
-            checkbox.checked = !status;
-            console.log('⏪ Reverted checkbox to:', !status);
-            agentItem.classList.remove('is-loading');
-            agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
+          console.error("Failed to reset all tasks:", error);
+          showToast(`فشل إعادة التعيين: ${error.message}`, "error");
+        } finally {
+          hideLoader();
         }
+      },
+      {
+        title: "تأكيد إعادة تعيين الكل",
+        confirmText: "نعم، أعد التعيين",
+        confirmClass: "btn-danger",
+      }
+    );
+  }
+
+  async _handleChange(e) {
+    const checkbox = e.target;
+    if (!checkbox.matches(".audit-check, .competition-check")) return;
+
+    const agentId = checkbox.dataset.agentId;
+    const dayIndex = parseInt(checkbox.dataset.dayIndex, 10);
+    const taskType = checkbox.classList.contains("audit-check")
+      ? "audited"
+      : "competition_sent";
+    const status = checkbox.checked;
+
+    // ========== DEBUG CONSOLE LOGS ==========
+    console.log("🔄 Toggle Changed!");
+    console.log("📍 Agent ID:", agentId);
+    console.log("📅 Day Index:", dayIndex);
+    console.log("🏷️ Task Type:", taskType);
+    console.log("✅ New Status:", status ? "ON (checked)" : "OFF (unchecked)");
+    console.log("🎯 Checkbox element:", checkbox);
+    console.log("🔍 Checkbox classes:", checkbox.className);
+    console.log("📊 Checkbox checked property:", checkbox.checked);
+    console.log("========================================");
+    // ========================================
+
+    const agentItem = checkbox.closest(".calendar-agent-item");
+    agentItem.classList.add("is-loading");
+    agentItem
+      .querySelectorAll('input[type="checkbox"]')
+      .forEach((cb) => (cb.disabled = true));
+
+    try {
+      // This updates the central store
+      console.log("📤 Sending update to server...");
+      await window.taskStore.updateTaskStatus(
+        agentId,
+        dayIndex,
+        taskType,
+        status
+      );
+      console.log("✅ Server update successful!");
+
+      // FIX: Now, manually and correctly update the UI for this single item.
+      updateCalendarUIFromState.call(this, {
+        agentId,
+        dayIndex,
+        taskType,
+        status,
+      });
+      console.log("🎨 UI updated successfully!");
+    } catch (error) {
+      console.error(
+        `[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`,
+        error
+      );
+      console.error("❌ Error details:", error);
+      showToast("فشل تحديث حالة المهمة.", "error");
+
+      // Revert UI on error
+      checkbox.checked = !status;
+      console.log("⏪ Reverted checkbox to:", !status);
+      agentItem.classList.remove("is-loading");
+      agentItem
+        .querySelectorAll('input[type="checkbox"]')
+        .forEach((cb) => (cb.disabled = false));
     }
+  }
 
-    _updateAfterDrag(sourceDayIndex, newDayIndex, agentId) {
-        const agentToMove = this.calendarData[sourceDayIndex].find(a => a._id === agentId);
-        if (!agentToMove) return;
+  _updateAfterDrag(sourceDayIndex, newDayIndex, agentId) {
+    const agentToMove = this.calendarData[sourceDayIndex].find(
+      (a) => a._id === agentId
+    );
+    if (!agentToMove) return;
 
-        this.calendarData[sourceDayIndex] = this.calendarData[sourceDayIndex].filter(a => a._id !== agentId);
-        this.calendarData[newDayIndex].push(agentToMove);
-        this.calendarData[newDayIndex].sort((a, b) => a.name.localeCompare(b.name));
-        
-        // Re-render only the two affected columns for efficiency
-        this._renderSingleDayColumn(sourceDayIndex);
-        this._renderSingleDayColumn(newDayIndex);
+    this.calendarData[sourceDayIndex] = this.calendarData[
+      sourceDayIndex
+    ].filter((a) => a._id !== agentId);
+    this.calendarData[newDayIndex].push(agentToMove);
+    this.calendarData[newDayIndex].sort((a, b) => a.name.localeCompare(b.name));
+
+    // Re-render only the two affected columns for efficiency
+    this._renderSingleDayColumn(sourceDayIndex);
+    this._renderSingleDayColumn(newDayIndex);
+  }
+
+  _renderSingleDayColumn(dayIndex) {
+    const columnEl = this.calendarContainer.querySelector(
+      `.day-column[data-day-index="${dayIndex}"]`
+    );
+    if (!columnEl) return;
+
+    const contentContainer = columnEl.querySelector(".day-column-content");
+    contentContainer.innerHTML = "";
+
+    const agentsForDay = this.calendarData[dayIndex] || [];
+    if (agentsForDay.length > 0) {
+      const fragment = document.createDocumentFragment();
+      const isToday = new Date().getDay() === dayIndex;
+      agentsForDay.forEach((agent, index) => {
+        const agentElement = createAgentItemHtml(
+          agent,
+          dayIndex,
+          isToday,
+          this.tasksState,
+          index + 1,
+          ""
+        );
+        fragment.appendChild(agentElement);
+      });
+      contentContainer.appendChild(fragment);
+    } else {
+      contentContainer.innerHTML =
+        '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
     }
-
-    _renderSingleDayColumn(dayIndex) {
-        const columnEl = this.calendarContainer.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
-        if (!columnEl) return;
-
-        const contentContainer = columnEl.querySelector('.day-column-content');
-        contentContainer.innerHTML = '';
-
-        const agentsForDay = this.calendarData[dayIndex] || [];
-        if (agentsForDay.length > 0) {
-            const fragment = document.createDocumentFragment();
-            const isToday = new Date().getDay() === dayIndex;
-            agentsForDay.forEach((agent, index) => {
-                const agentElement = createAgentItemHtml(agent, dayIndex, isToday, this.tasksState, index + 1, '');
-                fragment.appendChild(agentElement);
-            });
-            contentContainer.appendChild(fragment);
-        } else {
-            contentContainer.innerHTML = '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
-        }
-        updateDayProgressUI.call(this, dayIndex);
-    }
+    updateDayProgressUI.call(this, dayIndex);
+  }
 }
 
 let currentCalendarInstance = null;
 
 async function renderCalendarPage() {
-    if (currentCalendarInstance) {
-        currentCalendarInstance.destroy();
-    }
-    const appContent = document.getElementById('app-content');
-    currentCalendarInstance = new CalendarUI(appContent);
-    try {
-        await currentCalendarInstance.render();
-        startWeeklyResetCountdown();
-    } catch (error) {
-        console.error("Error rendering calendar page:", error);
-        const calendarContainer = document.getElementById('calendar-container');
-        if (calendarContainer) calendarContainer.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات التقويم: ${error.message}</p>`;
-    }
+  if (currentCalendarInstance) {
+    currentCalendarInstance.destroy();
+  }
+  const appContent = document.getElementById("app-content");
+  currentCalendarInstance = new CalendarUI(appContent);
+  try {
+    await currentCalendarInstance.render();
+    startWeeklyResetCountdown();
+  } catch (error) {
+    console.error("Error rendering calendar page:", error);
+    const calendarContainer = document.getElementById("calendar-container");
+    if (calendarContainer)
+      calendarContainer.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات التقويم: ${error.message}</p>`;
+  }
 }
 
 function getNextResetTime() {
-    const now = new Date();
-    const nextReset = new Date();
-    const day = now.getDay();
-    const daysUntilSunday = (7 - day) % 7;
-    nextReset.setDate(now.getDate() + daysUntilSunday);
-    nextReset.setHours(7, 0, 0, 0);
-    if (day === 0 && now.getTime() > nextReset.getTime()) {
-        nextReset.setDate(nextReset.getDate() + 7);
-    }
-    return nextReset;
+  const now = new Date();
+  const nextReset = new Date();
+  const day = now.getDay();
+  const daysUntilSunday = (7 - day) % 7;
+  nextReset.setDate(now.getDate() + daysUntilSunday);
+  nextReset.setHours(7, 0, 0, 0);
+  if (day === 0 && now.getTime() > nextReset.getTime()) {
+    nextReset.setDate(nextReset.getDate() + 7);
+  }
+  return nextReset;
 }
 
 function startWeeklyResetCountdown() {
-    const countdownContainer = document.getElementById('weekly-reset-countdown-container');
-    const countdownElement = document.getElementById('weekly-reset-countdown');
-    if (!countdownContainer || !countdownElement) return;
+  const countdownContainer = document.getElementById(
+    "weekly-reset-countdown-container"
+  );
+  const countdownElement = document.getElementById("weekly-reset-countdown");
+  if (!countdownContainer || !countdownElement) return;
 
-    const updateTimer = () => {
-        const now = new Date();
-        const nextReset = getNextResetTime();
-        const diff = nextReset - now;
+  const updateTimer = () => {
+    const now = new Date();
+    const nextReset = getNextResetTime();
+    const diff = nextReset - now;
 
-        if (diff > 0 && diff < 5 * 60 * 60 * 1000) {
-            countdownContainer.style.display = 'flex';
-            const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            const s = Math.floor((diff % (1000 * 60)) / 1000);
-            countdownElement.textContent = `${h}س ${m}د ${s}ث`;
-        } else {
-            countdownContainer.style.display = 'none';
-        }
-        
-        if (diff < 0) {
-            const lastReset = localStorage.getItem('lastWeeklyReset');
-            if (!lastReset || new Date(lastReset) < nextReset) {
-                localStorage.setItem('lastWeeklyReset', new Date().toISOString());
-                location.reload();
-            }
-        }
-    };
+    if (diff > 0 && diff < 5 * 60 * 60 * 1000) {
+      countdownContainer.style.display = "flex";
+      const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const s = Math.floor((diff % (1000 * 60)) / 1000);
+      countdownElement.textContent = `${h}س ${m}د ${s}ث`;
+    } else {
+      countdownContainer.style.display = "none";
+    }
 
-    updateTimer();
-    weeklyResetCountdownInterval = setInterval(updateTimer, 1000);
+    if (diff < 0) {
+      const lastReset = localStorage.getItem("lastWeeklyReset");
+      if (!lastReset || new Date(lastReset) < nextReset) {
+        localStorage.setItem("lastWeeklyReset", new Date().toISOString());
+        location.reload();
+      }
+    }
+  };
+
+  updateTimer();
+  weeklyResetCountdownInterval = setInterval(updateTimer, 1000);
 }
 
 function updateCalendarUIFromState({ agentId, dayIndex, taskType, status }) {
-    const container = this.calendarContainer;
-    if (!container) return;
+  const container = this.calendarContainer;
+  if (!container) return;
 
-    const agentItem = container.querySelector(`#agent-card-${agentId}-${dayIndex}`);
-    if (!agentItem) return;
+  const agentItem = container.querySelector(
+    `#agent-card-${agentId}-${dayIndex}`
+  );
+  if (!agentItem) return;
 
-    const taskState = (this.tasksState.tasks[agentId] || {})[dayIndex] || { audited: false, competition_sent: false };
+  const taskState = (this.tasksState.tasks[agentId] || {})[dayIndex] || {
+    audited: false,
+    competition_sent: false,
+  };
 
-    const checkbox = agentItem.querySelector(`.${taskType === 'audited' ? 'audit-check' : 'competition-check'}`);
-    if (checkbox) checkbox.checked = status;
+  const checkbox = agentItem.querySelector(
+    `.${taskType === "audited" ? "audit-check" : "competition-check"}`
+  );
+  if (checkbox) checkbox.checked = status;
 
-    checkbox?.closest('.action-item').classList.toggle('done', status);
+  checkbox?.closest(".action-item").classList.toggle("done", status);
 
-    if (taskType === 'audited') {
-        const isComplete = taskState.audited;
-        agentItem.classList.toggle('complete', isComplete);
-        const nameEl = agentItem.querySelector('.agent-name');
-        if (nameEl) nameEl.classList.toggle('has-checkmark', isComplete);
-    }
+  if (taskType === "audited") {
+    const isComplete = taskState.audited;
+    agentItem.classList.toggle("complete", isComplete);
+    const nameEl = agentItem.querySelector(".agent-name");
+    if (nameEl) nameEl.classList.toggle("has-checkmark", isComplete);
+  }
 
-    agentItem.classList.remove('is-loading');
-    agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
+  agentItem.classList.remove("is-loading");
+  agentItem
+    .querySelectorAll('input[type="checkbox"]')
+    .forEach((cb) => (cb.disabled = false));
 
-    updateDayProgressUI.call(this, dayIndex);
+  updateDayProgressUI.call(this, dayIndex);
 }
 
 function updateDayProgressUI(dayIndex) {
-    const column = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
-    if (!column) return;
+  const column = document.querySelector(
+    `.day-column[data-day-index="${dayIndex}"]`
+  );
+  if (!column) return;
 
-    const progressBar = column.querySelector('.progress-bar');
-    const progressLabel = column.querySelector('.progress-label');
-    
-    const allAgentsForDay = this.calendarData?.[dayIndex] || [];
-    const totalTasks = allAgentsForDay.length;
-    let completedTasks = 0;
+  const progressBar = column.querySelector(".progress-bar");
+  const progressLabel = column.querySelector(".progress-label");
 
-    allAgentsForDay.forEach(agent => {
-        const task = (this.tasksState.tasks[agent._id] || {})[dayIndex] || {};
-        if (task.audited) {
-            completedTasks++;
-        }
-    });
+  const allAgentsForDay = this.calendarData?.[dayIndex] || [];
+  const totalTasks = allAgentsForDay.length;
+  let completedTasks = 0;
 
-    const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-    progressBar.style.width = `${progressPercent}%`;
-    progressLabel.textContent = `${completedTasks} / ${totalTasks} مكتمل`;
+  allAgentsForDay.forEach((agent) => {
+    const task = (this.tasksState.tasks[agent._id] || {})[dayIndex] || {};
+    if (task.audited) {
+      completedTasks++;
+    }
+  });
+
+  const progressPercent =
+    totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  progressBar.style.width = `${progressPercent}%`;
+  progressLabel.textContent = `${completedTasks} / ${totalTasks} مكتمل`;
 }
 
 function setupClickAndDragEventListeners(container, calendarData, uiInstance) {
-    container.addEventListener('click', (e) => {
-        const copyIdTrigger = e.target.closest('.calendar-agent-id[data-agent-id-copy]');
-        if (copyIdTrigger) {
-            e.stopPropagation();
-            navigator.clipboard.writeText(copyIdTrigger.dataset.agentIdCopy).then(() => showToast(`تم نسخ الرقم: ${copyIdTrigger.dataset.agentIdCopy}`, 'info'));
-            return;
-        }
-        const card = e.target.closest('.calendar-agent-item[data-agent-id]');
-        if (card && !e.target.closest('.calendar-agent-actions')) {
-            window.location.hash = `#profile/${card.dataset.agentId}`;
-        }
+  container.addEventListener("click", (e) => {
+    const copyIdTrigger = e.target.closest(
+      ".calendar-agent-id[data-agent-id-copy]"
+    );
+    if (copyIdTrigger) {
+      e.stopPropagation();
+      navigator.clipboard
+        .writeText(copyIdTrigger.dataset.agentIdCopy)
+        .then(() =>
+          showToast(
+            `تم نسخ الرقم: ${copyIdTrigger.dataset.agentIdCopy}`,
+            "info"
+          )
+        );
+      return;
+    }
+    const card = e.target.closest(".calendar-agent-item[data-agent-id]");
+    if (card && !e.target.closest(".calendar-agent-actions")) {
+      window.location.hash = `#profile/${card.dataset.agentId}`;
+    }
 
-        const actionItem = e.target.closest('.action-item');
-        if (actionItem && !e.target.matches('input[type="checkbox"]')) {
-            const checkbox = actionItem.querySelector('input[type="checkbox"]');
-            if (checkbox) {
-                checkbox.checked = !checkbox.checked;
-                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        }
+    const actionItem = e.target.closest(".action-item");
+    if (actionItem && !e.target.matches('input[type="checkbox"]')) {
+      const checkbox = actionItem.querySelector('input[type="checkbox"]');
+      if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+  });
+
+  const isSuperAdmin = currentUserProfile?.role === "super_admin";
+  if (isSuperAdmin) {
+    let draggedItem = null;
+    let sourceDayIndex = null;
+
+    container.addEventListener("dragstart", (e) => {
+      const target = e.target.closest(".calendar-agent-item");
+      if (target) {
+        draggedItem = target;
+        sourceDayIndex = parseInt(target.dataset.dayIndex, 10);
+        setTimeout(() => target.classList.add("dragging"), 0);
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", target.dataset.agentId);
+      }
     });
 
-    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
-    if (isSuperAdmin) {
-        let draggedItem = null;
-        let sourceDayIndex = null;
+    container.addEventListener("dragend", () => {
+      if (draggedItem) {
+        draggedItem.classList.remove("dragging");
+        draggedItem = null;
+      }
+    });
 
-        container.addEventListener('dragstart', (e) => {
-            const target = e.target.closest('.calendar-agent-item');
-            if (target) {
-                draggedItem = target;
-                sourceDayIndex = parseInt(target.dataset.dayIndex, 10);
-                setTimeout(() => target.classList.add('dragging'), 0);
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', target.dataset.agentId);
-            }
-        });
+    container.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      const column = e.target.closest(".day-column");
+      if (column) column.classList.add("drag-over");
+    });
 
-        container.addEventListener('dragend', () => {
-            if (draggedItem) {
-                draggedItem.classList.remove('dragging');
-                draggedItem = null;
-            }
-        });
+    container.addEventListener("dragleave", (e) => {
+      const column = e.target.closest(".day-column");
+      if (column) column.classList.remove("drag-over");
+    });
 
-        container.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            const column = e.target.closest('.day-column');
-            if (column) column.classList.add('drag-over');
-        });
+    container.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      const targetColumn = e.target.closest(".day-column");
+      if (!targetColumn || !draggedItem) return;
 
-        container.addEventListener('dragleave', (e) => {
-            const column = e.target.closest('.day-column');
-            if (column) column.classList.remove('drag-over');
-        });
+      targetColumn.classList.remove("drag-over");
+      const newDayIndex = parseInt(targetColumn.dataset.dayIndex, 10);
+      const agentId = draggedItem.dataset.agentId;
+      const agentNameSafe = draggedItem?.dataset?.name || "هذا الوكيل";
 
-        container.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            const targetColumn = e.target.closest('.day-column');
-            if (!targetColumn || !draggedItem) return;
+      if (sourceDayIndex === newDayIndex) return;
 
-            targetColumn.classList.remove('drag-over');
-            const newDayIndex = parseInt(targetColumn.dataset.dayIndex, 10);
-            const agentId = draggedItem.dataset.agentId;
-            const agentNameSafe = draggedItem?.dataset?.name || 'هذا الوكيل';
+      try {
+        const agentCheckResponse = await authedFetch(
+          `/api/agents/${agentId}?select=audit_days`
+        );
+        const { data: agent } = await agentCheckResponse.json();
+        if ((agent.audit_days || []).includes(newDayIndex)) {
+          showToast(
+            `هذا الوكيل مجدول بالفعل في يوم ${uiInstance.daysOfWeek[newDayIndex]}.`,
+            "warning"
+          );
+          return;
+        }
 
-            if (sourceDayIndex === newDayIndex) return;
+        showConfirmationModal(
+          `هل أنت متأكد من نقل الوكيل <strong>${agentNameSafe}</strong> من يوم <strong>${uiInstance.daysOfWeek[sourceDayIndex]}</strong> إلى يوم <strong>${uiInstance.daysOfWeek[newDayIndex]}</strong>؟`,
+          async () => {
+            const agentResponse = await authedFetch(
+              `/api/agents/${agentId}?select=audit_days`
+            );
+            const { data: agent } = await agentResponse.json();
+            const newAuditDays = [
+              ...(agent.audit_days || []).filter((d) => d !== sourceDayIndex),
+              newDayIndex,
+            ];
 
-            try {
-                const agentCheckResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
-                const { data: agent } = await agentCheckResponse.json();
-                if ((agent.audit_days || []).includes(newDayIndex)) {
-                    showToast(`هذا الوكيل مجدول بالفعل في يوم ${uiInstance.daysOfWeek[newDayIndex]}.`, 'warning');
-                    return;
-                }
+            await authedFetch(`/api/agents/${agentId}`, {
+              method: "PUT",
+              body: JSON.stringify({ audit_days: newAuditDays }),
+            });
 
-                showConfirmationModal(
-                    `هل أنت متأكد من نقل الوكيل <strong>${agentNameSafe}</strong> من يوم <strong>${uiInstance.daysOfWeek[sourceDayIndex]}</strong> إلى يوم <strong>${uiInstance.daysOfWeek[newDayIndex]}</strong>؟`,
-                    async () => {
-                        const agentResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
-                        const { data: agent } = await agentResponse.json();
-                        const newAuditDays = [...(agent.audit_days || []).filter(d => d !== sourceDayIndex), newDayIndex];
+            showToast("تم تحديث يوم التدقيق بنجاح.", "success");
+            await logAgentActivity(
+              currentUserProfile?._id,
+              agentId,
+              "DETAILS_UPDATE",
+              `تم تغيير يوم التدقيق من ${uiInstance.daysOfWeek[sourceDayIndex]} إلى ${uiInstance.daysOfWeek[newDayIndex]} عبر التقويم.`
+            );
 
-                        await authedFetch(`/api/agents/${agentId}`, {
-                            method: 'PUT',
-                            body: JSON.stringify({ audit_days: newAuditDays })
-                        });
-
-                        showToast('تم تحديث يوم التدقيق بنجاح.', 'success');
-                        await logAgentActivity(currentUserProfile?._id, agentId, 'DETAILS_UPDATE', `تم تغيير يوم التدقيق من ${uiInstance.daysOfWeek[sourceDayIndex]} إلى ${uiInstance.daysOfWeek[newDayIndex]} عبر التقويم.`);
-                        
-                        uiInstance._updateAfterDrag(sourceDayIndex, newDayIndex, agentId);
-                    }
-                );
-            } catch (error) {
-                showToast(`فشل تحديث يوم التدقيق: ${error.message}`, 'error');
-            }
-        });
-    }
+            uiInstance._updateAfterDrag(sourceDayIndex, newDayIndex, agentId);
+          }
+        );
+      } catch (error) {
+        showToast(`فشل تحديث يوم التدقيق: ${error.message}`, "error");
+      }
+    });
+  }
 }
 
 function setupCalendarFilters(uiInstance) {
-    const searchInput = document.getElementById('calendar-search-input');
-    const clearBtn = document.getElementById('calendar-search-clear');
-    const filterButtons = document.querySelectorAll('.filter-btn');
+  const searchInput = document.getElementById("calendar-search-input");
+  const clearBtn = document.getElementById("calendar-search-clear");
+  const filterButtons = document.querySelectorAll(".filter-btn");
 
-    const applyFilters = () => {
-        if (clearBtn) {
-            clearBtn.style.display = searchInput.value ? 'block' : 'none';
-        }
-
-        const searchTerm = searchInput.value.toLowerCase().trim();
-        const activeFilter = document.querySelector('.filter-btn.active').dataset.filter;
-
-        uiInstance.calendarData.forEach((allAgentsForDay, dayIndex) => {
-            const columnEl = uiInstance.calendarContainer.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
-            if (!columnEl) return;
-
-            const filteredAgents = allAgentsForDay.filter(agent => {
-                const name = agent.name.toLowerCase();
-                const agentIdStr = agent.agent_id;
-                const classification = agent.classification;
-                const matchesSearch = searchTerm === '' || name.includes(searchTerm) || agentIdStr.includes(searchTerm);
-                const matchesFilter = activeFilter === 'all' || classification === activeFilter;
-                return matchesSearch && matchesFilter;
-            });
-            
-            const contentContainer = columnEl.querySelector('.day-column-content');
-            contentContainer.innerHTML = '';
-
-            if (filteredAgents.length === 0) {
-                contentContainer.innerHTML = '<div class="no-results-placeholder"><i class="fas fa-search"></i><p>لا توجد نتائج</p></div>';
-            } else {
-                const fragment = document.createDocumentFragment();
-                const isToday = new Date().getDay() === dayIndex;
-                filteredAgents.forEach((agent, index) => {
-                    const agentElement = createAgentItemHtml(agent, dayIndex, isToday, uiInstance.tasksState, index + 1, searchTerm);
-                    fragment.appendChild(agentElement);
-                });
-                contentContainer.appendChild(fragment);
-            }
-        });
-    };
-
-    searchInput.addEventListener('input', () => {
-        clearTimeout(uiInstance.searchDebounceTimer);
-        uiInstance.searchDebounceTimer = setTimeout(applyFilters, 300);
-    });
-
+  const applyFilters = () => {
     if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            applyFilters();
-            searchInput.focus();
-        });
+      clearBtn.style.display = searchInput.value ? "block" : "none";
     }
 
-    filterButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            filterButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            applyFilters();
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    const activeFilter =
+      document.querySelector(".filter-btn.active").dataset.filter;
+
+    uiInstance.calendarData.forEach((allAgentsForDay, dayIndex) => {
+      const columnEl = uiInstance.calendarContainer.querySelector(
+        `.day-column[data-day-index="${dayIndex}"]`
+      );
+      if (!columnEl) return;
+
+      const filteredAgents = allAgentsForDay.filter((agent) => {
+        const name = agent.name.toLowerCase();
+        const agentIdStr = agent.agent_id;
+        const classification = agent.classification;
+        const matchesSearch =
+          searchTerm === "" ||
+          name.includes(searchTerm) ||
+          agentIdStr.includes(searchTerm);
+        const matchesFilter =
+          activeFilter === "all" || classification === activeFilter;
+        return matchesSearch && matchesFilter;
+      });
+
+      const contentContainer = columnEl.querySelector(".day-column-content");
+      contentContainer.innerHTML = "";
+
+      if (filteredAgents.length === 0) {
+        contentContainer.innerHTML =
+          '<div class="no-results-placeholder"><i class="fas fa-search"></i><p>لا توجد نتائج</p></div>';
+      } else {
+        const fragment = document.createDocumentFragment();
+        const isToday = new Date().getDay() === dayIndex;
+        filteredAgents.forEach((agent, index) => {
+          const agentElement = createAgentItemHtml(
+            agent,
+            dayIndex,
+            isToday,
+            uiInstance.tasksState,
+            index + 1,
+            searchTerm
+          );
+          fragment.appendChild(agentElement);
         });
+        contentContainer.appendChild(fragment);
+      }
     });
+  };
+
+  searchInput.addEventListener("input", () => {
+    clearTimeout(uiInstance.searchDebounceTimer);
+    uiInstance.searchDebounceTimer = setTimeout(applyFilters, 300);
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      applyFilters();
+      searchInput.focus();
+    });
+  }
+
+  filterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      filterButtons.forEach((btn) => btn.classList.remove("active"));
+      button.classList.add("active");
+      applyFilters();
+    });
+  });
 }
+
 
 // == topAgents.js ==
 ﻿// topAgents.js - Updated: 2025-11-16 with Clear Filter Button
@@ -6170,6 +6435,12 @@ function stopAllProfileTimers() {
         if (element) element.removeEventListener(type, handler);
     });
     profilePageEventListeners = [];
+
+    // --- NEW: Unsubscribe from task store ---
+    if (window.taskStore && window.profileStoreSubscription) {
+        window.taskStore.unsubscribe(window.profileStoreSubscription);
+        window.profileStoreSubscription = null;
+    }
 }
 
 // Function to show rank change modal with reason and action inputs
@@ -6479,6 +6750,49 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const agentTaskToday = window.taskStore.state.tasks[agentId]?.[todayDayIndex] || { audited: false, competition_sent: false };
     const isAuditedToday = agentTaskToday.audited;
 
+    // --- NEW: Subscribe to task store updates ---
+    if (window.taskStore) {
+        // Define the update function
+        const updateProfileAuditButton = (newState) => {
+            const updatedTask = newState.tasks[agentId]?.[todayDayIndex] || { audited: false };
+            const isNowAudited = updatedTask.audited;
+            
+            const auditStatusContainer = document.getElementById('header-audit-status');
+            const auditBtn = document.getElementById('perform-audit-btn');
+            const auditText = document.querySelector('.audit-status-text');
+            
+            if (auditStatusContainer && auditBtn && auditText) {
+                // Update container class
+                if (isNowAudited) {
+                    auditStatusContainer.classList.add('audited');
+                    auditStatusContainer.classList.remove('pending');
+                } else {
+                    auditStatusContainer.classList.add('pending');
+                    auditStatusContainer.classList.remove('audited');
+                }
+                
+                // Update button icon and title
+                auditBtn.title = isNowAudited ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
+                auditBtn.innerHTML = `<i class="fas fa-${isNowAudited ? 'check-circle' : 'clipboard-check'}"></i>`;
+                
+                // Update text
+                auditText.textContent = isNowAudited ? 'تم التدقيق' : 'التدقيق';
+            }
+        };
+
+        // Subscribe
+        window.taskStore.subscribe(updateProfileAuditButton);
+
+        // Store the subscription for cleanup
+        if (!window.profileStoreSubscription) {
+            window.profileStoreSubscription = updateProfileAuditButton;
+        } else {
+            // If there was an old subscription, unsubscribe it first (though stopAllProfileTimers should have handled it)
+            window.taskStore.unsubscribe(window.profileStoreSubscription);
+            window.profileStoreSubscription = updateProfileAuditButton;
+        }
+    }
+
     const activeCompetition = agentCompetitions.find(c => c.is_active === true);
     const hasActiveCompetition = !!activeCompetition;
     const hasInactiveCompetition = !hasActiveCompetition && agentCompetitions.length > 0;
@@ -6496,14 +6810,13 @@ async function renderAgentProfilePage(agentId, options = {}) {
     }
 
     // --- NEW: Create the audit button for the header ---
-    const auditButtonHtml = isTaskDay
-        ? `<div id="header-audit-status" class="header-audit-status ${isAuditedToday ? 'audited' : 'pending'}">
+    // Modified: Always show audit button
+    const auditButtonHtml = `<div id="header-audit-status" class="header-audit-status ${isAuditedToday ? 'audited' : 'pending'}">
                <button id="perform-audit-btn" class="btn-icon-action" title="${isAuditedToday ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"'}">
                    <i class="fas fa-${isAuditedToday ? 'check-circle' : 'clipboard-check'}"></i>
                </button>
-               <span class="audit-status-text">${isAuditedToday ? 'تم التدقيق' : 'التدقيق مطلوب اليوم'}</span>
-           </div>`
-        : '';
+               <span class="audit-status-text">${isAuditedToday ? 'تم التدقيق' : 'التدقيق'}</span>
+           </div>`;
 
     // Helper for audit days in Action Tab
     // --- تعديل: عرض أيام التدقيق المحددة فقط كعلامات (tags) ---
@@ -6625,11 +6938,13 @@ async function renderAgentProfilePage(agentId, options = {}) {
     if (createCompBtn) {
         if (canCreateComp) { // This will be migrated later
             createCompBtn.addEventListener('click', () => {
-                // التحقق من تفعيل التدقيق قبل السماح بإنشاء مسابقة
+                // التحقق من تفعيل التدقيق قبل السماح بإنشاء مسابقة - REMOVED per user request
+                /*
                 if (!agent.is_auditing_enabled) {
                     showToast('عذراً، لا يمكن إنشاء مسابقة قبل إتمام عملية التدقيق لهذا الوكيل.', 'error');
                     return;
                 }
+                */
                 window.location.hash = `competitions/new?agentId=${agent._id}`;
             });
         } else {
@@ -6661,7 +6976,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
             statusContainer.classList.toggle('pending', !newAuditStatus);
             statusContainer.classList.toggle('audited', newAuditStatus);
             iconEl.className = `fas fa-${newAuditStatus ? 'check-circle' : 'clipboard-check'}`;
-            statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق مطلوب اليوم';
+            statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق';
             auditBtn.title = newAuditStatus ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
  
             // 2. Call the new backend endpoint to toggle is_auditing_enabled
@@ -6696,7 +7011,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 statusContainer.classList.toggle('pending', wasAudited);
                 statusContainer.classList.toggle('audited', !wasAudited);
                 iconEl.className = `fas fa-${wasAudited ? 'check-circle' : 'clipboard-check'}`;
-                statusTextEl.textContent = wasAudited ? 'تم التدقيق' : 'التدقيق مطلوب اليوم';
+                statusTextEl.textContent = wasAudited ? 'تم التدقيق' : 'التدقيق';
                 auditBtn.title = wasAudited ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
             } finally {
                 auditBtn.disabled = false; // Re-enable the button
@@ -10440,6 +10755,7 @@ async function handlePurgeAllUsers() {
 
             // Bind methods
             this.boundHandleEvents = this.handleEvents.bind(this);
+            this.boundUpdateUIFromStore = this.updateUIFromStore.bind(this);
         }
 
         async render() {
@@ -10448,23 +10764,33 @@ async function handlePurgeAllUsers() {
             
             this.setupEventListeners();
             
-            // FIX: Subscription removed to prevent buggy global UI updates.
-            // window.taskStore.subscribe(this.boundUpdateUIFromStore);
+            // Subscribe to store updates
+            if (window.taskStore) {
+                window.taskStore.subscribe(this.boundUpdateUIFromStore);
+            }
 
             await this.fetchAndRenderTasks();
         }
 
         async fetchAndRenderTasks() {
+            // Block Saturday - official holiday
             if (this.dayIndex === 6) { // Saturday
-                this.contentWrapper.innerHTML = '<p class="no-results-message">لا توجد مهام مجدولة في أيام العطلات.</p>';
+                this.contentWrapper.innerHTML = '<p class="no-results-message"><i class="fas fa-calendar-check"></i> السبت يوم أجازة رسمية - لا توجد مهام مجدولة</p>';
                 return;
             }
 
             try {
-                const response = await authedFetch('/api/tasks/today');
+                // Pass the local day index to the backend to ensure consistency
+                const response = await authedFetch(`/api/tasks/today?day=${this.dayIndex}`);
                 if (!response.ok) throw new Error('Failed to fetch tasks');
                 
                 const { agents, tasksMap } = await response.json();
+                
+                console.log('[TASKS PAGE DEBUG] Response from /api/tasks/today:');
+                console.log('  - Agents count:', agents?.length || 0);
+                console.log('  - Agents:', agents);
+                console.log('  - Current day index:', this.dayIndex);
+                
                 this.agents = agents || [];
                 this.tasksMap = tasksMap || {};
 
@@ -10729,13 +11055,22 @@ async function handlePurgeAllUsers() {
             overviewEl.querySelector('[data-stat="pending"] h3').textContent = total - completed;
         }
 
+        updateUIFromStore(newState) {
+            console.log('[Tasks Page] Received store update:', newState);
+            this.tasksMap = newState.tasks || {};
+            
+            // Efficiently update only visible cards
+            this.agents.forEach(agent => {
+                this.updateSingleCard(agent._id);
+            });
+        }
+
         destroy() {
             console.log('[Tasks Page] Destroying instance and cleaning up listeners.');
             this.container.removeEventListener('click', this.boundHandleEvents);
             this.container.removeEventListener('change', this.boundHandleEvents);
             clearTimeout(this.searchDebounceTimer);
             
-            // FIX: Subscription removed
             if (window.taskStore && this.boundUpdateUIFromStore) {
                 window.taskStore.unsubscribe(this.boundUpdateUIFromStore);
             }
@@ -10857,6 +11192,9 @@ function renderAddAgentForm() {
                                     <label for="day-${index}" class="day-toggle-btn">${day}</label>
                                 </div>`).join('')}
                         </div>
+                        <small style="color: #999; display: block; margin-top: 8px; font-style: italic;">
+                            <i class="fas fa-info-circle"></i> ملاحظة: السبت يوم أجازة رسمية ولا يتم فيه تدقيق
+                        </small>
                     </div>
                 </div>
 
@@ -12688,13 +13026,14 @@ async function fetchAndRenderMostInteractiveCompetitions() {
             const qFull = (comp.question || 'غير متوفر').toString();
             const aFull = (comp.correct_answer || 'غير متوفر').toString();
             const escapedQ = qFull.replace(/\"/g,'&quot;');
+            const truncatedQ = truncateText(qFull, 80);
             return `
               <div class="interactive-item" data-index="${idx+1}">
                 <div class="item-rank"><span class="index-badge">${idx+1}</span></div>
                 <div class="item-main">
                   <div class="item-question question-cell" title="${escapedQ}" data-fulltext="${escapedQ}">
                     <i class="fas fa-question-circle"></i>
-                    <span class="question-text">${qFull}</span>
+                    <span class="question-text">${truncatedQ}</span>
                     <span class="answer-badge">الإجابة: ${aFull}</span>
                   </div>
                   <div class="item-meta">
@@ -13829,12 +14168,12 @@ function renderGrantedBalances(data) {
         dynamicArray.forEach(d => {
             const p = Number(d.percentage);
             const c = Number(d.winners_count) || 0;
-            if (p && c > 0) combined.set(p, c);
+            if (c > 0) combined.set(p, c);
         });
         fixedArray.forEach(d => {
             const p = Number(d.percentage);
             const c = Number(d.winners_count) || 0;
-            if (p && c > 0 && !combined.has(p)) combined.set(p, c);
+            if (c > 0 && !combined.has(p)) combined.set(p, c);
         });
 
         // Build sorted rows
@@ -14087,12 +14426,12 @@ async function fetchAndRenderRankChanges(filter) {
             
             let changeDisplay = '';
             if (isClassificationChange) {
-                // Display classification change
+                // Display classification change from → to
                 changeDisplay = `
                     <td colspan="2" style="text-align: center;">
                         <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
                             <span class="classification-badge classification-${(change.old_classification || '').toLowerCase()}">${esc(change.old_classification || 'غير محدد')}</span>
-                            <i class="fas fa-arrow-left" style="color: #4fa3ff;"></i>
+                            <i class="fas fa-arrow-right" style="color: #4fa3ff;"></i>
                             <span class="classification-badge classification-${(change.new_classification || '').toLowerCase()}">${esc(change.new_classification || 'غير محدد')}</span>
                         </div>
                         <div style="font-size: 11px; color: #7f8c8d; margin-top: 4px;">تغيير التصنيف</div>
@@ -15426,8 +15765,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     };
     
     const LS_KEY = 'winnerRouletteSession.v1';
-    // Enforce no persistence of participants/winners across reloads
-    try { localStorage.removeItem(LS_KEY); } catch {}
+    // Persist session across reloads
     
     function cleanName(name) {
       if (!name) return '';
@@ -15515,7 +15853,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         }
         
         // Display comprehensive competition information
-        const tradingWinners = competition.trading_winners_count || 0;
+        // Support both new schema (trading_winners_count, deposit_winners_count) and old schema (winners_count)
+        const tradingWinners = competition.trading_winners_count || competition.winners_count || 0;
         const depositWinners = competition.deposit_winners_count || 0;
         const totalWinners = tradingWinners + depositWinners;
         const currentWinners = competition.current_winners_count || 0;
@@ -15525,7 +15864,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           id: competition._id,
           tradingWinnersRequired: tradingWinners,
           depositWinnersRequired: depositWinners,
-          totalRequired: totalWinners,
+          // Prefer backend required_winners if provided; fallback to sum
+          totalRequired: (typeof competition.required_winners === 'number' && competition.required_winners > 0)
+            ? competition.required_winners
+            : totalWinners,
+          requiredWinners: (typeof competition.required_winners === 'number' && competition.required_winners > 0)
+            ? competition.required_winners
+            : totalWinners,
           currentWinners: currentWinners,
           prizePerWinner: competition.prize_per_winner || 0,
           depositBonusPercentage: competition.deposit_bonus_percentage || 0
@@ -15559,18 +15904,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         }
         // -----------------------------------------------------
     
-        // Check if competition is completed
+        // Check if competition is completed (only if winners are already sent/approved)
         if (currentWinners >= totalWinners && totalWinners > 0) {
-          competitionInfo.innerHTML = `
-            <div class="wr-agent-info-empty" style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; color: #10b981;">
-              <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 10px;"></i>
-              <br>
-              تم اكتمال اختيار الفائزين لهذه المسابقة
-            </div>`;
-          // Disable controls
-          const autoBtn = document.getElementById('auto-pick-btn');
-          if(autoBtn) { autoBtn.disabled = true; autoBtn.classList.add('wr-btn-disabled'); }
-          return;
+          // Don't show completion message here, only show it after approval
+          // This prevents showing "completed" when user just loads the page
         }
     
         // Show engagement stats modal if stats are missing (0)
@@ -15645,28 +15982,41 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               <span>إحصائيات الفائزين المطلوبين</span>
             </div>`;
         
-        if (totalWinners > 0) {
-          html += `<div class="wr-competition-stat-row wr-stat-total">
-            <span class="wr-competition-stat-label"><i class="fas fa-trophy"></i> إجمالي الفائزين</span>
-            <span class="wr-competition-stat-value">${totalWinners} فائز</span>
+        // Always show stats - even if totalWinners is 0, we need to display the breakdown
+        // Use local session selections for clearer UX while picking
+        const requiredTotal = (typeof competition.required_winners === 'number' && competition.required_winners > 0) 
+          ? competition.required_winners 
+          : totalWinners;
+        const localSelected = (state && Array.isArray(state.winners)) ? state.winners.length : 0;
+        const remainingLocal = Math.max(requiredTotal - localSelected, 0);
+
+        html += `<div class="wr-competition-stat-row wr-stat-total">
+          <span class="wr-competition-stat-label"><i class="fas fa-trophy"></i> إجمالي الفائزين</span>
+          <span class="wr-competition-stat-value">${requiredTotal} فائز</span>
+        </div>`;
+
+        html += `<div class="wr-competition-stat-row">
+          <span class="wr-competition-stat-label"><i class="fas fa-hourglass-half"></i> المتبقي</span>
+          <span class="wr-competition-stat-value">${remainingLocal}</span>
+        </div>`;
+
+        // Bonus breakdown - show REQUIRED counts from competition, not selected
+        const depositWinnersRequired = competition.deposit_winners_count || 0;
+        const tradingWinnersRequired = competition.trading_winners_count || 0;
+        
+        // Also show how many have been selected locally (for progress)
+        const localDepositCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length : 0;
+        const localTradingCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'trading').length : 0;
+
+        html += `<div class="wr-competition-stat-row">
+            <span class="wr-competition-stat-label"><i class="fas fa-dollar-sign"></i> بونص إيداع</span>
+            <span class="wr-competition-stat-value deposit">${localDepositCount} / ${depositWinnersRequired} فائز</span>
           </div>`;
-          
-          if (depositWinners > 0) {
-            html += `<div class="wr-competition-stat-row">
-              <span class="wr-competition-stat-label"><i class="fas fa-dollar-sign"></i> بونص إيداع</span>
-              <span class="wr-competition-stat-value deposit">${depositWinners} فائز</span>
-            </div>`;
-          }
-          
-          if (tradingWinners > 0) {
-            html += `<div class="wr-competition-stat-row">
-              <span class="wr-competition-stat-label"><i class="fas fa-chart-line"></i> بونص تداولي</span>
-              <span class="wr-competition-stat-value trading">${tradingWinners} فائز</span>
-            </div>`;
-          }
-        } else {
-          html += '<div class="wr-agent-info-empty">لم يتم تحديد فائزين في المسابقة</div>';
-        }
+
+        html += `<div class="wr-competition-stat-row">
+            <span class="wr-competition-stat-label"><i class="fas fa-chart-line"></i> بونص تداولي</span>
+            <span class="wr-competition-stat-value trading">${localTradingCount} / ${tradingWinnersRequired} فائز</span>
+          </div>`;
         
         // Add prize information - always show if deposit bonus percentage exists
         if (competition.deposit_bonus_percentage) {
@@ -15727,9 +16077,54 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         html += '</div>';
         competitionInfo.innerHTML = html;
         
+        // تحديث الإحصائيات فوق الروليت
+        updateCompetitionStats();
+        
       } catch(e) {
         console.warn('Failed to load agent competition:', e);
         competitionInfo.innerHTML = '<div class="wr-agent-info-empty">فشل تحميل البيانات</div>';
+      }
+    }
+    
+    // دالة لتحديث الإحصائيات فقط بدون إعادة تحميل كل البيانات
+    function updateCompetitionStats() {
+      if (!state.activeCompetition) return;
+      
+      const requiredTotal = state.activeCompetition.requiredWinners || state.activeCompetition.totalRequired || 0;
+      const localSelected = (state && Array.isArray(state.winners)) ? state.winners.length : 0;
+      const remainingLocal = Math.max(requiredTotal - localSelected, 0);
+      
+      const depositWinnersRequired = state.activeCompetition.depositWinnersRequired || 0;
+      const tradingWinnersRequired = state.activeCompetition.tradingWinnersRequired || 0;
+      
+      const localDepositCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length : 0;
+      const localTradingCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'trading').length : 0;
+      
+      // تحديث العناصر في قسم معلومات المسابقة (الجانب الأيسر)
+      const remainingEl = document.querySelector('.wr-competition-stat-row:nth-child(2) .wr-competition-stat-value');
+      if (remainingEl) {
+        remainingEl.textContent = remainingLocal;
+      }
+      
+      const depositEl = document.querySelector('.wr-competition-stat-row:nth-child(3) .wr-competition-stat-value.deposit');
+      if (depositEl) {
+        depositEl.textContent = `${localDepositCount} / ${depositWinnersRequired} فائز`;
+      }
+      
+      const tradingEl = document.querySelector('.wr-competition-stat-row:nth-child(4) .wr-competition-stat-value.trading');
+      if (tradingEl) {
+        tradingEl.textContent = `${localTradingCount} / ${tradingWinnersRequired} فائز`;
+      }
+      
+      // تحديث العناصر فوق الروليت (الجانب الأيمن)
+      const wrDepositCount = document.getElementById('wr-deposit-count');
+      if (wrDepositCount) {
+        wrDepositCount.textContent = `${localDepositCount} / ${depositWinnersRequired} فائز`;
+      }
+      
+      const wrTradingCount = document.getElementById('wr-trading-count');
+      if (wrTradingCount) {
+        wrTradingCount.textContent = `${localTradingCount} / ${tradingWinnersRequired} فائز`;
       }
     }
     
@@ -16051,6 +16446,40 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       state.selectedAgent = null; // تأكيد التفريغ بعد الاسترجاع
       updateSpinControls?.();
       drawWheel();
+
+      // مزامنة تلقائية للمتبقي: حدث دوري يحدث كل 25 ثانية لجلب حالة المسابقة الحالية
+      try {
+        if (window._wrAutoSyncTimer) { clearInterval(window._wrAutoSyncTimer); }
+        window._wrAutoSyncTimer = setInterval(async () => {
+          try {
+            if (!state.selectedAgent || !state.selectedAgent.id) return;
+            const authedFetch = window.authedFetch || fetch;
+            const resp = await authedFetch(`/api/competitions/agent/${state.selectedAgent.id}/active`);
+            if (!resp.ok) return;
+            const result = await resp.json();
+            const competition = result.competition;
+            if (!competition) return;
+            const currentWinners = competition.current_winners_count || 0;
+            const requiredTotal = (typeof competition.required_winners === 'number' && competition.required_winners > 0)
+              ? competition.required_winners
+              : ((competition.trading_winners_count || 0) + (competition.deposit_winners_count || 0));
+            state.activeCompetition = {
+              ...(state.activeCompetition || {}),
+              id: competition._id,
+              tradingWinnersRequired: competition.trading_winners_count || 0,
+              depositWinnersRequired: competition.deposit_winners_count || 0,
+              totalRequired: requiredTotal,
+              requiredWinners: requiredTotal,
+              currentWinners: currentWinners,
+              prizePerWinner: competition.prize_per_winner || 0,
+              depositBonusPercentage: competition.deposit_bonus_percentage || 0
+            };
+            updateCounts();
+          } catch (e) {
+            // تجاهل أخطاء الشبكة المؤقتة
+          }
+        }, 25000);
+      } catch (e) { /* ignore */ }
     
       // Log screen size for debugging
       // Screen size log removed to reduce noise
@@ -16349,16 +16778,29 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // Bottom section buttons
       const exportBottomBtn = document.getElementById('export-winners-bottom');
       const resetBottomBtn = document.getElementById('reset-winners-bottom');
+      // Hide and disable reset button under roulette per request
+      if (resetBottomBtn) { resetBottomBtn.style.display = 'none'; }
       exportBottomBtn?.addEventListener('click', exportWinners);
       resetBottomBtn?.addEventListener('click', ()=> { 
         showConfirmModal(
-          'سيتم مسح جميع الفائزين بشكل دائم من القائمة. هل أنت متأكد من المتابعة؟',
+          'سيتم مسح جميع الفائزين وإعادة تحميل جميع المشاركين لاختيار الفائزين من جديد. هل أنت متأكد؟',
           () => {
+            // Clear winners
             state.winners = [];
+            // Re-add all participants from textarea/source
+            const ta = document.getElementById('participants-input');
+            const lines = (ta?.value || '').split('\n').map(s=>s.trim()).filter(Boolean);
+            state.entries = lines.map((line, idx) => {
+              const parts = line.split(' — ');
+              const name = parts[0] || line;
+              const account = parts[1] || '';
+              return { id: `entry_${idx}_${Date.now()}`, name, account, label: account ? `${name} — ${account}` : name, selected: false };
+            });
+            renderParticipants();
             renderWinners();
             updateCounts();
             saveSession();
-            toast('تم مسح الفائزين بنجاح', 'success');
+            toast('تم إعادة التهيئة: مسح الفائزين وإرجاع المشاركين', 'success');
           }
         );
       });
@@ -16443,35 +16885,124 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function saveSession() {
-      // Do not persist entries/winners per requirement
       const session = {
-        entries: [],
-        winners: [],
-        selectedAgent: null,
-        excludeWinner: state.excludeWinner,
-        filterTerm: state.filterTerm
+        entries: (state.entries || []).map(e => ({
+          id: e.id,
+          name: e.name,
+          account: e.account,
+          label: e.label,
+          selected: !!e.selected
+        })),
+        winners: (state.winners || []).map(w => ({
+          id: w.id,
+          name: w.name,
+          account: w.account,
+          email: w.email || '',
+          prizeType: w.prizeType,
+          prizeValue: w.prizeValue,
+          includeWarnMeet: !!w.includeWarnMeet,
+          includeWarnPrev: !!w.includeWarnPrev,
+          agent: w.agent ? { id: w.agent.id, name: w.agent.name, agentId: w.agent.agentId } : null,
+          _id: w._id || null,
+          idImageUploaded: !!w.idImageUploaded,
+          timestamp: w.timestamp || null
+        })),
+        selectedAgent: state.selectedAgent ? { id: state.selectedAgent.id, name: state.selectedAgent.name, agentId: state.selectedAgent.agentId } : null,
+        excludeWinner: !!state.excludeWinner,
+        filterTerm: state.filterTerm || '',
+        reportSent: !!state.reportSent,
+        noWinnersApproved: !!state.noWinnersApproved
       };
       try { localStorage.setItem(LS_KEY, JSON.stringify(session)); } catch {}
     }
     
     function restoreSession(skipAgent = false) {
-      // Intentionally do not restore entries/winners. Clear UI on load.
       try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) {
+          // initialize defaults in UI
+          const excludeCb = document.getElementById('exclude-winner');
+          if (excludeCb) excludeCb.checked = true;
+          const searchInput = document.getElementById('participants-search');
+          if (searchInput) searchInput.value = '';
+          const ta = document.getElementById('participants-input');
+          if (ta) {
+            // القائمة فارغة - يدخل المستخدم أسماء المشاركين يدويًا
+            ta.value = '';
+          }
+          state.entries = [];
+          state.winners = [];
+          state.filterTerm = '';
+          renderParticipants();
+          renderWinners();
+          updateCounts();
+          return;
+        }
+
+        const saved = JSON.parse(raw);
+        // restore entries
+        state.entries = Array.isArray(saved.entries) ? saved.entries.map(e => ({
+          id: e.id,
+          name: e.name,
+          account: e.account,
+          label: e.label || `${e.name} — ${e.account}`,
+          selected: !!e.selected
+        })) : [];
+
+        // restore winners
+        state.winners = Array.isArray(saved.winners) ? saved.winners.map(w => ({
+          id: w.id,
+          name: w.name,
+          account: w.account,
+          email: w.email || '',
+          prizeType: w.prizeType,
+          prizeValue: w.prizeValue,
+          includeWarnMeet: !!w.includeWarnMeet,
+          includeWarnPrev: !!w.includeWarnPrev,
+          agent: w.agent ? { id: w.agent.id, name: w.agent.name, agentId: w.agent.agentId } : null,
+          _id: w._id || null,
+          idImageUploaded: !!w.idImageUploaded,
+          timestamp: w.timestamp || null
+        })) : [];
+
+        // restore selected agent only if not skipped
+        if (!skipAgent) {
+          state.selectedAgent = saved.selectedAgent || null;
+          if (state.selectedAgent && state.selectedAgent.id) {
+            updateAgentStatus(state.selectedAgent.name, state.selectedAgent.agentId);
+            loadAgentCompetitionInfo(state.selectedAgent.id);
+          }
+        }
+
+        // restore UI filters
+        state.excludeWinner = saved.excludeWinner !== undefined ? !!saved.excludeWinner : true;
         const excludeCb = document.getElementById('exclude-winner');
-        if (excludeCb) excludeCb.checked = true;
+        if (excludeCb) excludeCb.checked = state.excludeWinner;
+        state.filterTerm = saved.filterTerm || '';
         const searchInput = document.getElementById('participants-search');
-        if (searchInput) searchInput.value = '';
+        if (searchInput) searchInput.value = state.filterTerm;
+        
+        // restore report sent status
+        state.reportSent = !!saved.reportSent;
+        state.noWinnersApproved = !!saved.noWinnersApproved;
+
+        // update participants textarea to reflect entries
         const ta = document.getElementById('participants-input');
-        if (ta) ta.value = '';
-        state.entries = [];
-        state.winners = [];
-        state.selectedAgent = null;
-        state.filterTerm = '';
+        if (ta) {
+          // If reportSent, clear the textarea; otherwise restore entries
+          if (state.reportSent || state.noWinnersApproved) {
+            ta.value = '';
+          } else {
+            ta.value = (state.entries || []).map(e => `${e.name} — ${e.account}`).join('\n');
+          }
+        }
+
         renderParticipants();
         renderWinners();
         updateCounts();
+        drawWheel();
       } catch (e) {
-        console.warn('Skipping session restore due to requirement');
+        console.warn('Session restore failed:', e);
       }
     }
     
@@ -16646,11 +17177,24 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function updateCounts() {
-        const countEl = document.getElementById('participants-count');
-        if (countEl) countEl.textContent = state.entries.length;
-        
+        // Total participants
+        const totalEl = document.getElementById('participants-count-total');
+        if (totalEl) totalEl.textContent = state.entries.length;
+        // Winners selected
         const winnersCountEl = document.getElementById('winners-count');
         if (winnersCountEl) winnersCountEl.textContent = state.winners.length;
+        // Remaining required winners (bind to backend required_winners if available)
+        const remainingEl = document.getElementById('participants-count-remaining');
+        if (remainingEl) {
+          if (state.activeCompetition) {
+            const totalReq = state.activeCompetition.totalRequired || state.activeCompetition.requiredWinners || 0;
+            const current = (state.activeCompetition.currentWinners ?? state.winners.length);
+            const remaining = Math.max(totalReq - current, 0);
+            remainingEl.textContent = remaining;
+          } else {
+            remainingEl.textContent = Math.max(state.entries.length - state.winners.length, 0);
+          }
+        }
     }
     
     function showConfirmModal(message, onConfirm) {
@@ -16697,7 +17241,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         return;
       }
       // منع الدوران إذا تم اختيار جميع الفائزين المطلوبين
-      const currentTotal = state.activeCompetition.currentWinners || 0;
+      const currentTotal = state.winners.length;
       if (state.activeCompetition && currentTotal >= state.activeCompetition.totalRequired) {
         const agentLabel = state.selectedAgent ? state.selectedAgent.name : 'هذا الوكيل';
         toast(`تم اختيار جميع الفائزين للوكيل ${agentLabel} (عددهم ${state.activeCompetition.totalRequired}).`, 'info');
@@ -16715,7 +17259,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }
       
       // Check if the number of winners has been reached
-      const currentTotal = state.activeCompetition.currentWinners || 0;
+      const currentTotal = state.winners.length;
       if (state.activeCompetition && currentTotal >= state.activeCompetition.totalRequired) {
         const agentLabel = state.selectedAgent ? state.selectedAgent.name : 'هذا الوكيل';
         toast(`تم اختيار جميع الفائزين للوكيل ${agentLabel} (عددهم ${state.activeCompetition.totalRequired}).`, 'info');
@@ -16741,7 +17285,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         return;
       }
       // منع الدوران إذا تم اختيار جميع الفائزين المطلوبين
-      const currentTotal = state.activeCompetition.currentWinners || 0;
+      const currentTotal = state.winners.length;
       if (state.activeCompetition && currentTotal >= state.activeCompetition.totalRequired) {
         const agentLabel = state.selectedAgent ? state.selectedAgent.name : 'هذا الوكيل';
         toast(`تم اختيار جميع الفائزين للوكيل ${agentLabel} (عددهم ${state.activeCompetition.totalRequired}).`, 'info');
@@ -16942,7 +17486,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function showVideoPreview(blob, winner) {
+      console.log('🎥 [Video Preview] Starting showVideoPreview');
+      console.log('🎥 [Video Preview] Blob:', blob);
+      console.log('🎥 [Video Preview] Winner:', winner);
+      
       if (!blob) {
+        console.warn('🎥 [Video Preview] No blob provided, falling back to normal flow');
         // Fallback to normal flow if recording failed
         if(state.autoMode){ showAutoWinnerModal(winner); } else { showWinnerModal(winner); }
         return;
@@ -16973,8 +17522,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const video = document.createElement('video');
       video.id = 'preview-video-el';
       video.controls = true;
-      video.autoplay = true;
-      video.muted = true;
+      video.autoplay = false;
+      video.muted = false;
+      video.loop = true;
       video.playsInline = true;
       video.style.cssText = 'width: 100%; border-radius: 8px; margin-bottom: 20px; max-height: 400px;';
       // Set src directly to avoid innerHTML safety checks
@@ -17003,9 +17553,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       overlay.appendChild(container);
       document.body.appendChild(overlay);
     
-      // Force play attempt
-      video.play().catch(e => console.error('🎥 [Preview] Auto-play failed:', e));
-      video.onloadedmetadata = () => console.log('🎥 [Preview] Metadata loaded, duration:', video.duration);
+      // Load metadata and prepare video
+      video.onloadedmetadata = () => {
+        console.log('🎥 [Preview] Metadata loaded, duration:', video.duration);
+      };
       video.onerror = (e) => {
           console.error('🎥 [Preview] Video error:', video.error);
           const errDiv = document.createElement('div');
@@ -17034,30 +17585,84 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       };
       
       skipBtn.addEventListener('click', () => {
+        console.log('⏭️ [Skip Video] Button clicked');
         cleanup();
-        if(state.autoMode){ showAutoWinnerModal(winner); } else { showWinnerModal(winner); }
+        // عند التخطي: لا نعيد الدوران تلقائياً. المستخدم يضغط الروليت يدوياً.
+        // المشارك الحالي يبقى في القائمة ولا يتم اعتباره فائز.
+        toast('تم تخطي هذا الفائز. اضغط الروليت لاختيار فائز بديل.', 'info');
       });
       
       saveBtn.addEventListener('click', async () => {
-        // بدلاً من الحفظ المباشر، ننتقل إلى نافذة إدخال البريد الإلكتروني
-        // ونمرر الفيديو المسجل ليتم حفظه مع بيانات الفائز
-        state.pendingVideoBlob = blob;
-        cleanup();
-        if(state.autoMode){ 
-            showAutoWinnerModal(winner); 
-        } else { 
-            showWinnerModal(winner); 
+        // حفظ الفيديو ثم فتح نافذة بيانات الفائز بشكل موثوق
+        console.log('🎬 [Save Video Continue] Button clicked');
+        console.log('🎬 [Save Video Continue] Winner:', winner);
+        console.log('🎬 [Save Video Continue] Auto mode:', state.autoMode);
+        console.log('🎬 [Save Video Continue] Blob:', blob);
+        
+        try {
+          state.pendingVideoBlob = blob;
+          console.log('🎬 [Save Video Continue] Pending video blob stored');
+          
+          // تأكد من وجود هيكل المودال قبل الفتح
+          try { 
+            console.log('🎬 [Save Video Continue] Ensuring winner modal structure...');
+            ensureWinnerModalStructure(); 
+            console.log('🎬 [Save Video Continue] Winner modal structure ensured');
+          } catch(e) {
+            console.error('🎬 [Save Video Continue] Failed to ensure modal structure:', e);
+          }
+          
+          console.log('🎬 [Save Video Continue] Calling cleanup...');
+          cleanup();
+          console.log('🎬 [Save Video Continue] Cleanup done');
+          
+          // افتح المودال بعد إزالة طبقة المعاينة لضمان الطبقات/z-index صحيحة
+          console.log('🎬 [Save Video Continue] Setting timeout to open modal...');
+          setTimeout(() => {
+            try {
+              console.log('🎬 [Save Video Continue] Timeout callback executing...');
+              if (state.autoMode) {
+                console.log('🎬 [Save Video Continue] Opening AUTO winner modal');
+                showAutoWinnerModal(winner);
+              } else {
+                console.log('🎬 [Save Video Continue] Opening MANUAL winner modal');
+                showWinnerModal(winner);
+              }
+              console.log('🎬 [Save Video Continue] Modal opened successfully');
+            } catch (e) {
+              console.error('🎬 [Save Video Continue] Failed to open winner modal after video save:', e);
+              // كحل أخير، أعد إنشاء المودال وافتحه مرة أخرى
+              try { ensureWinnerModalStructure(); } catch {}
+              if (state.autoMode) {
+                showAutoWinnerModal(winner);
+              } else {
+                showWinnerModal(winner);
+              }
+            }
+          }, 50);
+        } catch (e) {
+          console.error('🎬 [Save Video Continue] CRITICAL ERROR in flow:', e);
+          toast('حدث خطأ أثناء المتابعة. سنفتح نموذج بيانات الفائز مباشرة.', 'warning');
+          // فلو بديل مباشر
+          try { ensureWinnerModalStructure(); } catch {}
+          if (state.autoMode) {
+            showAutoWinnerModal(winner);
+          } else {
+            showWinnerModal(winner);
+          }
         }
       });
     }
     
     function checkCompletion() {
-      const currentTotal = state.activeCompetition ? (state.activeCompetition.currentWinners || 0) : state.winners.length;
+      // استخدام عدد الفائزين المحليين فقط (state.winners.length)
+      const currentTotal = state.winners.length;
       if (state.activeCompetition && currentTotal >= state.activeCompetition.totalRequired) {
         if (state.reportSent) {
           const agentLabel = state.selectedAgent ? state.selectedAgent.name : 'هذا الوكيل';
+          // عرض إشعار بسيط بدلاً من modal
           setTimeout(() => {
-            showCompletionModal(agentLabel, state.activeCompetition.totalRequired);
+            toast(`تم اكتمال اختيار الفائزين (${state.activeCompetition.totalRequired}) للوكيل ${agentLabel}`, 'success');
           }, 500);
         } else {
           // Do not show completion text until winners are sent to agent
@@ -17199,6 +17804,32 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       if (!bottomContainer) return;
       
+      // If reportSent is true, show only the completion message
+      if (state.reportSent || state.noWinnersApproved) {
+        let html = `
+          <div style="
+            padding: 24px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+            color: #065f46;
+            border: 2px solid #a7f3d0;
+            display: flex; 
+            align-items: center; 
+            gap: 16px;
+            justify-content: center;
+            text-align: center;
+            min-height: 120px;">
+            <i class="fas fa-check-circle" style="color:#10b981; font-size: 2.5rem;"></i>
+            <div>
+              <div style="font-size: 1.2rem; font-weight: 700; margin-bottom: 6px;">تم اكتمال اختيار الفائزين</div>
+              <div style="font-size: 0.95rem; opacity: 0.85;">تم اعتماد ${state.winners.length > 0 ? state.winners.length : 'عدم وجود'} فائز${state.winners.length > 1 ? 'ين' : ''} لهذه المسابقة</div>
+            </div>
+          </div>
+        `;
+        bottomContainer.innerHTML = html;
+        return;
+      }
+      
       if (state.winners.length === 0) {
         bottomContainer.innerHTML = '<div class="wr-winner-empty"><i class="fas fa-trophy" style="font-size:2rem;opacity:.3;margin-bottom:8px;"></i><p>لا يوجد اسماء</p></div>';
         return;
@@ -17215,47 +17846,47 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           html += `
           <div style="width:100%; margin-bottom: 20px;">
             <button id="send-all-winners-btn" class="wr-btn" style="
-                width: 100%;
-                background: linear-gradient(90deg, #2AABEE 0%, #229ED9 100%);
-                color: white;
-                box-shadow: 0 4px 15px rgba(42, 171, 238, 0.4);
-                border: none;
-                padding: 14px;
-                font-size: 1.1rem;
-                font-weight: bold;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 12px;
-                border-radius: 12px;
-                cursor: pointer;
-                transition: all 0.3s ease;
-            " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(42, 171, 238, 0.6)'" 
-               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(42, 171, 238, 0.4)'">
-                <i class="fas fa-paper-plane" style="font-size: 1.2em;"></i> 
-                <span>إرسال الكل للوكيل (${state.winners.length})</span>
+              width: 100%;
+              background: #0ea5e9;
+              color: #fff;
+              border: none;
+              padding: 12px 16px;
+              font-size: 1rem;
+              font-weight: 600;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 10px;
+              border-radius: 999px;
+              cursor: pointer;
+              transition: transform 0.2s ease, box-shadow 0.2s ease;
+              box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(14, 165, 233, 0.45)'" 
+               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(14, 165, 233, 0.35)'">
+              <i class="fas fa-paper-plane" style="font-size: 1em;"></i> 
+              <span>إرسال الكل للوكيل (${state.winners.length})</span>
             </button>
             <div style="height: 15px;"></div>
             <button id="send-winners-ids-btn" style="
-                width: 100%;
-                background: linear-gradient(90deg, #0ea5e9 0%, #0284c7 100%);
-                color: white;
-                box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4);
-                border: none;
-                padding: 14px;
-                font-size: 1.1rem;
-                font-weight: bold;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 12px;
-                border-radius: 12px;
-                cursor: pointer;
-                transition: all 0.3s ease;
-            " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(14, 165, 233, 0.6)'" 
-               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(14, 165, 233, 0.4)'">
-                <i class="fas fa-id-card" style="font-size: 1.2em;"></i> 
-                <span>إرسال الهوية والكليشة لجروب Agent competitions (${state.winners.length})</span>
+              width: 100%;
+              background: #22c55e;
+              color: #fff;
+              border: none;
+              padding: 12px 16px;
+              font-size: 1rem;
+              font-weight: 600;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 10px;
+              border-radius: 999px;
+              cursor: pointer;
+              transition: transform 0.2s ease, box-shadow 0.2s ease;
+              box-shadow: 0 4px 12px rgba(34, 197, 94, 0.35);
+            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(34, 197, 94, 0.45)'" 
+               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(34, 197, 94, 0.35)'">
+              <i class="fas fa-id-card" style="font-size: 1em;"></i> 
+              <span>إرسال الهوية والكليشة لجروب Agent competitions (${state.winners.length})</span>
             </button>
           </div>
           `;
@@ -17273,8 +17904,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           html += `
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
-              <div class="wr-winner-card-body">
-                <div class="wr-winner-card-name">${w.name}</div>
+              <div class="wr-winner-card-body" style="padding-right: 56px;">
+                <div class="wr-winner-card-name" style="font-weight:700; font-size:1.05rem; color:#0f172a;">${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
                 <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> ${w.prizeValue || 0}%</div>
@@ -17292,7 +17923,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               <div class="wr-winner-card-actions">
                 <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — ${w.prizeValue}%" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-undo="${w.id}" title="تراجع"><i class="fas fa-undo"></i></button>
+                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت"><i class="fas fa-reply"></i></button>
               </div>
             </div>`;
         });
@@ -17311,8 +17942,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           html += `
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
-              <div class="wr-winner-card-body">
-                <div class="wr-winner-card-name">${w.name}</div>
+              <div class="wr-winner-card-body" style="padding-right: 56px;">
+                <div class="wr-winner-card-name" style="font-weight:700; font-size:1.05rem; color:#0f172a;">${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
     
@@ -17330,20 +17961,177 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               <div class="wr-winner-card-actions">
                 <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — $${w.prizeValue}" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-undo="${w.id}" title="تراجع"><i class="fas fa-undo"></i></button>
+                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت"><i class="fas fa-reply"></i></button>
               </div>
             </div>`;
         });
         
         html += '</div></div>';
       }
-      
+
+      // Append compact approval buttons aligned left
+      html += `
+        <div style="margin-top: 12px; display: flex; justify-content: flex-start; gap: 8px;">
+          <button id="approve-winners-btn" style="
+              background: #0ea5e9; color: #fff; border: none;
+              padding: 8px 12px; font-size: 0.9rem; font-weight: 600;
+              display: inline-flex; align-items: center; gap: 6px;
+              border-radius: 999px; cursor: pointer;
+              transition: transform 0.2s ease, box-shadow 0.2s ease;
+              box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+          " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(14, 165, 233, 0.45)'" 
+             onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(14, 165, 233, 0.3)'">
+              <i class="fas fa-check" style="font-size: 0.95em;"></i>
+              <span>اعتماد الفائزين (${state.winners.length})</span>
+          </button>
+
+          <button id="approve-no-winners-btn" style="
+              background: #64748b; color: #fff; border: none;
+              padding: 8px 12px; font-size: 0.9rem; font-weight: 600;
+              display: inline-flex; align-items: center; gap: 6px;
+              border-radius: 999px; cursor: pointer;
+              transition: transform 0.2s ease, box-shadow 0.2s ease;
+              box-shadow: 0 2px 8px rgba(100, 116, 139, 0.3);
+          " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(100, 116, 139, 0.45)'" 
+             onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(100, 116, 139, 0.3)'">
+              <i class="fas fa-minus-circle" style="font-size: 0.95em;"></i>
+              <span>اعتماد عدم وجود فائزين</span>
+          </button>
+        </div>
+      `;
+
       bottomContainer.innerHTML = html;
     
       // Bind events
       const sendAllBtn = document.getElementById('send-all-winners-btn');
       if(sendAllBtn) {
           sendAllBtn.addEventListener('click', sendWinnersReport);
+      }
+
+      const approveWinnersBtn = document.getElementById('approve-winners-btn');
+      if (approveWinnersBtn) {
+        approveWinnersBtn.addEventListener('click', () => {
+          if (!state.selectedAgent) {
+            toast('يرجى اختيار وكيل أولاً', 'warning');
+            return;
+          }
+          if (state.winners.length === 0) {
+            toast('لا يوجد فائزين للاعتماد', 'warning');
+            return;
+          }
+          
+          // التحقق من أن عدد الفائزين يساوي العدد المطلوب
+          if (state.activeCompetition && state.activeCompetition.totalRequired) {
+            const requiredCount = state.activeCompetition.totalRequired;
+            const currentCount = state.winners.length;
+            
+            if (currentCount < requiredCount) {
+              toast(`يجب اختيار ${requiredCount} فائز. العدد الحالي: ${currentCount}`, 'warning');
+              return;
+            }
+          }
+          
+          showConfirmModal(
+            'سيتم اعتماد الفائزين الحاليين لهذه المسابقة. هل أنت متأكد؟',
+            async () => {
+              // حفظ جميع الفائزين في قاعدة البيانات
+              toast('جاري حفظ الفائزين في قاعدة البيانات...', 'info');
+              
+              try {
+                await saveAllWinnersToDatabase();
+
+                // Explicitly complete the competition
+                if (state.activeCompetition && state.activeCompetition.id) {
+                    const authedFetch = window.authedFetch || fetch;
+                    await authedFetch(`/api/competitions/${state.activeCompetition.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'completed' })
+                    });
+                }
+                
+                state.reportSent = true;
+                toast('تم اعتماد واختيار الفائزين بنجاح لهذا الوكيل', 'success');
+                
+                // Clear participants input and filters
+                const participantsInput = document.getElementById('participants-input');
+                if (participantsInput) participantsInput.value = '';
+                const searchInput = document.getElementById('participants-search');
+                if (searchInput) searchInput.value = '';
+                state.entries = [];
+                state.filterTerm = '';
+                
+                renderParticipants();
+                renderWinners();
+                updateCounts();
+                saveSession();
+                
+                // التوجه إلى صفحة مسابقات الوكيل بعد الاعتماد
+                setTimeout(() => {
+                  if (state.selectedAgent && state.selectedAgent.id) {
+                    window.location.href = `/pages/agent-competitions.html?agent_id=${encodeURIComponent(state.selectedAgent.id)}`;
+                  }
+                }, 1500);
+              } catch (error) {
+                console.error('Error saving winners:', error);
+                toast('حدث خطأ أثناء حفظ الفائزين في قاعدة البيانات', 'error');
+              }
+            }
+          );
+        });
+      }
+
+      const approveNoWinnersBtn = document.getElementById('approve-no-winners-btn');
+      if (approveNoWinnersBtn) {
+        approveNoWinnersBtn.addEventListener('click', () => {
+          if (!state.selectedAgent) {
+            toast('يرجى اختيار وكيل أولاً', 'warning');
+            return;
+          }
+          showConfirmModal(
+            'سيتم اعتماد عدم وجود فائزين لهذه المسابقة. هل أنت متأكد؟',
+            async () => {
+              try {
+                // Explicitly complete the competition
+                if (state.activeCompetition && state.activeCompetition.id) {
+                    const authedFetch = window.authedFetch || fetch;
+                    await authedFetch(`/api/competitions/${state.activeCompetition.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'completed' })
+                    });
+                }
+
+                state.reportSent = true;
+                state.noWinnersApproved = true;
+                toast('تم اعتماد عدم وجود فائزين لهذه المسابقة', 'success');
+                
+                // Clear participants input and filters
+                const participantsInput = document.getElementById('participants-input');
+                if (participantsInput) participantsInput.value = '';
+                const searchInput = document.getElementById('participants-search');
+                if (searchInput) searchInput.value = '';
+                state.entries = [];
+                state.filterTerm = '';
+                
+                renderParticipants();
+                renderWinners();
+                updateCounts();
+                saveSession();
+                
+                // التوجه إلى صفحة مسابقات الوكيل بعد الاعتماد
+                setTimeout(() => {
+                  if (state.selectedAgent && state.selectedAgent.id) {
+                    window.location.href = `/pages/agent-competitions.html?agent_id=${encodeURIComponent(state.selectedAgent.id)}`;
+                  }
+                }, 1500);
+              } catch (e) {
+                console.error('Failed to complete competition', e);
+                toast('فشل تحديث حالة المسابقة', 'error');
+              }
+            }
+          );
+        });
       }
     
       const sendIDsBtn = document.getElementById('send-winners-ids-btn');
@@ -17357,8 +18145,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       bottomContainer.querySelectorAll('input[data-warn]').forEach(input => {
         input.addEventListener('change', handleWinnerWarningToggle);
       });
-          bottomContainer.querySelectorAll('[data-undo]').forEach(btn => {
-            btn.addEventListener('click', handleUndoClick);
+          bottomContainer.querySelectorAll('[data-restore]').forEach(btn => {
+            btn.addEventListener('click', handleRestoreClick);
           });
           bottomContainer.querySelectorAll('[data-send]').forEach(btn => {
             btn.addEventListener('click', handleSendClick);
@@ -17382,6 +18170,63 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       if(entry){ entry.selected=false; }
       state.winners = state.winners.filter(w=> w.id!==id);
       renderParticipants(); renderWinners(); updateCounts(); saveSession();
+    }
+    
+    function handleRestoreClick(ev) {
+      const id = ev.currentTarget.getAttribute('data-restore');
+      const winner = state.winners.find(w => w.id === id);
+      
+      if (!winner) {
+        toast('لم يتم العثور على الفائز', 'error');
+        return;
+      }
+      
+      showConfirmModal(
+        `هل تريد استرجاع <strong>${winner.name}</strong> إلى الروليت؟ سيتم إلغاء اختياره كفائز وإعادته للمشاركين.`,
+        async () => {
+          // إزالة الفائز من قائمة الفائزين
+          state.winners = state.winners.filter(w => w.id !== id);
+          
+          // البحث عن المشارك في القائمة
+          const entry = state.entries.find(e => e.id === id);
+          
+          if (entry) {
+            // إذا كان موجوداً، إلغاء تحديده كفائز
+            entry.selected = false;
+          } else {
+            // إذا لم يكن موجوداً (تم استبعاده)، إعادته للقائمة
+            state.entries.push({
+              id: winner.id,
+              name: winner.name,
+              account: winner.account,
+              label: `${winner.name} — ${winner.account}`,
+              selected: false,
+              seq: state.entries.length + 1
+            });
+          }
+          
+          // حذف الفائز من قاعدة البيانات إذا كان محفوظاً
+          if (winner._id && state.selectedAgent && state.selectedAgent.id) {
+            try {
+              const authedFetch = window.authedFetch || fetch;
+              await authedFetch(`/api/agents/${state.selectedAgent.id}/winners/${winner._id}`, {
+                method: 'DELETE'
+              });
+            } catch (e) {
+              console.error('فشل حذف الفائز من قاعدة البيانات:', e);
+            }
+          }
+          
+          // تحديث الواجهة
+          renderParticipants();
+          renderWinners();
+          updateCounts();
+          drawWheel();
+          saveSession();
+          
+          toast(`تم استرجاع ${winner.name} إلى الروليت بنجاح`, 'success');
+        }
+      );
     }
     
     function handleWinnerWarningToggle(ev) {
@@ -17469,7 +18314,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function showWinnerModal(entry){
-      console.log('🎉 [showWinnerModal] Called with entry:', entry.name);
+      console.log('🎉 [showWinnerModal] Called with entry:', entry);
+      console.log('🎉 [showWinnerModal] Entry name:', entry?.name);
       
       const modal = document.getElementById('winner-modal');
       const winnerName = document.getElementById('celebration-winner-name');
@@ -17478,6 +18324,17 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const prizeTypeEl = document.getElementById('celebration-prize-type');
       const prizeValueEl = document.getElementById('celebration-prize-value');
       const confirmBtn = document.getElementById('confirm-winner');
+      
+      // Reset ID image input and preview to avoid leaking previous winner's image
+      const idInput = document.getElementById('winner-id-image');
+      const idPreview = document.getElementById('winner-id-image-preview');
+      try { if (idInput) idInput.value = ''; } catch(e){}
+      if (idPreview) { idPreview.style.display = 'none'; idPreview.src = ''; }
+      
+      // Initialize variables after using them for cleanup
+      let idPreviewUrl = null;
+      let compressedFile = null;
+      let isImageUploading = false;
       
       console.log('🔍 [showWinnerModal] Elements check:');
       console.log('  - modal:', modal ? 'FOUND' : 'MISSING');
@@ -17619,8 +18476,6 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // Add paste event handler for ID image
       const nationalIdImageInput = document.getElementById('winner-id-image');
       const idPreviewImg = document.getElementById('winner-id-image-preview');
-      let idPreviewUrl = null;
-      let compressedFile = null; // Store compressed file
     
       const openLightbox = () => {
         if (!idPreviewUrl) return;
@@ -17641,7 +18496,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const updateIdPreview = async () => {
         if (!nationalIdImageInput || !nationalIdImageInput.files || nationalIdImageInput.files.length === 0) {
           if (idPreviewImg) { idPreviewImg.style.display = 'none'; idPreviewImg.src = ''; }
-          if (idPreviewUrl) { try { URL.revokeObjectURL(idPreviewUrl); } catch(e){} idPreviewUrl = null; }
+          if (idPreviewUrl) { try { URL.revokeObjectURL(idPreviewUrl); } catch(e){} }
+          idPreviewUrl = null;
           compressedFile = null;
           return;
         }
@@ -17655,12 +18511,14 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         
         try {
           // Compress the image
+          isImageUploading = true;
           toast('جاري ضغط الصورة...', 'info');
           compressedFile = await compressImage(file);
           
           if (idPreviewUrl) { try { URL.revokeObjectURL(idPreviewUrl); } catch(e){} }
           idPreviewUrl = URL.createObjectURL(compressedFile);
           if (idPreviewImg) { idPreviewImg.src = idPreviewUrl; idPreviewImg.style.display = 'block'; }
+          isImageUploading = false;
           toast('تم ضغط الصورة بنجاح', 'success');
         } catch (error) {
           console.error('Failed to compress image:', error);
@@ -17669,6 +18527,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           idPreviewUrl = URL.createObjectURL(file);
           if (idPreviewImg) { idPreviewImg.src = idPreviewUrl; idPreviewImg.style.display = 'block'; }
           compressedFile = file;
+          isImageUploading = false;
           toast('تم رفع الصورة الأصلية', 'warning');
         }
       };
@@ -17770,6 +18629,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           setTimeout(()=>{ emailErrorEl && (emailErrorEl.style.display='none'); emailInput?.classList.remove('wr-input-error'); }, 2500);
           return; // Do not close modal
         }
+        
+        // Check if image is still uploading
+        if (isImageUploading) {
+          toast('يرجى الانتظار حتى يتم رفع صورة الهوية بالكامل', 'warning');
+          return;
+        }
+        
         // Require ID image before confirming
         if (!(nationalIdImageInput?.files?.length > 0)) {
           const idInput = document.getElementById('winner-id-image');
@@ -17795,108 +18661,26 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           timestamp: new Date().toISOString()
         };
         
-        // --- SAVE TO DATABASE IMMEDIATELY (Manual Mode) ---
-        if (state.selectedAgent && state.selectedAgent.id) {
-          const payload = {
-            winners: [{
-              id: `import_${winnerData.id}`,
-              name: winnerData.name,
-              account_number: winnerData.account || '',
-              email: winnerData.email || '',
-              national_id: winnerData.nationalId || '',
-              prize_type: winnerData.prizeType || '',
-              prize_value: Number(winnerData.prizeValue) || 0,
-              selected_at: winnerData.timestamp,
-              meta: {
-                email: winnerData.email || '',
-                national_id: winnerData.nationalId || '',
-                prize_type: winnerData.prizeType || '',
-                prize_value: Number(winnerData.prizeValue) || 0,
-                original_import_id: `import_${winnerData.id}`
-              }
-            }]
-          };
-          
-          const authedFetch = window.authedFetch || fetch;
-          
-          // Disable button to prevent double clicks
-          if(confirmBtn) {
-              confirmBtn.disabled = true;
-              confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
-          }
-    
-          authedFetch(`/api/agents/${encodeURIComponent(state.selectedAgent.id)}/winners/import`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          }).then(async (resp) => {
-            if(!resp.ok) throw new Error('Failed to save winner');
-            const data = await resp.json();
-            const createdWinner = data.winners && data.winners[0];
-            
-            // If we have a pending video, upload it now
-            if (state.pendingVideoBlob && createdWinner && createdWinner._id) {
-                const formData = new FormData();
-                // Determine extension based on recorded mimeType
-                const extension = (state.recordingMimeType && state.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
-                formData.append('video', state.pendingVideoBlob, `winner_${createdWinner._id}.${extension}`);
-                
-                const uploadResp = await authedFetch(`/api/winners/${createdWinner._id}/video`, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!uploadResp.ok) console.warn('Failed to upload video for winner', createdWinner._id);
-                else toast('تم حفظ الفيديو بنجاح', 'success');
-                
-                // Clear pending blob
-                state.pendingVideoBlob = null;
-            }
-            
-            // Upload national ID image if provided
-            if (compressedFile && createdWinner && createdWinner._id) {
-                const idImageFormData = new FormData();
-                idImageFormData.append('id_image', compressedFile);
-                
-                const idImageResp = await authedFetch(`/api/winners/${createdWinner._id}/id-image`, {
-                    method: 'POST',
-                    body: idImageFormData
-                });
-                
-                if (!idImageResp.ok) console.warn('Failed to upload ID image for winner', createdWinner._id);
-                else toast('تم حفظ صورة الهوية بنجاح', 'success');
-            }
-            
-            // UPDATE LOCAL WINNER WITH DB ID
-            if (createdWinner && createdWinner._id) {
-                const localWinner = state.winners.find(w => w.id === winnerData.id);
-                if (localWinner) {
-                    localWinner._id = createdWinner._id;
-                    saveSession(); // Save the _id to local storage
-                }
-            }
-            
-            toast('تم حفظ الفائز في قاعدة البيانات', 'success');
-          }).catch(err => {
-            console.error('Error saving winner to DB', err);
-            toast('حدث خطأ أثناء الحفظ في قاعدة البيانات', 'error');
-          }).finally(() => {
-            if(confirmBtn) {
-                confirmBtn.disabled = false;
-                confirmBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد الفائز';
-            }
-          });
+        // --- الحفظ المحلي فقط (لن يتم الحفظ في قاعدة البيانات حتى الضغط على "اعتماد الفائزين") ---
+        // حفظ الفيديو والصورة مؤقتاً في الكائن المحلي
+        if (state.pendingVideoBlob) {
+          winnerData.pendingVideoBlob = state.pendingVideoBlob;
+          winnerData.recordingMimeType = state.recordingMimeType;
+          state.pendingVideoBlob = null; // Clear from state
         }
+        
+        if (compressedFile) {
+          winnerData.pendingIdImage = compressedFile;
+          winnerData.idImageUploaded = true; // Mark as having image
+        }
+        
+        toast('تم إضافة الفائز محلياً. اضغط "اعتماد الفائزين" للحفظ النهائي', 'success');
         // ------------------------------------
     
         const idx = state.entries.findIndex(e => e.id === entry.id);
         if (idx !== -1) state.entries[idx].selected = true;
         if (!state.winners.find(w => w.id === entry.id)) {
           state.winners.push(winnerData);
-          // Increment global counter
-          if (state.activeCompetition) {
-            state.activeCompetition.currentWinners = (state.activeCompetition.currentWinners || 0) + 1;
-          }
         }
         
         // مسح الفائز من قائمة المشاركين
@@ -17912,8 +18696,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         saveSession();
         updateBatchCount?.();
         
+        // تحديث إحصائيات المسابقة في القسم العلوي
+        if (state.selectedAgent && state.selectedAgent.id) {
+          updateCompetitionStats();
+        }
+        
         // إظهار شاشة منبثقة عند اكتمال عدد الفائزين
-        const currentTotal = state.activeCompetition ? (state.activeCompetition.currentWinners || 0) : state.winners.length;
+        const currentTotal = state.winners.length;
         if (state.activeCompetition && currentTotal >= state.activeCompetition.totalRequired) {
           const agentLabel = state.selectedAgent ? state.selectedAgent.name : 'هذا الوكيل';
           checkCompletion();
@@ -18022,6 +18811,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const nationalIdImageInputAuto = document.getElementById('winner-id-image');
       const idPreviewImgAuto = document.getElementById('winner-id-image-preview');
       let idPreviewUrlAuto = null;
+      let isImageUploadingAuto = false;
     
       const openLightboxAuto = () => {
         if (!idPreviewUrlAuto) return;
@@ -18115,6 +18905,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           setTimeout(()=>{ emailErrorEl && (emailErrorEl.style.display='none'); emailInput?.classList.remove('wr-input-error'); }, 2500);
           return;
         }
+        
+        // Check if image is still uploading (auto mode)
+        if (isImageUploadingAuto) {
+          toast('يرجى الانتظار حتى يتم رفع صورة الهوية بالكامل', 'warning');
+          return;
+        }
+        
         // Require ID image before confirming
         if (!(nationalIdImageInput?.files?.length > 0)) {
           const idInput = document.getElementById('winner-id-image');
@@ -18138,64 +18935,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           timestamp: new Date().toISOString()
         };
         
-        // --- SAVE TO DATABASE IMMEDIATELY (Auto Mode) ---
-        if (state.selectedAgent && state.selectedAgent.id) {
-          const payload = {
-            winners: [{
-              id: `import_${winnerData.id}`,
-              name: winnerData.name,
-              account_number: winnerData.account || '',
-              email: winnerData.email || '',
-              national_id: winnerData.nationalId || '',
-              prize_type: winnerData.prizeType || '',
-              prize_value: winnerData.prizeValue || 0,
-              selected_at: winnerData.timestamp,
-              meta: {
-                email: winnerData.email || '',
-                national_id: winnerData.nationalId || '',
-                prize_type: winnerData.prizeType || '',
-                prize_value: winnerData.prizeValue || 0,
-                original_import_id: `import_${winnerData.id}`
-              }
-            }]
-          };
-          
-          const authedFetch = window.authedFetch || fetch;
-          authedFetch(`/api/agents/${encodeURIComponent(state.selectedAgent.id)}/winners/import`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          }).then(async resp => {
-            if(resp.ok) {
-                toast('تم حفظ الفائز في قاعدة البيانات', 'success');
-                const data = await resp.json();
-                const createdWinner = data.winners && data.winners[0];
-                
-                // Upload national ID image if provided
-                if (compressedFile && createdWinner && createdWinner._id) {
-                    const idImageFormData = new FormData();
-                    idImageFormData.append('id_image', compressedFile);
-                    
-                    const idImageResp = await authedFetch(`/api/winners/${createdWinner._id}/id-image`, {
-                        method: 'POST',
-                        body: idImageFormData
-                    });
-                    
-                    if (!idImageResp.ok) console.warn('Failed to upload ID image for winner', createdWinner._id);
-                    else toast('تم حفظ صورة الهوية بنجاح', 'success');
-                }
-                
-                // UPDATE LOCAL WINNER WITH DB ID
-                if (createdWinner && createdWinner._id) {
-                    const localWinner = state.winners.find(w => w.id === winnerData.id);
-                    if (localWinner) {
-                        localWinner._id = createdWinner._id;
-                        saveSession();
-                    }
-                }
-            }
-            else console.warn('Failed to save winner to DB', resp.status);
-          }).catch(err => console.error('Error saving winner to DB', err));
+        // --- الحفظ المحلي فقط في الوضع التلقائي (لن يتم الحفظ في قاعدة البيانات حتى الضغط على "اعتماد الفائزين") ---
+        if (compressedFile) {
+          winnerData.pendingIdImage = compressedFile;
+          winnerData.idImageUploaded = true;
         }
         // ------------------------------------
     
@@ -18203,10 +18946,6 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         if (idx !== -1) state.entries[idx].selected = true;
         if (!state.winners.find(w => w.id === entry.id)) {
           state.winners.push(winnerData);
-          // Increment global counter
-          if (state.activeCompetition) {
-            state.activeCompetition.currentWinners = (state.activeCompetition.currentWinners || 0) + 1;
-          }
         }
         
         // مسح الفائز من قائمة المشاركين
@@ -18221,6 +18960,11 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         renderParticipants(); renderWinners(); updateCounts(); drawWheel(); saveSession();
         state.autoRemaining--; onClose();
         updateBatchCount?.();
+        
+        // تحديث إحصائيات المسابقة في القسم العلوي
+        if (state.selectedAgent && state.selectedAgent.id) {
+          updateCompetitionStats();
+        }
         
         if(state.autoRemaining>0){ 
           setTimeout(()=> startSpin(), 400); 
@@ -18266,6 +19010,97 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         });
     }
     
+    // دالة لحفظ جميع الفائزين في قاعدة البيانات
+    async function saveAllWinnersToDatabase() {
+      if (!state.selectedAgent || !state.selectedAgent.id) {
+        throw new Error('لا يوجد وكيل محدد');
+      }
+      
+      const authedFetch = window.authedFetch || fetch;
+      
+      // تحضير بيانات جميع الفائزين
+      const winnersPayload = state.winners.map(winner => ({
+        id: `import_${winner.id}`,
+        name: winner.name,
+        account_number: winner.account || '',
+        email: winner.email || '',
+        national_id: winner.nationalId || '',
+        prize_type: winner.prizeType || '',
+        prize_value: Number(winner.prizeValue) || 0,
+        selected_at: winner.timestamp,
+        meta: {
+          email: winner.email || '',
+          national_id: winner.nationalId || '',
+          prize_type: winner.prizeType || '',
+          prize_value: Number(winner.prizeValue) || 0,
+          original_import_id: `import_${winner.id}`
+        }
+      }));
+      
+      // حفظ جميع الفائزين دفعة واحدة
+      const resp = await authedFetch(`/api/agents/${encodeURIComponent(state.selectedAgent.id)}/winners/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ winners: winnersPayload })
+      });
+      
+      if (!resp.ok) {
+        throw new Error('فشل حفظ الفائزين في قاعدة البيانات');
+      }
+      
+      const data = await resp.json();
+      const savedWinners = data.winners || [];
+      
+      // تحديث معرفات الفائزين المحلية
+      for (let i = 0; i < savedWinners.length; i++) {
+        const savedWinner = savedWinners[i];
+        const localWinner = state.winners.find(w => `import_${w.id}` === savedWinner.meta?.original_import_id);
+        
+        if (localWinner && savedWinner._id) {
+          localWinner._id = savedWinner._id;
+          
+          // رفع الفيديو إن وجد
+          if (localWinner.pendingVideoBlob) {
+            try {
+              const formData = new FormData();
+              const extension = (localWinner.recordingMimeType && localWinner.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
+              formData.append('video', localWinner.pendingVideoBlob, `winner_${savedWinner._id}.${extension}`);
+              
+              await authedFetch(`/api/winners/${savedWinner._id}/video`, {
+                method: 'POST',
+                body: formData
+              });
+              
+              delete localWinner.pendingVideoBlob;
+              delete localWinner.recordingMimeType;
+            } catch (e) {
+              console.warn('Failed to upload video for winner', savedWinner._id, e);
+            }
+          }
+          
+          // رفع صورة الهوية إن وجدت
+          if (localWinner.pendingIdImage) {
+            try {
+              const idFormData = new FormData();
+              idFormData.append('id_image', localWinner.pendingIdImage);
+              
+              await authedFetch(`/api/winners/${savedWinner._id}/id-image`, {
+                method: 'POST',
+                body: idFormData
+              });
+              
+              delete localWinner.pendingIdImage;
+            } catch (e) {
+              console.warn('Failed to upload ID image for winner', savedWinner._id, e);
+            }
+          }
+        }
+      }
+      
+      saveSession();
+      return savedWinners;
+    }
+
     async function sendWinnersReport() {
       if (!state.selectedAgent) {
         toast('يرجى اختيار وكيل أولاً', 'warning');
@@ -18275,54 +19110,99 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         toast('لا يوجد فائزين لإرسالهم', 'warning');
         return;
       }
-    
-      // Filter winners that have _id (saved to DB)
+      
+      // التحقق من وجود فائزين غير محفوظين في قاعدة البيانات، مع الحفظ التلقائي قبل الإرسال
+      let unsavedWinners = state.winners.filter(w => !w._id);
+      console.log('[sendWinnersReport] clicked:', {
+        total: state.winners.length,
+        unsaved: unsavedWinners.length,
+        agentId: state.selectedAgent && state.selectedAgent.id
+      });
+
+      if (unsavedWinners.length > 0) {
+        try {
+          console.log('[sendWinnersReport] auto-saving unsaved winners before send...', unsavedWinners);
+          toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
+          await saveAllWinnersToDatabase();
+          console.log('[sendWinnersReport] auto-save completed successfully');
+        } catch (error) {
+          console.error('[sendWinnersReport] auto-save failed:', error);
+          toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
+          return;
+        }
+      }
+
+      // Filter winners that have _id (saved to DB) بعد الحفظ التلقائي
       const validWinners = state.winners.filter(w => w._id);
+      console.log('[sendWinnersReport] valid winners to send:', validWinners.map(w => w._id));
       
       if (validWinners.length === 0) {
           toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
+          console.error('[sendWinnersReport] no winners with _id after filtering');
           return;
       }
     
       const messageText = generateWinnersMessage();
       
-      showConfirmModal(
-          `سيتم إرسال تقرير الفائزين (${validWinners.length}) إلى مجموعة الوكيل على تلجرام. هل أنت متأكد؟`,
+        // Directly send without confirmation modal
+          // Confirm before sending all winners to agent
+          showConfirmModal(
+          `سيتم إرسال جميع الفائزين (${validWinners.length}) إلى الوكيل. هل أنت متأكد من المتابعة؟`,
           async () => {
-              try {
-                  const authedFetch = window.authedFetch || fetch;
-                  const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-report`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                          winnerIds: validWinners.map(w => w._id),
-                          messageText
-                      })
-                  });
-                  
-                    if (resp.ok) {
-                      toast('تم إرسال التقرير بنجاح', 'success');
-                      // Mark report as sent to allow completion status
-                      state.reportSent = true;
-                      // Clear winners list after successful send
-                      state.winners = [];
-                      renderWinners();
-                      updateCounts();
-                      saveSession();
-                      // Redirect to agent competitions page after a short delay
-                      setTimeout(() => {
-                          window.location.href = `/pages/agent-competitions.html?agent_id=${state.selectedAgent.id}`;
-                      }, 1500);
-                  } else {
-                      const err = await resp.json();
-                      toast(`فشل الإرسال: ${err.message}`, 'error');
-                  }
-              } catch (e) {
-                  console.error(e);
-                  toast('حدث خطأ أثناء الإرسال', 'error');
-              }
+          // تعطيل الزر أثناء الإرسال
+          const sendBtn = document.getElementById('send-all-winners-btn');
+          const originalBtnText = sendBtn?.innerHTML;
+          if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.style.opacity = '0.6';
+            sendBtn.style.cursor = 'not-allowed';
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>جاري الإرسال...</span>';
           }
-      );
+          
+          try {
+          // إظهار رسالة تحميل
+          toast('جاري إرسال الفائزين إلى التليجرام...', 'info');
+          console.log('[sendWinnersReport] sending payload to API', {
+            url: `/api/agents/${state.selectedAgent.id}/send-winners-report`,
+            winnerIds: validWinners.map(w => w._id),
+            messageText
+          });
+          
+          const authedFetch = window.authedFetch || fetch;
+          const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              winnerIds: validWinners.map(w => w._id),
+              messageText
+            })
+          });
+          
+                if (resp.ok) {
+                  console.log('[sendWinnersReport] API response OK');
+                  toast('✅ تم إرسال التقرير بنجاح', 'success');
+                  // لا نقوم بعرض شريط اكتمال الاختيار من خلال الإرسال
+                  // لا نغير reportSent هنا بناءً على طلبك
+                  saveSession();
+              } else {
+            const err = await resp.json();
+            console.error('[sendWinnersReport] API error response:', err);
+            toast(`❌ فشل الإرسال: ${err.message}`, 'error');
+          }
+          } catch (e) {
+          console.error('[sendWinnersReport] unexpected error:', e);
+          toast('❌ حدث خطأ أثناء الإرسال', 'error');
+          } finally {
+            // إعادة تفعيل الزر
+            if (sendBtn && originalBtnText) {
+              sendBtn.disabled = false;
+              sendBtn.style.opacity = '1';
+              sendBtn.style.cursor = 'pointer';
+              sendBtn.innerHTML = originalBtnText;
+            }
+          }
+          }
+          );
     }
     
     async function sendWinnersDetails() {
@@ -18334,7 +19214,29 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         toast('لا يوجد فائزين لإرسال بياناتهم', 'warning');
         return;
       }
+      
+      // التحقق من وجود فائزين غير محفوظين
+      const unsavedWinners = state.winners.filter(w => !w._id);
+      console.log('[sendWinnersDetails] clicked: current winners:', {
+        total: state.winners.length,
+        unsaved: unsavedWinners.length,
+        agentId: state.selectedAgent && state.selectedAgent.id
+      });
+      if (unsavedWinners.length > 0) {
+        try {
+            console.log('[sendWinnersDetails] auto-saving unsaved winners before send...', unsavedWinners);
+            toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
+            await saveAllWinnersToDatabase();
+            console.log('[sendWinnersDetails] auto-save completed successfully');
+        } catch (error) {
+            console.error('[sendWinnersDetails] auto-save failed:', error);
+            toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
+            return;
+        }
+      }
+      
       const validWinners = state.winners.filter(w => w._id);
+      console.log('[sendWinnersDetails] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
         return;
@@ -18364,7 +19266,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             });
             if (resp.ok) {
               toast('تم إرسال بيانات الفائزين بنجاح', 'success');
-              state.reportSent = true;
+              // state.reportSent = true; // Removed to allow manual approval
               // لا نمسح الفائزين هنا بالضرورة؛ اترك التحكم لزر التقرير الكامل
             } else {
               const err = await resp.json();
@@ -18387,9 +19289,39 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         toast('لا يوجد فائزين لإرسال بياناتهم', 'warning');
         return;
       }
+      
+      // التحقق من وجود فائزين غير محفوظين
+      const unsavedWinners = state.winners.filter(w => !w._id);
+      console.log('[sendWinnersWithIDsToAgent] clicked: current winners:', {
+        total: state.winners.length,
+        unsaved: unsavedWinners.length,
+        agentId: state.selectedAgent && state.selectedAgent.id
+      });
+      if (unsavedWinners.length > 0) {
+        try {
+            console.log('[sendWinnersWithIDsToAgent] auto-saving unsaved winners before send...', unsavedWinners);
+            toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
+            await saveAllWinnersToDatabase();
+            console.log('[sendWinnersWithIDsToAgent] auto-save completed successfully');
+        } catch (error) {
+            console.error('[sendWinnersWithIDsToAgent] auto-save failed:', error);
+            toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
+            return;
+        }
+      }
+      
       const validWinners = state.winners.filter(w => w._id);
+      console.log('[sendWinnersWithIDsToAgent] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
+        return;
+      }
+
+      // Precheck: ensure each winner has ID image uploaded
+      const missingIdImages = validWinners.filter(w => !w.idImageUploaded);
+      console.log('[sendWinnersWithIDsToAgent] winners missing ID image:', missingIdImages.map(w => w._id));
+      if (missingIdImages.length > 0) {
+        toast(`يوجد ${missingIdImages.length} فائز بدون صورة هوية مرفوعة. يرجى رفع الصورة من نافذة اعتماد الفائز قبل الإرسال.`, 'warning');
         return;
       }
     
@@ -18418,7 +19350,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             });
             if (resp.ok) {
               toast('تم إرسال بيانات الفائزين إلى جروب الشركة بنجاح', 'success');
-              state.reportSent = true;
+              // state.reportSent = true; // Removed to allow manual approval
             } else {
               const err = await resp.json();
               toast(`فشل الإرسال: ${err.message}`, 'error');
@@ -18493,40 +19425,51 @@ function initQuestionSuggestions() {
     loadMySuggestions();
     setupFormSubmission();
     setupFilters();
-    checkForNotifications();
+    // checkForNotifications(); // Removed old notification check
     setupCustomCategoryToggle();
+    setupScrollObserver(); // NEW: Mark updates as seen on scroll
 }
 
 // ==========================
-// التحقق من وجود تقييمات جديدة
+// مراقبة التمرير لتحديث حالة القراءة
 // ==========================
-async function checkForNotifications() {
+function setupScrollObserver() {
+    const suggestionsList = document.getElementById('suggestionsContainer');
+    if (!suggestionsList) return;
+
+    // Create an intersection observer to detect when the list is viewed
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                markUpdatesAsSeen();
+                // Disconnect after marking as seen to avoid repeated calls
+                observer.disconnect();
+            }
+        });
+    }, { threshold: 0.1 }); // Trigger when 10% of the list is visible
+
+    observer.observe(suggestionsList);
+}
+
+// ==========================
+// تحديث حالة الإشعارات إلى "مقروءة"
+// ==========================
+async function markUpdatesAsSeen() {
     try {
-        const response = await utils.authedFetch('/api/question-suggestions/my-suggestions?status=');
-        const data = await response.json();
+        console.log('👀 [Suggestions] Marking updates as seen...');
+        const response = await utils.authedFetch('/api/question-suggestions/mark-seen', {
+            method: 'POST'
+        });
         
-        if (data.success && data.data) {
-            const unnotified = data.data.filter(s => 
-                !s.employee_notified && 
-                s.status !== 'pending' && 
-                s.evaluation && 
-                s.evaluation.feedback
-            );
-            
-            if (unnotified.length > 0) {
-                utils.showToast(`لديك ${unnotified.length} تقييم جديد على اقتراحاتك!`, 'info');
-                
-                // تحديث حالة الإشعار
-                for (const suggestion of unnotified) {
-                    // تعديل: المسار الصحيح في الراوتر هو /notify/:id وليس /mark-notified/:id
-                    await utils.authedFetch(`/api/question-suggestions/notify/${suggestion._id}`, {
-                        method: 'PUT'
-                    });
-                }
+        if (response.ok) {
+            console.log('✅ [Suggestions] Updates marked as seen');
+            // Update the global counter immediately
+            if (typeof loadGlobalUnreadCount === 'function') {
+                loadGlobalUnreadCount();
             }
         }
     } catch (error) {
-        console.error('Error checking notifications:', error);
+        console.error('❌ [Suggestions] Error marking updates as seen:', error);
     }
 }
 
@@ -18593,7 +19536,8 @@ async function loadMySuggestions(status = '') {
         const data = await response.json();
         
         if (data.success) {
-            displayMySuggestions(data.data);
+            allMySuggestions = data.data;
+            displayMySuggestions(allMySuggestions);
         }
     } catch (error) {
         console.error('Error loading suggestions:', error);
@@ -18632,14 +19576,18 @@ function displayMySuggestions(suggestions) {
     }
     const titles = {
         pending: 'قيد المراجعة',
+        needs_revision: 'تحتاج تعديل',
         approved: 'مقبولة',
-        rejected: 'مرفوضة',
-        needs_revision: 'تحتاج تعديل'
+        rejected: 'مرفوضة'
     };
+    
+    // ترتيب مخصص للعرض
+    const statusOrder = ['pending', 'needs_revision', 'approved', 'rejected'];
+    
     let html = '';
-    Object.keys(groups).forEach(status => {
+    statusOrder.forEach(status => {
         const list = groups[status];
-        if (list.length === 0) return; // لا تظهر القسم الفارغ
+        if (!list || list.length === 0) return; // لا تظهر القسم الفارغ
         html += `
             <div class="status-group ${status}" data-status="${status}">
                 <div class="status-group-header" role="button" tabindex="0" aria-expanded="true">
@@ -18655,6 +19603,27 @@ function displayMySuggestions(suggestions) {
         `;
     });
     container.innerHTML = html;
+
+    // إضافة event listeners للطي والفتح
+    document.querySelectorAll('.status-group-header').forEach(header => {
+        header.addEventListener('click', function() {
+            const body = this.nextElementSibling;
+            const icon = this.querySelector('.toggle-icon i');
+            const isExpanded = this.getAttribute('aria-expanded') === 'true';
+            
+            if (isExpanded) {
+                body.style.display = 'none';
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-left');
+                this.setAttribute('aria-expanded', 'false');
+            } else {
+                body.style.display = 'grid';
+                icon.classList.remove('fa-chevron-left');
+                icon.classList.add('fa-chevron-down');
+                this.setAttribute('aria-expanded', 'true');
+            }
+        });
+    });
 }
 
 function createSuggestionCard(suggestion) {
@@ -18798,6 +19767,9 @@ function setupFormSubmission() {
             if (category === 'other') {
                 payload.custom_category = custom_category;
             }
+            
+            console.log('🚀 [Employee Suggestion] Sending suggestion:', payload);
+            
             const response = await utils.authedFetch('/api/question-suggestions/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -18806,16 +19778,20 @@ function setupFormSubmission() {
             
             const data = await response.json();
             
+            console.log('✅ [Employee Suggestion] Server response:', data);
+            
             if (data.success) {
+                console.log('✅ [Employee Suggestion] Suggestion saved successfully with ID:', data.data?._id);
                 utils.showToast('تم إرسال الاقتراح بنجاح! سيتم مراجعته قريباً', 'success');
                 form.reset();
                 loadMyStats();
                 loadMySuggestions();
             } else {
+                console.error('❌ [Employee Suggestion] Failed to save:', data.message);
                 utils.showToast(data.message || 'حدث خطأ', 'error');
             }
         } catch (error) {
-            console.error('Error submitting suggestion:', error);
+            console.error('❌ [Employee Suggestion] Error submitting suggestion:', error);
             utils.showToast('حدث خطأ في إرسال الاقتراح', 'error');
         } finally {
             submitBtn.disabled = false;
@@ -18845,6 +19821,9 @@ function setupCustomCategoryToggle() {
 // ==========================
 // الفلاتر
 // ==========================
+let allMySuggestions = [];
+let currentStatusFilter = '';
+
 function setupFilters() {
     const filterButtons = document.querySelectorAll('.filter-btn');
     filterButtons.forEach(btn => {
@@ -18852,10 +19831,97 @@ function setupFilters() {
             filterButtons.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             
-            const status = this.dataset.status;
-            loadMySuggestions(status);
+            currentStatusFilter = this.dataset.status;
+            loadMySuggestions(currentStatusFilter);
         });
     });
+    
+    // Advanced search setup
+    const applySearchBtn = document.getElementById('applySearchBtn');
+    const resetSearchBtn = document.getElementById('resetSearchBtn');
+    const searchText = document.getElementById('searchText');
+    
+    if (applySearchBtn) {
+        applySearchBtn.addEventListener('click', () => {
+            applyAdvancedSearch();
+        });
+    }
+    
+    if (resetSearchBtn) {
+        resetSearchBtn.addEventListener('click', () => {
+            document.getElementById('searchText').value = '';
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            document.getElementById('filterCategory').value = '';
+            displayMySuggestions(allMySuggestions);
+        });
+    }
+    
+    // Real-time search on typing
+    if (searchText) {
+        searchText.addEventListener('input', debounce(() => {
+            applyAdvancedSearch();
+        }, 500));
+    }
+}
+
+// Apply advanced search
+function applyAdvancedSearch() {
+    const searchText = document.getElementById('searchText')?.value.toLowerCase().trim();
+    const dateFrom = document.getElementById('filterDateFrom')?.value;
+    const dateTo = document.getElementById('filterDateTo')?.value;
+    const category = document.getElementById('filterCategory')?.value;
+    
+    let filtered = [...allMySuggestions];
+    
+    // Filter by search text
+    if (searchText) {
+        filtered = filtered.filter(s => 
+            s.question?.toLowerCase().includes(searchText) ||
+            s.correct_answer?.toLowerCase().includes(searchText)
+        );
+    }
+    
+    // Filter by date range
+    if (dateFrom) {
+        const fromDate = new Date(dateFrom);
+        fromDate.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(s => {
+            const suggestionDate = new Date(s.createdAt);
+            suggestionDate.setHours(0, 0, 0, 0);
+            return suggestionDate >= fromDate;
+        });
+    }
+    
+    if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(s => {
+            const suggestionDate = new Date(s.createdAt);
+            return suggestionDate <= toDate;
+        });
+    }
+    
+    // Filter by category
+    if (category) {
+        filtered = filtered.filter(s => s.category === category);
+    }
+    
+    console.log('[EmployeeSuggest] Advanced search applied. Results:', filtered.length);
+    displayMySuggestions(filtered);
+}
+
+// Debounce helper function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 // ==========================
@@ -18909,17 +19975,46 @@ document.addEventListener('keydown', function(e){
 let allSuggestions = [];
 let stats = null;
 let adminSuggestionsCurrentFilter = 'pending';
+let currentUserRole = null; // Track user role
+let isSuperAdmin = false; // Track if user is super admin
 
 // ==========================
 // التهيئة عند تحميل الصفحة
 // ==========================
-function initAdminQuestionSuggestions() {
+async function initAdminQuestionSuggestions() {
     // Check if we're on the correct page
     if (!document.getElementById('adminSuggestionsContainer')) {
         return; // Not on admin-question-suggestions.html, skip initialization
     }
+    console.log('📄 [AdminSuggest] Entered Admin Question Suggestions page. Preparing to fetch data from DB...');
+    
+    // Check user permissions and get role
+    const userInfo = await checkUserAccess();
+    if (!userInfo) {
+        const appContent = document.getElementById('app-content');
+        if (appContent) {
+            appContent.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                    <h3>خطأ في التحقق من الصلاحيات</h3>
+                    <p>لم نتمكن من التحقق من صلاحياتك</p>
+                    <a href="#home" class="btn btn-primary mt-3">
+                        <i class="fas fa-home"></i> العودة للرئيسية
+                    </a>
+                </div>
+            `;
+        }
+        return;
+    }
+    
+    currentUserRole = userInfo.role;
+    isSuperAdmin = userInfo.role === 'super_admin'; // فقط السوبر أدمن له صلاحية التقييم والحذف
+    
+    // عرض جميع الاقتراحات لجميع المستخدمين (موظف، أدمن، سوبر أدمن)
+    // صلاحية التقييم والحذف: السوبر أدمن فقط
     
     loadStats();
+    loadUnreadCount(); // Load unread suggestions count for super admin
     loadAllSuggestions();
     setupFilters();
     setupEvaluationModal();
@@ -18927,19 +20022,72 @@ function initAdminQuestionSuggestions() {
 }
 
 // ==========================
+// ملاحظة: تم إزالة دالة hideAdminElements
+// لأن الصفحة أصبحت متاحة لعرض جميع الاقتراحات للجميع
+// ==========================
+// صلاحيات التقييم والحذف: السوبر أدمن فقط
+// الموظفون والأدمن: يمكنهم العرض فقط
+
+// ==========================
+// التحقق من صلاحيات المستخدم
+// ==========================
+async function checkUserAccess() {
+    try {
+        console.log('🔍 [AdminSuggest] Checking user access...');
+        const response = await utils.authedFetch('/api/auth/me');
+        console.log('🔍 [AdminSuggest] Response status:', response.status);
+        
+        if (!response.ok) {
+            console.error('❌ [AdminSuggest] Failed to get user info. Status:', response.status);
+            return null;
+        }
+        
+        const data = await response.json();
+        console.log('✅ [AdminSuggest] User data received:', data);
+        
+        // API returns user object directly, not wrapped in success/user
+        if (data && data.role) {
+            console.log('✅ [AdminSuggest] User role:', data.role, 'Name:', data.full_name);
+            return {
+                role: data.role,
+                name: data.full_name
+            };
+        }
+        
+        console.error('❌ [AdminSuggest] Invalid user data structure:', data);
+        return null;
+    } catch (error) {
+        console.error('❌ [AdminSuggest] Error checking user access:', error);
+        return null;
+    }
+}
+
+// ==========================
 // تحميل الإحصائيات
 // ==========================
 async function loadStats() {
     try {
+        console.log('📊 [AdminSuggest] Loading stats...');
         const response = await utils.authedFetch('/api/question-suggestions/all?page=1&limit=1');
+        console.log('📊 [AdminSuggest] Stats response status:', response.status);
+        
+        if (!response.ok) {
+            console.error('❌ [AdminSuggest] Failed to load stats. Status:', response.status);
+            return;
+        }
+        
         const data = await response.json();
+        console.log('📊 [AdminSuggest] Stats response data:', data);
         
         if (data.success && data.stats) {
             stats = data.stats;
+            console.log('✅ [AdminSuggest] Stats fetched from DB:', stats);
             displayStats(stats);
+        } else {
+            console.warn('⚠️ [AdminSuggest] No stats in response:', data);
         }
     } catch (error) {
-        console.error('Error loading stats:', error);
+        console.error('❌ [AdminSuggest] Error loading stats from DB:', error);
     }
 }
 
@@ -18949,6 +20097,73 @@ function displayStats(stats) {
     document.getElementById('approvedCount').textContent = stats.approved || 0;
     document.getElementById('rejectedCount').textContent = stats.rejected || 0;
     document.getElementById('revisionCount').textContent = stats.needs_revision || 0;
+
+    // Update header badge with pending count (show only if > 0)
+    const pendingBadge = document.getElementById('pendingHeaderCountBadge');
+    const pendingHeaderCount = document.getElementById('pendingHeaderCount');
+    if (pendingBadge && pendingHeaderCount) {
+        const pending = stats.pending || 0;
+        pendingHeaderCount.textContent = pending;
+        pendingBadge.style.display = pending > 0 ? 'inline-flex' : 'none';
+    }
+}
+
+// ==========================
+// تحميل عدد الاقتراحات غير المقروءة
+// ==========================
+async function loadUnreadCount() {
+    console.log('🔍 [Unread Count] isSuperAdmin:', isSuperAdmin, 'currentUserRole:', currentUserRole);
+
+    try {
+        console.log('🔍 [Unread Count] Loading unread suggestions count...');
+        
+        // Determine endpoint based on role
+        const endpoint = isSuperAdmin 
+            ? '/api/question-suggestions/unread-count' 
+            : '/api/question-suggestions/employee-unread-count';
+            
+        const response = await utils.authedFetch(endpoint);
+
+        console.log('🔍 [Unread Count] Response status:', response.status);
+
+        if (!response.ok) {
+            console.error('❌ [Unread Count] Failed to load unread count. Status:', response.status);
+            const errorText = await response.text();
+            console.error('❌ [Unread Count] Error response:', errorText);
+            return;
+        }
+
+        const data = await response.json();
+        console.log('✅ [Unread Count] Unread count response:', data);
+
+        if (data.success) {
+            const unreadCount = data.data.unreadCount || 0;
+            console.log('✅ [Unread Count] Setting count to:', unreadCount);
+            displayUnreadCount(unreadCount);
+        } else {
+            console.error('❌ [Unread Count] API returned success=false:', data);
+        }
+    } catch (error) {
+        console.error('❌ [Unread Count] Error loading unread count:', error);
+    }
+}
+
+function displayUnreadCount(count) {
+    const unreadCounter = document.getElementById('pendingHeaderCountBadge');
+    const unreadCountElement = document.getElementById('pendingHeaderCount');
+
+    if (unreadCounter && unreadCountElement) {
+        if (count > 0) {
+            unreadCountElement.textContent = count;
+            unreadCounter.style.display = 'inline-flex'; // Use inline-flex to match HTML style
+            console.log('🔔 [Unread Count] Showing unread counter with', count, 'items');
+        } else {
+            unreadCounter.style.display = 'none';
+            console.log('✅ [Unread Count] No unread suggestions, hiding counter');
+        }
+    } else {
+        console.warn('⚠️ [Unread Count] Counter elements not found in DOM');
+    }
 }
 
 // ==========================
@@ -18956,19 +20171,43 @@ function displayStats(stats) {
 // ==========================
 async function loadAllSuggestions(status = 'pending') {
     try {
-        console.log('[AdminSuggest] loadAllSuggestions status=', status);
-        const url = `/api/question-suggestions/all?status=${status}&limit=100`;
+        console.log('📥 [Admin Suggestions] Loading suggestions with status:', status);
+        // عرض جميع الاقتراحات لجميع المستخدمين
+        const url = status && status !== 'all'
+            ? `/api/question-suggestions/all?status=${status}&limit=100`
+            : `/api/question-suggestions/all?limit=100`;
+        console.log('📥 [Admin Suggestions] Fetching from:', url);
+        
         const response = await utils.authedFetch(url);
-        console.log('[AdminSuggest] fetch response status', response.status);
+        console.log('📥 [Admin Suggestions] Response status:', response.status);
+        
         const data = await response.json();
-        console.log('[AdminSuggest] suggestions received count=', data.success ? data.data.length : 'NO-DATA', data);
+        console.log('📥 [Admin Suggestions] Response data:', data);
         
         if (data.success) {
             allSuggestions = data.data;
+            console.log('✅ [Admin Suggestions] Loaded', allSuggestions.length, 'suggestions from database');
+            console.log('✅ [Admin Suggestions] Suggestions list:', allSuggestions);
+            
+            if (allSuggestions.length > 0) {
+                console.log('📋 [Admin Suggestions] First suggestion example:', {
+                    id: allSuggestions[0]._id,
+                    question: allSuggestions[0].question?.substring(0, 50) + '...',
+                    suggested_by: allSuggestions[0].suggested_by_name,
+                    status: allSuggestions[0].status,
+                    created: allSuggestions[0].createdAt
+                });
+            } else {
+                console.log('⚠️ [Admin Suggestions] No suggestions found with status:', status);
+            }
+            
             displayAllSuggestions(allSuggestions);
+            loadEmployeeList(); // Load employee dropdown after data is loaded
+        } else {
+            console.error('❌ [Admin Suggestions] Failed to load:', data.message);
         }
     } catch (error) {
-        console.error('Error loading suggestions:', error);
+        console.error('❌ [Admin Suggestions] Error loading suggestions:', error);
         utils.showToast('حدث خطأ في تحميل الاقتراحات', 'error');
     }
 }
@@ -19065,26 +20304,28 @@ function createAdminSuggestionCard(suggestion) {
                 ` : ''}
             </div>
             
-            <div class="card-footer">
-                ${canEvaluate ? `
-                    <button class="btn btn-success" data-action="evaluate" data-status="approved" data-id="${suggestion._id}">
-                        <i class="fas fa-check"></i> قبول
+            ${isSuperAdmin ? `
+                <div class="card-footer">
+                    ${canEvaluate ? `
+                        <button class="btn btn-success" data-action="evaluate" data-status="approved" data-id="${suggestion._id}">
+                            <i class="fas fa-check"></i> قبول
+                        </button>
+                        <button class="btn btn-warning" data-action="evaluate" data-status="needs_revision" data-id="${suggestion._id}">
+                            <i class="fas fa-edit"></i> يحتاج تعديل
+                        </button>
+                        <button class="btn btn-danger" data-action="evaluate" data-status="rejected" data-id="${suggestion._id}">
+                            <i class="fas fa-times"></i> رفض
+                        </button>
+                    ` : `
+                        <button class="btn btn-secondary" data-action="evaluate" data-status="${suggestion.status}" data-id="${suggestion._id}">
+                            <i class="fas fa-eye"></i> عرض التفاصيل
+                        </button>
+                    `}
+                    <button class="btn btn-outline-danger" data-action="delete" data-id="${suggestion._id}">
+                        <i class="fas fa-trash"></i> حذف
                     </button>
-                    <button class="btn btn-warning" data-action="evaluate" data-status="needs_revision" data-id="${suggestion._id}">
-                        <i class="fas fa-edit"></i> يحتاج تعديل
-                    </button>
-                    <button class="btn btn-danger" data-action="evaluate" data-status="rejected" data-id="${suggestion._id}">
-                        <i class="fas fa-times"></i> رفض
-                    </button>
-                ` : `
-                    <button class="btn btn-secondary" data-action="evaluate" data-status="${suggestion.status}" data-id="${suggestion._id}">
-                        <i class="fas fa-eye"></i> عرض التفاصيل
-                    </button>
-                `}
-                <button class="btn btn-outline-danger" data-action="delete" data-id="${suggestion._id}">
-                    <i class="fas fa-trash"></i> حذف
-                </button>
-            </div>
+                </div>
+            ` : ''}
         </div>
     `;
 }
@@ -19094,6 +20335,13 @@ function createAdminSuggestionCard(suggestion) {
 // ==========================
 function openEvaluationModal(suggestionId, status) {
     console.log('[AdminSuggest] openEvaluationModal id=', suggestionId, 'targetStatus=', status);
+    
+    // فحص صلاحية السوبر أدمن
+    if (!isSuperAdmin) {
+        utils.showToast('هذه الصلاحية متاحة للمدير العام فقط', 'error');
+        return;
+    }
+    
     const suggestion = allSuggestions.find(s => s._id === suggestionId);
     if (!suggestion) {
         console.warn('[AdminSuggest] suggestion not found in allSuggestions for id', suggestionId);
@@ -19134,6 +20382,12 @@ function setupEvaluationModal() {
         e.preventDefault();
         console.log('[AdminSuggest] evaluationForm submit triggered');
         
+        // فحص صلاحية السوبر أدمن
+        if (!isSuperAdmin) {
+            utils.showToast('هذه الصلاحية متاحة للمدير العام فقط', 'error');
+            return;
+        }
+        
         const suggestionId = document.getElementById('evalSuggestionId').value;
         const status = document.getElementById('evalStatus').value;
         const rating = parseInt(document.getElementById('evalRating').value) || null;
@@ -19149,11 +20403,15 @@ function setupEvaluationModal() {
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
         
+        const payload = { status, rating, feedback, admin_notes };
+        console.log('[AdminSuggest] Sending evaluation data:', payload);
+        console.log('[AdminSuggest] Suggestion ID:', suggestionId);
+        
         try {
             const response = await utils.authedFetch(`/api/question-suggestions/evaluate/${suggestionId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status, rating, feedback, admin_notes })
+                body: JSON.stringify(payload)
             });
             console.log('[AdminSuggest] evaluate fetch status', response.status);
             const data = await response.json();
@@ -19162,6 +20420,7 @@ function setupEvaluationModal() {
                 utils.showToast('تم تقييم الاقتراح بنجاح', 'success');
                 bootstrap.Modal.getInstance(document.getElementById('evaluationModal')).hide();
                 loadStats();
+                loadUnreadCount(); // Update unread count after evaluation
                 loadAllSuggestions(adminSuggestionsCurrentFilter);
             } else {
                 utils.showToast(data.message || 'حدث خطأ', 'error');
@@ -19179,32 +20438,58 @@ function setupEvaluationModal() {
 // ==========================
 // حذف اقتراح
 // ==========================
+let pendingDeleteId = null; // Store the ID to delete
+
 async function deleteSuggestion(suggestionId) {
     console.log('[AdminSuggest] deleteSuggestion clicked id=', suggestionId);
-    if (!confirm('هل أنت متأكد من حذف هذا الاقتراح؟')) {
+    
+    // فحص صلاحية السوبر أدمن
+    if (!isSuperAdmin) {
+        utils.showToast('هذه الصلاحية متاحة للمدير العام فقط', 'error');
         return;
     }
     
-    try {
-        const response = await utils.authedFetch(`/api/question-suggestions/${suggestionId}`, {
-            method: 'DELETE'
-        });
-        console.log('[AdminSuggest] delete fetch status', response.status);
-        const data = await response.json();
-        console.log('[AdminSuggest] delete response body', data);
-        
-        if (data.success) {
-            utils.showToast('تم حذف الاقتراح بنجاح', 'success');
-            loadStats();
-            loadAllSuggestions(adminSuggestionsCurrentFilter);
-        } else {
-            utils.showToast(data.message || 'حدث خطأ', 'error');
-        }
-    } catch (error) {
-        console.error('Error deleting suggestion:', error);
-        utils.showToast('حدث خطأ في حذف الاقتراح', 'error');
-    }
+    // Store ID and show modal
+    pendingDeleteId = suggestionId;
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    deleteModal.show();
 }
+
+// Handle confirm delete button
+document.addEventListener('DOMContentLoaded', () => {
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', async () => {
+            if (!pendingDeleteId) return;
+            
+            const deleteModal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
+            deleteModal.hide();
+            
+            try {
+                const response = await utils.authedFetch(`/api/question-suggestions/${pendingDeleteId}`, {
+                    method: 'DELETE'
+                });
+                console.log('[AdminSuggest] delete fetch status', response.status);
+                const data = await response.json();
+                console.log('[AdminSuggest] delete response body', data);
+                
+                if (data.success) {
+                    utils.showToast('تم حذف الاقتراح بنجاح', 'success');
+                    loadStats();
+                    loadUnreadCount(); // Update unread count after deletion
+                    loadAllSuggestions(adminSuggestionsCurrentFilter);
+                } else {
+                    utils.showToast(data.message || 'حدث خطأ', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting suggestion:', error);
+                utils.showToast('حدث خطأ في حذف الاقتراح', 'error');
+            } finally {
+                pendingDeleteId = null;
+            }
+        });
+    }
+});
 
 // ==========================
 // الفلاتر
@@ -19221,6 +20506,150 @@ function setupFilters() {
             loadAllSuggestions(adminSuggestionsCurrentFilter);
         });
     });
+    
+    // Advanced filters setup
+    const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+    const resetFiltersBtn = document.getElementById('resetFiltersBtn');
+    const employeeFilter = document.getElementById('employeeFilter');
+    const dateFromFilter = document.getElementById('dateFromFilter');
+    const dateToFilter = document.getElementById('dateToFilter');
+    const categoryFilter = document.getElementById('categoryFilter');
+    
+    // Apply filters button
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener('click', () => {
+            applyAdvancedFilters();
+        });
+    }
+    
+    // Reset filters button
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', () => {
+            if (employeeFilter) employeeFilter.value = '';
+            if (dateFromFilter) dateFromFilter.value = '';
+            if (dateToFilter) dateToFilter.value = '';
+            if (categoryFilter) categoryFilter.value = '';
+            loadAllSuggestions(adminSuggestionsCurrentFilter);
+        });
+    }
+    
+    // Employee filter change
+    if (employeeFilter) {
+        employeeFilter.addEventListener('change', () => {
+            applyAdvancedFilters();
+        });
+    }
+}
+
+// Load employee list from suggestions
+async function loadEmployeeList() {
+    try {
+        const employeeFilter = document.getElementById('employeeFilter');
+        if (!employeeFilter) return;
+
+        // Clear existing options except the first one (all employees)
+        while (employeeFilter.options.length > 1) {
+            employeeFilter.remove(1);
+        }
+
+        // Load ALL employees regardless of current filter status
+        const response = await utils.authedFetch('/api/question-suggestions/all?limit=1000');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                // Get unique employee names from ALL suggestions
+                const uniqueEmployees = [...new Set(data.data.map(s => s.suggested_by_name))]
+                    .filter(name => name)
+                    .sort();
+
+                // Add options to select
+                uniqueEmployees.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    employeeFilter.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error loading employee list:', error);
+    }
+}
+
+// Apply advanced filters
+async function applyAdvancedFilters() {
+    const employeeName = document.getElementById('employeeFilter')?.value.trim();
+    const dateFrom = document.getElementById('dateFromFilter')?.value;
+    const dateTo = document.getElementById('dateToFilter')?.value;
+    const category = document.getElementById('categoryFilter')?.value;
+
+    try {
+        // Load ALL suggestions regardless of current status filter
+        const response = await utils.authedFetch('/api/question-suggestions/all?limit=1000');
+        if (!response.ok) {
+            console.error('Failed to load all suggestions for filtering');
+            return;
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+            console.error('Failed to get suggestions data');
+            return;
+        }
+
+        // Update global allSuggestions so modal lookups work
+        allSuggestions = data.data;
+        let filtered = [...allSuggestions];
+
+        // Filter by employee name
+        if (employeeName) {
+            filtered = filtered.filter(s =>
+                s.suggested_by_name === employeeName
+            );
+        }
+
+        // Filter by date range
+        if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            fromDate.setHours(0, 0, 0, 0);
+            filtered = filtered.filter(s => {
+                const suggestionDate = new Date(s.createdAt);
+                suggestionDate.setHours(0, 0, 0, 0);
+                return suggestionDate >= fromDate;
+            });
+        }
+
+        if (dateTo) {
+            const toDate = new Date(dateTo);
+            toDate.setHours(23, 59, 59, 999);
+            filtered = filtered.filter(s => {
+                const suggestionDate = new Date(s.createdAt);
+                return suggestionDate <= toDate;
+            });
+        }
+
+        // Filter by category
+        if (category) {
+            filtered = filtered.filter(s => s.category === category);
+        }
+
+        console.log('[AdminSuggest] Advanced filters applied. Results:', filtered.length);
+        displayAllSuggestions(filtered);
+    } catch (error) {
+        console.error('Error applying advanced filters:', error);
+        utils.showToast('حدث خطأ في تطبيق الفلاتر', 'error');
+    }
+}// Debounce helper function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 // ==========================
@@ -19236,6 +20665,13 @@ function setupCardDelegation() {
         if (!action) return;
         const id = btn.dataset.id;
         if (!id) return;
+        
+        // Block actions for non-super admin users
+        if (!isSuperAdmin) {
+            utils.showToast('هذه الصلاحية متاحة للمدير العام فقط', 'error');
+            return;
+        }
+        
         if (action === 'evaluate') {
             const targetStatus = btn.dataset.status || 'pending';
             console.log('[AdminSuggest][Delegation] evaluate click id=', id, 'status=', targetStatus);
@@ -19296,14 +20732,30 @@ function getRatingStars(rating) {
 // ==========================
 // التهيئة عند تحميل الصفحة
 // ==========================
-document.addEventListener('DOMContentLoaded', initAdminQuestionSuggestions);
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 [AdminSuggest] DOMContentLoaded event fired');
+    console.log('🚀 [AdminSuggest] Checking for adminSuggestionsContainer...');
+    const container = document.getElementById('adminSuggestionsContainer');
+    console.log('🚀 [AdminSuggest] Container found:', !!container);
+    
+    initAdminQuestionSuggestions();
+});
 
 // جعل الدوال المستخدمة في onclick متاحة عالمياً بعد التجميع داخل IIFE
 // بسبب أن bundler يلف كل الملفات داخل (function(window){ ... }) فلا تصبح هذه الدوال على الكائن window تلقائياً
 // لذلك نُصدرها صراحة ليعمل الـ onclick داخل عناصر البطاقات
 window.openEvaluationModal = openEvaluationModal;
 window.deleteSuggestion = deleteSuggestion;
-console.log('[AdminSuggest] Global functions exposed');
+// Show this debug log only when running in development or for admin users
+try {
+    const isDev = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
+    const cachedProfile = localStorage.getItem('userProfile');
+    const role = cachedProfile ? (JSON.parse(cachedProfile).role) : null;
+    const isAdmin = role === 'admin' || role === 'super_admin';
+    if (isDev || isAdmin) {
+        console.log('[AdminSuggest] Global functions exposed');
+    }
+} catch (_) { /* noop */ }
 
 
 // == main.js ==
@@ -19443,24 +20895,32 @@ function updateUIAfterLogin(user) {
         usersNavItem.style.display = 'block';
     }
 
-    // NEW: Show/Hide Question Suggestions links based on role
+    // NEW: Show Question Suggestions links for all users
+    // جميع المستخدمين (موظف، أدمن، سوبر أدمن) يمكنهم رؤية جميع الاقتراحات
     const navQuestionsDropdownContainer = document.getElementById('nav-questions-dropdown-container');
     const navAdminQuestionSuggestions = document.getElementById('nav-admin-question-suggestions');
     
-    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
-    
     if (navQuestionsDropdownContainer) {
-        navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all employees
+        navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all users
     }
     
     if (navAdminQuestionSuggestions) {
-        navAdminQuestionSuggestions.style.display = isAdmin ? 'block' : 'none'; // Show admin link only for admins
+        navAdminQuestionSuggestions.style.display = 'block'; // Show for all authenticated users
     }
 
-    // NEW: Show/Hide Tasks & Calendar dropdown for admins only
+    // NEW: Show Tasks & Calendar dropdown for all users (employees, admins, and super admins)
     const navTasksCalendarDropdownContainer = document.getElementById('nav-tasks-calendar-dropdown-container');
     if (navTasksCalendarDropdownContainer) {
-        navTasksCalendarDropdownContainer.style.display = isAdmin ? 'block' : 'none';
+        navTasksCalendarDropdownContainer.style.display = 'block'; // Show for all authenticated users
+    }
+
+    // Load global unread suggestions counter for all roles (Super Admin & Employees)
+    if (currentUserProfile) {
+        loadGlobalUnreadCount();
+        // Live polling every 30 seconds
+        if (!window._globalUnreadInterval) {
+            window._globalUnreadInterval = setInterval(loadGlobalUnreadCount, 30000);
+        }
     }
 }
 // NEW: Router function to handle page navigation based on URL hash
@@ -19505,6 +20965,7 @@ async function handleRouting() {
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
         '#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' },
         '#analytics': { func: renderAnalyticsPage, nav: 'nav-analytics' },
+        '#admin-suggestions': { func: renderAdminSuggestionsPage, nav: 'nav-admin-question-suggestions' },
         '#statistics': { func: renderStatisticsPage, nav: 'nav-statistics' },
         '#winner-roulette': { func: renderWinnerRoulettePage, nav: 'nav-winner-roulette' }
     };
@@ -19564,6 +21025,46 @@ async function handleRouting() {
         console.error("Routing error:", err);
     } finally {
         hideLoader();
+    }
+}
+
+// ==========================
+// Admin Suggestions Page Loader
+// ==========================
+async function renderAdminSuggestionsPage() {
+    if (!window.appContent) {
+        console.error('app-content element not found!');
+        return;
+    }
+    try {
+        const response = await fetch('/pages/admin-question-suggestions.html');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const html = await response.text();
+        window.appContent.innerHTML = html;
+
+        // Dynamically import and initialize the admin suggestions page script
+        try {
+            const adminModule = await import('/js/pages/admin-question-suggestions.js');
+            if (adminModule && typeof adminModule.initAdminQuestionSuggestions === 'function') {
+                // Ensure DOM is ready before init
+                setTimeout(() => {
+                    adminModule.initAdminQuestionSuggestions();
+                }, 0);
+            } else {
+                console.warn('Admin suggestions initialization function not found, attempting fallback');
+                // Fallback: if module exports default or different name
+                if (adminModule && typeof adminModule.init === 'function') {
+                    setTimeout(() => adminModule.init(), 0);
+                }
+            }
+        } catch (e) {
+            throw e;
+        }
+    } catch (error) {
+        console.error('Failed to load admin suggestions page:', error);
+        window.appContent.innerHTML = `<p class="error-message">فشل تحميل صفحة جميع الاقتراحات: ${error.message}</p>`;
     }
 }
 
@@ -19739,6 +21240,13 @@ function setupRealtimeListeners() {
                             window.dispatchEvent(new CustomEvent('presence-update'));
                         }
                         break;
+                    
+                    case 'suggestion_update':
+                    case 'new_suggestion':
+                        console.log('🔔 [WebSocket] Received suggestion update/new suggestion');
+                        loadGlobalUnreadCount();
+                        break;
+
                     // Add other message types here
                 }
             } catch (error) {
@@ -20151,12 +21659,12 @@ function setupNavbar() {
 
     // Show/Hide dropdown based on role
     if (currentUserProfile && navQuestionsDropdownContainer) {
-        const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
+        // const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
         
         navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all employees
         
         if (navAdminQuestionSuggestionsMenu) {
-            navAdminQuestionSuggestionsMenu.style.display = isAdmin ? 'block' : 'none'; // Show admin link only for admins
+            navAdminQuestionSuggestionsMenu.style.display = 'block'; // Show admin link for all employees
         }
     }
 
@@ -20394,7 +21902,6 @@ function baseRouletteMarkup() {
                         <canvas id=\"winner-roulette-wheel\"></canvas>
                         <div class=\"wr-actions-row\">
                             <button id=\"auto-pick-btn\" class=\"wr-btn wr-btn-secondary wr-btn-large\"><i class=\"fas fa-forward\"></i> متتالي</button>
-                            <button id=\"reset-wheel\" class=\"wr-btn wr-btn-danger wr-btn-large\"><i class=\"fas fa-rotate-left\"></i> إعادة</button>
                         </div>
                     </div>
                     <small style=\"text-align:center;color:var(--wr-text-dim);\">اختيار عشوائي دون تحيز.</small>
@@ -20657,6 +22164,67 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Failed to attach fallback logout handler', e);
     }
 });
+
+// ==========================
+// Global Unread Suggestions Counter
+// ==========================
+async function loadGlobalUnreadCount() {
+    try {
+        console.log('🔍 [Global Unread Count] Loading unread suggestions count...');
+        
+        let endpoint = '';
+        if (currentUserProfile.role === 'super_admin') {
+            endpoint = '/api/question-suggestions/unread-count';
+        } else {
+            endpoint = '/api/question-suggestions/employee-unread-count';
+        }
+
+        const response = await window.utils.authedFetch(endpoint);
+
+        if (!response.ok) {
+            console.error('❌ [Global Unread Count] Failed to load unread count. Status:', response.status);
+            return;
+        }
+
+        const data = await response.json();
+        console.log('✅ [Global Unread Count] Unread count response:', data);
+
+        if (data.success) {
+            const unreadCount = data.data.unreadCount || 0;
+            displayGlobalUnreadCount(unreadCount);
+        }
+    } catch (error) {
+        console.error('❌ [Global Unread Count] Error loading unread count:', error);
+    }
+}
+
+function displayGlobalUnreadCount(count) {
+    const globalUnreadCountElement = document.getElementById('globalUnreadCount');
+
+    if (globalUnreadCountElement) {
+        if (count > 0) {
+            globalUnreadCountElement.textContent = count;
+            globalUnreadCountElement.style.display = 'inline-block';
+            console.log('🔔 [Global Unread Count] Showing global counter with', count, 'items');
+            
+            // Update click handler based on role
+            const badgeLink = globalUnreadCountElement.closest('a');
+            if (badgeLink) {
+                badgeLink.onclick = (e) => {
+                    e.preventDefault();
+                    if (currentUserProfile.role === 'super_admin') {
+                        window.location.href = '/pages/admin-question-suggestions.html';
+                    } else {
+                        window.location.href = '/pages/question-suggestions.html';
+                    }
+                };
+            }
+        } else {
+            globalUnreadCountElement.style.display = 'none';
+            console.log('✅ [Global Unread Count] No unread suggestions, hiding counter');
+        }
+    }
+}
 
 
 })(window);
