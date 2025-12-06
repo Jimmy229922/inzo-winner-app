@@ -578,6 +578,8 @@ async function renderCompetitionCreatePage(agentId) {
                         <label for="override-duration">مدة المسابقة</label>
                         <select id="override-duration">
                             <option value="" disabled>-- اختر مدة --</option>
+                            <option value="5s">5 ثواني</option>
+                            <option value="10s">10 ثواني</option>
                             <option value="1d" ${agent.competition_duration === '24h' || !agent.competition_duration || (agent.competition_duration !== '48h' && agent.competition_duration !== '168h') ? 'selected' : ''}>يوم واحد</option>
                             <option value="2d" ${agent.competition_duration === '48h' ? 'selected' : ''}>يومين</option>
                             <option value="1w" ${agent.competition_duration === '168h' ? 'selected' : ''}>أسبوع</option>
@@ -751,9 +753,17 @@ async function renderCompetitionCreatePage(agentId) {
             if (duration === '1d') daysToAdd = 1;
             else if (duration === '2d') daysToAdd = 2;
             else if (duration === '1w') daysToAdd = 7;
-            endDate.setDate(endDate.getDate() + daysToAdd);
-            const formattedEndDate = endDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            displayDuration = `من تاريخ اليوم وحتى نهاية يوم ${formattedEndDate}`;
+            else if (duration === '10s') {
+                displayDuration = 'تنتهي بعد 10 ثواني من لحظة الإرسال';
+            } else if (duration === '5s') {
+                displayDuration = 'تنتهي بعد 5 ثوانٍ من لحظة الإرسال';
+            }
+
+            if (!displayDuration) {
+                endDate.setDate(endDate.getDate() + daysToAdd);
+                const formattedEndDate = endDate.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                displayDuration = `من تاريخ اليوم وحتى نهاية يوم ${formattedEndDate}`;
+            }
         }
 
         if (displayDuration) content = content.replace(/⏳ مدة المسابقة: {{competition_duration}}/g, `⏳ مدة المسابقة:\n${displayDuration}`);
