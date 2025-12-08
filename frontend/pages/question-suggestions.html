@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>اقتراح الأسئلة - Inzo Winner</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="../images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="../images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="128x128" href="../images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="256x256" href="../images/Logo1.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="../images/Logo1.png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../css/styles.css">
@@ -73,47 +80,113 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 18px;
             margin-bottom: 30px;
         }
 
         .stat-card {
-            background: #1a1f3a;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            background: linear-gradient(135deg, #1e2442 0%, #1a1f3a 100%);
+            border-radius: 14px;
+            padding: 20px 16px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
             text-align: center;
-            transition: transform 0.3s;
-                    border: 1px solid #2a3155;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 2px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, currentColor, transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
         .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
         }
 
         .stat-card .icon {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
+            font-size: 2.8rem;
+            margin-bottom: 12px;
+            display: inline-block;
+            transition: transform 0.4s ease;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+        }
+
+        .stat-card:hover .icon {
+            transform: scale(1.15) rotate(5deg);
         }
 
         .stat-card .label {
-            color: #666;
-            font-size: 0.9rem;
-            margin-bottom: 5px;
+            color: #b0b5c9;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .stat-card .value {
-            font-size: 2rem;
-            font-weight: bold;
+            font-size: 2.2rem;
+            font-weight: 800;
             color: #fff;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
         }
 
-        .stat-card.pending .icon { color: #ffc107; }
-        .stat-card.approved .icon { color: #28a745; }
-        .stat-card.rejected .icon { color: #dc3545; }
-        .stat-card.revision .icon { color: #17a2b8; }
+        .stat-card:hover .value {
+            transform: scale(1.1);
+        }
+
+        .stat-card.pending {
+            border-color: rgba(255, 193, 7, 0.3);
+            background: linear-gradient(135deg, #2a2412 0%, #1a1f3a 100%);
+        }
+        .stat-card.pending .icon { 
+            color: #ffc107;
+            animation: pulse-pending 2s ease-in-out infinite;
+        }
+        @keyframes pulse-pending {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .stat-card.approved {
+            border-color: rgba(40, 167, 69, 0.3);
+            background: linear-gradient(135deg, #1a2e1f 0%, #1a1f3a 100%);
+        }
+        .stat-card.approved .icon { 
+            color: #28a745;
+        }
+
+        .stat-card.rejected {
+            border-color: rgba(220, 53, 69, 0.3);
+            background: linear-gradient(135deg, #2e1a1f 0%, #1a1f3a 100%);
+        }
+        .stat-card.rejected .icon { 
+            color: #dc3545;
+        }
+
+        .stat-card.revision {
+            border-color: rgba(23, 162, 184, 0.3);
+            background: linear-gradient(135deg, #1a2a2e 0%, #1a1f3a 100%);
+        }
+        .stat-card.revision .icon { 
+            color: #17a2b8;
+        }
 
         .suggestion-form {
             background: #1a1f3a;
@@ -164,6 +237,139 @@
             resize: vertical;
         }
 
+        /* Search Action Buttons */
+        .btn-search-action {
+            padding: 12px 28px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-search-action::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn-search-action:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-search-action i {
+            font-size: 1.1rem;
+            transition: transform 0.3s ease;
+        }
+
+        .btn-search-action span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .btn-search-apply {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-search-apply:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-search-apply:hover i {
+            transform: scale(1.15);
+        }
+
+        .btn-search-apply:active {
+            transform: translateY(0);
+        }
+
+        .btn-search-reset {
+            background: linear-gradient(135deg, #fc6c8f 0%, #f093fb 100%);
+            color: white;
+        }
+
+        .btn-search-reset:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(252, 108, 143, 0.4);
+        }
+
+        .btn-search-reset:hover i {
+            transform: rotate(180deg);
+        }
+
+        .btn-search-reset:active {
+            transform: translateY(0);
+        }
+
+        /* Category Select Styling */
+        .category-label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .category-label i {
+            color: #667eea;
+            font-size: 1.1rem;
+        }
+
+        .category-select {
+            padding: 12px 16px;
+            border: 2px solid transparent;
+            border-radius: 10px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
+        }
+
+        .category-select:focus {
+            border-color: transparent;
+            box-shadow: 0 0 0 0.2rem rgba(17, 153, 142, 0.25), 0 6px 20px rgba(17, 153, 142, 0.4);
+            outline: none;
+            transform: translateY(-2px);
+        }
+
+        .category-select:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(17, 153, 142, 0.4);
+            background: linear-gradient(135deg, #0f8577 0%, #32d66f 100%);
+        }
+
+        .category-select option {
+            padding: 10px;
+            font-weight: 600;
+            background: white;
+            color: #333;
+        }
+
+        .category-select option:checked {
+            background: #11998e;
+            color: white;
+        }
+
         .btn-submit {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -179,50 +385,110 @@
             transform: scale(1.05);
         }
 
+        /* Status Groups */
+        .status-group {
+            margin-bottom: 30px;
+        }
+
+        .status-group-header {
+            background: linear-gradient(135deg, #1e2442 0%, #1a1f3a 100%);
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #fff;
+            border: 2px solid #2a3155;
+            transition: all 0.3s ease;
+        }
+
+        .status-group-header:hover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+        }
+
+        .status-group-header .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .status-group-header .count {
+            margin-right: auto;
+            background: rgba(255,255,255,0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .status-group-body {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            transition: all 0.3s ease;
+            padding: 10px 0;
+        }
+
         .suggestions-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        /* Status Groups */
+        .status-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .status-group:nth-child(4) {
+            grid-column: span 3;
         }
 
         .suggestion-card {
             background: #1a1f3a;
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             overflow: hidden;
-                        border: 1px solid #2a3155;
-            transition: transform 0.3s;
+            border: 1px solid #2a3155;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
         }
 
         .suggestion-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+            transform: translateY(-4px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.4);
         }
 
         .suggestion-card .card-header {
-            padding: 15px 20px;
-            border-bottom: 2px solid #2a3155;
+            padding: 12px 16px;
+            border-bottom: 1px solid #2a3155;
             background: #141937;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 0.85rem;
         }
 
         .suggestion-card .date {
             color: #999;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
         }
 
         .suggestion-card .card-body {
-            padding: 20px;
+            padding: 16px;
         }
 
         .question-text {
             background: #0f1429;
-            padding: 15px;
+            padding: 12px;
             border-radius: 8px;
-            margin-bottom: 15px;
-            font-size: 1.05rem;
+            margin-bottom: 12px;
+            font-size: 0.9rem;
             color: #e0e0e0;
             border-right: 4px solid #667eea;
         }
@@ -232,11 +498,53 @@
 
         .answer-text {
             background: #1a2f1a;
-            padding: 15px;
+            padding: 12px;
             border-radius: 8px;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             color: #4caf50;
             border-right: 4px solid #4caf50;
+            font-size: 0.9rem;
+        }
+
+        /* Custom Modal Styles */
+        .custom-modal {
+            background: #1a1f3a;
+            border: 1px solid #2a3155;
+            color: #e0e0e0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        .custom-modal .modal-header {
+            border-bottom: 1px solid #2a3155;
+            background: linear-gradient(135deg, #141937 0%, #0f1429 100%);
+        }
+        
+        .custom-modal .modal-title {
+            color: #ffd54f;
+            font-weight: 600;
+        }
+        
+        .custom-input {
+            background: #0f1429;
+            border: 1px solid #2a3155;
+            color: #e0e0e0;
+        }
+        
+        .custom-input:focus {
+            background: #141937;
+            border-color: #667eea;
+            color: #fff;
+            box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .custom-alert {
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            color: #d0d4e6;
+        }
+        
+        .custom-alert i {
+            color: #667eea;
         }
         .answer-text strong {
             color: #4caf50;
@@ -244,9 +552,9 @@
 
         .status-badge {
             display: inline-block;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
+            padding: 5px 12px;
+            border-radius: 18px;
+            font-size: 0.8rem;
             font-weight: 600;
         }
 
@@ -268,6 +576,49 @@
         .status-badge.needs-revision {
             background: #d1ecf1;
             color: #0c5460;
+        }
+
+        /* Section Header Fancy */
+        .section-header-fancy {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .section-header-fancy .header-icon {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            color: white;
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .section-header-fancy:hover .header-icon {
+            transform: rotate(5deg) scale(1.05);
+            box-shadow: 0 12px 28px rgba(102, 126, 234, 0.5);
+        }
+
+        .section-header-fancy .header-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fff;
+            margin: 0;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .section-header-fancy .header-line {
+            flex: 1;
+            height: 3px;
+            background: linear-gradient(90deg, rgba(102, 126, 234, 0.6) 0%, transparent 100%);
+            border-radius: 2px;
         }
 
         .evaluation-section {
@@ -314,7 +665,7 @@
         }
 
         @media (max-width: 768px) {
-            .suggestions-container {
+            .status-group-body {
                 grid-template-columns: 1fr;
             }
             
@@ -342,8 +693,8 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link pill-link active" href="question-suggestions.html">
-                            <i class="fas fa-lightbulb"></i> اقتراح الأسئلة
+                        <a class="nav-link pill-link" href="admin-question-suggestions.html">
+                            <i class="fas fa-tasks"></i> إدارة اقتراحات الأسئلة
                         </a>
                     </li>
                 </ul>
@@ -379,6 +730,65 @@
                 <div class="icon"><i class="fas fa-edit"></i></div>
                 <div class="label">تحتاج تعديل</div>
                 <div class="value" id="statRevision">0</div>
+            </div>
+        </div>
+
+        <!-- Advanced Search & Filters -->
+        <div class="suggestion-form mb-4">
+            <h5 class="mb-3">
+                <i class="fas fa-filter"></i>
+                البحث والتصفية المتقدمة
+            </h5>
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label for="searchText" class="form-label">
+                        <i class="fas fa-search"></i> البحث في الأسئلة
+                    </label>
+                    <input type="text" 
+                           id="searchText" 
+                           class="form-control" 
+                           placeholder="ابحث في نص السؤال...">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="filterDateFrom" class="form-label">
+                        <i class="fas fa-calendar-alt"></i> من تاريخ
+                    </label>
+                    <input type="date" 
+                           id="filterDateFrom" 
+                           class="form-control">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="filterDateTo" class="form-label">
+                        <i class="fas fa-calendar-check"></i> إلى تاريخ
+                    </label>
+                    <input type="date" 
+                           id="filterDateTo" 
+                           class="form-control">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="filterCategory" class="form-label category-label">
+                        <i class="fas fa-tag"></i> التصنيف
+                    </label>
+                    <select id="filterCategory" class="form-select category-select">
+                        <option value="">-- جميع التصنيفات --</option>
+                        <option value="trading">تداولية</option>
+                        <option value="interactive">تفاعلية</option>
+                        <option value="company_features">مميزات الشركة</option>
+                        <option value="educational">تعليمية</option>
+                        <option value="highlight_site">تبرز الموقع</option>
+                        <option value="other">اخري</option>
+                    </select>
+                </div>
+            </div>
+            <div class="d-flex gap-3 mt-3">
+                <button type="button" id="applySearchBtn" class="btn-search-action btn-search-apply">
+                    <i class="fas fa-search"></i>
+                    <span>تطبيق البحث</span>
+                </button>
+                <button type="button" id="resetSearchBtn" class="btn-search-action btn-search-reset">
+                    <i class="fas fa-redo-alt"></i>
+                    <span>إعادة تعيين</span>
+                </button>
             </div>
         </div>
 
@@ -422,11 +832,12 @@
                                 <i class="fas fa-tag"></i> التصنيف
                             </label>
                             <select class="form-control" id="category" name="category">
-                                <option value="general">عام</option>
-                                <option value="technical">تقني</option>
-                                <option value="trading">تداول</option>
-                                <option value="market">سوق</option>
-                                <option value="other">أخرى</option>
+                                <option value="trading">تداولية</option>
+                                <option value="interactive">تفاعلية</option>
+                                <option value="company_features">مميزات الشركة</option>
+                                <option value="educational">تعليمية</option>
+                                <option value="highlight_site">تبرز الموقع</option>
+                                <option value="other">اخري</option>
                             </select>
                         </div>
                     </div>
@@ -478,11 +889,83 @@
 
         <!-- My Suggestions -->
         <div class="my-suggestions-section">
-            <h2 style="margin-bottom: 20px;">
-                <i class="fas fa-list"></i> اقتراحاتي
-            </h2>
+            <div class="section-header-fancy">
+                <div class="header-icon">
+                    <i class="fas fa-list"></i>
+                </div>
+                <h2 class="header-title">اقتراحاتي</h2>
+                <div class="header-line"></div>
+            </div>
             <div id="suggestionsContainer" class="suggestions-container">
                 <!-- Will be populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Suggestion Modal -->
+    <div class="modal fade" id="editSuggestionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content custom-modal">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-edit"></i> تعديل الاقتراح</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editSuggestionForm">
+                        <input type="hidden" id="editSuggestionId">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">السؤال <span class="text-danger">*</span></label>
+                            <textarea class="form-control custom-input" id="editQuestion" rows="3" required></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">الإجابة الصحيحة <span class="text-danger">*</span></label>
+                            <textarea class="form-control custom-input" id="editAnswer" rows="2" required></textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">التصنيف</label>
+                                <select class="form-select custom-input" id="editCategory">
+                                    <option value="trading">تداولية</option>
+                                    <option value="interactive">تفاعلية</option>
+                                    <option value="company_features">مميزات الشركة</option>
+                                    <option value="educational">تعليمية</option>
+                                    <option value="highlight_site">تبرز الموقع</option>
+                                    <option value="other">اخري</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">الصعوبة</label>
+                                <select class="form-select custom-input" id="editDifficulty">
+                                    <option value="easy">سهل</option>
+                                    <option value="medium">متوسط</option>
+                                    <option value="hard">صعب</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3" id="editCustomCategoryGroup" style="display:none;">
+                            <label class="form-label">اسم التصنيف المخصص</label>
+                            <input type="text" class="form-control custom-input" id="editCustomCategory">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">ملاحظات إضافية</label>
+                            <textarea class="form-control custom-input" id="editNotes" rows="2"></textarea>
+                        </div>
+
+                        <div class="alert alert-info custom-alert">
+                            <i class="fas fa-info-circle"></i> عند حفظ التعديلات، سيتم إعادة إرسال الاقتراح للمراجعة مرة أخرى.
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">إلغاء</button>
+                            <button type="submit" class="btn btn-warning">حفظ وإعادة إرسال</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -490,5 +973,36 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../js/utils.js"></script>
     <script src="../js/pages/question-suggestions.js"></script>
+    <script>
+        (function setupFaviconDebug() {
+            const logSizes = () => {
+                try {
+                    const favicons = document.querySelectorAll('link[rel="icon"][href*="Logo1"]');
+                    if (!favicons.length) {
+                        console.warn('[Favicon Debug] لم يتم العثور على أي روابط للأيقونة');
+                        return;
+                    }
+                    favicons.forEach((link) => {
+                        const img = new Image();
+                        img.onload = function () {
+                            console.log(`[Favicon Debug] الحجم الفعلي: ${this.naturalWidth}x${this.naturalHeight} - ${link.href}`);
+                        };
+                        img.onerror = function () {
+                            console.error('[Favicon Debug] تعذر تحميل الأيقونة', link.href);
+                        };
+                        img.src = link.href;
+                    });
+                } catch (err) {
+                    console.error('[Favicon Debug] خطأ أثناء تتبع الأيقونة', err);
+                }
+            };
+
+            if (document.readyState === 'complete') {
+                logSizes();
+            } else {
+                window.addEventListener('load', logSizes, { once: true });
+            }
+        })();
+    </script>
 </body>
 </html>

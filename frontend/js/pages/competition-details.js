@@ -90,7 +90,7 @@ async function loadCompetitionDetails(competitionId) {
             throw new Error('لم يتم العثور على رمز المصادقة');
         }
 
-        const response = await fetch(`http://localhost:30001/api/competitions/${competitionId}`, {
+        const response = await fetch(`/api/competitions/${competitionId}`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,

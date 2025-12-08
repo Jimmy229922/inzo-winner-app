@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أرشيف الاقتراحات - Inzo Winner</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        /* Pills Navigation Custom */
+        .nav-pills-custom .pill-link {
+            background: #141937;
+            margin-left: .75rem;
+            border-radius: 30px;
+            padding: 8px 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #d0d4e6 !important;
+            border: 1px solid #2a3155;
+            transition: background .25s, color .25s, box-shadow .25s;
+        }
+        .nav-pills-custom .pill-link:hover {
+            background: #1f2647;
+            color: #fff !important;
+            box-shadow: 0 0 0 2px rgba(102,118,234,.3);
+        }
+        .nav-pills-custom .pill-link.active {
+            background: linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+            color: #fff !important;
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102,118,234,.4);
+        }
+        .navbar-brand {
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .navbar-brand i { color: #ffd54f; }
+
+        body {
+            background: #0a0e27;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        .admin-page {
+            padding: 30px 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+        }
+
+        .page-header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+        }
+
+        .admin-suggestion-card {
+            background: linear-gradient(135deg, #1a1f3a 0%, #141937 100%);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4), 0 0 0 1px rgba(42, 49, 85, 0.5);
+            margin-bottom: 25px;
+            overflow: hidden;
+            border-right: 6px solid #6c757d; /* Gray for archived */
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+
+        .admin-suggestion-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5), 0 0 0 1px rgba(108, 117, 125, 0.3);
+        }
+
+        .admin-suggestion-card .card-header {
+            padding: 18px 24px;
+            background: linear-gradient(135deg, #141937 0%, #0f1429 100%);
+            border-bottom: 2px solid #2a3155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+        }
+
+        .employee-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+
+        .employee-info .date {
+            font-size: 0.85rem;
+            color: #999;
+            font-weight: normal;
+        }
+
+        .badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .category-badge, .difficulty-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .category-badge {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            color: #1976d2;
+            border-color: #1976d2;
+        }
+
+        .difficulty-badge.easy {
+            background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+            color: #2e7d32;
+            border-color: #2e7d32;
+        }
+
+        .difficulty-badge.medium {
+            background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%);
+            color: #f57f17;
+            border-color: #f57f17;
+        }
+
+        .difficulty-badge.hard {
+            background: linear-gradient(135deg, #ffcdd2 0%, #ef9a9a 100%);
+            color: #c62828;
+            border-color: #c62828;
+        }
+
+        .admin-suggestion-card .card-body {
+            padding: 24px;
+            background: linear-gradient(135deg, rgba(26, 31, 58, 0.8) 0%, rgba(20, 25, 55, 0.8) 100%);
+        }
+
+        .section-title {
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .question-text {
+            background: linear-gradient(135deg, #0f1429 0%, #1a1f3a 100%);
+            padding: 18px;
+            border-radius: 12px;
+            color: #e0e0e0;
+            border-right: 5px solid #667eea;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .answer-text {
+            background: linear-gradient(135deg, #1a2f1a 0%, #2d4a2d 100%);
+            padding: 18px;
+            border-radius: 12px;
+            color: #4caf50;
+            border-right: 5px solid #4caf50;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .previous-evaluation {
+            background: linear-gradient(135deg, #2a2410 0%, #3d3520 100%);
+            padding: 18px;
+            border-radius: 12px;
+            margin-top: 18px;
+            border: 1px solid #3d3520;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            position: relative;
+        }
+
+        .rating-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            font-size: 1.2rem;
+        }
+
+        .feedback-text {
+            color: #666;
+            margin: 10px 0;
+        }
+
+        .reviewer-info {
+            font-size: 0.85rem;
+            color: #999;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .status-badge.approved { background: #28a745; color: white; }
+        .status-badge.rejected { background: #dc3545; color: white; }
+        .status-badge.needs_revision { background: #17a2b8; color: white; }
+        .status-badge.pending { background: #ffc107; color: black; }
+
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="../index.html">
+                <i class="fas fa-trophy"></i> Inzo Winner
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto nav-pills-custom">
+                    <li class="nav-item">
+                        <a class="nav-link pill-link" href="../index.html">
+                            <i class="fas fa-home"></i> الرئيسية
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pill-link" href="admin-question-suggestions.html">
+                            <i class="fas fa-list-check"></i> إدارة الاقتراحات
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="admin-page">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h2 id="pageTitle"><i class="fas fa-archive"></i> أرشيف الاقتراحات</h2>
+            <p id="pageSubtitle">عرض الاقتراحات المؤرشفة</p>
+            <div class="mt-3 text-center">
+                <a href="admin-question-suggestions.html" class="btn btn-outline-light">
+                    <i class="fas fa-arrow-right"></i> العودة للاقتراحات النشطة
+                </a>
+            </div>
+        </div>
+
+        <!-- Suggestions Container -->
+        <div id="archivedSuggestionsContainer">
+            <!-- Will be populated by JS -->
+            <div class="text-center py-5">
+                <i class="fas fa-spinner fa-spin fa-3x text-muted"></i>
+                <p class="mt-3 text-muted">جاري التحميل...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/pages/archived-suggestions.js"></script>
+</body>
+</html>

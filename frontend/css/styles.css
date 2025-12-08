@@ -150,6 +150,12 @@
     font-weight: 700;
     font-size: 0.8rem; /* Smaller, more professional */
     box-shadow: 0 4px 10px rgba(245, 158, 11, 0.25);
+    z-index: 1;
+}
+
+.wr-winner-card-name {
+    position: relative;
+    z-index: 2;
 }
 
 .section-title-v2 {

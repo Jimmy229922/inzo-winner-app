@@ -573,6 +573,7 @@ async function fetchAnalyticsData(filter) {
         let url = '/api/analytics';
     dlog && dlog('DEBUG: fetchAnalyticsData - initial filter:', filter);
         const qp = new URLSearchParams();
+        qp.append('_t', Date.now()); // Cache busting
 
         if (filter) {
             if (typeof filter === 'object') {
@@ -1415,6 +1416,15 @@ function renderGrantedBalances(data) {
         showError(grantedBalancesError, '', false);
     }
 
+    // Debug Log for Granted Balances
+    console.log('%c[Analytics] Granted Balances Update:', 'color: #00ff00; font-weight: bold; font-size: 12px;');
+    console.log('Trading Bonus Data:', data.trading_bonus);
+    console.log('Total Amount:', data.trading_bonus?.total_amount);
+    console.log('Winners Count:', data.trading_bonus?.winners_count);
+    console.log('Breakdown:', data.trading_bonus?.breakdown);
+    console.log('[Deposit Bonus] Raw details from DB:', data.deposit_bonus_details);
+    console.log('[Deposit Bonus] Totals by band:', (data.deposit_bonus || []).map(b => ({ value: b.bonus_value ?? b.percentage, winners: b.winners_count })));
+
     // Update trading bonus
     if (tradingBonusAmount) {
         tradingBonusAmount.textContent = `$${data.trading_bonus?.total_amount?.toLocaleString() || 0}`;
@@ -1423,32 +1433,46 @@ function renderGrantedBalances(data) {
         tradingBonusWinners.textContent = data.trading_bonus?.winners_count || 0;
     }
 
-    // Update deposit bonus table - show only percentages that have winners (>0), hide unused
+    // Remove trading bonus breakdown controls per latest requirement
+    document.getElementById('toggleTradingBreakdown')?.remove();
+    document.getElementById('tradingBonusBreakdownContainer')?.remove();
+
+    // Update deposit bonus table - show aggregated list
     if (depositBonusTableBody) {
-        const fixedArray = Array.isArray(data.deposit_bonus) ? data.deposit_bonus : [];
-        const dynamicArray = Array.isArray(data.deposit_bonus_dynamic) ? data.deposit_bonus_dynamic : [];
+        const details = Array.isArray(data.deposit_bonus_details) ? data.deposit_bonus_details : [];
+        const REQUIRED_PERCENTAGES = [40, 50, 60, 75, 85, 90, 95, 100];
+        const percentTotals = details.reduce((acc, item) => {
+            const rawValue = typeof item.bonus_value === 'string' ? parseFloat(item.bonus_value) : item.bonus_value;
+            if (!Number.isFinite(rawValue)) {
+                return acc;
+            }
+            const winners = Number(item.total_winners) || 0;
+            acc[rawValue] = (acc[rawValue] || 0) + winners;
+            return acc;
+        }, {});
 
-        // Merge dynamic first (authoritative), then add fixed if missing
-        const combined = new Map(); // percentage -> winners_count
-        dynamicArray.forEach(d => {
-            const p = Number(d.percentage);
-            const c = Number(d.winners_count) || 0;
-            if (p && c > 0) combined.set(p, c);
-        });
-        fixedArray.forEach(d => {
-            const p = Number(d.percentage);
-            const c = Number(d.winners_count) || 0;
-            if (p && c > 0 && !combined.has(p)) combined.set(p, c);
+        const normalizedRows = [];
+        REQUIRED_PERCENTAGES.forEach((pct) => {
+            normalizedRows.push({ bonus_value: pct, total_winners: percentTotals[pct] || 0, required: true });
+            delete percentTotals[pct];
         });
 
-        // Build sorted rows
-        const entries = Array.from(combined.entries()).sort((a, b) => a[0] - b[0]);
-        let rowsHtml = '';
-        if (entries.length === 0) {
-            rowsHtml = `<tr><td colspan=\"2\" class=\"no-deposit-winners\">لا يوجد فائزون ببونص الإيداع في الفترة المحددة.</td></tr>`;
-        } else {
-            rowsHtml = entries.map(([p, c]) => `<tr><td>${c}</td><td>${p}%</td></tr>`).join('');
-        }
+        Object.keys(percentTotals)
+            .map((key) => Number(key))
+            .filter((pct) => Number.isFinite(pct))
+            .sort((a, b) => a - b)
+            .forEach((pct) => {
+                normalizedRows.push({ bonus_value: pct, total_winners: percentTotals[pct] || 0, required: false });
+            });
+
+        const rowsHtml = normalizedRows.map((item) => `
+            <tr>
+                <td style="font-weight:bold; color:#10b981;">
+                    ${item.bonus_value}%${item.required ? '' : ' *'}
+                </td>
+                <td>${item.total_winners}</td>
+            </tr>
+        `).join('');
 
         const tableWrapper = depositBonusTableBody.closest('.deposit-bonus-table');
         if (tableWrapper) tableWrapper.style.display = 'block';
@@ -1608,6 +1632,11 @@ function renderCompetitionPerformanceChart(data) {
 }
 
 
+// Global variables for Rank Changes Pagination
+let allRankChangesData = [];
+let currentRankChangesPage = 1;
+const RANK_CHANGES_PER_PAGE = 7;
+
 // Function to fetch and render agent rank changes
 async function fetchAndRenderRankChanges(filter) {
     const rankChangesTableBody = document.getElementById('rankChangesTableBody');
@@ -1620,7 +1649,7 @@ async function fetchAndRenderRankChanges(filter) {
     
     try {
         // Build query params
-        let url = '/api/stats/rank-changes?limit=50';
+        let url = '/api/stats/rank-changes?limit=100'; // Increased limit to fetch more for client-side pagination
         
         if (filter) {
             if (typeof filter === 'object') {
@@ -1648,130 +1677,227 @@ async function fetchAndRenderRankChanges(filter) {
         }
         
         const result = await response.json();
-        const rankChanges = result.rankChanges || [];
+        allRankChangesData = result.rankChanges || [];
+        currentRankChangesPage = 1; // Reset to first page
         
-        if (rankChanges.length === 0) {
-            rankChangesTableBody.innerHTML = `
-                <tr>
-                    <td colspan="10" style="text-align: center; padding: 30px;">
-                        <i class="fas fa-info-circle" style="font-size: 48px; color: #95a5a6; margin-bottom: 10px;"></i>
-                        <p style="color: #7f8c8d; font-size: 16px;">لا توجد تغييرات في المراتب خلال هذه الفترة</p>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        
-        // Check if user is super_admin
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const isSuperAdmin = currentUser.role === 'super_admin';
-        
-        // Render table rows with truncated reason/action and click-to-expand
-        rankChangesTableBody.innerHTML = rankChanges.map((change, index) => {
-            const date = new Date(change.createdAt);
-            const formattedDate = date.toLocaleDateString('ar-EG', {
-                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
-            const truncate = (text, max=50) => {
-                if (!text) return '';
-                const t = String(text);
-                return t.length > max ? t.slice(0, max) + '…' : t;
-            };
-            const esc = (s='') => String(s)
-                .replace(/&/g,'&amp;')
-                .replace(/</g,'&lt;')
-                .replace(/>/g,'&gt;')
-                .replace(/"/g,'&quot;')
-                .replace(/'/g,'&#39;');
-            const classification = change.classification || change.agent_classification || change.class || 'غير محدد';
-            const classificationSlug = classification ? classification.toString().trim().toLowerCase() : 'unknown';
-            
-            // Determine if this is a rank change or classification change
-            const isClassificationChange = change.change_type === 'classification';
-            
-            let changeDisplay = '';
-            if (isClassificationChange) {
-                // Display classification change
-                changeDisplay = `
-                    <td colspan="2" style="text-align: center;">
-                        <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
-                            <span class="classification-badge classification-${(change.old_classification || '').toLowerCase()}">${esc(change.old_classification || 'غير محدد')}</span>
-                            <i class="fas fa-arrow-left" style="color: #4fa3ff;"></i>
-                            <span class="classification-badge classification-${(change.new_classification || '').toLowerCase()}">${esc(change.new_classification || 'غير محدد')}</span>
-                        </div>
-                        <div style="font-size: 11px; color: #7f8c8d; margin-top: 4px;">تغيير التصنيف</div>
-                    </td>
-                `;
-            } else {
-                // Display rank change
-                changeDisplay = `
-                    <td><span class="rank-badge rank-old">${esc(change.old_rank)}</span></td>
-                    <td><span class="rank-badge rank-new">${esc(change.new_rank)}</span></td>
-                `;
-            }
-            
-            return `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td><strong>${esc(change.agent_name)}</strong></td>
-                    <td>${esc(change.agent_number)}</td>
-                    <td><span class="classification-badge classification-${classificationSlug}">${esc(classification)}</span></td>
-                    ${changeDisplay}
-                    <td><div class="reason-cell" data-fulltext="${esc(change.reason)}">${truncate(change.reason, 60)}</div></td>
-                    <td><div class="action-cell" data-fulltext="${esc(change.action_taken)}">${truncate(change.action_taken, 60)}</div></td>
-                    <td style="white-space: nowrap;">${formattedDate}</td>
-                    <td style="text-align: center;">
-                        <button class="btn btn-danger btn-sm delete-rank-change-btn" data-change-id="${change._id}" title="حذف هذا التغيير">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        renderRankChangesPage(currentRankChangesPage);
 
-        // Attach click handlers for expanding full text
-        rankChangesTableBody.querySelectorAll('.reason-cell, .action-cell').forEach(el => {
-            el.style.cursor = 'pointer';
-            el.title = 'انقر لعرض النص كاملًا';
-            el.addEventListener('click', () => {
-                const full = el.getAttribute('data-fulltext') || '';
-                const label = el.classList.contains('reason-cell') ? 'السبب' : 'الإجراء';
-                if (typeof showConfirmationModal === 'function') {
-                    const styled = `
-                        <div class="dark-expand-modal-wrapper">
-                            <div class="dark-expand-modal">
-                                <div class="dark-expand-modal-header">
-                                    <i class="fas fa-align-left" style="color:#4fa3ff"></i>${label} الكامل
-                                </div>
-                                <div class="dark-expand-modal-body">
-                                    <pre>${full}</pre>
-                                </div>
-                            </div>
-                        </div>`;
-                    showConfirmationModal(styled, async () => true, { title: '', confirmText: '<i class="fas fa-times"></i> إغلاق', showCancel: false });
-                } else { alert(full); }
-            });
-        });
-        
-        // Attach delete button handlers
-        rankChangesTableBody.querySelectorAll('.delete-rank-change-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const changeId = btn.getAttribute('data-change-id');
-                await handleDeleteRankChange(changeId, filter);
-            });
-        });
-        
     } catch (error) {
+        console.error('Error fetching rank changes:', error);
+        if (rankChangesError) {
+            showError(rankChangesError, 'حدث خطأ أثناء جلب البيانات', true);
+        }
+        if (rankChangesTableBody) {
+            rankChangesTableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:red;">فشل تحميل البيانات</td></tr>`;
+        }
+    }
+}
+
+function renderRankChangesPage(page) {
+    const rankChangesTableBody = document.getElementById('rankChangesTableBody');
+    if (!rankChangesTableBody) return;
+
+    if (allRankChangesData.length === 0) {
         rankChangesTableBody.innerHTML = `
             <tr>
-                <td colspan="10" style="text-align: center; padding: 30px; color: #e74c3c;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 10px;"></i>
-                    <p>${error.message}</p>
+                <td colspan="10" style="text-align: center; padding: 30px;">
+                    <i class="fas fa-info-circle" style="font-size: 48px; color: #95a5a6; margin-bottom: 10px;"></i>
+                    <p style="color: #7f8c8d; font-size: 16px;">لا توجد تغييرات في المراتب خلال هذه الفترة</p>
                 </td>
             </tr>
         `;
+        renderRankChangesPaginationControls();
+        return;
     }
+
+    const startIndex = (page - 1) * RANK_CHANGES_PER_PAGE;
+    const endIndex = startIndex + RANK_CHANGES_PER_PAGE;
+    const pageData = allRankChangesData.slice(startIndex, endIndex);
+
+    // Check if user is super_admin
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const isSuperAdmin = currentUser.role === 'super_admin';
+    
+    // Render table rows with truncated reason/action and click-to-expand
+    rankChangesTableBody.innerHTML = pageData.map((change, index) => {
+        const globalIndex = startIndex + index + 1;
+        const date = new Date(change.createdAt);
+        const formattedDate = date.toLocaleDateString('ar-EG', {
+            year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        const truncate = (text, max=50) => {
+            if (!text) return '';
+            const t = String(text);
+            return t.length > max ? t.slice(0, max) + '…' : t;
+        };
+        const esc = (s='') => String(s)
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#39;');
+        const classification = change.classification || change.agent_classification || change.class || 'غير محدد';
+        const classificationSlug = classification ? classification.toString().trim().toLowerCase() : 'unknown';
+        
+        // Determine if this is a rank change or classification change
+        const isClassificationChange = change.change_type === 'classification';
+        
+        // Ensure we have valid strings for ranks
+        const oldRank = change.old_rank ? String(change.old_rank) : '---';
+        const newRank = change.new_rank ? String(change.new_rank) : '---';
+
+        let changeDisplay = '';
+        if (isClassificationChange) {
+            // Display classification change from → to (Reversed for RTL: New <- Old)
+            changeDisplay = `
+                <td colspan="2" style="text-align: center;">
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
+                        <span class="classification-badge classification-${(change.old_classification || '').toLowerCase()}">${esc(change.old_classification || 'غير محدد')}</span>
+                        <i class="fas fa-arrow-left" style="color: #4fa3ff;"></i>
+                        <span class="classification-badge classification-${(change.new_classification || '').toLowerCase()}">${esc(change.new_classification || 'غير محدد')}</span>
+                    </div>
+                    <div style="font-size: 11px; color: #7f8c8d; margin-top: 4px;">تغيير التصنيف</div>
+                </td>
+            `;
+        } else {
+            // Display rank change - Using inline styles to debug visibility
+            changeDisplay = `
+                <td colspan="2" style="text-align: center; vertical-align: middle;">
+                    <span style="color: #2ecc71; font-weight: bold; padding: 4px 8px; background: rgba(46, 204, 113, 0.1); border-radius: 4px;">${newRank}</span>
+                    <i class="fas fa-arrow-left" style="color: #7f8c8d; margin: 0 8px;"></i>
+                    <span style="color: #e74c3c; font-weight: bold; padding: 4px 8px; background: rgba(231, 76, 60, 0.1); border-radius: 4px;">${oldRank}</span>
+                </td>
+            `;
+        }
+        
+        return `
+            <tr>
+                <td>${globalIndex}</td>
+                <td><strong>${esc(change.agent_name)}</strong></td>
+                <td>${esc(change.agent_number)}</td>
+                <td><span class="classification-badge classification-${classificationSlug}">${esc(classification)}</span></td>
+                ${changeDisplay}
+                <td><div class="reason-cell" data-fulltext="${esc(change.reason)}">${truncate(change.reason, 60)}</div></td>
+                <td><div class="action-cell" data-fulltext="${esc(change.action_taken)}">${truncate(change.action_taken, 60)}</div></td>
+                <td style="white-space: nowrap;">${formattedDate}</td>
+                <td style="text-align: center;">
+                    <button class="btn btn-danger btn-sm delete-rank-change-btn" data-change-id="${change._id}" title="حذف هذا التغيير">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    // Attach click handlers for expanding full text
+    rankChangesTableBody.querySelectorAll('.reason-cell, .action-cell').forEach(el => {
+        el.style.cursor = 'pointer';
+        el.title = 'انقر لعرض النص كاملًا';
+        el.addEventListener('click', () => {
+            const full = el.getAttribute('data-fulltext') || '';
+            const label = el.classList.contains('reason-cell') ? 'السبب' : 'الإجراء';
+            if (typeof showConfirmationModal === 'function') {
+                const styled = `
+                    <div class="dark-expand-modal-wrapper">
+                        <div class="dark-expand-modal">
+                            <div class="dark-expand-modal-header">
+                                <i class="fas fa-align-left" style="color:#4fa3ff"></i>${label} الكامل
+                            </div>
+                            <div class="dark-expand-modal-body">
+                                <pre>${full}</pre>
+                            </div>
+                        </div>
+                    </div>`;
+                showConfirmationModal(styled, async () => true, { title: '', confirmText: '<i class="fas fa-times"></i> إغلاق', showCancel: false });
+            } else { alert(full); }
+        });
+    });
+
+    // Attach delete handlers
+    rankChangesTableBody.querySelectorAll('.delete-rank-change-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const changeId = btn.getAttribute('data-change-id');
+            if (!changeId) return;
+            
+            const confirmDelete = await new Promise(resolve => {
+                if (typeof showConfirmationModal === 'function') {
+                    showConfirmationModal('هل أنت متأكد من حذف هذا السجل؟', async () => {
+                        resolve(true);
+                    }, { title: 'تأكيد الحذف', confirmText: 'حذف', cancelText: 'إلغاء' });
+                } else {
+                    resolve(confirm('هل أنت متأكد من حذف هذا السجل؟'));
+                }
+            });
+
+            if (confirmDelete) {
+                try {
+                    const res = await fetchWithAuth(`/api/stats/rank-changes/${changeId}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        showToast('تم حذف السجل بنجاح', 'success');
+                        // Remove from local data and re-render
+                        allRankChangesData = allRankChangesData.filter(item => item._id !== changeId);
+                        renderRankChangesPage(currentRankChangesPage);
+                    } else {
+                        showToast('فشل حذف السجل', 'error');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('حدث خطأ أثناء الحذف', 'error');
+                }
+            }
+        });
+    });
+
+    renderRankChangesPaginationControls();
+}
+
+function renderRankChangesPaginationControls() {
+    const table = document.getElementById('rankChangesTable');
+    if (!table) return;
+    
+    let paginationContainer = document.getElementById('rankChangesPagination');
+    if (!paginationContainer) {
+        paginationContainer = document.createElement('div');
+        paginationContainer.id = 'rankChangesPagination';
+        paginationContainer.className = 'pagination-controls';
+        paginationContainer.style.cssText = 'display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px; direction: ltr;';
+        table.parentNode.insertAdjacentElement('afterend', paginationContainer);
+    }
+
+    const totalPages = Math.ceil(allRankChangesData.length / RANK_CHANGES_PER_PAGE);
+    
+    if (totalPages <= 1) {
+        paginationContainer.style.display = 'none';
+        return;
+    }
+
+    paginationContainer.style.display = 'flex';
+    paginationContainer.innerHTML = `
+        <button id="nextRankPage" class="btn btn-secondary btn-sm" ${currentRankChangesPage === totalPages ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+            التالي <i class="fas fa-chevron-right"></i>
+        </button>
+        <span style="font-weight: bold; color: var(--text-primary-color);">
+            صفحة ${currentRankChangesPage} من ${totalPages}
+        </span>
+        <button id="prevRankPage" class="btn btn-secondary btn-sm" ${currentRankChangesPage === 1 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+            <i class="fas fa-chevron-left"></i> السابق
+        </button>
+    `;
+
+    document.getElementById('prevRankPage')?.addEventListener('click', () => {
+        if (currentRankChangesPage > 1) {
+            currentRankChangesPage--;
+            renderRankChangesPage(currentRankChangesPage);
+        }
+    });
+
+    document.getElementById('nextRankPage')?.addEventListener('click', () => {
+        if (currentRankChangesPage < totalPages) {
+            currentRankChangesPage++;
+            renderRankChangesPage(currentRankChangesPage);
+        }
+    });
 }
 
 // Function to update all charts and table with performance optimization
@@ -1969,7 +2095,7 @@ async function renderComparisonView() {
                 const r2 = list2.find(d=>d.percentage==p)?.winners_count||0;
                 const diff = r1 - r2;
                 const cls = diff>0?'positive':diff<0?'negative':'neutral';
-                return `<tr><td>${r1}</td><td>${p}%</td><td class="comparison ${cls}">${r2}</td><td class="diff ${cls}">${diff>=0?'+':''}${diff}</td></tr>`;
+                return `<tr><td>${p}%</td><td class="comparison ${cls}">${r1}</td><td class="comparison ${cls}">${r2}</td><td class="diff ${cls}">${diff>=0?'+':''}${diff}</td></tr>`;
             }).join('');
             depositBonusTableBody.innerHTML = rows || '<tr><td colspan="4">لا يوجد فائزون في أي فترة.</td></tr>';
         } else {
@@ -2730,8 +2856,8 @@ const fetchAndRenderAgentsCompetitions = (classification = 'all') => {
             
             if (!latestComp) return '';
             
-            // اختصار السؤال
-            const questionText = latestComp.description || latestComp.name || 'غير متوفر';
+            // اختصار السؤال - استخدام الاسم (السؤال) بدلاً من الوصف (القالب الكامل)
+            const questionText = latestComp.name || latestComp.description || 'غير متوفر';
             const shortQuestion = questionText.length > 50 
                 ? questionText.substring(0, 50) + '...' 
                 : questionText;

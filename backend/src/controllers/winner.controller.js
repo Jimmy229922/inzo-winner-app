@@ -6,10 +6,16 @@ const Competition = require('../models/Competition');
 exports.getWinnersByAgent = async (req, res) => {
     try {
         const { agentId } = req.params;
+        const { competition_id } = req.query;
         if (!agentId) return res.status(400).json({ message: 'agentId is required' });
 
+        let query = { agent_id: agentId };
+        if (competition_id) {
+            query.competition_id = competition_id;
+        }
+
         // Find winners for this agent and populate competition info (name + description as question)
-        const winners = await Winner.find({ agent_id: agentId })
+        const winners = await Winner.find(query)
             .populate('competition_id', 'name description')
             .lean();
 
@@ -29,9 +35,11 @@ exports.getWinnersByAgent = async (req, res) => {
                 id: String(w._id),
                 name: w.name,
                 account_number: w.account_number,
-                    email: w.email,
-                    national_id: w.national_id,
-                    national_id_image: w.national_id_image,
+                email: w.email,
+                national_id: w.national_id,
+                national_id_image: w.national_id_image,
+                prize_type: w.prize_type, // Include prize_type
+                prize_value: w.prize_value, // Include prize_value
                 selected_at: w.selected_at,
                 video_url: w.video_url, // Include video_url
                 meta: w.meta
@@ -242,5 +250,45 @@ exports.uploadWinnerIdImage = async (req, res) => {
     } catch (err) {
         console.error('Failed to upload winner ID image:', err);
         res.status(500).json({ message: 'Server error uploading ID image' });
+    }
+};
+
+// PUT /api/winners/:id
+exports.updateWinner = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        
+        // Prevent updating immutable fields if necessary, but for now allow editing details
+        // Map frontend fields to backend fields if needed, or assume payload matches schema
+        // Frontend sends: name, account_number, email, prize_type, prize_value
+        
+        const allowedUpdates = ['name', 'account_number', 'email', 'national_id', 'prize_type', 'prize_value', 'meta'];
+        const updateData = {};
+        
+        Object.keys(updates).forEach(key => {
+            if (allowedUpdates.includes(key)) {
+                updateData[key] = updates[key];
+            }
+        });
+
+        // Also update meta if provided or merge it
+        if (updates.meta) {
+            updateData.meta = updates.meta;
+        }
+
+        const winner = await Winner.findByIdAndUpdate(id, updateData, { new: true });
+
+        if (!winner) {
+            return res.status(404).json({ message: 'Winner not found' });
+        }
+
+        res.json({ 
+            message: 'Winner updated successfully',
+            winner
+        });
+    } catch (err) {
+        console.error('Failed to update winner:', err);
+        res.status(500).json({ message: 'Server error updating winner' });
     }
 };

@@ -100,13 +100,12 @@ exports.getHomeStats = async (req, res) => {
             top_agents,
             competitions_today_hourly
         ] = await Promise.all([
-            Agent.countDocuments({ status: 'Active' }),
+            Agent.countDocuments(), // Count all agents (no status field exists)
             Competition.countDocuments({ is_active: true }),
             Competition.countDocuments({ createdAt: { $gte: startOfToday, $lt: endOfToday } }),
             Agent.countDocuments({ createdAt: { $gte: startOfMonth } }),
             Agent.aggregate([
-                { $match: { status: 'Active' } },
-                { $group: { _id: '$classification', count: { $sum: 1 } } }
+                { $group: { _id: '$classification', count: { $sum: 1 } } } // Count all agents by classification
             ]),
             Agent.find({ audit_days: { $in: [dayOfWeekIndex] } }).select('name agent_id classification avatar_url').lean(),
             Agent.aggregate([
@@ -123,7 +122,7 @@ exports.getHomeStats = async (req, res) => {
                 },
                 { $project: { _id: 1, 'tasks.audited': 1, 'tasks.competition_sent': 1 } }
             ]),
-            Agent.find({ status: 'Active' }).sort({ rank: 1 }).limit(5).select('name agent_id avatar_url').lean(),
+            Agent.find({}).sort({ rank: 1 }).limit(5).select('name agent_id avatar_url').lean(), // Get top 5 agents (no status filter)
             Competition.find({ createdAt: { $gte: startOfToday, $lt: endOfToday } }).select('createdAt').lean()
         ]);
 
@@ -166,11 +165,7 @@ async function getKpiData(dateFilter) {
     return { 
         total_competitions_sent, 
         new_agents_in_period, 
-        total_activities,
-        granted_balances: 'لا يوجد بيانات', // يمكن تحديثها لاحقاً من قاعدة البيانات
-        trading_bonus: 540, // القيمة الافتراضية
-        number_of_winners: 18, // القيمة الافتراضية
-        deposit_bonus: 'لا يوجد أي بيانات' // لا توجد بيانات حالياً
+        total_activities
     };
 }
 
@@ -210,7 +205,7 @@ async function getMostFrequentCompetitions(dateFilter) {
  * @returns {Promise<Array>}
  */
 async function getCompetitionsByDay(dateFilter) {
-    const arabicDays = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const arabicDays = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
     
     const results = await Competition.aggregate([
         { $match: dateFilter },
@@ -224,11 +219,14 @@ async function getCompetitionsByDay(dateFilter) {
     ]);
 
     // Convert to array with Arabic day names
-    // MongoDB dayOfWeek: 1=Sunday, 2=Monday, ..., 7=Saturday
-    const dayData = new Array(7).fill(0);
+    // MongoDB dayOfWeek: 1=Sunday, 2=Monday, ..., 6=Friday (Saturday removed)
+    const dayData = new Array(6).fill(0);
     results.forEach(item => {
         const dayIndex = item._id - 1; // Convert to 0-based index
-        dayData[dayIndex] = item.count;
+        // Only include Sunday (0) to Friday (5), ignore Saturday (6)
+        if (dayIndex >= 0 && dayIndex <= 5) {
+            dayData[dayIndex] = item.count;
+        }
     });
 
     return arabicDays.map((day, index) => ({
@@ -388,154 +386,138 @@ async function getCompletedCompetitions(dateFilter) {
  */
 async function getGrantedBalances(dateFilter) {
     try {
-        const range = dateFilter?.createdAt || null;
-        const dateMatch = range ? { 
-            $or: [ 
-                { processed_at: range },
-                { ends_at: range } 
-            ] 
-        } : {};
+        // --- 1. Trading Bonus (Updated Logic: based on creation/sending) ---
+        // User Requirement: Update immediately upon sending (createdAt)
+        // We use the passed dateFilter which is already based on createdAt
+        const tradingDateMatch = dateFilter || {};
 
-        console.log('=== getGrantedBalances Debug ===');
-        console.log('Date Filter:', dateFilter);
-        console.log('Date Match:', dateMatch);
-
-        // Debug: Check what competitions match our filter
-        const allCompetitions = await Competition.find({
-            status: 'completed'
-        }).select('name deposit_winners_count deposit_bonus_percentage processed_at');
-        
-        console.log('All completed competitions:', allCompetitions.map(c => ({
-            name: c.name,
-            deposit_winners_count: c.deposit_winners_count,
-            deposit_bonus_percentage: c.deposit_bonus_percentage,
-            processed_at: c.processed_at
-        })));
-
-        const results = await Competition.aggregate([
+        const tradingResults = await Competition.aggregate([
             {
                 $match: {
-                    status: { $in: ['completed', 'awaiting_winners'] },
-                    ...dateMatch
+                    status: { $in: ['completed', 'awaiting_winners', 'active', 'sent'] },
+                    ...tradingDateMatch
                 }
             },
             {
                 $group: {
                     _id: null,
-                    // Trading bonus: sum across all completed/awaiting competitions regardless of deposit winners
                     trading_bonus_total: { $sum: { $ifNull: ['$total_cost', 0] } },
-                    trading_bonus_winners: { $sum: { $ifNull: ['$winners_count', 0] } },
-                    // Deposit bonus: count by deposit_bonus_percentage from competition
-                    deposit_40: { 
+                    // FIX: Use trading_winners_count as primary source, fallback to winners_count
+                    trading_bonus_winners: { 
                         $sum: { 
-                            $cond: [
-                                { $eq: [{ $ifNull: ['$deposit_bonus_percentage', 0] }, 40] },
-                                { $ifNull: ['$deposit_winners_count', 0] },
-                                0
-                            ]
-                        }
-                    },
-                    deposit_50: { 
-                        $sum: { 
-                            $cond: [
-                                { $eq: [{ $ifNull: ['$deposit_bonus_percentage', 0] }, 50] },
-                                { $ifNull: ['$deposit_winners_count', 0] },
-                                0
-                            ]
-                        }
-                    },
-                    deposit_60: { 
-                        $sum: { 
-                            $cond: [
-                                { $eq: [{ $ifNull: ['$deposit_bonus_percentage', 0] }, 60] },
-                                { $ifNull: ['$deposit_winners_count', 0] },
-                                0
-                            ]
-                        }
-                    },
-                    deposit_75: { 
-                        $sum: { 
-                            $cond: [
-                                { $eq: [{ $ifNull: ['$deposit_bonus_percentage', 0] }, 75] },
-                                { $ifNull: ['$deposit_winners_count', 0] },
-                                0
-                            ]
-                        }
-                    },
-                    deposit_85: { 
-                        $sum: { 
-                            $cond: [
-                                { $eq: [{ $ifNull: ['$deposit_bonus_percentage', 0] }, 85] },
-                                { $ifNull: ['$deposit_winners_count', 0] },
-                                0
-                            ]
-                        }
+                            $max: [
+                                { $ifNull: ['$trading_winners_count', 0] }, 
+                                { $ifNull: ['$winners_count', 0] }
+                            ] 
+                        } 
                     }
                 }
             }
         ]);
-
-        // Dynamic deposit breakdown by any percentage present
-        const dynamicBreakdown = await Competition.aggregate([
+        
+        // --- 1.1 Trading Bonus Breakdown by Agent ---
+        const tradingBreakdown = await Competition.aggregate([
             {
                 $match: {
-                    status: { $in: ['completed', 'awaiting_winners'] },
-                    ...dateMatch,
-                    deposit_winners_count: { $gt: 0 }
+                    status: { $in: ['completed', 'awaiting_winners', 'active', 'sent'] },
+                    total_cost: { $gt: 0 },
+                    ...tradingDateMatch
                 }
             },
             {
                 $group: {
-                    _id: { $ifNull: ['$deposit_bonus_percentage', 0] },
-                    winners_count: { $sum: { $ifNull: ['$deposit_winners_count', 0] } }
+                    _id: '$agent_id',
+                    total_amount: { $sum: '$total_cost' },
+                    competitions_count: { $sum: 1 }
                 }
             },
-            { $sort: { _id: 1 } },
+            {
+                $lookup: {
+                    from: 'agents',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'agent'
+                }
+            },
+            { $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
             {
                 $project: {
-                    _id: 0,
-                    percentage: '$_id',
-                    winners_count: 1
+                    agent_name: { $ifNull: ['$agent.name', 'غير معروف'] },
+                    total_amount: 1,
+                    competitions_count: 1
                 }
-            }
+            },
+            { $sort: { total_amount: -1 } }
         ]);
 
-        const data = results.length > 0 ? results[0] : {
-            trading_bonus_total: 0,
-            trading_bonus_winners: 0,
-            deposit_40: 0,
-            deposit_50: 0,
-            deposit_60: 0,
-            deposit_75: 0,
-            deposit_85: 0
-        };
+        // --- 2. Deposit Bonus (New Logic: based on creation/sending) ---
+        // User Requirement: Record when competition is sent (createdAt), not when winners are selected.
+        // Display as a detailed list.
+        
+        // Use the original dateFilter which filters by createdAt
+        const depositDateMatch = dateFilter?.createdAt ? { createdAt: dateFilter.createdAt } : {};
 
-        console.log('Aggregation Results:', data);
+        // Modified query to include competitions with either explicit percentage OR explicit winners count
+        // This ensures old competitions (before the percentage fix) are also included if they had deposit winners
+        const depositCompetitions = await Competition.find({
+            ...depositDateMatch,
+            $or: [
+                { deposit_bonus_percentage: { $gt: 0 } },
+                { deposit_winners_count: { $gt: 0 } }
+            ]
+        })
+        .select('deposit_bonus_percentage deposit_winners_count createdAt agent_id')
+        .populate('agent_id', 'name agent_id deposit_bonus_percentage') // Fetch agent percentage as fallback
+        .sort({ createdAt: -1 })
+        .lean();
+
+        // Aggregate by bonus value
+        const aggregationMap = {};
+
+        depositCompetitions.forEach(comp => {
+            // Use competition percentage if available, otherwise fallback to agent's current percentage
+            const bonusValue = comp.deposit_bonus_percentage || comp.agent_id?.deposit_bonus_percentage || 0;
+            const winners = comp.deposit_winners_count || 0;
+            
+            if (!aggregationMap[bonusValue]) {
+                aggregationMap[bonusValue] = 0;
+            }
+            aggregationMap[bonusValue] += winners;
+        });
+
+        const depositBonusDetails = Object.entries(aggregationMap).map(([bonus, totalWinners]) => ({
+            bonus_value: Number(bonus),
+            total_winners: totalWinners
+        })).sort((a, b) => b.bonus_value - a.bonus_value);
+
+        const tradingData = tradingResults.length > 0 ? tradingResults[0] : {
+            trading_bonus_total: 0,
+            trading_bonus_winners: 0
+        };
 
         const response = {
             trading_bonus: {
-                total_amount: data.trading_bonus_total || 0,
-                winners_count: data.trading_bonus_winners || 0
+                total_amount: tradingData.trading_bonus_total || 0,
+                winners_count: tradingData.trading_bonus_winners || 0,
+                breakdown: tradingBreakdown
             },
-            deposit_bonus: [
-                { percentage: 40, winners_count: data.deposit_40 || 0 },
-                { percentage: 50, winners_count: data.deposit_50 || 0 },
-                { percentage: 60, winners_count: data.deposit_60 || 0 },
-                { percentage: 75, winners_count: data.deposit_75 || 0 },
-                { percentage: 85, winners_count: data.deposit_85 || 0 }
-            ],
-            deposit_bonus_dynamic: dynamicBreakdown
+            deposit_bonus_details: depositBonusDetails,
+            // Legacy fields (populated for compatibility)
+            deposit_bonus: depositBonusDetails.map(d => ({
+                percentage: d.bonus_value,
+                winners_count: d.total_winners
+            })),
+            deposit_bonus_dynamic: []
         };
-
-        console.log('Final Response:', response);
-        console.log('=================================');
 
         return response;
     } catch (error) {
         console.error('Error fetching granted balances:', error);
         return {
             trading_bonus: { total_amount: 0, winners_count: 0 },
-            deposit_bonus: []
+            deposit_bonus_details: [],
+            deposit_bonus: [],
+            deposit_bonus_dynamic: []
         };
     }
 }
@@ -566,10 +548,6 @@ async function getWeeklyExcellence(dateFilter) {
         const previousWeekEnd = new Date(currentWeekStart);
         previousWeekEnd.setDate(currentWeekStart.getDate() - 1);
         previousWeekEnd.setHours(23, 59, 59, 999);
-
-        console.log('=== getWeeklyExcellence Debug ===');
-        console.log('Current Week:', currentWeekStart, 'to', currentWeekEnd);
-        console.log('Previous Week:', previousWeekStart, 'to', previousWeekEnd);
 
         // Fetch current week data
         const currentWeekData = await Competition.aggregate([
@@ -641,9 +619,6 @@ async function getWeeklyExcellence(dateFilter) {
                 )
             }
         };
-
-        console.log('Weekly Excellence Response:', response);
-        console.log('=================================');
 
         return response;
     } catch (error) {
@@ -747,11 +722,6 @@ exports.getTopAgents = async (req, res) => {
             matchStage.classification = classification;
         }
 
-        console.log('='.repeat(80));
-        console.log('[TOP AGENTS DEBUG] Match stage:', matchStage);
-        console.log('[TOP AGENTS DEBUG] Fetching agents without status filter');
-        console.log('='.repeat(80));
-
         const topAgents = await Agent.aggregate([
             { $match: matchStage },
             {
@@ -768,10 +738,68 @@ exports.getTopAgents = async (req, res) => {
                     total_views: { $sum: '$competitions.views_count' },
                     total_reactions: { $sum: '$competitions.reactions_count' },
                     total_participants: { $sum: '$competitions.participants_count' },
-                    total_winners: { $sum: '$competitions.winners_count' }
+                    total_winners: { $sum: '$competitions.winners_count' },
+                    // Calculate compliance stats
+                    compliance_stats: {
+                        $reduce: {
+                            input: '$competitions',
+                            initialValue: { compliant: 0, total: 0 },
+                            in: {
+                                $cond: [
+                                    { $and: [
+                                        { $ifNull: ['$$this.processed_at', false] },
+                                        { $ifNull: ['$$this.ends_at', false] }
+                                    ]},
+                                    {
+                                        compliant: {
+                                            $add: [
+                                                '$$value.compliant',
+                                                {
+                                                    $cond: [
+                                                        { $lte: [
+                                                            { $subtract: ['$$this.processed_at', '$$this.ends_at'] },
+                                                            172800000 // 2 days in ms
+                                                        ]},
+                                                        1,
+                                                        0
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        total: { $add: ['$$value.total', 1] }
+                                    },
+                                    '$$value'
+                                ]
+                            }
+                        }
+                    }
                 }
             },
-            { $sort: { rank: 1, competition_count: -1 } },
+            {
+                $addFields: {
+                    compliance_rate: {
+                        $cond: [
+                            { $gt: ['$compliance_stats.total', 0] },
+                            { $multiply: [{ $divide: ['$compliance_stats.compliant', '$compliance_stats.total'] }, 100] },
+                            0
+                        ]
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    // Performance Score: Views(1) + Reactions(2) + Participants(3) + (ComplianceRate * 100)
+                    performance_score: {
+                        $add: [
+                            { $multiply: ['$total_views', 1] },
+                            { $multiply: ['$total_reactions', 2] },
+                            { $multiply: ['$total_participants', 3] },
+                            { $multiply: ['$compliance_rate', 100] }
+                        ]
+                    }
+                }
+            },
+            { $sort: { performance_score: -1 } },
             { $limit: parseInt(limit) || 10 },
             {
                 $project: {
@@ -785,20 +813,12 @@ exports.getTopAgents = async (req, res) => {
                     total_views: 1,
                     total_reactions: 1,
                     total_participants: 1,
-                    total_winners: 1
+                    total_winners: 1,
+                    compliance_rate: 1,
+                    performance_score: 1
                 }
             }
         ]);
-
-        console.log('='.repeat(80));
-        console.log('[TOP AGENTS DEBUG] Number of agents found:', topAgents.length);
-        console.log('[TOP AGENTS DEBUG] Response structure:', {
-            hasData: true,
-            dataType: Array.isArray(topAgents) ? 'Array' : typeof topAgents,
-            dataLength: topAgents.length,
-            firstAgent: topAgents[0] || 'No agents'
-        });
-        console.log('='.repeat(80));
 
         res.json({ data: topAgents });
     } catch (error) {
@@ -817,15 +837,14 @@ exports.getCompetitionsByDayOfWeek = async (req, res) => {
         const { dayOfWeek } = req.params;
         const { from, to, range } = req.query;
 
-        // Map Arabic day names to MongoDB dayOfWeek values (1=Sunday...7=Saturday)
+        // Map Arabic day names to MongoDB dayOfWeek values (1=Sunday...6=Friday, Saturday removed)
         const dayMapping = {
             'الأحد': 1,
             'الاثنين': 2,
             'الثلاثاء': 3,
             'الأربعاء': 4,
             'الخميس': 5,
-            'الجمعة': 6,
-            'السبت': 7
+            'الجمعة': 6
         };
 
         const dayNumber = dayMapping[dayOfWeek];
@@ -1173,7 +1192,11 @@ exports.getAgentsCompetitions = async (req, res) => {
                         complianceDetails.actual_confirmation_date = processedDate;
 
                         // Check if processed on the same day as ends_at OR the day after
-                        if (processedDate.getTime() === endsDate.getTime() || processedDate.getTime() === dayAfterEnds.getTime()) {
+                        // FIX: Allow processing on the same day as ends_at, or up to 2 days after
+                        const twoDaysAfterEnds = new Date(endsDate);
+                        twoDaysAfterEnds.setDate(twoDaysAfterEnds.getDate() + 2);
+
+                        if (processedDate.getTime() >= endsDate.getTime() && processedDate.getTime() <= twoDaysAfterEnds.getTime()) {
                             complianceDetails.winners_confirmed_on_time = true;
                             complianceDetails.confirmation_status = 'on_time';
                             isCompliant = true;

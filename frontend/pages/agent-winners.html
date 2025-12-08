@@ -306,6 +306,34 @@
             color: var(--text-secondary);
             font-size: 0.8em;
         }
+        
+        /* Prize Type Badge Styles */
+        .prize-type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            font-weight: 700;
+            border: 1px solid;
+        }
+        
+        .prize-type-badge.prize-deposit {
+            background: linear-gradient(135deg, rgba(78,205,196,0.15), rgba(78,205,196,0.25));
+            color: #14b8a6;
+            border-color: rgba(78,205,196,0.4);
+        }
+        
+        .prize-type-badge.prize-trading {
+            background: linear-gradient(135deg, rgba(69,183,209,0.15), rgba(69,183,209,0.25));
+            color: #0ea5e9;
+            border-color: rgba(69,183,209,0.4);
+        }
+        
+        .prize-type-badge i {
+            font-size: 1.1em;
+        }
 
         .winner-actions {
             display: flex;
@@ -437,9 +465,68 @@
         .btn-secondary:hover { filter: brightness(0.98); }
         .btn-danger { background: #ef4444; color: #fff; border: none; }
         .btn-danger:hover { filter: brightness(0.95); }
+
+        /* Agent Top Bar */
+        .agent-top-bar {
+            background: white;
+            padding: 15px 30px;
+            margin-bottom: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        body.dark-mode .agent-top-bar {
+            background: var(--card-bg, #1e293b);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+
+        .nav-container {
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        body.dark-mode .nav-btn {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-color, #e2e8f0);
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            background: #e5e7eb;
+        }
+
+        body.dark-mode .nav-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
     </style>
 </head>
 <body class="dark-mode">
+    <nav class="agent-top-bar">
+        <div class="nav-container">
+            <a href="../index.html" class="nav-btn">
+                <i class="fas fa-home"></i> الرئيسية
+            </a>
+            <a href="../index.html#winner-roulette" class="nav-btn">
+                <i class="fas fa-trophy"></i> اختيار الفائزين
+            </a>
+        </div>
+    </nav>
     <div id="main-content" class="agent-winners-page">
         <!-- Hero Section -->
         <div class="agent-winners-hero">
@@ -471,6 +558,11 @@
                     <button id="sendWinnersDetailsBtn" class="action-btn send-details-btn" style="background: linear-gradient(135deg, #0ea5e9, #0284c7);">
                         <i class="fas fa-id-card"></i> إرسال الهوية والكليشة للوكيل
                     </button>
+                    <div class="competition-select-box" style="margin-left: 10px; min-width: 200px;">
+                        <select id="competitionFilter" style="width: 100%; padding: 14px; border-radius: 14px; border: 2px solid rgba(99,102,241,0.2); background: rgba(99,102,241,0.05); color: var(--text-color); font-size: 15px; outline: none;">
+                            <option value="all">كل المسابقات</option>
+                        </select>
+                    </div>
                     <div class="search-box">
                         <i class="fas fa-search"></i>
                         <input type="text" id="searchWinners" placeholder="بحث في الفائزين...">
@@ -487,6 +579,7 @@
                             <th>البريد الإلكتروني</th>
                             <th>رقم الهوية</th>
                             <th>صورة الهوية</th>
+                            <th>نوع الجائزة</th>
                             <th>المسابقة</th>
                             <th>سؤال المسابقة</th>
                             <th>تاريخ الفوز</th>
@@ -523,6 +616,6 @@
     </div>
 
     <script src="../js/utils.js"></script>
-    <script src="../js/pages/agent-winners.js"></script>
+    <script src="../js/pages/agent-winners.js?v=1.2"></script>
     </body>
 </html>

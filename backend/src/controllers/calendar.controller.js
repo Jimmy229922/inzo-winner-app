@@ -9,23 +9,30 @@ const Task = require('../models/Task');
  */
 exports.getCalendarData = async (req, res) => {
     try {
-        // 1. جلب الوكلاء الذين لديهم مهام مجدولة فقط
-        // --- إصلاح: جلب الوكلاء الذين لديهم أيام تدقيق محددة فقط ---
-        // هذا يضمن أن القائمة تحتوي فقط على الوكلاء ذوي الصلة بالتقويم، مما يحل مشكلة عدم تطابق الأعداد.
+        // 1. جلب جميع الوكلاء النشطين
+        // --- إصلاح: إزالة شرط أيام التدقيق للسماح بعرض جميع الوكلاء ---
         const agents = await Agent.find({ 
-            status: { $ne: 'inactive' },
-            // التأكد من أن حقل أيام التدقيق موجود وليس فارغاً
-            audit_days: { $exists: true, $not: { $size: 0 } } 
+            status: { $ne: 'inactive' }
         }).select(
             '_id agent_id name avatar_url classification audit_days'
         ).lean();
+        
+        // 2. جلب مهام الأسبوع الحالي فقط
+        // --- إصلاح: تقييد البحث بمهام الأسبوع الحالي فقط لمنع تداخل البيانات القديمة ---
+        const today = new Date();
+        const currentDayOfWeek = today.getDay(); 
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - currentDayOfWeek);
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 7);
 
-        // 2. جلب جميع المهام المسجلة للوكلاء الذين تم جلبهم
-        // --- إصلاح: إزالة التقييد بتاريخ الأسبوع الحالي ---
-        // هذا يضمن أن الواجهة الأمامية لديها كل تاريخ المهام اللازم لتقييم حالة كل وكيل في كل يوم من أيام الأسبوع الحالي،
-        // حتى لو كانت آخر مهمة مسجلة له في أسبوع سابق.
         const agentIds = agents.map(a => a._id);
-        const tasks = await Task.find({ agent_id: { $in: agentIds } }).lean();
+        const tasks = await Task.find({ 
+            agent_id: { $in: agentIds },
+            task_date: { $gte: startOfWeek, $lt: endOfWeek }
+        }).lean();
 
         // 3. إرسال البيانات إلى الواجهة الأمامية
         res.json({ agents, tasks });

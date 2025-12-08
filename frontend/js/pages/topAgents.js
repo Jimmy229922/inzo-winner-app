@@ -382,8 +382,29 @@ function displayTopAgents(sortedAgents, sortKey) {
     const exclusiveRanks = ['CENTER', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND', 'وكيل حصري بدون مرتبة'];
     const regularRanks = ['BEGINNING', 'GROWTH', 'PRO', 'ELITE'];
     
-    const exclusiveRunnersUp = runnersUp.filter(agent => exclusiveRanks.includes(agent.rank));
-    const regularRunnersUp = runnersUp.filter(agent => regularRanks.includes(agent.rank));
+    const orderAgentsByRank = (agents, rankOrder) => {
+        const orderMap = rankOrder.reduce((acc, rank, idx) => {
+            acc[rank] = idx;
+            return acc;
+        }, {});
+        return agents.slice().sort((a, b) => {
+            const aOrder = orderMap.hasOwnProperty(a.rank) ? orderMap[a.rank] : Number.MAX_SAFE_INTEGER;
+            const bOrder = orderMap.hasOwnProperty(b.rank) ? orderMap[b.rank] : Number.MAX_SAFE_INTEGER;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            const metricDiff = (b[sortKey] || 0) - (a[sortKey] || 0);
+            if (metricDiff !== 0) return metricDiff;
+            return (a.name || '').localeCompare(b.name || '', 'ar');
+        });
+    };
+
+    const exclusiveRunnersUp = orderAgentsByRank(
+        runnersUp.filter(agent => exclusiveRanks.includes(agent.rank)),
+        exclusiveRanks
+    );
+    const regularRunnersUp = orderAgentsByRank(
+        runnersUp.filter(agent => regularRanks.includes(agent.rank)),
+        regularRanks
+    );
 
     // Debug logging
     console.log('Top Agents Debug:');
@@ -416,6 +437,12 @@ function displayTopAgents(sortedAgents, sortKey) {
                 ? `<img src="${agent.avatar_url}" alt="Avatar" class="leaderboard-avatar" loading="lazy">`
                 : `<div class="leaderboard-avatar-placeholder"><i class="fas fa-user"></i></div>`;
 
+            // Determine if agent is exclusive
+            const isExclusive = exclusiveRanks.includes(agent.rank);
+            const exclusiveBadge = isExclusive 
+                ? `<div class="exclusive-badge" title="وكيل حصري"><i class="fas fa-crown"></i></div>` 
+                : `<div class="regular-badge" title="وكيل اعتيادي"><i class="fas fa-star"></i></div>`;
+
             return `
                 <div class="leaderboard-card ${isTopThree ? `top-rank ${rankClass}` : ''}" data-agent-id="${agent._id}" style="cursor: pointer;">
                     <div class="leaderboard-rank">
@@ -423,7 +450,10 @@ function displayTopAgents(sortedAgents, sortKey) {
                     </div>
                     ${rank === 1 ? '<div class="glow-bar"></div>' : ''}
                     <div class="leaderboard-agent-profile">
-                        ${avatarHtml}
+                        <div style="position: relative;">
+                            ${avatarHtml}
+                            ${exclusiveBadge}
+                        </div>
                         <div class="leaderboard-agent-info">
                             <h3 class="leaderboard-agent-name">${agent.name} ${trendIcon}</h3>
                             <div class="leaderboard-agent-meta" data-agent-id-copy="${agent.agent_id || 'N/A'}" title="نسخ الرقم">
@@ -438,6 +468,25 @@ function displayTopAgents(sortedAgents, sortKey) {
                     ${(() => {
                         const metricKeys = ['total_views','total_reactions','total_participants'];
                         const isMetricSort = metricKeys.includes(sortKey);
+                        
+                        // Special layout for Top 3
+                        if (isTopThree) {
+                             return `
+                                <div class="stat-item top-stat-item">
+                                    <span class="stat-label"><i class="fas fa-eye"></i> مشاهدات</span>
+                                    <span class="stat-value">${formatNumber(agent.total_views)}</span>
+                                </div>
+                                <div class="stat-item top-stat-item">
+                                    <span class="stat-label"><i class="fas fa-heart"></i> تفاعلات</span>
+                                    <span class="stat-value">${formatNumber(agent.total_reactions)}</span>
+                                </div>
+                                <div class="stat-item top-stat-item">
+                                    <span class="stat-label"><i class="fas fa-users"></i> مشاركات</span>
+                                    <span class="stat-value">${formatNumber(agent.total_participants)}</span>
+                                </div>
+                            `;
+                        }
+
                         // If sorting by a metric and this agent is not top 3, show only that metric
                         if (isMetricSort && rank > 3) {
                             if (sortKey === 'total_views') {
@@ -473,12 +522,18 @@ function displayTopAgents(sortedAgents, sortKey) {
                 ? `<img src="${agent.avatar_url}" alt="Avatar" class="leaderboard-avatar-simple" loading="lazy">`
                 : `<div class="leaderboard-avatar-placeholder-simple"><i class="fas fa-user"></i></div>`;
 
+            // Determine if agent is exclusive
+            const isExclusive = exclusiveRanks.includes(agent.rank);
+            const exclusiveIcon = isExclusive 
+                ? `<i class="fas fa-crown" style="color: #f1c40f; margin-left: 5px;" title="وكيل حصري"></i>` 
+                : `<i class="fas fa-star" style="color: #95a5a6; margin-left: 5px;" title="وكيل اعتيادي"></i>`;
+
             return `
                 <div class="leaderboard-card-simple" data-agent-id="${agent._id}" style="cursor: pointer;">
                     <span class="simple-rank">${rank}</span>
                     ${avatarHtml}
                     <div class="simple-agent-info">
-                        <span class="simple-agent-name">${agent.name}</span>
+                        <span class="simple-agent-name">${agent.name} ${exclusiveIcon}</span>
                         <span class="simple-agent-id" data-agent-id-copy="${agent.agent_id || 'N/A'}" title="نسخ الرقم">#${agent.agent_id || 'N/A'}</span>
                         <span class="simple-agent-classification"><span class="classification-badge classification-${(agent.classification || '').toLowerCase()}">${agent.classification || ''}</span></span>
                     </div>

@@ -95,6 +95,12 @@ function stopAllProfileTimers() {
         if (element) element.removeEventListener(type, handler);
     });
     profilePageEventListeners = [];
+
+    // --- NEW: Unsubscribe from task store ---
+    if (window.taskStore && window.profileStoreSubscription) {
+        window.taskStore.unsubscribe(window.profileStoreSubscription);
+        window.profileStoreSubscription = null;
+    }
 }
 
 // Function to show rank change modal with reason and action inputs
@@ -404,6 +410,49 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const agentTaskToday = window.taskStore.state.tasks[agentId]?.[todayDayIndex] || { audited: false, competition_sent: false };
     const isAuditedToday = agentTaskToday.audited;
 
+    // --- NEW: Subscribe to task store updates ---
+    if (window.taskStore) {
+        // Define the update function
+        const updateProfileAuditButton = (newState) => {
+            const updatedTask = newState.tasks[agentId]?.[todayDayIndex] || { audited: false };
+            const isNowAudited = updatedTask.audited;
+            
+            const auditStatusContainer = document.getElementById('header-audit-status');
+            const auditBtn = document.getElementById('perform-audit-btn');
+            const auditText = document.querySelector('.audit-status-text');
+            
+            if (auditStatusContainer && auditBtn && auditText) {
+                // Update container class
+                if (isNowAudited) {
+                    auditStatusContainer.classList.add('audited');
+                    auditStatusContainer.classList.remove('pending');
+                } else {
+                    auditStatusContainer.classList.add('pending');
+                    auditStatusContainer.classList.remove('audited');
+                }
+                
+                // Update button icon and title
+                auditBtn.title = isNowAudited ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
+                auditBtn.innerHTML = `<i class="fas fa-${isNowAudited ? 'check-circle' : 'clipboard-check'}"></i>`;
+                
+                // Update text
+                auditText.textContent = isNowAudited ? 'تم التدقيق' : 'التدقيق';
+            }
+        };
+
+        // Subscribe
+        window.taskStore.subscribe(updateProfileAuditButton);
+
+        // Store the subscription for cleanup
+        if (!window.profileStoreSubscription) {
+            window.profileStoreSubscription = updateProfileAuditButton;
+        } else {
+            // If there was an old subscription, unsubscribe it first (though stopAllProfileTimers should have handled it)
+            window.taskStore.unsubscribe(window.profileStoreSubscription);
+            window.profileStoreSubscription = updateProfileAuditButton;
+        }
+    }
+
     const activeCompetition = agentCompetitions.find(c => c.is_active === true);
     const hasActiveCompetition = !!activeCompetition;
     const hasInactiveCompetition = !hasActiveCompetition && agentCompetitions.length > 0;
@@ -421,14 +470,13 @@ async function renderAgentProfilePage(agentId, options = {}) {
     }
 
     // --- NEW: Create the audit button for the header ---
-    const auditButtonHtml = isTaskDay
-        ? `<div id="header-audit-status" class="header-audit-status ${isAuditedToday ? 'audited' : 'pending'}">
+    // Modified: Always show audit button
+    const auditButtonHtml = `<div id="header-audit-status" class="header-audit-status ${isAuditedToday ? 'audited' : 'pending'}">
                <button id="perform-audit-btn" class="btn-icon-action" title="${isAuditedToday ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"'}">
                    <i class="fas fa-${isAuditedToday ? 'check-circle' : 'clipboard-check'}"></i>
                </button>
-               <span class="audit-status-text">${isAuditedToday ? 'تم التدقيق' : 'التدقيق مطلوب اليوم'}</span>
-           </div>`
-        : '';
+               <span class="audit-status-text">${isAuditedToday ? 'تم التدقيق' : 'التدقيق'}</span>
+           </div>`;
 
     // Helper for audit days in Action Tab
     // --- تعديل: عرض أيام التدقيق المحددة فقط كعلامات (tags) ---
@@ -550,11 +598,13 @@ async function renderAgentProfilePage(agentId, options = {}) {
     if (createCompBtn) {
         if (canCreateComp) { // This will be migrated later
             createCompBtn.addEventListener('click', () => {
-                // التحقق من تفعيل التدقيق قبل السماح بإنشاء مسابقة
+                // التحقق من تفعيل التدقيق قبل السماح بإنشاء مسابقة - REMOVED per user request
+                /*
                 if (!agent.is_auditing_enabled) {
                     showToast('عذراً، لا يمكن إنشاء مسابقة قبل إتمام عملية التدقيق لهذا الوكيل.', 'error');
                     return;
                 }
+                */
                 window.location.hash = `competitions/new?agentId=${agent._id}`;
             });
         } else {
@@ -586,7 +636,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
             statusContainer.classList.toggle('pending', !newAuditStatus);
             statusContainer.classList.toggle('audited', newAuditStatus);
             iconEl.className = `fas fa-${newAuditStatus ? 'check-circle' : 'clipboard-check'}`;
-            statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق مطلوب اليوم';
+            statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق';
             auditBtn.title = newAuditStatus ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
  
             // 2. Call the new backend endpoint to toggle is_auditing_enabled
@@ -621,7 +671,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 statusContainer.classList.toggle('pending', wasAudited);
                 statusContainer.classList.toggle('audited', !wasAudited);
                 iconEl.className = `fas fa-${wasAudited ? 'check-circle' : 'clipboard-check'}`;
-                statusTextEl.textContent = wasAudited ? 'تم التدقيق' : 'التدقيق مطلوب اليوم';
+                statusTextEl.textContent = wasAudited ? 'تم التدقيق' : 'التدقيق';
                 auditBtn.title = wasAudited ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
             } finally {
                 auditBtn.disabled = false; // Re-enable the button

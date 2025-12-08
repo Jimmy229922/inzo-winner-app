@@ -34,19 +34,6 @@ const taskStore = {
    * @param {boolean} status
    */
   async updateTaskStatus(agentId, dayIndex, taskType, status) {
-    console.log(`[TaskStore] updateTaskStatus called with:`, {
-      agentId,
-      dayIndex,
-      taskType,
-      status,
-    });
-
-    // Log state before
-    console.log(
-      `[TaskStore] State for agent ${agentId} BEFORE update:`,
-      JSON.parse(JSON.stringify(this.state.tasks[agentId] || {}))
-    );
-
     try {
       const response = await authedFetch("/api/tasks", {
         method: "POST",
@@ -95,12 +82,6 @@ const taskStore = {
           ? savedTask.updatedAt
           : new Date().toISOString();
 
-      // Log state after
-      console.log(
-        `[TaskStore] State for agent ${agentId} AFTER update:`,
-        JSON.parse(JSON.stringify(this.state.tasks[agentId] || {}))
-      );
-
       // Notify UI subscribers (do not persist locally; server is authoritative)
       this._notify();
     } catch (error) {
@@ -111,7 +92,6 @@ const taskStore = {
   },
 
   async resetAllTasks() {
-    console.log("[TaskStore] Resetting all tasks.");
     try {
       // Perform API call to reset all tasks on the backend
       const response = await authedFetch("/api/tasks/reset-all", {
@@ -131,9 +111,6 @@ const taskStore = {
       // If API call is successful, reset the in-memory state (server will reflect this)
       this.state.tasks = {};
       this._notify();
-      console.log(
-        "[TaskStore] All tasks have been reset locally and on the server."
-      );
     } catch (error) {
       console.error("Error resetting all tasks:", error);
       throw error; // Re-throw for the UI to handle
@@ -149,11 +126,18 @@ const taskStore = {
       const response = await authedFetch("/api/calendar/data");
       if (!response.ok) throw new Error("Failed to fetch calendar data");
       const { tasks: serverTasks } = await response.json();
-
+      
       // Build authoritative in-memory state based on server tasks only.
       const incoming = {};
       (serverTasks || []).forEach((task) => {
-        const dayIndex = new Date(task.task_date).getDay();
+        // --- FIX: Use explicit day_index if available, else fallback to date parsing ---
+        let dayIndex;
+        if (task.day_index !== undefined && task.day_index !== null) {
+            dayIndex = task.day_index;
+        } else {
+            dayIndex = new Date(task.task_date).getDay();
+        }
+        
         const agentId = String(
           task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? ""
         );
@@ -169,7 +153,7 @@ const taskStore = {
       // Replace in-memory state with server state (server is source-of-truth)
       this.state.tasks = incoming;
     } catch (error) {
-      console.error("Failed to fetch initial task data:", error);
+      console.error("[TaskStore] ❌ Failed to fetch initial task data:", error);
     }
   },
 
@@ -185,7 +169,14 @@ const taskStore = {
       // Rebuild authoritative state from server and replace in-memory state.
       const incoming = {};
       (serverTasks || []).forEach((task) => {
-        const dayIndex = new Date(task.task_date).getDay();
+        // --- FIX: Use explicit day_index if available, else fallback to date parsing ---
+        let dayIndex;
+        if (task.day_index !== undefined && task.day_index !== null) {
+            dayIndex = task.day_index;
+        } else {
+            dayIndex = new Date(task.task_date).getDay();
+        }
+
         const agentId = String(
           task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? ""
         );
@@ -201,7 +192,7 @@ const taskStore = {
       this.state.tasks = incoming;
       this._notify();
     } catch (error) {
-      console.error("TaskStore sync failed:", error);
+      console.error("[TaskStore] ❌ Sync failed:", error);
     }
   },
 

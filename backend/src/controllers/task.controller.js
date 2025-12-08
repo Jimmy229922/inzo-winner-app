@@ -16,18 +16,42 @@ exports.getTodayTasks = async (req, res) => {
         endOfToday.setDate(startOfToday.getDate() + 1);
 
         // 1. Find all agents who are scheduled for today
-        const dayOfWeekIndex = startOfToday.getDay(); // Use getDay() for server's local timezone day index
-        // Ensure we don't fetch on Saturday (day 6)
-        if (dayOfWeekIndex === 6) {
-            return res.json({ agents: [], tasksMap: {} });
+        let dayOfWeekIndex = startOfToday.getDay(); // Default to server's local day
+
+        // FIX: Allow client to specify the day index to handle timezone differences
+        if (req.query.day !== undefined) {
+            const clientDay = parseInt(req.query.day, 10);
+            if (!isNaN(clientDay) && clientDay >= 0 && clientDay <= 6) {
+                dayOfWeekIndex = clientDay;
+                console.log(`[TODAY TASKS] Using client-provided day index: ${dayOfWeekIndex}`);
+            }
         }
 
+        // --- FIX: Calculate the specific date for the requested day index to match updateTask logic ---
+        // This ensures that if the client is asking for "Wednesday" (3), we look for tasks on "Wednesday"
+        // of the current week, even if the server is currently on "Tuesday".
+        const today = new Date();
+        const currentDayOfWeek = today.getDay(); 
+        const sunday = new Date(today);
+        sunday.setDate(today.getDate() - currentDayOfWeek);
+        sunday.setHours(0, 0, 0, 0);
+
+        const targetTaskDate = new Date(sunday);
+        targetTaskDate.setDate(sunday.getDate() + dayOfWeekIndex);
+        
+        const startOfTaskDay = new Date(targetTaskDate);
+        startOfTaskDay.setHours(0, 0, 0, 0);
+        
+        const endOfTaskDay = new Date(targetTaskDate);
+        endOfTaskDay.setHours(23, 59, 59, 999);
+
         const query = { audit_days: { $in: [dayOfWeekIndex] } }; // FIX: Remove status check to include all agents with audit days
-        // console.log('[Tasks] Finding agents for today with query:', JSON.stringify(query));
+        
         const agentsForToday = await Agent.find(query)
-            .select('name agent_id classification avatar_url remaining_balance remaining_deposit_bonus deposit_bonus_percentage')
+            .select('name agent_id classification avatar_url remaining_balance remaining_deposit_bonus deposit_bonus_percentage audit_days')
             .lean();
-        // console.log(`[Tasks] Found ${agentsForToday.length} agents for today.`);
+        
+
 
         // --- FIX: If no agents are found, return early with empty data ---
         if (agentsForToday.length === 0) {
@@ -38,7 +62,7 @@ exports.getTodayTasks = async (req, res) => {
         const agentIds = agentsForToday.map(a => a._id);
         const tasks = await Task.find({
             agent_id: { $in: agentIds },
-            task_date: { $gte: startOfToday, $lt: endOfToday } // FIX: Query using local timezone date range
+            task_date: { $gte: startOfTaskDay, $lt: endOfTaskDay } // FIX: Query using calculated target date
         }).lean();
 
         // 3. Combine the data
@@ -65,10 +89,6 @@ exports.getTodayTaskStats = async (req, res) => {
         endOfToday.setDate(startOfToday.getDate() + 1);
         const dayOfWeekIndex = startOfToday.getDay();
 
-        if (dayOfWeekIndex === 6) { // Saturday
-            return res.json({ total: 0, completed: 0 });
-        }
-
         // 1. Find total agents scheduled for today
         const total = await Agent.countDocuments({ audit_days: { $in: [dayOfWeekIndex] } });
 
@@ -79,9 +99,25 @@ exports.getTodayTaskStats = async (req, res) => {
         // 2. Find completed tasks for today (audited = true)
         const agentIdsForToday = (await Agent.find({ audit_days: { $in: [dayOfWeekIndex] } }).select('_id')).map(a => a._id);
 
+        // Calculate target date for stats as well
+        const today = new Date();
+        const currentDayOfWeek = today.getDay(); 
+        const sunday = new Date(today);
+        sunday.setDate(today.getDate() - currentDayOfWeek);
+        sunday.setHours(0, 0, 0, 0);
+
+        const targetTaskDate = new Date(sunday);
+        targetTaskDate.setDate(sunday.getDate() + dayOfWeekIndex);
+        
+        const startOfTaskDay = new Date(targetTaskDate);
+        startOfTaskDay.setHours(0, 0, 0, 0);
+        
+        const endOfTaskDay = new Date(targetTaskDate);
+        endOfTaskDay.setHours(23, 59, 59, 999);
+
         const completed = await Task.countDocuments({
             agent_id: { $in: agentIdsForToday },
-            task_date: { $gte: startOfToday, $lt: endOfToday }, // FIX: Use 'task_date' to match the schema
+            task_date: { $gte: startOfTaskDay, $lt: endOfTaskDay }, // FIX: Use calculated date
             audited: true // FIX: Completion is based on audit only
         });
 

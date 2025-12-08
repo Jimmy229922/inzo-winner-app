@@ -124,15 +124,59 @@
 .competitions-list-view .competition-card-name {
     grid-area: name;
     display: flex;
-    align-items: center;
-    gap: 15px;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 8px;
     border-right: 1px solid var(--border-color);
     padding-right: 1.5rem;
+    min-width: 0; /* Important for truncation */
+}
+
+.competitions-list-view .competition-info-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
 }
 
 .competitions-list-view .competition-card-name h3 {
     margin: 0;
     font-size: 1.05em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.competition-question-text {
+    font-size: 0.9rem;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+}
+
+.competition-question-text i {
+    color: #3b82f6;
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+.competition-question-text span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* Adjust countdown to fit better in column layout */
+.competition-timing-info {
+    display: flex;
+    gap: 10px;
+    font-size: 0.8rem;
+    flex-wrap: wrap;
 }
 
 .competitions-list-view .competition-card-status {

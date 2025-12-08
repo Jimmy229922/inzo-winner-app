@@ -50,10 +50,25 @@
             <span style="font-size:.7rem;color:var(--wr-text-dim);">إزالة الاسم بعد اختياره</span>
           </div>
         </div>
-        <div class="wr-setting">
-          <label>عدد اختيارات متتالية</label>
-          <input type="number" id="batch-count" min="1" value="1">
+        
+        <!-- إحصائيات الفائزين المطلوبين -->
+        <div class="wr-setting" id="wr-stats-display" style="grid-column: 1 / -1; background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(139,92,246,0.05)); border: 1px solid rgba(99,102,241,0.2); border-radius: 12px; padding: 15px; margin-top: 10px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div style="text-align: center;">
+              <div style="font-size: 0.75rem; color: var(--wr-text-dim); margin-bottom: 4px;">
+                <i class="fas fa-dollar-sign"></i> بونص إيداع
+              </div>
+              <div id="wr-deposit-count" style="font-size: 1.1rem; font-weight: 700; color: #14b8a6;">0 / 0 فائز</div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-size: 0.75rem; color: var(--wr-text-dim); margin-bottom: 4px;">
+                <i class="fas fa-chart-line"></i> بونص تداولي
+              </div>
+              <div id="wr-trading-count" style="font-size: 1.1rem; font-weight: 700; color: #0ea5e9;">0 / 0 فائز</div>
+            </div>
+          </div>
         </div>
+        
         <div class="wr-setting">
           <label>سرعة الدوران</label>
           <select id="spin-speed">
@@ -197,6 +212,6 @@
     
     console.log('✅ [HTML] Script setup complete');
 </script>
-    <script src="../js/pages/winner-roulette.js?v=20251130007"></script>
+    <script src="../js/pages/winner-roulette.js?v=20251207004"></script>
 
 

@@ -4,10 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IB Competition system</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="/images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="128x128" href="/images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="256x256" href="/images/Logo1.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/Logo1.png">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <!-- Bundled CSS (cache-busted) -->
-    <link rel="stylesheet" href="/dist/bundle.css?v=20251130019">
+    <link rel="stylesheet" href="dist/bundle.css?v=20251207002">
     <!-- Cyan Theme Enhancements -->
     <link rel="stylesheet" href="/assets/css/cyan-theme-enhancements.css?v=20251113040">`n    <!-- Calendar Compact CSS -->`n    <link rel="stylesheet" href="/assets/css/calendar-compact.css?v=20251114002">
     <!-- Toggle Fix CSS - General toggles -->
@@ -39,10 +46,14 @@
                     <span>أبرز الوكلاء</span>
                 </a>
                 <div class="nav-item dropdown" id="nav-questions-dropdown-container" style="display: none;">
-                    <a href="#" class="nav-link dropdown-toggle" id="nav-questions-dropdown"><i class="fas fa-lightbulb"></i> اقتراحات الأسئلة</a>
+                    <a href="#" class="nav-link dropdown-toggle" id="nav-questions-dropdown" style="position: relative;">
+                        <i class="fas fa-lightbulb"></i> 
+                        اقتراحات الأسئلة
+                        <span id="globalUnreadCount" class="notification-badge" style="display: none;">0</span>
+                    </a>
                     <div class="dropdown-menu">
                         <a href="pages/question-suggestions.html" id="nav-question-suggestions" class="dropdown-item"><i class="fas fa-plus-circle"></i> إضافة اقتراح</a>
-                        <a href="pages/admin-question-suggestions.html" id="nav-admin-question-suggestions" class="dropdown-item" style="display: none;"><i class="fas fa-clipboard-check"></i> إدارة الاقتراحات</a>
+                        <a href="pages/admin-question-suggestions.html" id="nav-admin-question-suggestions" class="dropdown-item" style="display: none;"><i class="fas fa-list-check"></i> جميع الاقتراحات</a>
                     </div>
                 </div>
                 <div class="nav-item dropdown">
@@ -133,7 +144,38 @@
     <!-- SheetJS for Excel export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <!-- Bundled JavaScript (cache-busted) -->
-    <script src="/dist/bundle.js?v=20251130019" defer></script>
+    <script src="/dist/bundle.js?v=20251204008" defer></script>
+    <script>
+        (function setupFaviconDebug() {
+            const logSizes = () => {
+                try {
+                    const favicons = document.querySelectorAll('link[rel="icon"][href*="Logo1"]');
+                    if (!favicons.length) {
+                        console.warn('[Favicon Debug] لم يتم العثور على أي روابط للأيقونة');
+                        return;
+                    }
+                    favicons.forEach((link) => {
+                        const img = new Image();
+                        img.onload = function () {
+                            console.log(`[Favicon Debug] الحجم الفعلي: ${this.naturalWidth}x${this.naturalHeight} - ${link.href}`);
+                        };
+                        img.onerror = function () {
+                            console.error('[Favicon Debug] تعذر تحميل الأيقونة', link.href);
+                        };
+                        img.src = link.href;
+                    });
+                } catch (err) {
+                    console.error('[Favicon Debug] خطأ أثناء تتبع الأيقونة', err);
+                }
+            };
+
+            if (document.readyState === 'complete') {
+                logSizes();
+            } else {
+                window.addEventListener('load', logSizes, { once: true });
+            }
+        })();
+    </script>
 </body>
 </html>
 

@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>تسجيل الدخول - IB Competition system</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="/images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="128x128" href="/images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="256x256" href="/images/Logo1.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/Logo1.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="assets/css/base.css"> <!-- Keep base.css for theme variables -->
     <link rel="stylesheet" href="assets/css/components.css">
@@ -52,5 +59,36 @@
     </div>
 
     <script src="js/pages/login.js"></script>
+    <script>
+        (function setupFaviconDebug() {
+            const logSizes = () => {
+                try {
+                    const favicons = document.querySelectorAll('link[rel="icon"][href*="Logo1"]');
+                    if (!favicons.length) {
+                        console.warn('[Favicon Debug] لم يتم العثور على أي روابط للأيقونة');
+                        return;
+                    }
+                    favicons.forEach((link) => {
+                        const img = new Image();
+                        img.onload = function () {
+                            console.log(`[Favicon Debug] الحجم الفعلي: ${this.naturalWidth}x${this.naturalHeight} - ${link.href}`);
+                        };
+                        img.onerror = function () {
+                            console.error('[Favicon Debug] تعذر تحميل الأيقونة', link.href);
+                        };
+                        img.src = link.href;
+                    });
+                } catch (err) {
+                    console.error('[Favicon Debug] خطأ أثناء تتبع الأيقونة', err);
+                }
+            };
+
+            if (document.readyState === 'complete') {
+                logSizes();
+            } else {
+                window.addEventListener('load', logSizes, { once: true });
+            }
+        })();
+    </script>
 </body>
 </html>

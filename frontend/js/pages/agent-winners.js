@@ -135,6 +135,9 @@ async function fetchAgentWinners(agentId) {
         // تجميع جميع الفائزين
         allWinners = [];
         if (data.competitions) {
+            // Sort competitions by date descending (newest first)
+            data.competitions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
             data.competitions.forEach(competition => {
                 if (competition.winners && Array.isArray(competition.winners)) {
                     competition.winners.forEach(winner => {
@@ -152,9 +155,27 @@ async function fetchAgentWinners(agentId) {
 
         console.log('[agent-winners] total winners after fetch', allWinners.length);
 
-        // عرض البيانات
-        renderWinnersStatistics();
-        renderWinnersTable();
+        // Populate competition filter
+        populateCompetitionFilter(data.competitions);
+
+        // Apply default filter (latest competition) if no specific filter provided
+        const filterSelect = document.getElementById('competitionFilter');
+        const urlParams = new URLSearchParams(window.location.search);
+        const filterCompetitionId = urlParams.get('competition_id');
+
+        if (filterCompetitionId) {
+             // If URL has filter, use it
+             if (filterSelect) filterSelect.value = filterCompetitionId;
+             filterWinnersByCompetition(filterCompetitionId);
+        } else if (filterSelect && filterSelect.options.length > 1) { // > 1 because of "All" option
+             // Select the second option (first actual competition, which is the latest due to sort)
+             filterSelect.selectedIndex = 1;
+             filterWinnersByCompetition(filterSelect.value);
+        } else {
+             // عرض البيانات (all)
+             renderWinnersStatistics();
+             renderWinnersTable();
+        }
 
     } catch (error) {
         console.error('Error fetching agent winners:', error);
@@ -162,44 +183,85 @@ async function fetchAgentWinners(agentId) {
     }
 }
 
+function populateCompetitionFilter(competitions) {
+    const select = document.getElementById('competitionFilter');
+    if (!select) return;
+
+    // Clear existing options except "All"
+    select.innerHTML = '<option value="all">كل المسابقات</option>';
+
+    if (!competitions || !Array.isArray(competitions)) return;
+
+    competitions.forEach(comp => {
+        const option = document.createElement('option');
+        option.value = comp.id;
+        const date = new Date(comp.created_at).toLocaleDateString('ar-EG');
+        option.textContent = `${comp.title} (${date})`;
+        select.appendChild(option);
+    });
+
+    // Add event listener
+    select.addEventListener('change', (e) => {
+        filterWinnersByCompetition(e.target.value);
+    });
+}
+
+function filterWinnersByCompetition(competitionId) {
+    if (competitionId === 'all') {
+        renderWinnersStatistics(allWinners);
+        renderWinnersTable(allWinners);
+    } else {
+        const filtered = allWinners.filter(w => String(w.competition_id) === String(competitionId));
+        renderWinnersStatistics(filtered);
+        renderWinnersTable(filtered);
+    }
+}
+
 // --- عرض إحصائيات الفائزين ---
-function renderWinnersStatistics() {
+function renderWinnersStatistics(winners = allWinners) {
     const statsGrid = document.getElementById('winnersStatsGrid');
     if (!statsGrid) return;
 
-    const totalWinners = allWinners.length;
-    const uniqueCompetitions = new Set(allWinners.map(w => w.competition_id)).size;
-    const recentWinners = allWinners.filter(w => {
-        const winDate = new Date(w.win_date);
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        return winDate >= weekAgo;
-    }).length;
+    const totalWinners = winners.length;
+    
+    // حساب عدد فائزين بونص الإيداع
+    const depositBonusWinners = winners.filter(w => 
+        w.prize_type === 'deposit_bonus' || 
+        w.prize_type === 'deposit' ||
+        (w.meta && (w.meta.prize_type === 'deposit_bonus' || w.meta.prize_type === 'deposit'))
+    ).length;
+    
+    // حساب عدد فائزين بونص تداولي
+    const tradingBonusWinners = winners.filter(w => 
+        w.prize_type === 'trading_bonus' || 
+        w.prize_type === 'trading' ||
+        (w.meta && (w.meta.prize_type === 'trading_bonus' || w.meta.prize_type === 'trading'))
+    ).length;
 
     const statCards = [
         {
             icon: 'fa-trophy',
             value: totalWinners,
             label: 'إجمالي الفائزين',
-            color: '#ff6b6b'
+            color: '#6366f1'
         },
         {
-            icon: 'fa-calendar-alt',
-            value: uniqueCompetitions,
-            label: 'المسابقات المكتملة',
-            color: '#4ecdc4'
+            icon: 'fa-coins',
+            value: depositBonusWinners,
+            label: 'فائزو بونص الإيداع',
+            color: '#14b8a6'
         },
         {
-            icon: 'fa-clock',
-            value: recentWinners,
-            label: 'فائزون هذا الأسبوع',
-            color: '#45b7d1'
+            icon: 'fa-chart-line',
+            value: tradingBonusWinners,
+            label: 'فائزو بونص التداول',
+            color: '#0ea5e9'
         },
         {
-            icon: 'fa-percentage',
-            value: uniqueCompetitions > 0 ? Math.round((totalWinners / uniqueCompetitions) * 10) / 10 : 0,
-            label: 'متوسط الفائزين لكل مسابقة',
-            color: '#f9ca24'
+            icon: 'fa-calendar-check',
+            value: new Set(winners.map(w => w.competition_id)).size,
+            label: 'عدد المسابقات',
+            color: '#8b5cf6'
         }
     ];
 
@@ -227,7 +289,7 @@ function renderWinnersTable(winners = allWinners) {
     if (winners.length === 0) {
         tableBody.innerHTML = `
             <tr>
-                <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                <td colspan="10" style="text-align: center; padding: 40px; color: var(--text-secondary);">
                     <i class="fas fa-trophy" style="font-size: 2em; margin-bottom: 10px; display: block;"></i>
                     لا يوجد فائزون حتى الآن
                 </td>
@@ -253,6 +315,22 @@ function renderWinnersTable(winners = allWinners) {
         const email = winner.email || (winner.meta && winner.meta.email) || '';
         const nationalId = winner.national_id || (winner.meta && winner.meta.national_id) || '';
         const nationalIdImage = winner.national_id_image || '';
+        
+        // تحديد نوع الجائزة وعرضها بشكل مناسب
+        const prizeType = winner.prize_type || (winner.meta && winner.meta.prize_type) || '';
+        let prizeTypeDisplay = '—';
+        let prizeTypeClass = '';
+        
+        if (prizeType === 'deposit_bonus' || prizeType === 'deposit') {
+            prizeTypeDisplay = '<i class="fas fa-coins"></i> بونص إيداع';
+            prizeTypeClass = 'prize-deposit';
+        } else if (prizeType === 'deposit_prev') {
+            prizeTypeDisplay = '<i class="fas fa-coins"></i> بونص إيداع (فائز سابق)';
+            prizeTypeClass = 'prize-deposit';
+        } else if (prizeType === 'trading_bonus' || prizeType === 'trading') {
+            prizeTypeDisplay = '<i class="fas fa-chart-line"></i> بونص تداولي';
+            prizeTypeClass = 'prize-trading';
+        }
 
         row.innerHTML = `
             <td>
@@ -269,6 +347,9 @@ function renderWinnersTable(winners = allWinners) {
             </td>
             <td>
                 ${nationalIdImage ? `<a href="${nationalIdImage}" target="_blank" class="btn-view-image"><i class="fas fa-image"></i> عرض</a>` : '—'}
+            </td>
+            <td>
+                <span class="prize-type-badge ${prizeTypeClass}">${prizeTypeDisplay}</span>
             </td>
             <td>
                 <div class="competition-title">${winner.competition_title || 'غير محدد'}</div>

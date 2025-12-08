@@ -53,16 +53,23 @@ exports.updateTask = async (req, res) => {
         const taskDate = new Date(sunday);
         taskDate.setDate(sunday.getDate() + dayIndex);
 
+        // --- FIX: Use date range to find task to avoid time precision issues ---
+        const startOfDay = new Date(taskDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(taskDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
         // Find the task or create a new one
         let task = await Task.findOne({
             agent_id: agentId,
-            task_date: taskDate
+            task_date: { $gte: startOfDay, $lte: endOfDay }
         });
 
         if (!task) {
             task = new Task({
                 agent_id: agentId,
-                task_date: taskDate,
+                task_date: startOfDay, // Ensure we save with 00:00:00
+                day_index: dayIndex, // --- NEW: Save day index explicitly ---
                 [taskType]: status,
                 updated_by: userId
             });
@@ -72,10 +79,21 @@ exports.updateTask = async (req, res) => {
                 task[taskType] = status;
                 task.updated_by = userId;
             }
+            // Ensure day_index is set if missing (migration)
+            if (task.day_index === undefined) {
+                task.day_index = dayIndex;
+            }
         }
 
         const savedTask = await task.save();
 
+        // --- NEW: Return the saved task to the client ---
+        // This allows the client to update its state with the authoritative server data
+        // Note: We send the response here, but continue processing (logging, competition creation) asynchronously if needed.
+        // However, Express requires one response. So we must ensure we don't send another response later.
+        // The original code didn't send a response until the end or error.
+        // Let's buffer the response data and send it at the end.
+        
         // Log the activity
         const agent = await Agent.findById(agentId).select('name');
         const agentName = agent ? agent.name : `ID ${agentId}`;
@@ -90,7 +108,8 @@ exports.updateTask = async (req, res) => {
                     return res.status(404).json({ message: 'الوكيل غير موجود لإنشاء المسابقة.' });
                 }
 
-                // Check if auditing is enabled for the agent
+                // Check if auditing is enabled for the agent - REMOVED per user request
+                /*
                 if (!agent.is_auditing_enabled) {
                     await logActivity(userId, agentId, 'COMPETITION_SENT_FAILED', `التدقيق غير مفعل للوكيل ${agent.name}. يجب تفعيل التدقيق قبل إنشاء مسابقة.`);
                     return res.status(403).json({ 
@@ -98,6 +117,7 @@ exports.updateTask = async (req, res) => {
                         error: 'Auditing is not enabled for this agent'
                     });
                 }
+                */
 
                 // Prevent duplicate competition for the same agent on the same day
                 const startOfDay = new Date(taskDate); startOfDay.setHours(0,0,0,0);

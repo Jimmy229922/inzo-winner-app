@@ -102,12 +102,6 @@ async function fetchUserProfile() {
 function updateUIAfterLogin(user) {
     if (!user) return;
 
-    // --- DEBUG: Log the user profile being used to update the UI ---
-    console.log(
-        `%c[UI Update] Updating interface for user: "${user.full_name}" with role: "${user.role}"`,
-        'color: #28a745; font-weight: bold; border: 1px solid #28a745; padding: 2px 5px; border-radius: 3px;'
-    );
-
     const settingsMenu = document.getElementById('settings-menu');
     const userNameDisplay = document.getElementById('user-name');
     const userEmailDisplay = document.getElementById('user-email');
@@ -134,24 +128,32 @@ function updateUIAfterLogin(user) {
         usersNavItem.style.display = 'block';
     }
 
-    // NEW: Show/Hide Question Suggestions links based on role
+    // NEW: Show Question Suggestions links for all users
+    // جميع المستخدمين (موظف، أدمن، سوبر أدمن) يمكنهم رؤية جميع الاقتراحات
     const navQuestionsDropdownContainer = document.getElementById('nav-questions-dropdown-container');
     const navAdminQuestionSuggestions = document.getElementById('nav-admin-question-suggestions');
     
-    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
-    
     if (navQuestionsDropdownContainer) {
-        navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all employees
+        navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all users
     }
     
     if (navAdminQuestionSuggestions) {
-        navAdminQuestionSuggestions.style.display = isAdmin ? 'block' : 'none'; // Show admin link only for admins
+        navAdminQuestionSuggestions.style.display = 'block'; // Show for all authenticated users
     }
 
-    // NEW: Show/Hide Tasks & Calendar dropdown for admins only
+    // NEW: Show Tasks & Calendar dropdown for all users (employees, admins, and super admins)
     const navTasksCalendarDropdownContainer = document.getElementById('nav-tasks-calendar-dropdown-container');
     if (navTasksCalendarDropdownContainer) {
-        navTasksCalendarDropdownContainer.style.display = isAdmin ? 'block' : 'none';
+        navTasksCalendarDropdownContainer.style.display = 'block'; // Show for all authenticated users
+    }
+
+    // Load global unread suggestions counter for all roles (Super Admin & Employees)
+    if (currentUserProfile) {
+        loadGlobalUnreadCount();
+        // Live polling every 30 seconds
+        if (!window._globalUnreadInterval) {
+            window._globalUnreadInterval = setInterval(loadGlobalUnreadCount, 30000);
+        }
     }
 }
 // NEW: Router function to handle page navigation based on URL hash
@@ -196,6 +198,7 @@ async function handleRouting() {
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
         '#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' },
         '#analytics': { func: renderAnalyticsPage, nav: 'nav-analytics' },
+        '#admin-suggestions': { func: renderAdminSuggestionsPage, nav: 'nav-admin-question-suggestions' },
         '#statistics': { func: renderStatisticsPage, nav: 'nav-statistics' },
         '#winner-roulette': { func: renderWinnerRoulettePage, nav: 'nav-winner-roulette' }
     };
@@ -255,6 +258,46 @@ async function handleRouting() {
         console.error("Routing error:", err);
     } finally {
         hideLoader();
+    }
+}
+
+// ==========================
+// Admin Suggestions Page Loader
+// ==========================
+async function renderAdminSuggestionsPage() {
+    if (!window.appContent) {
+        console.error('app-content element not found!');
+        return;
+    }
+    try {
+        const response = await fetch('/pages/admin-question-suggestions.html');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const html = await response.text();
+        window.appContent.innerHTML = html;
+
+        // Dynamically import and initialize the admin suggestions page script
+        try {
+            const adminModule = await import('/js/pages/admin-question-suggestions.js');
+            if (adminModule && typeof adminModule.initAdminQuestionSuggestions === 'function') {
+                // Ensure DOM is ready before init
+                setTimeout(() => {
+                    adminModule.initAdminQuestionSuggestions();
+                }, 0);
+            } else {
+                console.warn('Admin suggestions initialization function not found, attempting fallback');
+                // Fallback: if module exports default or different name
+                if (adminModule && typeof adminModule.init === 'function') {
+                    setTimeout(() => adminModule.init(), 0);
+                }
+            }
+        } catch (e) {
+            throw e;
+        }
+    } catch (error) {
+        console.error('Failed to load admin suggestions page:', error);
+        window.appContent.innerHTML = `<p class="error-message">فشل تحميل صفحة جميع الاقتراحات: ${error.message}</p>`;
     }
 }
 
@@ -430,6 +473,13 @@ function setupRealtimeListeners() {
                             window.dispatchEvent(new CustomEvent('presence-update'));
                         }
                         break;
+                    
+                    case 'suggestion_update':
+                    case 'new_suggestion':
+                        console.log('🔔 [WebSocket] Received suggestion update/new suggestion');
+                        loadGlobalUnreadCount();
+                        break;
+
                     // Add other message types here
                 }
             } catch (error) {
@@ -842,12 +892,12 @@ function setupNavbar() {
 
     // Show/Hide dropdown based on role
     if (currentUserProfile && navQuestionsDropdownContainer) {
-        const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
+        // const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
         
         navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all employees
         
         if (navAdminQuestionSuggestionsMenu) {
-            navAdminQuestionSuggestionsMenu.style.display = isAdmin ? 'block' : 'none'; // Show admin link only for admins
+            navAdminQuestionSuggestionsMenu.style.display = 'block'; // Show admin link for all employees
         }
     }
 
@@ -1085,7 +1135,6 @@ function baseRouletteMarkup() {
                         <canvas id=\"winner-roulette-wheel\"></canvas>
                         <div class=\"wr-actions-row\">
                             <button id=\"auto-pick-btn\" class=\"wr-btn wr-btn-secondary wr-btn-large\"><i class=\"fas fa-forward\"></i> متتالي</button>
-                            <button id=\"reset-wheel\" class=\"wr-btn wr-btn-danger wr-btn-large\"><i class=\"fas fa-rotate-left\"></i> إعادة</button>
                         </div>
                     </div>
                     <small style=\"text-align:center;color:var(--wr-text-dim);\">اختيار عشوائي دون تحيز.</small>
@@ -1348,3 +1397,58 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Failed to attach fallback logout handler', e);
     }
 });
+
+// ==========================
+// Global Unread Suggestions Counter
+// ==========================
+async function loadGlobalUnreadCount() {
+    try {
+        let endpoint = '';
+        if (currentUserProfile.role === 'super_admin') {
+            endpoint = '/api/question-suggestions/unread-count';
+        } else {
+            endpoint = '/api/question-suggestions/employee-unread-count';
+        }
+
+        const response = await window.utils.authedFetch(endpoint);
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            const unreadCount = data.data.unreadCount || 0;
+            displayGlobalUnreadCount(unreadCount);
+        }
+    } catch (error) {
+        console.error('❌ [Global Unread Count] Error loading unread count:', error);
+    }
+}
+
+function displayGlobalUnreadCount(count) {
+    const globalUnreadCountElement = document.getElementById('globalUnreadCount');
+
+    if (globalUnreadCountElement) {
+        if (count > 0) {
+            globalUnreadCountElement.textContent = count;
+            globalUnreadCountElement.style.display = 'inline-block';
+            
+            // Update click handler based on role
+            const badgeLink = globalUnreadCountElement.closest('a');
+            if (badgeLink) {
+                badgeLink.onclick = (e) => {
+                    e.preventDefault();
+                    if (currentUserProfile.role === 'super_admin') {
+                        window.location.href = '/pages/admin-question-suggestions.html';
+                    } else {
+                        window.location.href = '/pages/question-suggestions.html';
+                    }
+                };
+            }
+        } else {
+            globalUnreadCountElement.style.display = 'none';
+        }
+    }
+}

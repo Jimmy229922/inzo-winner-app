@@ -273,39 +273,33 @@
 
 /* --- NEW: Glow and Background styles for each rank --- */
 .leaderboard-card.gold {
-    background-image: radial-gradient(circle at 10% 10%, #4a380f, transparent),
-                      radial-gradient(circle at 80% 90%, #b67d15, transparent),
-                      var(--card-bg-color);
-    box-shadow: 0 0 10px rgba(255, 215, 0, 0.4), 0 0 20px rgba(255, 215, 0, 0.3);
-    border-color: rgba(255, 215, 0, 0.3);
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 215, 0, 0.05) 100%), rgb(15, 18, 25);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.2), 0 0 30px rgba(255, 215, 0, 0.1);
+    border-color: rgba(255, 215, 0, 0.4);
 }
 .leaderboard-card.gold:hover {
-    box-shadow: 0 0 20px rgba(255, 215, 0, 0.6), 0 0 40px rgba(255, 215, 0, 0.4);
-    border-color: rgba(255, 215, 0, 0.6);
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.4), 0 0 50px rgba(255, 215, 0, 0.2);
+    border-color: rgba(255, 215, 0, 0.8);
 }
 
 .leaderboard-card.silver {
-    background-image: radial-gradient(circle at 90% 20%, #4f5b66, transparent),
-                      radial-gradient(circle at 20% 80%, #888, transparent),
-                      var(--card-bg-color);
-    box-shadow: 0 0 8px rgba(192, 192, 192, 0.3), 0 0 15px rgba(192, 192, 192, 0.2);
-    border-color: rgba(192, 192, 192, 0.2);
+    background: linear-gradient(135deg, rgba(192, 192, 192, 0.15) 0%, rgba(192, 192, 192, 0.05) 100%), rgb(15, 18, 25);
+    box-shadow: 0 0 12px rgba(192, 192, 192, 0.2), 0 0 25px rgba(192, 192, 192, 0.1);
+    border-color: rgba(192, 192, 192, 0.4);
 }
 .leaderboard-card.silver:hover {
-    box-shadow: 0 0 15px rgba(192, 192, 192, 0.5), 0 0 30px rgba(192, 192, 192, 0.3);
-    border-color: rgba(192, 192, 192, 0.5);
+    box-shadow: 0 0 20px rgba(192, 192, 192, 0.4), 0 0 40px rgba(192, 192, 192, 0.2);
+    border-color: rgba(192, 192, 192, 0.8);
 }
 
 .leaderboard-card.bronze {
-    background-image: radial-gradient(circle at 85% 15%, #6d4c2c, transparent),
-                      radial-gradient(circle at 15% 85%, #8c582c, transparent),
-                      var(--card-bg-color);
-    box-shadow: 0 0 8px rgba(205, 127, 50, 0.3), 0 0 15px rgba(205, 127, 50, 0.2);
-    border-color: rgba(205, 127, 50, 0.2);
+    background: linear-gradient(135deg, rgba(205, 127, 50, 0.15) 0%, rgba(205, 127, 50, 0.05) 100%), rgb(15, 18, 25);
+    box-shadow: 0 0 12px rgba(205, 127, 50, 0.2), 0 0 25px rgba(205, 127, 50, 0.1);
+    border-color: rgba(205, 127, 50, 0.4);
 }
 .leaderboard-card.bronze:hover {
-    box-shadow: 0 0 15px rgba(205, 127, 50, 0.5), 0 0 30px rgba(205, 127, 50, 0.3);
-    border-color: rgba(205, 127, 50, 0.5);
+    box-shadow: 0 0 20px rgba(205, 127, 50, 0.4), 0 0 40px rgba(205, 127, 50, 0.2);
+    border-color: rgba(205, 127, 50, 0.8);
 }
 
 /* --- NEW: Keyframe for background animation --- */

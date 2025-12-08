@@ -165,41 +165,42 @@ window.utils.authedFetch = authedFetch;
 window.utils.translateTelegramError = translateTelegramError;
 
 // Lightweight toast notification helper compatible with components.css styles
-function showToast(message, type = 'info', duration) {
-    try {
-        let container = document.getElementById('toast-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'toast-container';
-            document.body.appendChild(container);
+if (typeof window.showToast !== 'function') {
+    window.showToast = function (message, type = 'info', duration) {
+        try {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+
+            // Add close button
+            const closeBtn = document.createElement('span');
+            closeBtn.textContent = '×';
+            closeBtn.style.marginRight = '8px';
+            closeBtn.style.cursor = 'pointer';
+            closeBtn.style.fontWeight = 'bold';
+            closeBtn.style.fontSize = '20px';
+            closeBtn.onclick = () => {
+                if (container.contains(toast)) container.removeChild(toast);
+            };
+            toast.insertBefore(closeBtn, toast.firstChild);
+
+            container.appendChild(toast);
+        } catch (e) {
+            // Fallback if DOM not ready
+            if (type === 'error' || type === 'warning') {
+                alert(message);
+            } else {
+                console.log(`[${type}] ${message}`);
+            }
         }
-
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.textContent = message;
-
-        // Add close button
-        const closeBtn = document.createElement('span');
-        closeBtn.textContent = '×';
-        closeBtn.style.marginRight = '8px';
-        closeBtn.style.cursor = 'pointer';
-        closeBtn.style.fontWeight = 'bold';
-        closeBtn.style.fontSize = '20px';
-        closeBtn.onclick = () => {
-            if (container.contains(toast)) container.removeChild(toast);
-        };
-        toast.insertBefore(closeBtn, toast.firstChild);
-
-        container.appendChild(toast);
-    } catch (e) {
-        // Fallback if DOM not ready
-        if (type === 'error' || type === 'warning') {
-            alert(message);
-        } else {
-            console.log(`[${type}] ${message}`);
-        }
-    }
+    };
 }
 
-window.showToast = showToast;
-window.utils.showToast = showToast;
+window.utils.showToast = window.showToast;
