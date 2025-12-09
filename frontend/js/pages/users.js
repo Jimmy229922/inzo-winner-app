@@ -706,23 +706,29 @@ function renderEditUserModal(user) {
         e.stopPropagation(); // Prevent event bubbling if needed
         avatarUploadInput.click();
     };
-    // Allow clicking the entire avatar container to open the file dialog
-    avatarPreview.closest('.profile-avatar-edit').addEventListener('click', openFileDialog);
-    changeAvatarBtn.addEventListener('click', openFileDialog);
+    if (isCurrentUserSuperAdmin) {
+        // Allow clicking the entire avatar container to open the file dialog
+        avatarPreview.closest('.profile-avatar-edit').addEventListener('click', openFileDialog);
+        changeAvatarBtn.addEventListener('click', openFileDialog);
 
-    deleteAvatarBtn.addEventListener('click', () => {
-        avatarUploadInput.value = null; // Clear the file input
-        avatarPreview.src = originalAvatarUrl;
+        deleteAvatarBtn.addEventListener('click', () => {
+            avatarUploadInput.value = null; // Clear the file input
+            avatarPreview.src = originalAvatarUrl;
+            avatarActions.style.display = 'none';
+        });
+
+        avatarUploadInput.addEventListener('change', () => {
+            const file = avatarUploadInput.files[0];
+            if (file) {
+                avatarPreview.src = URL.createObjectURL(file);
+                avatarActions.style.display = 'flex';
+            }
+        });
+    } else {
+        // Hide actions and disable click for non-super-admin editors
         avatarActions.style.display = 'none';
-    });
-
-    avatarUploadInput.addEventListener('change', () => {
-        const file = avatarUploadInput.files[0];
-        if (file) {
-            avatarPreview.src = URL.createObjectURL(file);
-            avatarActions.style.display = 'flex';
-        }
-    });
+        avatarPreview.closest('.profile-avatar-edit').style.cursor = 'not-allowed';
+    }
 
     // --- Form Submission Logic ---
     modal.querySelector('#edit-user-form').addEventListener('submit', async (e) => {
@@ -733,7 +739,7 @@ function renderEditUserModal(user) {
 
         try {
             const avatarFile = modal.querySelector('#avatar-upload').files[0];
-            if (avatarFile) {
+            if (avatarFile && isCurrentUserSuperAdmin) {
                 const formData = new FormData();
                 formData.append('avatar', avatarFile);
 
