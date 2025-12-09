@@ -105,7 +105,11 @@ const userController = {
                 return res.status(403).json({ message: 'Forbidden: You do not have permission to change these user permissions.' });
             }
 
+            // Password change allowed only for super_admin
             if (password) {
+                if (req.user.role !== 'super_admin') {
+                    return res.status(403).json({ message: 'تغيير كلمة المرور مسموح للسوبر أدمن فقط.' });
+                }
                 updateData.password = await bcrypt.hash(password, 12);
             }
 

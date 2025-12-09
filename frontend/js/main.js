@@ -420,14 +420,14 @@ function setupRealtimeListeners() {
     const wsUrl = `${protocol}://${window.location.host}`;
     let ws;
     let reconnectAttempts = 0;
-    let maxReconnectAttempts = 3;
+    let maxReconnectAttempts = 5;
     let reconnectTimeout;
 
     function connect() {
         // Check if token exists before connecting
         const token = localStorage.getItem('authToken');
         if (!token) {
-            console.warn('[WebSocket] No auth token found. Skipping connection.');
+            console.warn('[WebSocket] لا يوجد رمز مصادقة. تخطي الاتصال.');
             return;
         }
 
@@ -436,7 +436,7 @@ function setupRealtimeListeners() {
         try { window._realtimeWs = ws; } catch (e) { /* ignore in non-browser env */ }
 
         ws.onopen = () => {
-            /* logs suppressed: WebSocket connected */
+            console.log('[WebSocket] متصل الآن ✓');
             reconnectAttempts = 0; // Reset counter on successful connection
             const token = localStorage.getItem('authToken');
             if (token) {
@@ -469,8 +469,14 @@ function setupRealtimeListeners() {
                         if (Array.isArray(message.data)) {
                             window.onlineUsers.clear();
                             message.data.forEach(userId => window.onlineUsers.set(userId, true));
+                            // Add the current user to online list
+                            const currentUserId = currentUserProfile?.userId || currentUserProfile?._id;
+                            if (currentUserId) {
+                                window.onlineUsers.set(currentUserId, true);
+                            }
                             // Dispatch a global event that the user list can listen to
                             window.dispatchEvent(new CustomEvent('presence-update'));
+                            console.log('[WebSocket] تحديث الحالة المباشرة:', Array.from(window.onlineUsers.keys()));
                         }
                         break;
                     
@@ -488,16 +494,22 @@ function setupRealtimeListeners() {
         };
 
         ws.onclose = () => {
+            console.log('[WebSocket] قطع الاتصال ✗');
+            // Remove current user from online list
+            const currentUserId = currentUserProfile?.userId || currentUserProfile?._id;
+            if (currentUserId) {
+                window.onlineUsers.delete(currentUserId);
+            }
             // Clear the global reference when socket closes
             try { if (window._realtimeWs === ws) window._realtimeWs = null; } catch (e) { /* ignore */ }
             
             // Only reconnect if we haven't exceeded max attempts
             if (reconnectAttempts < maxReconnectAttempts) {
                 reconnectAttempts++;
-                console.log(`[WebSocket] Disconnected. Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in 5 seconds...`);
+                console.log(`[WebSocket] إعادة محاولة الاتصال (${reconnectAttempts}/${maxReconnectAttempts}) بعد 5 ثواني...`);
                 reconnectTimeout = setTimeout(connect, 5000);
             } else {
-                console.warn('[WebSocket] Max reconnection attempts reached. Please refresh the page or log in again.');
+                console.warn('[WebSocket] فشل الاتصال المباشر بعد عدة محاولات. يرجى تحديث الصفحة.');
             }
         };
 
@@ -652,6 +664,50 @@ function showFallbackToast(message, duration = 1600) {
         el.style.transform = 'translateY(6px)';
     }, duration);
 }
+try { window.showFallbackToast = showFallbackToast; } catch (e) { /* ignore */ }
+
+// Centralized logout flow used by all logout triggers
+function performLogoutFlow() {
+    try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (e) { /* ignore */ }
+
+    // Close realtime socket if present and stop reconnection attempts
+    try {
+        if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
+            window._realtimeWs.close();
+            window._realtimeWs = null;
+        }
+        if (typeof window.stopWebSocketReconnect === 'function') {
+            window.stopWebSocketReconnect();
+        }
+    } catch (err) {
+        console.warn('Failed to close realtime socket during logout:', err);
+    }
+
+    // Fire logout API call (fire-and-forget to log activity)
+    const logoutTimeout = setTimeout(() => {
+        console.warn('Logout API timeout - proceeding with client-side logout');
+    }, 2000);
+    try {
+        authedFetch('/api/auth/logout', { method: 'POST' })
+            .then(() => clearTimeout(logoutTimeout))
+            .catch(err => {
+                console.warn('Logout API call failed:', err);
+                clearTimeout(logoutTimeout);
+            });
+    } catch (e) { 
+        clearTimeout(logoutTimeout);
+    }
+
+    // Clear auth state immediately
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userProfile');
+
+    try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
+
+    // Redirect right away to the login page
+    setTimeout(() => window.location.replace('/login.html'), 250);
+}
+try { window.performLogoutFlow = performLogoutFlow; } catch (e) { /* ignore */ }
 
 function setupAutoHidingNavbar() {
     let lastScrollTop = 0;
@@ -727,48 +783,11 @@ function setupNavbar() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            // Immediate client-side logout without waiting for the server.
-            try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (e) { /* ignore */ }
-
-            // Close the realtime WebSocket if it's open to prevent further background requests
-            try {
-                if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
-                    window._realtimeWs.close();
-                    window._realtimeWs = null;
-                }
-                // Stop reconnection attempts
-                if (typeof window.stopWebSocketReconnect === 'function') {
-                    window.stopWebSocketReconnect();
-                }
-            } catch (err) {
-                console.warn('Failed to close realtime socket during logout:', err);
-            }
-
-            // Fire logout API call (fire-and-forget to log activity)
-            // Use a timeout to ensure we redirect even if API hangs
-            const logoutTimeout = setTimeout(() => {
-                console.warn('Logout API timeout - proceeding with client-side logout');
-            }, 2000);
-            
-            try {
-                authedFetch('/api/auth/logout', { method: 'POST' })
-                    .then(() => clearTimeout(logoutTimeout))
-                    .catch(err => {
-                        console.warn('Logout API call failed:', err);
-                        clearTimeout(logoutTimeout);
-                    });
-            } catch (e) { 
-                clearTimeout(logoutTimeout);
-            }
-
-            // Clear auth state immediately
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('userProfile');
-
-            try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
-
-            // Redirect right away to the login page
-            setTimeout(() => window.location.replace('/login.html'), 250);
+            showConfirmationModal(
+                'هل أنت متأكد أنك تريد تسجيل الخروج؟ سيتم إنهاء الجلسة وإغلاق الاتصال المباشر.',
+                () => performLogoutFlow(),
+                { title: 'تأكيد تسجيل الخروج', confirmText: 'تسجيل الخروج', cancelText: 'إلغاء', confirmClass: 'btn-danger' }
+            );
         });
     }
 
@@ -1350,49 +1369,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const clone = btn.cloneNode(true);
         btn.parentNode.replaceChild(clone, btn);
         // Attach a single, authoritative handler to the cloned element
-                clone.addEventListener('click', (e) => {
-                    // If a modal is already visible, don't duplicate
-                    if (document.querySelector('.modal-overlay')) return;
-                    e.preventDefault();
-                    // Immediate client-side logout without confirmation
-                    try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (err) { /* ignore */ }
-
-                    // Close realtime socket if present
-                    try {
-                        if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
-                            window._realtimeWs.close();
-                            window._realtimeWs = null;
-                        }
-                        // Stop reconnection attempts
-                        if (typeof window.stopWebSocketReconnect === 'function') {
-                            window.stopWebSocketReconnect();
-                        }
-                    } catch (err) {
-                        console.warn('Failed to close realtime socket during logout:', err);
-                    }
-
-                    // Fire logout API call (fire-and-forget to log activity)
-                    const logoutTimeout = setTimeout(() => {
-                        console.warn('Logout API timeout - proceeding with client-side logout');
-                    }, 2000);
-                    
-                    try {
-                        authedFetch('/api/auth/logout', { method: 'POST' })
-                            .then(() => clearTimeout(logoutTimeout))
-                            .catch(err => {
-                                console.warn('Logout API call failed:', err);
-                                clearTimeout(logoutTimeout);
-                            });
-                    } catch (e) { 
-                        clearTimeout(logoutTimeout);
-                    }
-
-                    // Clear auth state immediately
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('userProfile');
-                    try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
-                    setTimeout(() => window.location.replace('/login.html'), 250);
-                }, { passive: false });
+        clone.addEventListener('click', (e) => {
+            if (document.querySelector('.modal-overlay')) return; // Avoid stacking modals
+            e.preventDefault();
+            showConfirmationModal(
+                'هل أنت متأكد أنك تريد تسجيل الخروج؟ سيتم إنهاء الجلسة وإغلاق الاتصال المباشر.',
+                () => performLogoutFlow(),
+                { title: 'تأكيد تسجيل الخروج', confirmText: 'تسجيل الخروج', cancelText: 'إلغاء', confirmClass: 'btn-danger' }
+            );
+        }, { passive: false });
     } catch (e) {
         console.error('Failed to attach fallback logout handler', e);
     }

@@ -147,30 +147,45 @@ exports.verifyPassword = async (req, res) => {
     }
 };
 
-// Change password for the authenticated user
+// Change password (only super_admin can change any password)
 exports.changePassword = async (req, res) => {
     try {
-        const userId = req.user?._id || req.user?.userId;
-        const { currentPassword, newPassword } = req.body || {};
+        const requesterId = req.user?._id || req.user?.userId;
+        const requesterRole = req.user?.role;
+        const { currentPassword, newPassword, userId: targetUserId } = req.body || {};
 
-        if (!userId) {
+        if (!requesterId) {
             return res.status(401).json({ message: 'غير مصرح. يرجى تسجيل الدخول مرة أخرى.' });
         }
-        if (!currentPassword || !newPassword) {
-            return res.status(400).json({ message: 'يرجى إدخال كلمة المرور الحالية والجديدة.' });
+
+        // Only super_admin can change passwords (whether for self أو للغير)
+        if (requesterRole !== 'super_admin') {
+            return res.status(403).json({ message: 'تغيير كلمة المرور مسموح للسوبر أدمن فقط.' });
+        }
+
+        const targetId = targetUserId || requesterId;
+
+        if (!newPassword) {
+            return res.status(400).json({ message: 'يرجى إدخال كلمة المرور الجديدة.' });
         }
         if (newPassword.length < 8) {
             return res.status(400).json({ message: 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل.' });
         }
 
-        const user = await User.findById(userId).select('+password');
+        const user = await User.findById(targetId).select('+password');
         if (!user) {
             return res.status(404).json({ message: 'المستخدم غير موجود.' });
         }
 
-        const isMatch = await bcrypt.compare(currentPassword, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ message: 'كلمة المرور الحالية غير صحيحة.' });
+        // If changing own password, optionally verify currentPassword; for others skip
+        if (String(targetId) === String(requesterId)) {
+            if (!currentPassword) {
+                return res.status(400).json({ message: 'يرجى إدخال كلمة المرور الحالية.' });
+            }
+            const isMatch = await bcrypt.compare(currentPassword, user.password);
+            if (!isMatch) {
+                return res.status(401).json({ message: 'كلمة المرور الحالية غير صحيحة.' });
+            }
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 12);
@@ -179,10 +194,10 @@ exports.changePassword = async (req, res) => {
 
         // Log activity
         logActivity(
-            user._id,
+            requesterId,
             null,
             'USER_PASSWORD_CHANGED',
-            `${user.full_name || user.email} غيّر كلمة المرور الخاصة به`
+            `${req.user?.full_name || req.user?.name || 'مشرف'} غيّر كلمة المرور للمستخدم ${user.full_name || user.email}`
         ).catch(err => console.warn('[AUTH] Failed to log password change activity:', err));
 
         return res.json({ message: 'تم تغيير كلمة المرور بنجاح.' });

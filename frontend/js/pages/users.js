@@ -674,7 +674,7 @@ function renderEditUserModal(user) {
                     </div>
                     <div class="form-group">
                         <label for="edit-user-password">كلمة المرور الجديدة</label>
-                        <input type="password" id="edit-user-password" minlength="8" placeholder="اتركه فارغاً لعدم التغيير">
+                        <input type="password" id="edit-user-password" minlength="8" placeholder="${isCurrentUserSuperAdmin ? 'اتركه فارغاً لعدم التغيير' : 'السوبر أدمن فقط'}" ${isCurrentUserSuperAdmin ? '' : 'disabled'}>
                     </div>
                 </div>
                 <!-- Actions Section -->
@@ -754,8 +754,13 @@ function renderEditUserModal(user) {
 
             const userData = {
                 full_name: modal.querySelector('#edit-user-fullname').value,
-                password: modal.querySelector('#edit-user-password').value,
             };
+            if (isCurrentUserSuperAdmin) {
+                const newPwd = modal.querySelector('#edit-user-password').value;
+                if (newPwd) {
+                    userData.password = newPwd;
+                }
+            }
 
             // Send other user data update request
             const response = await authedFetch(`/api/users/${user._id}`, {
@@ -981,7 +986,7 @@ async function renderProfileSettingsPage() {
                     <div class="form-group">
                         <label for="profile-current-password">كلمة المرور الحالية</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-current-password" placeholder="أدخل كلمة المرور الحالية للتغيير">
+                            <input type="password" id="profile-current-password" placeholder="متاح للسوبر أدمن فقط" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                             <div id="current-password-validation-msg" class="validation-status-inline"></div>
                         </div>
@@ -989,22 +994,23 @@ async function renderProfileSettingsPage() {
                     <div class="form-group">
                         <label for="profile-new-password">كلمة المرور الجديدة</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-new-password" placeholder="اتركه فارغاً لعدم التغيير">
+                            <input type="password" id="profile-new-password" placeholder="متاح للسوبر أدمن فقط" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                         </div>
                         <div class="password-strength-meter"><div class="strength-bar"></div></div>
                         <div class="password-actions">
-                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small">إنشاء كلمة مرور قوية</button>
+                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>إنشاء كلمة مرور قوية</button>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="profile-confirm-password">تأكيد كلمة المرور الجديدة</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-confirm-password">
+                            <input type="password" id="profile-confirm-password" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                             <div id="password-match-error" class="validation-error-inline" style="display: none;">كلمتا المرور غير متطابقتين.</div>
                         </div>
                     </div>
+                    ${currentUserProfile.role !== 'super_admin' ? '<div class="alert alert-warning">تغيير كلمة المرور مسموح للسوبر أدمن فقط.</div>' : ''}
                 </div>
 
                 <div class="form-actions">
@@ -1023,8 +1029,9 @@ async function renderProfileSettingsPage() {
     const currentPasswordInput = form.querySelector('#profile-current-password');
     const validationMsgEl = form.querySelector('#current-password-validation-msg');
 
-    // --- NEW: Real-time current password validation on blur ---
+    // --- NEW: Real-time current password validation on blur (super_admin only) ---
     currentPasswordInput.addEventListener('blur', async () => {
+        if (currentUserProfile.role !== 'super_admin') return;
         const password = currentPasswordInput.value;
 
         // Clear previous message if input is empty
@@ -1164,12 +1171,17 @@ async function renderProfileSettingsPage() {
         const currentPassword = document.getElementById('profile-current-password').value;
 
         try {
-            // --- Password Validation ---
-            if (newPassword && !currentPassword) {
-                throw new Error('يجب إدخال كلمة المرور الحالية لتغييرها.');
-            }
-            if (newPassword !== confirmPassword) {
-                throw new Error('كلمتا المرور الجديدتان غير متطابقتين.');
+            // --- Password Validation (super_admin only) ---
+            if (newPassword || confirmPassword || currentPassword) {
+                if (currentUserProfile.role !== 'super_admin') {
+                    throw new Error('تغيير كلمة المرور مسموح للسوبر أدمن فقط.');
+                }
+                if (newPassword && !currentPassword) {
+                    throw new Error('يجب إدخال كلمة المرور الحالية لتغييرها.');
+                }
+                if (newPassword !== confirmPassword) {
+                    throw new Error('كلمتا المرور الجديدتان غير متطابقتين.');
+                }
             }
 
             // 1. Handle avatar upload if a new file is selected
@@ -1215,8 +1227,8 @@ async function renderProfileSettingsPage() {
             }
 
 
-            // 3. If a new password is provided, verify old and update in auth
-            if (newPassword && currentPassword) {
+            // 3. If a new password is provided, verify old and update in auth (super_admin only)
+            if (newPassword && currentPassword && currentUserProfile.role === 'super_admin') {
                 const resp = await authedFetch('/api/auth/change-password', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

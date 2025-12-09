@@ -66,7 +66,7 @@ async function createSuperAdmin() {
  */
 function broadcastPresence() {
     const onlineUserIds = Array.from(onlineClients.keys());
-    const message = JSON.stringify({ type: 'presence_update', onlineUserIds });
+    const message = JSON.stringify({ type: 'presence_update', data: onlineUserIds });
 
     onlineClients.forEach((client) => {
         if (client.readyState === client.OPEN) {
