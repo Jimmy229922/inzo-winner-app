@@ -10263,7 +10263,7 @@ async function renderProfileSettingsPage() {
 
         <div class="form-container" style="max-width: 800px;">
             <form id="profile-settings-form">
-                ${currentUserProfile.role === 'admin' ? `
+                ${currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin' ? `
                     <h3 class="details-section-title">المعلومات الأساسية</h3>
                     <div class="details-grid" style="grid-template-columns: 1fr; gap: 20px;"><div class="form-group"><label for="profile-full-name">الاسم الكامل</label><input type="text" id="profile-full-name" class="profile-name-input" value="${currentUserProfile.full_name || ''}" required></div></div>
                 ` : ''}
@@ -10498,7 +10498,7 @@ async function renderProfileSettingsPage() {
 
             // 2. Update public profile table (users)
             const profileUpdateData = { avatar_url: newAvatarUrl };
-            if (currentUserProfile.role === 'admin' && fullNameInput) {
+            if ((currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin') && fullNameInput) {
                 profileUpdateData.full_name = fullName;
             }
 
