@@ -10320,21 +10320,21 @@ async function renderProfileSettingsPage() {
         validationMsgEl.className = 'validation-status-inline checking';
 
         try {
-            // TODO: Implement a backend endpoint to verify current password
-            // For now, this will always fail or succeed based on a placeholder
             const response = await authedFetch('/api/auth/verify-password', {
                 method: 'POST',
-                body: JSON.stringify({ password: password })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
             });
+
             if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.message || 'كلمة المرور الحالية غير صحيحة.');
-                validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>كلمة المرور الحالية غير صحيحة.</span>';
+                const result = await response.json().catch(() => ({}));
+                validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>' + (result.message || 'كلمة المرور الحالية غير صحيحة.') + '</span>';
                 validationMsgEl.className = 'validation-status-inline error';
-            } else {
-                validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
-                validationMsgEl.className = 'validation-status-inline success';
+                return;
             }
+
+            validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
+            validationMsgEl.className = 'validation-status-inline success';
         } catch (e) {
             validationMsgEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>حدث خطأ أثناء التحقق.</span>';
             validationMsgEl.className = 'validation-status-inline error';
@@ -10348,7 +10348,8 @@ async function renderProfileSettingsPage() {
 
     if (avatarEditContainer) {
         avatarEditContainer.addEventListener('click', () => {
-            if (currentUserProfile.role === 'admin') {
+            // Allow both admin and super_admin to change avatar
+            if (currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin') {
                 avatarUploadInput.click();
             }
         });
@@ -10423,7 +10424,7 @@ async function renderProfileSettingsPage() {
     confirmPasswordInput.addEventListener('input', validatePasswordMatch);
 
     // --- Disable form elements for non-admins ---
-    if (currentUserProfile.role !== 'admin') {
+    if (currentUserProfile.role !== 'admin' && currentUserProfile.role !== 'super_admin') {
         const fullNameInput = form.querySelector('#profile-full-name');
         if (fullNameInput) fullNameInput.disabled = true;
         avatarEditContainer.style.cursor = 'not-allowed';
@@ -10457,15 +10458,24 @@ async function renderProfileSettingsPage() {
             let newAvatarUrl = currentUserProfile.avatar_url;
 
             if (avatarFile) {
-                // TODO: Implement backend endpoint for avatar upload
-                // For now, this will be a placeholder
-                console.warn('Avatar upload is not yet implemented in the new backend.');
-                if (true) { // Simulate an error for now
-                    throw new Error('فشل رفع الصورة. يرجى المحاولة مرة أخرى.');
+                const formData = new FormData();
+                formData.append('avatar', avatarFile);
+
+                const uploadResp = await authedFetch(`/api/users/${currentUserProfile._id}/avatar`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!uploadResp.ok) {
+                    const result = await uploadResp.json().catch(() => ({}));
+                    throw new Error(result.message || 'فشل رفع الصورة. يرجى المحاولة مرة أخرى.');
                 }
 
-                const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-                newAvatarUrl = urlData.publicUrl;
+                const uploadResult = await uploadResp.json();
+                newAvatarUrl = uploadResult.avatar_url || newAvatarUrl;
+                // تحديث المعاينة فوراً
+                if (newAvatarUrl && avatarPreview) {
+                    avatarPreview.src = newAvatarUrl;
+                }
             }
 
             // 2. Update public profile table (users)
@@ -10488,9 +10498,16 @@ async function renderProfileSettingsPage() {
 
             // 3. If a new password is provided, verify old and update in auth
             if (newPassword && currentPassword) {
-                // TODO: Implement backend endpoint for changing password
-                console.warn('Password change is not yet implemented in the new backend.');
-                if (true) throw new Error('تغيير كلمة المرور غير متاح حالياً.'); // Simulate error
+                const resp = await authedFetch('/api/auth/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ currentPassword, newPassword })
+                });
+
+                if (!resp.ok) {
+                    const result = await resp.json().catch(() => ({}));
+                    throw new Error(result.message || 'فشل تغيير كلمة المرور.');
+                }
             }
 
             // 4. Refresh local user profile data to reflect changes
@@ -18347,7 +18364,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 ${(!state.reportSent && !state.noWinnersApproved) ? `<button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>` : ''}
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — ${prizeDisplay}" title="نسخ"><i class="fas fa-copy"></i></button>
                 ${(!state.reportSent && !state.noWinnersApproved) ? `<button class="wr-icon-btn" data-edit="${w.id}" title="تعديل"><i class="fas fa-edit"></i></button>` : ''}
-                ${(!state.reportSent && !state.noWinnersApproved) ? `<button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت"><i class="fas fa-reply"></i></button>` : ''}
+                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت"><i class="fas fa-reply"></i></button>
               </div>
             </div>`;
         });
@@ -18386,7 +18403,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 ${(!state.reportSent && !state.noWinnersApproved) ? `<button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>` : ''}
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — $${w.prizeValue} بونص تداولي" title="نسخ"><i class="fas fa-copy"></i></button>
                 ${(!state.reportSent && !state.noWinnersApproved) ? `<button class="wr-icon-btn" data-edit="${w.id}" title="تعديل"><i class="fas fa-edit"></i></button>` : ''}
-                ${(!state.reportSent && !state.noWinnersApproved) ? `<button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت"><i class="fas fa-reply"></i></button>` : ''}
+                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت"><i class="fas fa-reply"></i></button>
               </div>
             </div>`;
         });
@@ -18876,9 +18893,28 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               await authedFetch(`/api/agents/${state.selectedAgent.id}/winners/${winner._id}`, {
                 method: 'DELETE'
               });
+
+              // NEW: If we delete a winner, we should ensure the competition is not "completed" anymore
+              // This allows the user to spin again and select a replacement
+              if (state.activeCompetition && state.activeCompetition.id) {
+                  // We optimistically update local state
+                  state.reportSent = false;
+                  state.noWinnersApproved = false;
+
+                  // And update backend status to 'active' (or 'awaiting_winners' if supported, but 'active' is safer)
+                  await authedFetch(`/api/competitions/${state.activeCompetition.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'active' })
+                  });
+              }
             } catch (e) {
               console.error('فشل حذف الفائز من قاعدة البيانات:', e);
             }
+          } else {
+             // Even if not saved in DB, we should unlock the UI locally
+             state.reportSent = false;
+             state.noWinnersApproved = false;
           }
           
           // تحديث الواجهة

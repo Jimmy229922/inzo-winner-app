@@ -116,4 +116,79 @@ exports.logout = async (req, res) => {
     
     res.status(200).json({ message: "تم تسجيل الخروج بنجاح." });
 };
+
+// Verify current password for the authenticated user
+exports.verifyPassword = async (req, res) => {
+    try {
+        const userId = req.user?._id || req.user?.userId;
+        const { password } = req.body || {};
+
+        if (!userId) {
+            return res.status(401).json({ message: 'غير مصرح. يرجى تسجيل الدخول مرة أخرى.' });
+        }
+        if (!password) {
+            return res.status(400).json({ message: 'يرجى إدخال كلمة المرور الحالية.' });
+        }
+
+        const user = await User.findById(userId).select('+password');
+        if (!user) {
+            return res.status(404).json({ message: 'المستخدم غير موجود.' });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ message: 'كلمة المرور الحالية غير صحيحة.' });
+        }
+
+        return res.json({ message: 'كلمة المرور صحيحة.' });
+    } catch (error) {
+        console.error('VerifyPassword Error:', error);
+        return res.status(500).json({ message: 'خطأ في الخادم أثناء التحقق من كلمة المرور.' });
+    }
+};
+
+// Change password for the authenticated user
+exports.changePassword = async (req, res) => {
+    try {
+        const userId = req.user?._id || req.user?.userId;
+        const { currentPassword, newPassword } = req.body || {};
+
+        if (!userId) {
+            return res.status(401).json({ message: 'غير مصرح. يرجى تسجيل الدخول مرة أخرى.' });
+        }
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: 'يرجى إدخال كلمة المرور الحالية والجديدة.' });
+        }
+        if (newPassword.length < 8) {
+            return res.status(400).json({ message: 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل.' });
+        }
+
+        const user = await User.findById(userId).select('+password');
+        if (!user) {
+            return res.status(404).json({ message: 'المستخدم غير موجود.' });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ message: 'كلمة المرور الحالية غير صحيحة.' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 12);
+        user.password = hashedPassword;
+        await user.save();
+
+        // Log activity
+        logActivity(
+            user._id,
+            null,
+            'USER_PASSWORD_CHANGED',
+            `${user.full_name || user.email} غيّر كلمة المرور الخاصة به`
+        ).catch(err => console.warn('[AUTH] Failed to log password change activity:', err));
+
+        return res.json({ message: 'تم تغيير كلمة المرور بنجاح.' });
+    } catch (error) {
+        console.error('ChangePassword Error:', error);
+        return res.status(500).json({ message: 'خطأ في الخادم أثناء تغيير كلمة المرور.' });
+    }
+};
                 
