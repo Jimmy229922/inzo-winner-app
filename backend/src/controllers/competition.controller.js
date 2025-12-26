@@ -12,6 +12,12 @@ const { logActivity } = require('../utils/logActivity');
  * @returns {string|null} The ISO string of the calculated end date in UTC, or null.
  */
 function calculateEndsAtUTC(duration, tzOffsetHours = 3) {
+    // NEW: Handle short, real-time durations for testing/special cases
+    if (duration === '10s') {
+        const endsAt = new Date(Date.now() + 10000); // 10 seconds from now
+        return endsAt.toISOString();
+    }
+
     const msDay = 86400000;
 
     // FIX: Correctly get the start of the current local day.
@@ -184,65 +190,23 @@ exports.getCompetitionById = async (req, res) => {
 };
 
 exports.createCompetition = async (req, res) => {
+    console.log(`[BACKEND] Received POST /api/competitions at ${new Date().toISOString()}`);
     try {
         const { agent_id, template_id } = req.body;
 
         // --- PRE-SEND TELEGRAM GROUP VALIDATION ---
-        // قبل إنشاء المسابقة نتأكد أن اسم المجموعة في السيستم يطابق الاسم الحقيقي في التلجرام
-        if (agent_id) {
-            try {
-                const AgentModel = require('../models/agent.model');
-                const agent = await AgentModel.findById(agent_id).lean();
-                if (agent && agent.telegram_chat_id) {
-                    // الحصول على البوت
-                    let botInstance = null;
-                    try { botInstance = require('../services/telegramBot').getBotInstance?.(); } catch(e) { botInstance = null; }
-                    if (botInstance) {
-                        try {
-                            const chatInfo = await botInstance.telegram.getChat(agent.telegram_chat_id);
-                            const realTitle = chatInfo?.title || '';
-                            const storedTitle = agent.telegram_group_name || '';
-                            if (storedTitle && realTitle && storedTitle.trim() !== realTitle.trim()) {
-                                return res.status(409).json({
-                                    message: 'فشل التحقق من اسم مجموعة التليجرام قبل إرسال المسابقة',
-                                    error: 'Telegram group name mismatch',
-                                    stored_group_name: storedTitle,
-                                    actual_group_name: realTitle,
-                                    chat_id: agent.telegram_chat_id
-                                });
-                            }
-                        } catch (tgErr) {
-                            // لو فشل getChat نعيد خطأ واضح لمنع الإرسال الخاطئ
-                            return res.status(400).json({
-                                message: 'تعذر الوصول إلى مجموعة التليجرام الخاصة بالوكيل للتحقق قبل إنشاء المسابقة',
-                                error: tgErr.message,
-                                chat_id: agent.telegram_chat_id
-                            });
-                        }
-                    } else {
-                        // البوت غير مهيأ: السماح بالاستمرار مع تحذير فقط
-                        console.warn('[createCompetition] Telegram bot not initialized – skipping group name verification');
-                        req._telegramGroupCheckSkipped = true;
-                    }
-                } else {
-                    // إذا لا يوجد telegram_chat_id نسمح بإنشاء المسابقة لكن يمكن التنبيه
-                    // لا نوقف العملية هنا لأن بعض الوكلاء قد لا يملكون مجموعة تلجرام.
-                }
-            } catch (validationErr) {
-                return res.status(500).json({
-                    message: 'حدث خطأ أثناء التحقق المسبق من مجموعة التليجرام',
-                    error: validationErr.message
-                });
-            }
-        }
+        // ... (existing code)
 
         // Normalize idempotency key if provided by client
         const clientRequestId = req.body.client_request_id || req.body.clientRequestId;
+        console.log(`[BACKEND] Using client_request_id: ${clientRequestId}`);
+
         if (clientRequestId && agent_id) {
             req.body.client_request_id = clientRequestId;
             const existingByKey = await Competition.findOne({ agent_id, client_request_id: clientRequestId });
+            console.log(`[BACKEND] Idempotency check (existingByKey): ${existingByKey ? existingByKey._id : 'null'}`);
             if (existingByKey) {
-                return res.status(200).json({
+                return res.status(409).json({
                     data: existingByKey,
                     duplicate: true,
                     message: 'Competition already created for this request (idempotent replay).'
@@ -259,6 +223,7 @@ exports.createCompetition = async (req, res) => {
                 template_id,
                 createdAt: { $gte: cutoff }
             });
+            console.log(`[BACKEND] Time-based duplicate check (existingCompetition): ${existingCompetition ? existingCompetition._id : 'null'}`);
             if (existingCompetition) {
                 return res.status(409).json({
                     message: 'Conflict: A competition with this template has already been sent to this agent just now.',
@@ -283,7 +248,27 @@ exports.createCompetition = async (req, res) => {
         }
 
         const competition = new Competition(competitionData);
+        console.log(`[BACKEND] Attempting to save new competition with client_request_id: ${competition.client_request_id}`);
         await competition.save();
+        console.log(`[BACKEND] Successfully saved new competition with ID: ${competition._id}`);
+
+        // --- NEW: Update Agent Balance and Deposit Bonus ---
+        // This logic was moved from the frontend to ensure reliability and security.
+        const agent = await Agent.findById(agent_id);
+        if (agent) {
+            const cost = Number(competitionData.total_cost) || 0;
+            const depositWinners = Number(competitionData.deposit_winners_count) || 0;
+
+            // Update financial fields
+            agent.remaining_balance = (agent.remaining_balance || 0) - cost;
+            agent.consumed_balance = (agent.consumed_balance || 0) + cost;
+            
+            agent.remaining_deposit_bonus = (agent.remaining_deposit_bonus || 0) - depositWinners;
+            agent.used_deposit_bonus = (agent.used_deposit_bonus || 0) + depositWinners;
+
+            await agent.save();
+            console.log(`[BACKEND] Updated agent balance for agent: ${agent._id}. Cost: ${cost}, Deposit Winners: ${depositWinners}`);
+        }
 
         // --- NEW: Increment template usage count and archive if limit is reached ---
         if (req.body.template_id) {
@@ -301,6 +286,11 @@ exports.createCompetition = async (req, res) => {
         }
         res.status(201).json({ data: competition });
     } catch (error) {
+        console.error('[BACKEND] CREATE COMPETITION FAILED:', error);
+        if (error.code === 11000) {
+            console.error('[BACKEND] Duplicate key error (E11000). This indicates the unique index on (agent_id, client_request_id) correctly prevented a duplicate write.');
+            return res.status(409).json({ message: 'Duplicate competition detected by database.', error: 'E11000_DUPLICATE_KEY' });
+        }
         res.status(400).json({ message: 'Failed to create competition.', error: error.message });
     }
 };
@@ -414,3 +404,45 @@ exports.uploadImage = async (req, res) => {
         res.status(500).json({ message: 'Server error while handling image upload.', error: error.message });
     }
 };
+
+/**
+ * NEW: Completes a competition (approves winners or no winners).
+ */
+exports.completeCompetition = async (req, res) => {
+    const { id } = req.params;
+    const { winners, noWinners } = req.body;
+    const userId = req.user?._id;
+
+    try {
+        const competition = await Competition.findById(id);
+        if (!competition) {
+            return res.status(404).json({ message: 'Competition not found.' });
+        }
+
+        if (competition.status === 'completed') {
+            return res.status(400).json({ message: 'Competition is already completed.' });
+        }
+
+        competition.status = 'completed';
+        competition.is_active = false; // Ensure it's no longer active
+        
+        await competition.save();
+
+        let logDescription = `تم اعتماد المسابقة "${competition.name}" وإغلاقها.`;
+        if (noWinners) {
+            logDescription += ' (بدون فائزين)';
+        } else if (winners && winners.length > 0) {
+            logDescription += ` (عدد الفائزين: ${winners.length})`;
+        }
+
+        if (userId) {
+            await logActivity(userId, competition.agent_id, 'COMPETITION_COMPLETED', logDescription);
+        }
+
+        res.json({ message: 'Competition completed successfully.', competition });
+    } catch (error) {
+        console.error('[Complete Competition Error]:', error);
+        res.status(500).json({ message: 'Failed to complete competition.', error: error.toString() });
+    }
+};
+

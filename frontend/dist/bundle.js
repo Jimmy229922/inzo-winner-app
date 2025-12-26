@@ -51,239 +51,253 @@
  * mimicking a Redux/Context pattern in vanilla JavaScript.
  */
 
-const TASK_STATE_KEY = 'inzoTaskState';
 const { authedFetch } = window.utils;
 
 const taskStore = {
-    state: {
-        // tasks: { agentId: { dayIndex: { audited: bool, competition_sent: bool } } }
-        tasks: {},
-    },
-    _subscribers: [], // NEW: To hold all callback functions
+  state: {
+    // tasks: { agentId: { dayIndex: { audited: bool, competition_sent: bool } } }
+    tasks: {},
+  },
+  _subscribers: [], // NEW: To hold all callback functions
 
-    /**
-     * Initializes the store by loading data from localStorage and fetching initial data.
-     * This acts as the "hydration" step.
-     */
-    async init() {
-        this._loadState();
-        await this._fetchInitialData();
-        // Notify all components that the initial state is ready.
-        this._notify();
-    },
+  /**
+   * Initializes the store by loading data from localStorage and fetching initial data.
+   * This acts as the "hydration" step.
+   */
+  async init() {
+    // Do not hydrate from localStorage — server is source-of-truth
+    await this._fetchInitialData();
+    // Notify all components that the initial state is ready.
+    this._notify();
+  },
 
-    /**
-     * The main dispatcher function to update task status.
-     * This is the equivalent of a reducer action.
-     * @param {string} agentId
-     * @param {number} dayIndex
-     * @param {'audited' | 'competition_sent'} taskType
-     * @param {boolean} status
-     */
-    async updateTaskStatus(agentId, dayIndex, taskType, status) {
-        console.log(`[TaskStore] updateTaskStatus called with:`, { agentId, dayIndex, taskType, status });
+  /**
+   * The main dispatcher function to update task status.
+   * This is the equivalent of a reducer action.
+   * @param {string} agentId
+   * @param {number} dayIndex
+   * @param {'audited' | 'competition_sent'} taskType
+   * @param {boolean} status
+   */
+  async updateTaskStatus(agentId, dayIndex, taskType, status) {
+    console.log(`[TaskStore] updateTaskStatus called with:`, {
+      agentId,
+      dayIndex,
+      taskType,
+      status,
+    });
 
-        // Log state before
-        console.log(`[TaskStore] State for agent ${agentId} BEFORE update:`, JSON.parse(JSON.stringify(this.state.tasks[agentId] || {})));
+    // Log state before
+    console.log(
+      `[TaskStore] State for agent ${agentId} BEFORE update:`,
+      JSON.parse(JSON.stringify(this.state.tasks[agentId] || {}))
+    );
 
-        try {
-            const response = await authedFetch('/api/tasks', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ agentId, dayIndex, taskType, status })
-            });
+    try {
+      const response = await authedFetch("/api/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ agentId, dayIndex, taskType, status }),
+      });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to update task on the server.');
-            }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || "Failed to update task on the server."
+        );
+      }
 
-            // Ensure the agent and day objects exist
-            if (!this.state.tasks[agentId]) {
-                this.state.tasks[agentId] = {};
-            }
-            if (!Object.prototype.hasOwnProperty.call(this.state.tasks[agentId], dayIndex)) {
-                this.state.tasks[agentId][dayIndex] = { audited: false, competition_sent: false };
-            }
+      // Consume returned saved task from server (backend returns { message, task })
+      let savedTask = null;
+      try {
+        const respBody = await response.json();
+        savedTask = respBody.task || null;
+      } catch (_) {
+        // ignore parse errors, fallback to using current time below
+      }
 
-            // Update the state
-            this.state.tasks[agentId][dayIndex][taskType] = status;
+      // Ensure the agent and day objects exist
+      if (!this.state.tasks[agentId]) {
+        this.state.tasks[agentId] = {};
+      }
+      if (
+        !Object.prototype.hasOwnProperty.call(
+          this.state.tasks[agentId],
+          dayIndex
+        )
+      ) {
+        this.state.tasks[agentId][dayIndex] = {
+          audited: false,
+          competition_sent: false,
+        };
+      }
 
-            // Log state after
-            console.log(`[TaskStore] State for agent ${agentId} AFTER update:`, JSON.parse(JSON.stringify(this.state.tasks[agentId] || {})));
+      // Update the state and set a reliable _updatedAt value from server when available
+      this.state.tasks[agentId][dayIndex][taskType] = status;
+      this.state.tasks[agentId][dayIndex]._updatedAt =
+        savedTask && savedTask.updatedAt
+          ? savedTask.updatedAt
+          : new Date().toISOString();
 
-            // Persist and notify
-            this._saveState();
-            this._notify();
+      // Log state after
+      console.log(
+        `[TaskStore] State for agent ${agentId} AFTER update:`,
+        JSON.parse(JSON.stringify(this.state.tasks[agentId] || {}))
+      );
 
-        } catch (error) {
-            console.error("Error updating task status:", error);
-            // Re-throw the error to be caught by the calling UI component
-            throw error;
-        }
-    },
-
-    async resetAllTasks() {
-        console.log('[TaskStore] Resetting all tasks.');
-        try {
-            // Perform API call to reset all tasks on the backend
-            const response = await authedFetch('/api/tasks/reset-all', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to reset tasks on server.');
-            }
-
-            // If API call is successful, reset the local state
-            this.state.tasks = {};
-
-            // Persist and notify
-            this._saveState();
-            this._notify();
-            console.log('[TaskStore] All tasks have been reset locally and on the server.');
-
-        } catch (error) {
-            console.error("Error resetting all tasks:", error);
-            throw error; // Re-throw for the UI to handle
-        }
-    },
-
-    /**
-     * Fetches the initial data (agents and tasks for the week) from the backend.
-     * It merges the backend state with the local state, giving precedence to local changes.
-     */
-    async _fetchInitialData() {
-        try {
-            const response = await authedFetch('/api/calendar/data');
-            if (!response.ok) throw new Error('Failed to fetch calendar data');
-            const { tasks: serverTasks } = await response.json();
-
-            // Merge server tasks into local state
-            (serverTasks || []).forEach(task => {
-                // Use local day to match backend week calculation
-                const dayIndex = new Date(task.task_date).getDay();
-                // Safely build agentId from possible fields to avoid calling toString on undefined
-                const agentId = String(task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? '');
-                if (!agentId) return; // skip malformed entries
-
-                if (!this.state.tasks[agentId]) this.state.tasks[agentId] = {};
-                if (!this.state.tasks[agentId][dayIndex]) {
-                     this.state.tasks[agentId][dayIndex] = {
-                        audited: task.audited,
-                        competition_sent: task.competition_sent
-                    };
-                }
-            });
-            this._saveState();
-        } catch (error) {
-            console.error("Failed to fetch initial task data:", error);
-        }
-    },
-
-    /**
-     * مزامنة الحالة من الخادم لضمان توحيد العرض بين جميع المستخدمين.
-     * الخادم هو مصدر الحقيقة؛ يتم استبدال الحالة المحلية بحالة الخادم.
-     */
-        async syncWithServer() {
-        try {
-            const response = await authedFetch('/api/calendar/data');
-            if (!response.ok) throw new Error('Failed to sync calendar data');
-            const { tasks: serverTasks } = await response.json();
-
-            const incoming = {};
-            (serverTasks || []).forEach(task => {
-                const dayIndex = new Date(task.task_date).getDay();
-                const agentId = String(task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? '');
-                if (!agentId) return;
-                if (!incoming[agentId]) incoming[agentId] = {};
-                if (!incoming[agentId][dayIndex]) {
-                    incoming[agentId][dayIndex] = {
-                        audited: !!task.audited,
-                        competition_sent: !!task.competition_sent,
-                        _updatedAt: task.updatedAt || task.task_date
-                    };
-                }
-            });
-
-            // Merge instead of replace to avoid wiping optimistic updates
-            Object.keys(incoming).forEach(agentId => {
-                if (!this.state.tasks[agentId]) this.state.tasks[agentId] = {};
-                Object.keys(incoming[agentId]).forEach(dayIdx => {
-                    const inc = incoming[agentId][dayIdx];
-                    const existing = this.state.tasks[agentId][dayIdx];
-                    if (!existing) {
-                        this.state.tasks[agentId][dayIdx] = inc;
-                    } else {
-                        // Always overwrite booleans with server truth
-                        existing.audited = inc.audited;
-                        existing.competition_sent = inc.competition_sent;
-                        existing._updatedAt = inc._updatedAt;
-                    }
-                });
-            });
-            this._saveState();
-            this._notify();
-        } catch (error) {
-            console.error('TaskStore sync failed:', error);
-        }
-    },
-
-    _loadState() {
-        const storedState = localStorage.getItem(TASK_STATE_KEY);
-        if (storedState) {
-            this.state = JSON.parse(storedState);
-        }
-    },
-
-    _saveState() {
-        localStorage.setItem(TASK_STATE_KEY, JSON.stringify(this.state));
-    },
-
-    _notify() {
-        // Call all subscribed callbacks with a deep clone of the new state to prevent mutation.
-        const stateClone = JSON.parse(JSON.stringify(this.state));
-        this._subscribers.forEach(callback => callback(stateClone));
-    },
-
-    /**
-     * Subscribes a callback function to state changes.
-     * @param {Function} callback
-     */
-    subscribe(callback) {
-        if (!this._subscribers.includes(callback)) {
-            this._subscribers.push(callback);
-        }
-    },
-
-    /**
-     * Unsubscribes a callback function from state changes.
-     * @param {Function} callback
-     */
-    unsubscribe(callback) {
-        this._subscribers = this._subscribers.filter(cb => cb !== callback);
+      // Notify UI subscribers (do not persist locally; server is authoritative)
+      this._notify();
+    } catch (error) {
+      console.error("Error updating task status:", error);
+      // Re-throw the error to be caught by the calling UI component
+      throw error;
     }
+  },
+
+  async resetAllTasks() {
+    console.log("[TaskStore] Resetting all tasks.");
+    try {
+      // Perform API call to reset all tasks on the backend
+      const response = await authedFetch("/api/tasks/reset-all", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || "Failed to reset tasks on server."
+        );
+      }
+
+      // If API call is successful, reset the in-memory state (server will reflect this)
+      this.state.tasks = {};
+      this._notify();
+      console.log(
+        "[TaskStore] All tasks have been reset locally and on the server."
+      );
+    } catch (error) {
+      console.error("Error resetting all tasks:", error);
+      throw error; // Re-throw for the UI to handle
+    }
+  },
+
+  /**
+   * Fetches the initial data (agents and tasks for the week) from the backend.
+   * It merges the backend state with the local state, giving precedence to local changes.
+   */
+  async _fetchInitialData() {
+    try {
+      const response = await authedFetch("/api/calendar/data");
+      if (!response.ok) throw new Error("Failed to fetch calendar data");
+      const { tasks: serverTasks } = await response.json();
+
+      // Build authoritative in-memory state based on server tasks only.
+      const incoming = {};
+      (serverTasks || []).forEach((task) => {
+        const dayIndex = new Date(task.task_date).getDay();
+        const agentId = String(
+          task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? ""
+        );
+        if (!agentId) return;
+        if (!incoming[agentId]) incoming[agentId] = {};
+        incoming[agentId][dayIndex] = {
+          audited: !!task.audited,
+          competition_sent: !!task.competition_sent,
+          _updatedAt: task.updatedAt || task.task_date,
+        };
+      });
+
+      // Replace in-memory state with server state (server is source-of-truth)
+      this.state.tasks = incoming;
+    } catch (error) {
+      console.error("Failed to fetch initial task data:", error);
+    }
+  },
+
+  /**
+   * مزامنة الحالة من الخادم لضمان توحيد العرض بين جميع المستخدمين.
+   * الخادم هو مصدر الحقيقة؛ يتم استبدال الحالة المحلية بحالة الخادم.
+   */
+  async syncWithServer() {
+    try {
+      const response = await authedFetch("/api/calendar/data");
+      if (!response.ok) throw new Error("Failed to sync calendar data");
+      const { tasks: serverTasks } = await response.json();
+      // Rebuild authoritative state from server and replace in-memory state.
+      const incoming = {};
+      (serverTasks || []).forEach((task) => {
+        const dayIndex = new Date(task.task_date).getDay();
+        const agentId = String(
+          task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? ""
+        );
+        if (!agentId) return;
+        if (!incoming[agentId]) incoming[agentId] = {};
+        incoming[agentId][dayIndex] = {
+          audited: !!task.audited,
+          competition_sent: !!task.competition_sent,
+          _updatedAt: task.updatedAt || task.task_date,
+        };
+      });
+
+      this.state.tasks = incoming;
+      this._notify();
+    } catch (error) {
+      console.error("TaskStore sync failed:", error);
+    }
+  },
+
+  _loadState() {
+    // intentionally noop — local persistence removed, server is authoritative
+  },
+
+  _saveState() {
+    // intentionally noop — local persistence removed, server is authoritative
+  },
+
+  _notify() {
+    // Call all subscribed callbacks with a deep clone of the new state to prevent mutation.
+    const stateClone = JSON.parse(JSON.stringify(this.state));
+    this._subscribers.forEach((callback) => callback(stateClone));
+  },
+
+  /**
+   * Subscribes a callback function to state changes.
+   * @param {Function} callback
+   */
+  subscribe(callback) {
+    if (!this._subscribers.includes(callback)) {
+      this._subscribers.push(callback);
+    }
+  },
+
+  /**
+   * Unsubscribes a callback function from state changes.
+   * @param {Function} callback
+   */
+  unsubscribe(callback) {
+    this._subscribers = this._subscribers.filter((cb) => cb !== callback);
+  },
 };
 
 // Make it globally accessible immediately
-window.taskStore = taskStore; 
+window.taskStore = taskStore;
 
 // Initialize the store only after the main document is fully loaded and parsed.
 // This ensures that functions from other scripts (like authedFetch) are available.
-document.addEventListener('DOMContentLoaded', () => {
-    taskStore.init().then(() => {
-        // Dispatch storeReady event after initialization is complete.
-        window.dispatchEvent(new Event('storeReady'));
-        // Start periodic server sync to reflect others' changes
-        setInterval(() => taskStore.syncWithServer(), 20000);
-    });
+document.addEventListener("DOMContentLoaded", () => {
+  taskStore.init().then(() => {
+    // Dispatch storeReady event after initialization is complete.
+    window.dispatchEvent(new Event("storeReady"));
+    // Start periodic server sync to reflect others' changes
+    setInterval(() => taskStore.syncWithServer(), 20000);
+  });
 });
+
 
 // == home.js ==
 ﻿async function renderHomePage() {
@@ -2300,7 +2314,7 @@ async function renderCompetitionCreatePage(agentId) {
                 <div class="override-fields-grid">
                     <div class="form-group">
                         <label for="override-trading-winners">عدد الفائزين (تداولي)</label>
-                        <input type="number" id="override-trading-winners" value="${agent.winners_count || 0}">
+                        <input type="number" id="override-trading-winners" value="${agent.winners_count !== undefined ? agent.winners_count : 1}" min="0">
                     </div>
                     <div class="form-group">
                         <label for="override-prize">الجائزة لكل فائز ($)</label>
@@ -2308,12 +2322,13 @@ async function renderCompetitionCreatePage(agentId) {
                     </div>
                     <div class="form-group">
                         <label for="override-deposit-winners">عدد الفائزين (إيداع)</label>
-                        <input type="number" id="override-deposit-winners" value="${agent.deposit_bonus_winners_count || 0}">
+                        <input type="number" id="override-deposit-winners" value="${agent.deposit_bonus_winners_count !== undefined ? agent.deposit_bonus_winners_count : 0}" min="0">
                     </div>
                     <div class="form-group">
                         <label for="override-duration">مدة المسابقة</label>
                         <select id="override-duration">
                             <option value="" disabled>-- اختر مدة --</option>
+                            <option value="10s">10 ثواني</option>
                             <option value="1d" ${agent.competition_duration === '24h' || !agent.competition_duration || (agent.competition_duration !== '48h' && agent.competition_duration !== '168h') ? 'selected' : ''}>يوم واحد</option>
                             <option value="2d" ${agent.competition_duration === '48h' ? 'selected' : ''}>يومين</option>
                             <option value="1w" ${agent.competition_duration === '168h' ? 'selected' : ''}>أسبوع</option>
@@ -2593,6 +2608,11 @@ async function renderCompetitionCreatePage(agentId) {
             const winnersCount = parseInt(document.getElementById('override-trading-winners').value) || 0;
             const prizePerWinner = parseFloat(document.getElementById('override-prize').value) || 0;
             const depositWinnersCount = parseInt(document.getElementById('override-deposit-winners').value) || 0;
+            
+            if (winnersCount === 0 && depositWinnersCount === 0) {
+                throw new Error('يجب تحديد فائز واحد على الأقل (تداولي أو إيداع).');
+            }
+
             const totalCost = winnersCount * prizePerWinner;
 
             if (totalCost > (agent.remaining_balance || 0) || depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
@@ -2692,32 +2712,9 @@ async function renderCompetitionCreatePage(agentId) {
             }
             // --- End of FIX ---
 
-            // --- NEW: Use the correct PUT endpoint to update the agent's balance and deposit bonus ---
-            const newRemainingBalance = (agent.remaining_balance || 0) - totalCost;
-            const newConsumedBalance = (agent.consumed_balance || 0) + totalCost;
-            const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) - depositWinnersCount;
-            const newUsedDepositBonus = (agent.used_deposit_bonus || 0) + depositWinnersCount;
-
-            const updatePayload = {
-                remaining_balance: newRemainingBalance,
-                consumed_balance: newConsumedBalance,
-                remaining_deposit_bonus: newRemainingDepositBonus,
-                used_deposit_bonus: newUsedDepositBonus
-            };
-
-            const balanceUpdateResponse = await authedFetch(`/api/agents/${agent._id}`, {
-                method: 'PUT',
-                body: JSON.stringify(updatePayload)
-            });
-
-            if (!balanceUpdateResponse.ok) {
-                const result = await balanceUpdateResponse.json();
-                // Log the error and perhaps show a warning to the user that the balance deduction failed
-                console.error(`فشل خصم الرصيد أو البونص: ${result.message}`);
-                showToast(`تم إرسال المسابقة، لكن فشل تحديث الرصيد أو البونص: ${result.message}`, 'warning');
-            } else {
-                showToast('تم خصم التكاليف من الرصيد والبونص بنجاح.', 'success');
-            }
+            // --- UPDATE: Balance deduction is now handled by the backend in createCompetition ---
+            // We no longer need to send a separate PUT request here.
+            showToast('تم خصم التكاليف من الرصيد والبونص بنجاح.', 'success');
 
             // --- FIX: Force a full page reload to show updated balance ---
             // Using .hash only changes the URL fragment without reloading, which can show stale cached data.
@@ -4664,87 +4661,118 @@ let weeklyResetCountdownInterval = null;
  * @param {string} searchTerm The search term to highlight.
  */
 function applyHighlight(element, searchTerm) {
-    const nameEl = element.querySelector('.agent-name');
-    const idEl = element.querySelector('.calendar-agent-id');
-    const originalName = element.dataset.name;
-    const originalId = '#' + element.dataset.agentidStr;
+  const nameEl = element.querySelector(".agent-name");
+  const idEl = element.querySelector(".calendar-agent-id");
+  const originalName = element.dataset.name;
+  const originalId = "#" + element.dataset.agentidStr;
 
-    const regex = searchTerm ? new RegExp(searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi') : null;
+  const regex = searchTerm
+    ? new RegExp(searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&"), "gi")
+    : null;
 
-    nameEl.innerHTML = searchTerm ? originalName.replace(regex, '<mark>$&</mark>') : originalName;
-    idEl.innerHTML = searchTerm ? originalId.replace(regex, '<mark>$&</mark>') : originalId;
+  nameEl.innerHTML = searchTerm
+    ? originalName.replace(regex, "<mark>$&</mark>")
+    : originalName;
+  idEl.innerHTML = searchTerm
+    ? originalId.replace(regex, "<mark>$&</mark>")
+    : originalId;
 }
 
-function createAgentItemHtml(agent, dayIndex, isToday, tasksState, number, searchTerm = '') {
-    // Read state directly from the centralized store's state
-    const agentTasks = tasksState.tasks[agent._id] || {};
-    const task = agentTasks[dayIndex] || { audited: false, competition_sent: false };
+function createAgentItemHtml(
+  agent,
+  dayIndex,
+  isToday,
+  tasksState,
+  number,
+  searchTerm = ""
+) {
+  // Read state directly from the centralized store's state
+  const agentTasks = tasksState.tasks[agent._id] || {};
+  const task = agentTasks[dayIndex] || {
+    audited: false,
+    competition_sent: false,
+  };
 
-    const isComplete = task.audited; // Visual completion now only requires audit
-    const avatarHtml = agent.avatar_url
-        ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar" loading="lazy">`
-        : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
+  const isComplete = task.audited; // Visual completion now only requires audit
+  const avatarHtml = agent.avatar_url
+    ? `<img src="${agent.avatar_url}" alt="Avatar" class="calendar-agent-avatar" loading="lazy">`
+    : `<div class="calendar-agent-avatar-placeholder"><i class="fas fa-user"></i></div>`;
 
-    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
-    const cursorStyle = isSuperAdmin ? 'cursor: grab;' : 'cursor: pointer;';
+  const isSuperAdmin = currentUserProfile?.role === "super_admin";
+  const cursorStyle = isSuperAdmin ? "cursor: grab;" : "cursor: pointer;";
 
-    const element = document.createElement('div');
-    element.id = `agent-card-${agent._id}-${dayIndex}`;
-    element.className = `calendar-agent-item ${isComplete ? 'complete' : ''}`;
-    element.dataset.agentId = agent._id;
-    element.dataset.classification = agent.classification;
-    element.dataset.name = agent.name;
-    element.dataset.agentidStr = agent.agent_id;
-    element.dataset.dayIndex = dayIndex;
-    element.style.cssText = cursorStyle;
-    if (isSuperAdmin) element.setAttribute('draggable', 'true');
+  const element = document.createElement("div");
+  element.id = `agent-card-${agent._id}-${dayIndex}`;
+  element.className = `calendar-agent-item ${isComplete ? "complete" : ""}`;
+  element.dataset.agentId = agent._id;
+  element.dataset.classification = agent.classification;
+  element.dataset.name = agent.name;
+  element.dataset.agentidStr = agent.agent_id;
+  element.dataset.dayIndex = dayIndex;
+  element.style.cssText = cursorStyle;
+  if (isSuperAdmin) element.setAttribute("draggable", "true");
 
-    element.innerHTML = `
+  element.innerHTML = `
         <div class="calendar-agent-number">${number}</div>
         <div class="calendar-agent-main">
             ${avatarHtml}
             <div class="calendar-agent-info">
                 <span class="agent-name"></span>
                 <div class="agent-meta">
-                    <p class="calendar-agent-id" title="نسخ الرقم" data-agent-id-copy="${agent.agent_id}"></p>
-                    <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
+                    <p class="calendar-agent-id" title="نسخ الرقم" data-agent-id-copy="${
+                      agent.agent_id
+                    }"></p>
+                    <span class="classification-badge classification-${agent.classification.toLowerCase()}">${
+    agent.classification
+  }</span>
                 </div>
             </div>
         </div>
         <div class="calendar-agent-actions">
-            <div class="action-item ${task.audited ? 'done' : ''}">
+            <div class="action-item ${task.audited ? "done" : ""}">
                 <label>التدقيق</label>
                 <label class="custom-checkbox toggle-switch">
-                    <input type="checkbox" class="audit-check" data-agent-id="${agent._id}" data-day-index="${dayIndex}" ${task.audited ? 'checked' : ''}>
+                    <input type="checkbox" class="audit-check" data-agent-id="${
+                      agent._id
+                    }" data-day-index="${dayIndex}" ${
+    task.audited ? "checked" : ""
+  }>
                     <span class="slider round"></span>
                 </label>
             </div>
-            <div class="action-item ${task.competition_sent ? 'done' : ''}">
+            <div class="action-item ${task.competition_sent ? "done" : ""}">
                 <label>المسابقة</label>
                 <label class="custom-checkbox toggle-switch">
-                    <input type="checkbox" class="competition-check" data-agent-id="${agent._id}" data-day-index="${dayIndex}" ${task.competition_sent ? 'checked' : ''}>
+                    <input type="checkbox" class="competition-check" data-agent-id="${
+                      agent._id
+                    }" data-day-index="${dayIndex}" ${
+    task.competition_sent ? "checked" : ""
+  }>
                     <span class="slider round"></span>
                 </label>
             </div>
         </div>
     `;
 
-    applyHighlight(element, searchTerm);
+  applyHighlight(element, searchTerm);
 
-    const nameEl = element.querySelector('.agent-name');
-    // إضافة علامة الصح فقط عند تفعيل التدقيق
-    if (isComplete) {
-        nameEl.insertAdjacentHTML('beforeend', '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>');
-        nameEl.classList.add('has-checkmark');
-    }
+  const nameEl = element.querySelector(".agent-name");
+  // إضافة علامة الصح فقط عند تفعيل التدقيق
+  if (isComplete) {
+    nameEl.insertAdjacentHTML(
+      "beforeend",
+      '<i class="fas fa-check-circle task-complete-icon" title="المهمة مكتملة"></i>'
+    );
+    nameEl.classList.add("has-checkmark");
+  }
 
-    return element;
+  return element;
 }
 
 class CalendarUI {
-    constructor(container) {
-        this.container = container;
-        this.container.innerHTML = `
+  constructor(container) {
+    this.container = container;
+    this.container.innerHTML = `
         <div class="page-header column-header">
             <div class="header-top-row">
                 <h1>تقويم المهام الأسبوعي</h1>
@@ -4778,90 +4806,122 @@ class CalendarUI {
         </div>
         <div id="calendar-container" class="calendar-container"></div>
         `;
-        this.calendarContainer = this.container.querySelector('#calendar-container');
-        this.calendarData = [];
-        this.tasksState = null;
-        this.daysOfWeek = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة',];
-        this.searchDebounceTimer = null;
-        this._syncInterval = null;
+    this.calendarContainer = this.container.querySelector(
+      "#calendar-container"
+    );
+    this.calendarData = [];
+    this.tasksState = null;
+    this.daysOfWeek = [
+      "الأحد",
+      "الاثنين",
+      "الثلاثاء",
+      "الأربعاء",
+      "الخميس",
+      "الجمعة",
+    ];
+    this.searchDebounceTimer = null;
+    this._syncInterval = null;
 
-        this.boundHandleChange = this._handleChange.bind(this);
-        this.boundHandleResetAll = this.handleResetAllTasks.bind(this);
+    this.boundHandleChange = this._handleChange.bind(this);
+    this.boundHandleResetAll = this.handleResetAllTasks.bind(this);
+  }
+
+  destroy() {
+    // window.taskStore.unsubscribe(this.boundUpdateUIFromState); // Removed to fix bug
+    clearTimeout(this.searchDebounceTimer);
+    if (weeklyResetCountdownInterval) {
+      clearInterval(weeklyResetCountdownInterval);
     }
-
-    destroy() {
-        // window.taskStore.unsubscribe(this.boundUpdateUIFromState); // Removed to fix bug
-        clearTimeout(this.searchDebounceTimer);
-        if (weeklyResetCountdownInterval) {
-            clearInterval(weeklyResetCountdownInterval);
-        }
-        if (this._syncInterval) {
-            clearInterval(this._syncInterval);
-            this._syncInterval = null;
-        }
-        this.calendarContainer.removeEventListener('change', this.boundHandleChange);
-        const resetBtn = this.container.querySelector('#reset-all-tasks-btn');
-        if (resetBtn) {
-            resetBtn.removeEventListener('click', this.boundHandleResetAll);
-        }
-        console.log('[Calendar Page] Instance destroyed and listeners cleaned up.');
+    if (this._syncInterval) {
+      clearInterval(this._syncInterval);
+      this._syncInterval = null;
     }
+    this.calendarContainer.removeEventListener(
+      "change",
+      this.boundHandleChange
+    );
+    const resetBtn = this.container.querySelector("#reset-all-tasks-btn");
+    if (resetBtn) {
+      resetBtn.removeEventListener("click", this.boundHandleResetAll);
+    }
+    console.log("[Calendar Page] Instance destroyed and listeners cleaned up.");
+  }
 
-    async render() {
-        const response = await authedFetch('/api/calendar/data');
-        if (!response.ok) {
-            throw new Error((await response.json()).message || 'فشل جلب بيانات التقويم');
-        }
-        const { agents } = await response.json();
+  async render() {
+    const response = await authedFetch("/api/calendar/data");
+    if (!response.ok) {
+      throw new Error(
+        (await response.json()).message || "فشل جلب بيانات التقويم"
+      );
+    }
+    const { agents } = await response.json();
 
+    this.tasksState = window.taskStore.state;
+
+    // Ensure we have the most recent authoritative task state from the server
+    // (in case taskStore.init/localStorage raced with page rendering)
+    try {
+      if (
+        window.taskStore &&
+        typeof window.taskStore.syncWithServer === "function"
+      ) {
+        await window.taskStore.syncWithServer();
         this.tasksState = window.taskStore.state;
-
-        this.calendarData = this.daysOfWeek.map(() => []);
-        agents.forEach(agent => {
-            const dayIndices = agent.audit_days || [];
-            dayIndices.forEach(dayIndex => {
-                if (dayIndex >= 0 && dayIndex < 6) { // Corrected to include Saturday
-                    this.calendarData[dayIndex].push(agent);
-                }
-            });
-        });
-
-        this._renderDayColumns();
-        this._renderAllAgentCards();
-        this._setupEventListeners();
-        setupCalendarFilters(this);
-
-        // مزامنة دورية مع الخادم لضمان ظهور تغييرات الجميع للجميع
-        if (this._syncInterval) clearInterval(this._syncInterval);
-        this._syncInterval = setInterval(() => {
-            try {
-                if (window.taskStore && window.taskStore.state) {
-                    const prevState = JSON.stringify(this.tasksState?.tasks || {});
-                    const newState = JSON.stringify(window.taskStore.state.tasks || {});
-                    if (prevState !== newState) {
-                        this.tasksState = window.taskStore.state;
-                        this._renderDayColumns();
-                        this._renderAllAgentCards();
-                    }
-                }
-            } catch (_) { /* ignore */ }
-        }, 20000); // كل 20 ثانية
-
-        // The global subscription is removed to fix the bug.
-        // this.boundUpdateUIFromState = updateCalendarUIFromState.bind(this);
-        // window.taskStore.subscribe(this.boundUpdateUIFromState);
+      }
+    } catch (e) {
+      console.warn("[Calendar] Failed to sync store during render:", e);
     }
 
-    _renderDayColumns() {
-        this.calendarContainer.innerHTML = '';
-        this.daysOfWeek.forEach((dayName, index) => {
-            const isToday = new Date().getDay() === index;
-            const { completedTasks, totalTasks, progressPercent } = this._calculateDayProgress(index);
+    this.calendarData = this.daysOfWeek.map(() => []);
+    agents.forEach((agent) => {
+      const dayIndices = agent.audit_days || [];
+      dayIndices.forEach((dayIndex) => {
+        if (dayIndex >= 0 && dayIndex < 6) {
+          // Corrected to include Saturday
+          this.calendarData[dayIndex].push(agent);
+        }
+      });
+    });
 
-            const columnEl = document.createElement('div');
-            columnEl.className = `day-column ${isToday ? 'today' : ''}`;
-            columnEl.dataset.dayIndex = index;
-            columnEl.innerHTML = `
+    this._renderDayColumns();
+    this._renderAllAgentCards();
+    this._setupEventListeners();
+    setupCalendarFilters(this);
+
+    // مزامنة دورية مع الخادم لضمان ظهور تغييرات الجميع للجميع
+    if (this._syncInterval) clearInterval(this._syncInterval);
+    this._syncInterval = setInterval(() => {
+      try {
+        if (window.taskStore && window.taskStore.state) {
+          const prevState = JSON.stringify(this.tasksState?.tasks || {});
+          const newState = JSON.stringify(window.taskStore.state.tasks || {});
+          if (prevState !== newState) {
+            this.tasksState = window.taskStore.state;
+            this._renderDayColumns();
+            this._renderAllAgentCards();
+          }
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }, 20000); // كل 20 ثانية
+
+    // The global subscription is removed to fix the bug.
+    // this.boundUpdateUIFromState = updateCalendarUIFromState.bind(this);
+    // window.taskStore.subscribe(this.boundUpdateUIFromState);
+  }
+
+  _renderDayColumns() {
+    this.calendarContainer.innerHTML = "";
+    this.daysOfWeek.forEach((dayName, index) => {
+      const isToday = new Date().getDay() === index;
+      const { completedTasks, totalTasks, progressPercent } =
+        this._calculateDayProgress(index);
+
+      const columnEl = document.createElement("div");
+      columnEl.className = `day-column ${isToday ? "today" : ""}`;
+      columnEl.dataset.dayIndex = index;
+      columnEl.innerHTML = `
                 <h2>${dayName}</h2>
                 <div class="day-progress">
                     <div class="progress-bar" style="width: ${progressPercent}%"></div>
@@ -4869,441 +4929,548 @@ class CalendarUI {
                 </div>
                 <div class="day-column-content"></div>
             `;
-            this.calendarContainer.appendChild(columnEl);
+      this.calendarContainer.appendChild(columnEl);
+    });
+  }
+
+  _calculateDayProgress(dayIndex) {
+    const dailyAgents = this.calendarData[dayIndex] || [];
+    const totalTasks = dailyAgents.length;
+    let completedTasks = 0;
+    dailyAgents.forEach((agent) => {
+      const task = (this.tasksState.tasks[agent._id] || {})[dayIndex] || {};
+      if (task.audited) {
+        completedTasks++;
+      }
+    });
+    const progressPercent =
+      totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+    return { completedTasks, totalTasks, progressPercent };
+  }
+
+  _renderAllAgentCards() {
+    this.calendarData.forEach((agentsForDay, dayIndex) => {
+      const columnEl = this.calendarContainer.querySelector(
+        `.day-column[data-day-index="${dayIndex}"]`
+      );
+      if (!columnEl) return;
+
+      const contentContainer = columnEl.querySelector(".day-column-content");
+      contentContainer.innerHTML = "";
+
+      if (agentsForDay.length > 0) {
+        const fragment = document.createDocumentFragment();
+        const isToday = new Date().getDay() === dayIndex;
+        agentsForDay.forEach((agent, index) => {
+          const agentElement = createAgentItemHtml(
+            agent,
+            dayIndex,
+            isToday,
+            this.tasksState,
+            index + 1,
+            ""
+          );
+          fragment.appendChild(agentElement);
         });
-    }
+        contentContainer.appendChild(fragment);
+      } else {
+        contentContainer.innerHTML =
+          '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
+      }
+    });
+  }
 
-    _calculateDayProgress(dayIndex) {
-        const dailyAgents = this.calendarData[dayIndex] || [];
-        const totalTasks = dailyAgents.length;
-        let completedTasks = 0;
-        dailyAgents.forEach(agent => {
-            const task = (this.tasksState.tasks[agent._id] || {})[dayIndex] || {};
-            if (task.audited) {
-                completedTasks++;
-            }
-        });
-        const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-        return { completedTasks, totalTasks, progressPercent };
-    }
+  _setupEventListeners() {
+    this.calendarContainer.addEventListener("change", this.boundHandleChange);
+    this.container
+      .querySelector("#reset-all-tasks-btn")
+      .addEventListener("click", this.boundHandleResetAll);
+    setupClickAndDragEventListeners(
+      this.calendarContainer,
+      this.calendarData,
+      this
+    );
+  }
 
-    _renderAllAgentCards() {
-        this.calendarData.forEach((agentsForDay, dayIndex) => {
-            const columnEl = this.calendarContainer.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
-            if (!columnEl) return;
-
-            const contentContainer = columnEl.querySelector('.day-column-content');
-            contentContainer.innerHTML = '';
-
-            if (agentsForDay.length > 0) {
-                const fragment = document.createDocumentFragment();
-                const isToday = new Date().getDay() === dayIndex;
-                agentsForDay.forEach((agent, index) => {
-                    const agentElement = createAgentItemHtml(agent, dayIndex, isToday, this.tasksState, index + 1, '');
-                    fragment.appendChild(agentElement);
-                });
-                contentContainer.appendChild(fragment);
-            } else {
-                contentContainer.innerHTML = '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
-            }
-        });
-    }
-
-    _setupEventListeners() {
-        this.calendarContainer.addEventListener('change', this.boundHandleChange);
-        this.container.querySelector('#reset-all-tasks-btn').addEventListener('click', this.boundHandleResetAll);
-        setupClickAndDragEventListeners(this.calendarContainer, this.calendarData, this);
-    }
-
-    async handleResetAllTasks() {
-        showConfirmationModal(
-            'هل أنت متأكد من إعادة تعيين جميع المهام (التدقيق والمسابقة) لهذا الأسبوع؟ لا يمكن التراجع عن هذا الإجراء.',
-            async () => {
-                showLoader();
-                try {
-                    await window.taskStore.resetAllTasks();
-                    showToast('تمت إعادة تعيين جميع المهام بنجاح.', 'success');
-
-                    // FIX: Manually re-render the UI without a page reload
-                    this.tasksState = window.taskStore.state; // Get the fresh, reset state
-                    this._renderDayColumns(); // Re-render columns to reset progress bars
-                    this._renderAllAgentCards(); // Re-render agent cards with reset state
-
-                } catch (error) {
-                    console.error('Failed to reset all tasks:', error);
-                    showToast(`فشل إعادة التعيين: ${error.message}`, 'error');
-                } finally {
-                    hideLoader();
-                }
-            },
-            { title: 'تأكيد إعادة تعيين الكل', confirmText: 'نعم، أعد التعيين', confirmClass: 'btn-danger' }
-        );
-    }
-
-    async _handleChange(e) {
-        const checkbox = e.target;
-        if (!checkbox.matches('.audit-check, .competition-check')) return;
-
-        const agentId = checkbox.dataset.agentId;
-        const dayIndex = parseInt(checkbox.dataset.dayIndex, 10);
-        const taskType = checkbox.classList.contains('audit-check') ? 'audited' : 'competition_sent';
-        const status = checkbox.checked;
-
-        // ========== DEBUG CONSOLE LOGS ==========
-        console.log('🔄 Toggle Changed!');
-        console.log('📍 Agent ID:', agentId);
-        console.log('📅 Day Index:', dayIndex);
-        console.log('🏷️ Task Type:', taskType);
-        console.log('✅ New Status:', status ? 'ON (checked)' : 'OFF (unchecked)');
-        console.log('🎯 Checkbox element:', checkbox);
-        console.log('🔍 Checkbox classes:', checkbox.className);
-        console.log('📊 Checkbox checked property:', checkbox.checked);
-        console.log('========================================');
-        // ========================================
-
-        const agentItem = checkbox.closest('.calendar-agent-item');
-        agentItem.classList.add('is-loading');
-        agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = true);
-
+  async handleResetAllTasks() {
+    showConfirmationModal(
+      "هل أنت متأكد من إعادة تعيين جميع المهام (التدقيق والمسابقة) لهذا الأسبوع؟ لا يمكن التراجع عن هذا الإجراء.",
+      async () => {
+        showLoader();
         try {
-            // This updates the central store
-            console.log('📤 Sending update to server...');
-            await window.taskStore.updateTaskStatus(agentId, dayIndex, taskType, status);
-            console.log('✅ Server update successful!');
-            
-            // FIX: Now, manually and correctly update the UI for this single item.
-            updateCalendarUIFromState.call(this, { agentId, dayIndex, taskType, status });
-            console.log('🎨 UI updated successfully!');
+          await window.taskStore.resetAllTasks();
+          showToast("تمت إعادة تعيين جميع المهام بنجاح.", "success");
 
+          // FIX: Manually re-render the UI without a page reload
+          this.tasksState = window.taskStore.state; // Get the fresh, reset state
+          this._renderDayColumns(); // Re-render columns to reset progress bars
+          this._renderAllAgentCards(); // Re-render agent cards with reset state
         } catch (error) {
-            console.error(`[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`, error);
-            console.error('❌ Error details:', error);
-            showToast('فشل تحديث حالة المهمة.', 'error');
-            
-            // Revert UI on error
-            checkbox.checked = !status;
-            console.log('⏪ Reverted checkbox to:', !status);
-            agentItem.classList.remove('is-loading');
-            agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
+          console.error("Failed to reset all tasks:", error);
+          showToast(`فشل إعادة التعيين: ${error.message}`, "error");
+        } finally {
+          hideLoader();
         }
+      },
+      {
+        title: "تأكيد إعادة تعيين الكل",
+        confirmText: "نعم، أعد التعيين",
+        confirmClass: "btn-danger",
+      }
+    );
+  }
+
+  async _handleChange(e) {
+    const checkbox = e.target;
+    if (!checkbox.matches(".audit-check, .competition-check")) return;
+
+    const agentId = checkbox.dataset.agentId;
+    const dayIndex = parseInt(checkbox.dataset.dayIndex, 10);
+    const taskType = checkbox.classList.contains("audit-check")
+      ? "audited"
+      : "competition_sent";
+    const status = checkbox.checked;
+
+    // ========== DEBUG CONSOLE LOGS ==========
+    console.log("🔄 Toggle Changed!");
+    console.log("📍 Agent ID:", agentId);
+    console.log("📅 Day Index:", dayIndex);
+    console.log("🏷️ Task Type:", taskType);
+    console.log("✅ New Status:", status ? "ON (checked)" : "OFF (unchecked)");
+    console.log("🎯 Checkbox element:", checkbox);
+    console.log("🔍 Checkbox classes:", checkbox.className);
+    console.log("📊 Checkbox checked property:", checkbox.checked);
+    console.log("========================================");
+    // ========================================
+
+    const agentItem = checkbox.closest(".calendar-agent-item");
+    agentItem.classList.add("is-loading");
+    agentItem
+      .querySelectorAll('input[type="checkbox"]')
+      .forEach((cb) => (cb.disabled = true));
+
+    try {
+      // This updates the central store
+      console.log("📤 Sending update to server...");
+      await window.taskStore.updateTaskStatus(
+        agentId,
+        dayIndex,
+        taskType,
+        status
+      );
+      console.log("✅ Server update successful!");
+
+      // FIX: Now, manually and correctly update the UI for this single item.
+      updateCalendarUIFromState.call(this, {
+        agentId,
+        dayIndex,
+        taskType,
+        status,
+      });
+      console.log("🎨 UI updated successfully!");
+    } catch (error) {
+      console.error(
+        `[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`,
+        error
+      );
+      console.error("❌ Error details:", error);
+      showToast("فشل تحديث حالة المهمة.", "error");
+
+      // Revert UI on error
+      checkbox.checked = !status;
+      console.log("⏪ Reverted checkbox to:", !status);
+      agentItem.classList.remove("is-loading");
+      agentItem
+        .querySelectorAll('input[type="checkbox"]')
+        .forEach((cb) => (cb.disabled = false));
     }
+  }
 
-    _updateAfterDrag(sourceDayIndex, newDayIndex, agentId) {
-        const agentToMove = this.calendarData[sourceDayIndex].find(a => a._id === agentId);
-        if (!agentToMove) return;
+  _updateAfterDrag(sourceDayIndex, newDayIndex, agentId) {
+    const agentToMove = this.calendarData[sourceDayIndex].find(
+      (a) => a._id === agentId
+    );
+    if (!agentToMove) return;
 
-        this.calendarData[sourceDayIndex] = this.calendarData[sourceDayIndex].filter(a => a._id !== agentId);
-        this.calendarData[newDayIndex].push(agentToMove);
-        this.calendarData[newDayIndex].sort((a, b) => a.name.localeCompare(b.name));
-        
-        // Re-render only the two affected columns for efficiency
-        this._renderSingleDayColumn(sourceDayIndex);
-        this._renderSingleDayColumn(newDayIndex);
+    this.calendarData[sourceDayIndex] = this.calendarData[
+      sourceDayIndex
+    ].filter((a) => a._id !== agentId);
+    this.calendarData[newDayIndex].push(agentToMove);
+    this.calendarData[newDayIndex].sort((a, b) => a.name.localeCompare(b.name));
+
+    // Re-render only the two affected columns for efficiency
+    this._renderSingleDayColumn(sourceDayIndex);
+    this._renderSingleDayColumn(newDayIndex);
+  }
+
+  _renderSingleDayColumn(dayIndex) {
+    const columnEl = this.calendarContainer.querySelector(
+      `.day-column[data-day-index="${dayIndex}"]`
+    );
+    if (!columnEl) return;
+
+    const contentContainer = columnEl.querySelector(".day-column-content");
+    contentContainer.innerHTML = "";
+
+    const agentsForDay = this.calendarData[dayIndex] || [];
+    if (agentsForDay.length > 0) {
+      const fragment = document.createDocumentFragment();
+      const isToday = new Date().getDay() === dayIndex;
+      agentsForDay.forEach((agent, index) => {
+        const agentElement = createAgentItemHtml(
+          agent,
+          dayIndex,
+          isToday,
+          this.tasksState,
+          index + 1,
+          ""
+        );
+        fragment.appendChild(agentElement);
+      });
+      contentContainer.appendChild(fragment);
+    } else {
+      contentContainer.innerHTML =
+        '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
     }
-
-    _renderSingleDayColumn(dayIndex) {
-        const columnEl = this.calendarContainer.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
-        if (!columnEl) return;
-
-        const contentContainer = columnEl.querySelector('.day-column-content');
-        contentContainer.innerHTML = '';
-
-        const agentsForDay = this.calendarData[dayIndex] || [];
-        if (agentsForDay.length > 0) {
-            const fragment = document.createDocumentFragment();
-            const isToday = new Date().getDay() === dayIndex;
-            agentsForDay.forEach((agent, index) => {
-                const agentElement = createAgentItemHtml(agent, dayIndex, isToday, this.tasksState, index + 1, '');
-                fragment.appendChild(agentElement);
-            });
-            contentContainer.appendChild(fragment);
-        } else {
-            contentContainer.innerHTML = '<div class="no-tasks-placeholder"><i class="fas fa-bed"></i><p>لا توجد مهام</p></div>';
-        }
-        updateDayProgressUI.call(this, dayIndex);
-    }
+    updateDayProgressUI.call(this, dayIndex);
+  }
 }
 
 let currentCalendarInstance = null;
 
 async function renderCalendarPage() {
-    if (currentCalendarInstance) {
-        currentCalendarInstance.destroy();
-    }
-    const appContent = document.getElementById('app-content');
-    currentCalendarInstance = new CalendarUI(appContent);
-    try {
-        await currentCalendarInstance.render();
-        startWeeklyResetCountdown();
-    } catch (error) {
-        console.error("Error rendering calendar page:", error);
-        const calendarContainer = document.getElementById('calendar-container');
-        if (calendarContainer) calendarContainer.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات التقويم: ${error.message}</p>`;
-    }
+  if (currentCalendarInstance) {
+    currentCalendarInstance.destroy();
+  }
+  const appContent = document.getElementById("app-content");
+  currentCalendarInstance = new CalendarUI(appContent);
+  try {
+    await currentCalendarInstance.render();
+    startWeeklyResetCountdown();
+  } catch (error) {
+    console.error("Error rendering calendar page:", error);
+    const calendarContainer = document.getElementById("calendar-container");
+    if (calendarContainer)
+      calendarContainer.innerHTML = `<p class="error">حدث خطأ أثناء جلب بيانات التقويم: ${error.message}</p>`;
+  }
 }
 
 function getNextResetTime() {
-    const now = new Date();
-    const nextReset = new Date();
-    const day = now.getDay();
-    const daysUntilSunday = (7 - day) % 7;
-    nextReset.setDate(now.getDate() + daysUntilSunday);
-    nextReset.setHours(7, 0, 0, 0);
-    if (day === 0 && now.getTime() > nextReset.getTime()) {
-        nextReset.setDate(nextReset.getDate() + 7);
-    }
-    return nextReset;
+  const now = new Date();
+  const nextReset = new Date();
+  const day = now.getDay();
+  const daysUntilSunday = (7 - day) % 7;
+  nextReset.setDate(now.getDate() + daysUntilSunday);
+  nextReset.setHours(7, 0, 0, 0);
+  if (day === 0 && now.getTime() > nextReset.getTime()) {
+    nextReset.setDate(nextReset.getDate() + 7);
+  }
+  return nextReset;
 }
 
 function startWeeklyResetCountdown() {
-    const countdownContainer = document.getElementById('weekly-reset-countdown-container');
-    const countdownElement = document.getElementById('weekly-reset-countdown');
-    if (!countdownContainer || !countdownElement) return;
+  const countdownContainer = document.getElementById(
+    "weekly-reset-countdown-container"
+  );
+  const countdownElement = document.getElementById("weekly-reset-countdown");
+  if (!countdownContainer || !countdownElement) return;
 
-    const updateTimer = () => {
-        const now = new Date();
-        const nextReset = getNextResetTime();
-        const diff = nextReset - now;
+  const updateTimer = () => {
+    const now = new Date();
+    const nextReset = getNextResetTime();
+    const diff = nextReset - now;
 
-        if (diff > 0 && diff < 5 * 60 * 60 * 1000) {
-            countdownContainer.style.display = 'flex';
-            const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            const s = Math.floor((diff % (1000 * 60)) / 1000);
-            countdownElement.textContent = `${h}س ${m}د ${s}ث`;
-        } else {
-            countdownContainer.style.display = 'none';
-        }
-        
-        if (diff < 0) {
-            const lastReset = localStorage.getItem('lastWeeklyReset');
-            if (!lastReset || new Date(lastReset) < nextReset) {
-                localStorage.setItem('lastWeeklyReset', new Date().toISOString());
-                location.reload();
-            }
-        }
-    };
+    if (diff > 0 && diff < 5 * 60 * 60 * 1000) {
+      countdownContainer.style.display = "flex";
+      const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const s = Math.floor((diff % (1000 * 60)) / 1000);
+      countdownElement.textContent = `${h}س ${m}د ${s}ث`;
+    } else {
+      countdownContainer.style.display = "none";
+    }
 
-    updateTimer();
-    weeklyResetCountdownInterval = setInterval(updateTimer, 1000);
+    if (diff < 0) {
+      const lastReset = localStorage.getItem("lastWeeklyReset");
+      if (!lastReset || new Date(lastReset) < nextReset) {
+        localStorage.setItem("lastWeeklyReset", new Date().toISOString());
+        location.reload();
+      }
+    }
+  };
+
+  updateTimer();
+  weeklyResetCountdownInterval = setInterval(updateTimer, 1000);
 }
 
 function updateCalendarUIFromState({ agentId, dayIndex, taskType, status }) {
-    const container = this.calendarContainer;
-    if (!container) return;
+  const container = this.calendarContainer;
+  if (!container) return;
 
-    const agentItem = container.querySelector(`#agent-card-${agentId}-${dayIndex}`);
-    if (!agentItem) return;
+  const agentItem = container.querySelector(
+    `#agent-card-${agentId}-${dayIndex}`
+  );
+  if (!agentItem) return;
 
-    const taskState = (this.tasksState.tasks[agentId] || {})[dayIndex] || { audited: false, competition_sent: false };
+  const taskState = (this.tasksState.tasks[agentId] || {})[dayIndex] || {
+    audited: false,
+    competition_sent: false,
+  };
 
-    const checkbox = agentItem.querySelector(`.${taskType === 'audited' ? 'audit-check' : 'competition-check'}`);
-    if (checkbox) checkbox.checked = status;
+  const checkbox = agentItem.querySelector(
+    `.${taskType === "audited" ? "audit-check" : "competition-check"}`
+  );
+  if (checkbox) checkbox.checked = status;
 
-    checkbox?.closest('.action-item').classList.toggle('done', status);
+  checkbox?.closest(".action-item").classList.toggle("done", status);
 
-    if (taskType === 'audited') {
-        const isComplete = taskState.audited;
-        agentItem.classList.toggle('complete', isComplete);
-        const nameEl = agentItem.querySelector('.agent-name');
-        if (nameEl) nameEl.classList.toggle('has-checkmark', isComplete);
-    }
+  if (taskType === "audited") {
+    const isComplete = taskState.audited;
+    agentItem.classList.toggle("complete", isComplete);
+    const nameEl = agentItem.querySelector(".agent-name");
+    if (nameEl) nameEl.classList.toggle("has-checkmark", isComplete);
+  }
 
-    agentItem.classList.remove('is-loading');
-    agentItem.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.disabled = false);
+  agentItem.classList.remove("is-loading");
+  agentItem
+    .querySelectorAll('input[type="checkbox"]')
+    .forEach((cb) => (cb.disabled = false));
 
-    updateDayProgressUI.call(this, dayIndex);
+  updateDayProgressUI.call(this, dayIndex);
 }
 
 function updateDayProgressUI(dayIndex) {
-    const column = document.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
-    if (!column) return;
+  const column = document.querySelector(
+    `.day-column[data-day-index="${dayIndex}"]`
+  );
+  if (!column) return;
 
-    const progressBar = column.querySelector('.progress-bar');
-    const progressLabel = column.querySelector('.progress-label');
-    
-    const allAgentsForDay = this.calendarData?.[dayIndex] || [];
-    const totalTasks = allAgentsForDay.length;
-    let completedTasks = 0;
+  const progressBar = column.querySelector(".progress-bar");
+  const progressLabel = column.querySelector(".progress-label");
 
-    allAgentsForDay.forEach(agent => {
-        const task = (this.tasksState.tasks[agent._id] || {})[dayIndex] || {};
-        if (task.audited) {
-            completedTasks++;
-        }
-    });
+  const allAgentsForDay = this.calendarData?.[dayIndex] || [];
+  const totalTasks = allAgentsForDay.length;
+  let completedTasks = 0;
 
-    const progressPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-    progressBar.style.width = `${progressPercent}%`;
-    progressLabel.textContent = `${completedTasks} / ${totalTasks} مكتمل`;
+  allAgentsForDay.forEach((agent) => {
+    const task = (this.tasksState.tasks[agent._id] || {})[dayIndex] || {};
+    if (task.audited) {
+      completedTasks++;
+    }
+  });
+
+  const progressPercent =
+    totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  progressBar.style.width = `${progressPercent}%`;
+  progressLabel.textContent = `${completedTasks} / ${totalTasks} مكتمل`;
 }
 
 function setupClickAndDragEventListeners(container, calendarData, uiInstance) {
-    container.addEventListener('click', (e) => {
-        const copyIdTrigger = e.target.closest('.calendar-agent-id[data-agent-id-copy]');
-        if (copyIdTrigger) {
-            e.stopPropagation();
-            navigator.clipboard.writeText(copyIdTrigger.dataset.agentIdCopy).then(() => showToast(`تم نسخ الرقم: ${copyIdTrigger.dataset.agentIdCopy}`, 'info'));
-            return;
-        }
-        const card = e.target.closest('.calendar-agent-item[data-agent-id]');
-        if (card && !e.target.closest('.calendar-agent-actions')) {
-            window.location.hash = `#profile/${card.dataset.agentId}`;
-        }
+  container.addEventListener("click", (e) => {
+    const copyIdTrigger = e.target.closest(
+      ".calendar-agent-id[data-agent-id-copy]"
+    );
+    if (copyIdTrigger) {
+      e.stopPropagation();
+      navigator.clipboard
+        .writeText(copyIdTrigger.dataset.agentIdCopy)
+        .then(() =>
+          showToast(
+            `تم نسخ الرقم: ${copyIdTrigger.dataset.agentIdCopy}`,
+            "info"
+          )
+        );
+      return;
+    }
+    const card = e.target.closest(".calendar-agent-item[data-agent-id]");
+    if (card && !e.target.closest(".calendar-agent-actions")) {
+      window.location.hash = `#profile/${card.dataset.agentId}`;
+    }
 
-        const actionItem = e.target.closest('.action-item');
-        if (actionItem && !e.target.matches('input[type="checkbox"]')) {
-            const checkbox = actionItem.querySelector('input[type="checkbox"]');
-            if (checkbox) {
-                checkbox.checked = !checkbox.checked;
-                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        }
+    const actionItem = e.target.closest(".action-item");
+    if (actionItem && !e.target.matches('input[type="checkbox"]')) {
+      const checkbox = actionItem.querySelector('input[type="checkbox"]');
+      if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+  });
+
+  const isSuperAdmin = currentUserProfile?.role === "super_admin";
+  if (isSuperAdmin) {
+    let draggedItem = null;
+    let sourceDayIndex = null;
+
+    container.addEventListener("dragstart", (e) => {
+      const target = e.target.closest(".calendar-agent-item");
+      if (target) {
+        draggedItem = target;
+        sourceDayIndex = parseInt(target.dataset.dayIndex, 10);
+        setTimeout(() => target.classList.add("dragging"), 0);
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", target.dataset.agentId);
+      }
     });
 
-    const isSuperAdmin = currentUserProfile?.role === 'super_admin';
-    if (isSuperAdmin) {
-        let draggedItem = null;
-        let sourceDayIndex = null;
+    container.addEventListener("dragend", () => {
+      if (draggedItem) {
+        draggedItem.classList.remove("dragging");
+        draggedItem = null;
+      }
+    });
 
-        container.addEventListener('dragstart', (e) => {
-            const target = e.target.closest('.calendar-agent-item');
-            if (target) {
-                draggedItem = target;
-                sourceDayIndex = parseInt(target.dataset.dayIndex, 10);
-                setTimeout(() => target.classList.add('dragging'), 0);
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/plain', target.dataset.agentId);
-            }
-        });
+    container.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      const column = e.target.closest(".day-column");
+      if (column) column.classList.add("drag-over");
+    });
 
-        container.addEventListener('dragend', () => {
-            if (draggedItem) {
-                draggedItem.classList.remove('dragging');
-                draggedItem = null;
-            }
-        });
+    container.addEventListener("dragleave", (e) => {
+      const column = e.target.closest(".day-column");
+      if (column) column.classList.remove("drag-over");
+    });
 
-        container.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            const column = e.target.closest('.day-column');
-            if (column) column.classList.add('drag-over');
-        });
+    container.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      const targetColumn = e.target.closest(".day-column");
+      if (!targetColumn || !draggedItem) return;
 
-        container.addEventListener('dragleave', (e) => {
-            const column = e.target.closest('.day-column');
-            if (column) column.classList.remove('drag-over');
-        });
+      targetColumn.classList.remove("drag-over");
+      const newDayIndex = parseInt(targetColumn.dataset.dayIndex, 10);
+      const agentId = draggedItem.dataset.agentId;
+      const agentNameSafe = draggedItem?.dataset?.name || "هذا الوكيل";
 
-        container.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            const targetColumn = e.target.closest('.day-column');
-            if (!targetColumn || !draggedItem) return;
+      if (sourceDayIndex === newDayIndex) return;
 
-            targetColumn.classList.remove('drag-over');
-            const newDayIndex = parseInt(targetColumn.dataset.dayIndex, 10);
-            const agentId = draggedItem.dataset.agentId;
-            const agentNameSafe = draggedItem?.dataset?.name || 'هذا الوكيل';
+      try {
+        const agentCheckResponse = await authedFetch(
+          `/api/agents/${agentId}?select=audit_days`
+        );
+        const { data: agent } = await agentCheckResponse.json();
+        if ((agent.audit_days || []).includes(newDayIndex)) {
+          showToast(
+            `هذا الوكيل مجدول بالفعل في يوم ${uiInstance.daysOfWeek[newDayIndex]}.`,
+            "warning"
+          );
+          return;
+        }
 
-            if (sourceDayIndex === newDayIndex) return;
+        showConfirmationModal(
+          `هل أنت متأكد من نقل الوكيل <strong>${agentNameSafe}</strong> من يوم <strong>${uiInstance.daysOfWeek[sourceDayIndex]}</strong> إلى يوم <strong>${uiInstance.daysOfWeek[newDayIndex]}</strong>؟`,
+          async () => {
+            const agentResponse = await authedFetch(
+              `/api/agents/${agentId}?select=audit_days`
+            );
+            const { data: agent } = await agentResponse.json();
+            const newAuditDays = [
+              ...(agent.audit_days || []).filter((d) => d !== sourceDayIndex),
+              newDayIndex,
+            ];
 
-            try {
-                const agentCheckResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
-                const { data: agent } = await agentCheckResponse.json();
-                if ((agent.audit_days || []).includes(newDayIndex)) {
-                    showToast(`هذا الوكيل مجدول بالفعل في يوم ${uiInstance.daysOfWeek[newDayIndex]}.`, 'warning');
-                    return;
-                }
+            await authedFetch(`/api/agents/${agentId}`, {
+              method: "PUT",
+              body: JSON.stringify({ audit_days: newAuditDays }),
+            });
 
-                showConfirmationModal(
-                    `هل أنت متأكد من نقل الوكيل <strong>${agentNameSafe}</strong> من يوم <strong>${uiInstance.daysOfWeek[sourceDayIndex]}</strong> إلى يوم <strong>${uiInstance.daysOfWeek[newDayIndex]}</strong>؟`,
-                    async () => {
-                        const agentResponse = await authedFetch(`/api/agents/${agentId}?select=audit_days`);
-                        const { data: agent } = await agentResponse.json();
-                        const newAuditDays = [...(agent.audit_days || []).filter(d => d !== sourceDayIndex), newDayIndex];
+            showToast("تم تحديث يوم التدقيق بنجاح.", "success");
+            await logAgentActivity(
+              currentUserProfile?._id,
+              agentId,
+              "DETAILS_UPDATE",
+              `تم تغيير يوم التدقيق من ${uiInstance.daysOfWeek[sourceDayIndex]} إلى ${uiInstance.daysOfWeek[newDayIndex]} عبر التقويم.`
+            );
 
-                        await authedFetch(`/api/agents/${agentId}`, {
-                            method: 'PUT',
-                            body: JSON.stringify({ audit_days: newAuditDays })
-                        });
-
-                        showToast('تم تحديث يوم التدقيق بنجاح.', 'success');
-                        await logAgentActivity(currentUserProfile?._id, agentId, 'DETAILS_UPDATE', `تم تغيير يوم التدقيق من ${uiInstance.daysOfWeek[sourceDayIndex]} إلى ${uiInstance.daysOfWeek[newDayIndex]} عبر التقويم.`);
-                        
-                        uiInstance._updateAfterDrag(sourceDayIndex, newDayIndex, agentId);
-                    }
-                );
-            } catch (error) {
-                showToast(`فشل تحديث يوم التدقيق: ${error.message}`, 'error');
-            }
-        });
-    }
+            uiInstance._updateAfterDrag(sourceDayIndex, newDayIndex, agentId);
+          }
+        );
+      } catch (error) {
+        showToast(`فشل تحديث يوم التدقيق: ${error.message}`, "error");
+      }
+    });
+  }
 }
 
 function setupCalendarFilters(uiInstance) {
-    const searchInput = document.getElementById('calendar-search-input');
-    const clearBtn = document.getElementById('calendar-search-clear');
-    const filterButtons = document.querySelectorAll('.filter-btn');
+  const searchInput = document.getElementById("calendar-search-input");
+  const clearBtn = document.getElementById("calendar-search-clear");
+  const filterButtons = document.querySelectorAll(".filter-btn");
 
-    const applyFilters = () => {
-        if (clearBtn) {
-            clearBtn.style.display = searchInput.value ? 'block' : 'none';
-        }
-
-        const searchTerm = searchInput.value.toLowerCase().trim();
-        const activeFilter = document.querySelector('.filter-btn.active').dataset.filter;
-
-        uiInstance.calendarData.forEach((allAgentsForDay, dayIndex) => {
-            const columnEl = uiInstance.calendarContainer.querySelector(`.day-column[data-day-index="${dayIndex}"]`);
-            if (!columnEl) return;
-
-            const filteredAgents = allAgentsForDay.filter(agent => {
-                const name = agent.name.toLowerCase();
-                const agentIdStr = agent.agent_id;
-                const classification = agent.classification;
-                const matchesSearch = searchTerm === '' || name.includes(searchTerm) || agentIdStr.includes(searchTerm);
-                const matchesFilter = activeFilter === 'all' || classification === activeFilter;
-                return matchesSearch && matchesFilter;
-            });
-            
-            const contentContainer = columnEl.querySelector('.day-column-content');
-            contentContainer.innerHTML = '';
-
-            if (filteredAgents.length === 0) {
-                contentContainer.innerHTML = '<div class="no-results-placeholder"><i class="fas fa-search"></i><p>لا توجد نتائج</p></div>';
-            } else {
-                const fragment = document.createDocumentFragment();
-                const isToday = new Date().getDay() === dayIndex;
-                filteredAgents.forEach((agent, index) => {
-                    const agentElement = createAgentItemHtml(agent, dayIndex, isToday, uiInstance.tasksState, index + 1, searchTerm);
-                    fragment.appendChild(agentElement);
-                });
-                contentContainer.appendChild(fragment);
-            }
-        });
-    };
-
-    searchInput.addEventListener('input', () => {
-        clearTimeout(uiInstance.searchDebounceTimer);
-        uiInstance.searchDebounceTimer = setTimeout(applyFilters, 300);
-    });
-
+  const applyFilters = () => {
     if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            applyFilters();
-            searchInput.focus();
-        });
+      clearBtn.style.display = searchInput.value ? "block" : "none";
     }
 
-    filterButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            filterButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            applyFilters();
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    const activeFilter =
+      document.querySelector(".filter-btn.active").dataset.filter;
+
+    uiInstance.calendarData.forEach((allAgentsForDay, dayIndex) => {
+      const columnEl = uiInstance.calendarContainer.querySelector(
+        `.day-column[data-day-index="${dayIndex}"]`
+      );
+      if (!columnEl) return;
+
+      const filteredAgents = allAgentsForDay.filter((agent) => {
+        const name = agent.name.toLowerCase();
+        const agentIdStr = agent.agent_id;
+        const classification = agent.classification;
+        const matchesSearch =
+          searchTerm === "" ||
+          name.includes(searchTerm) ||
+          agentIdStr.includes(searchTerm);
+        const matchesFilter =
+          activeFilter === "all" || classification === activeFilter;
+        return matchesSearch && matchesFilter;
+      });
+
+      const contentContainer = columnEl.querySelector(".day-column-content");
+      contentContainer.innerHTML = "";
+
+      if (filteredAgents.length === 0) {
+        contentContainer.innerHTML =
+          '<div class="no-results-placeholder"><i class="fas fa-search"></i><p>لا توجد نتائج</p></div>';
+      } else {
+        const fragment = document.createDocumentFragment();
+        const isToday = new Date().getDay() === dayIndex;
+        filteredAgents.forEach((agent, index) => {
+          const agentElement = createAgentItemHtml(
+            agent,
+            dayIndex,
+            isToday,
+            uiInstance.tasksState,
+            index + 1,
+            searchTerm
+          );
+          fragment.appendChild(agentElement);
         });
+        contentContainer.appendChild(fragment);
+      }
     });
+  };
+
+  searchInput.addEventListener("input", () => {
+    clearTimeout(uiInstance.searchDebounceTimer);
+    uiInstance.searchDebounceTimer = setTimeout(applyFilters, 300);
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      applyFilters();
+      searchInput.focus();
+    });
+  }
+
+  filterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      filterButtons.forEach((btn) => btn.classList.remove("active"));
+      button.classList.add("active");
+      applyFilters();
+    });
+  });
 }
+
 
 // == topAgents.js ==
 ﻿// topAgents.js - Updated: 2025-11-16 with Clear Filter Button
@@ -14692,8 +14859,7 @@ function renderMostFrequentCompetitionsChartComparison(data1, data2) {
     });
 }
 
-// Initialization
-function init() {
+// Initializationfunction init() {
     // DOM Elements - moved inside init()
     const fromDateInput = document.getElementById('fromDate');
     const toDateInput = document.getElementById('toDate');
@@ -15337,7 +15503,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       modal.className='wr-celebration-modal';
       modal.style.display='none';
       modal.innerHTML = `
-        <div class="wr-celebration-content" role="dialog" aria-modal="true" style="width: 100%; max-width: 600px; padding: 2rem;">
+        <div class="wr-celebration-content" role="dialog" aria-modal="true" style="width: 100%; max-width: 600px; padding: 2rem; box-sizing: border-box;">
           <h2 class="wr-celebration-title" style="font-size: 2rem; margin-bottom: 1rem;">مبروك الفوز!</h2>
           <div class="wr-winner-card" style="margin-bottom: 1.5rem; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px;">
               <div class="wr-winner-name" id="celebration-winner-name" style="font-size: 1.5rem; font-weight: bold; color: #fff;">—</div>
@@ -15381,9 +15547,14 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               </div>
           </div>
   
-          <button id="confirm-winner" class="wr-confirm-btn" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
-              <i class="fas fa-check-circle"></i> اعتماد الفائز
-          </button>
+          <div style="display: flex; gap: 10px;">
+              <button id="confirm-winner" class="wr-confirm-btn" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
+                  <i class="fas fa-check-circle"></i> اعتماد الفائز
+              </button>
+              <button id="skip-winner" class="wr-skip-btn" style="flex: 1; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
+                  <i class="fas fa-redo"></i> تخطي
+              </button>
+          </div>
         </div>`;
       document.body.appendChild(modal);
       
@@ -15521,8 +15692,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         const currentWinners = competition.current_winners_count || 0;
         
         // Store competition info in state for reference (include prize data)
+        console.log('Active competition loaded:', competition);
         state.activeCompetition = {
-          id: competition._id,
+          id: competition._id || competition.id,
           tradingWinnersRequired: tradingWinners,
           depositWinnersRequired: depositWinners,
           totalRequired: totalWinners,
@@ -16365,6 +16537,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       window.addEventListener('resize', () => { drawWheel(); if(confettiCanvas){confettiCanvas.width=window.innerWidth;confettiCanvas.height=window.innerHeight;} });
       searchInput?.addEventListener('input', ()=> { state.filterTerm = searchInput.value.trim(); renderParticipants(); updateCounts(); });
+      /* Reset button removed per request
       resetWinnersBtn?.addEventListener('click', ()=> { 
         showConfirmModal(
           'سيتم مسح جميع الفائزين بشكل دائم من القائمة. هل أنت متأكد من المتابعة؟',
@@ -16377,6 +16550,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           }
         );
       });
+      */
       
       // Refresh participants button - adds winner to roulette after confirmation
       refreshParticipantsBtn?.addEventListener('click', () => {
@@ -16443,11 +16617,11 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function saveSession() {
-      // Do not persist entries/winners per requirement
+      // Persist entries and winners as requested
       const session = {
-        entries: [],
-        winners: [],
-        selectedAgent: null,
+        entries: state.entries,
+        winners: state.winners,
+        selectedAgent: state.selectedAgent,
         excludeWinner: state.excludeWinner,
         filterTerm: state.filterTerm
       };
@@ -16455,23 +16629,44 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function restoreSession(skipAgent = false) {
-      // Intentionally do not restore entries/winners. Clear UI on load.
       try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return;
+        const session = JSON.parse(raw);
+        
+        state.entries = session.entries || [];
+        state.winners = session.winners || [];
+        state.excludeWinner = !!session.excludeWinner;
+        state.filterTerm = session.filterTerm || '';
+        
+        if (!skipAgent && session.selectedAgent) {
+          state.selectedAgent = session.selectedAgent;
+          // We need to re-select the agent in the dropdown if possible
+          const agentSelect = document.getElementById('agent-select');
+          if (agentSelect) {
+             agentSelect.value = session.selectedAgent.id;
+             // Trigger change event to load competition info
+             agentSelect.dispatchEvent(new Event('change'));
+          }
+        }
+
         const excludeCb = document.getElementById('exclude-winner');
-        if (excludeCb) excludeCb.checked = true;
+        if (excludeCb) excludeCb.checked = state.excludeWinner;
+        
         const searchInput = document.getElementById('participants-search');
-        if (searchInput) searchInput.value = '';
+        if (searchInput) searchInput.value = state.filterTerm;
+        
+        // Restore participants text area
         const ta = document.getElementById('participants-input');
-        if (ta) ta.value = '';
-        state.entries = [];
-        state.winners = [];
-        state.selectedAgent = null;
-        state.filterTerm = '';
+        if (ta && state.entries.length > 0) {
+             ta.value = state.entries.map(e => e.account ? `${e.name} — ${e.account}` : e.name).join('\n');
+        }
+
         renderParticipants();
         renderWinners();
         updateCounts();
       } catch (e) {
-        console.warn('Skipping session restore due to requirement');
+        console.warn('Session restore failed', e);
       }
     }
     
@@ -16992,12 +17187,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ الفيديو والمتابعة';
       btnContainer.appendChild(saveBtn);
     
-      // Skip Button
-      const skipBtn = document.createElement('button');
-      skipBtn.id = 'skip-video-btn';
-      skipBtn.style.cssText = 'background: #64748b; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 16px;';
-      skipBtn.textContent = 'تخطي';
-      btnContainer.appendChild(skipBtn);
+      // Skip Winner Button (Cancel Winner)
+      const skipWinnerBtn = document.createElement('button');
+      skipWinnerBtn.id = 'skip-winner-btn';
+      skipWinnerBtn.style.cssText = 'background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 16px;';
+      skipWinnerBtn.innerHTML = '<i class="fas fa-redo"></i> تخطي الفائز';
+      btnContainer.appendChild(skipWinnerBtn);
     
       container.appendChild(btnContainer);
       overlay.appendChild(container);
@@ -17033,9 +17228,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         URL.revokeObjectURL(url);
       };
       
-      skipBtn.addEventListener('click', () => {
+      skipWinnerBtn.addEventListener('click', () => {
         cleanup();
-        if(state.autoMode){ showAutoWinnerModal(winner); } else { showWinnerModal(winner); }
+        // Do NOT proceed to showWinnerModal.
+        // Just close the preview. The winner is not added to state.winners yet (that happens in showWinnerModal).
+        // We might want to re-spin if in auto mode or queue, similar to the other skip button.
+        // But for now, just closing effectively "skips" this winner selection.
+        toast('تم تخطي الفائز وإلغاء الاختيار', 'info');
       });
       
       saveBtn.addEventListener('click', async () => {
@@ -17274,7 +17473,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
               <div class="wr-winner-card-body">
-                <div class="wr-winner-card-name">${w.name}</div>
+                <div class="wr-winner-card-name">الاسم: ${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
                 <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> ${w.prizeValue || 0}%</div>
@@ -17292,7 +17491,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               <div class="wr-winner-card-actions">
                 <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — ${w.prizeValue}%" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-undo="${w.id}" title="تراجع"><i class="fas fa-undo"></i></button>
+                <button class="wr-icon-btn" data-return="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
               </div>
             </div>`;
         });
@@ -17312,7 +17511,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
               <div class="wr-winner-card-body">
-                <div class="wr-winner-card-name">${w.name}</div>
+                <div class="wr-winner-card-name">الاسم: ${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
     
@@ -17330,7 +17529,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               <div class="wr-winner-card-actions">
                 <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — $${w.prizeValue}" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-undo="${w.id}" title="تراجع"><i class="fas fa-undo"></i></button>
+                <button class="wr-icon-btn" data-return="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
               </div>
             </div>`;
         });
@@ -17338,32 +17537,130 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         html += '</div></div>';
       }
       
-      bottomContainer.innerHTML = html;
-    
-      // Bind events
-      const sendAllBtn = document.getElementById('send-all-winners-btn');
-      if(sendAllBtn) {
-          sendAllBtn.addEventListener('click', sendWinnersReport);
-      }
-    
-      const sendIDsBtn = document.getElementById('send-winners-ids-btn');
-      if(sendIDsBtn) {
-          sendIDsBtn.addEventListener('click', sendWinnersWithIDsToAgent);
-      }
-    
-      bottomContainer.querySelectorAll('[data-copy]').forEach(btn => {
-        btn.addEventListener('click', handleCopyClick);
-      });
-      bottomContainer.querySelectorAll('input[data-warn]').forEach(input => {
-        input.addEventListener('change', handleWinnerWarningToggle);
-      });
-          bottomContainer.querySelectorAll('[data-undo]').forEach(btn => {
-            btn.addEventListener('click', handleUndoClick);
-          });
-          bottomContainer.querySelectorAll('[data-send]').forEach(btn => {
+        html += `
+          <div id="approval-section" style="width:100%; margin-top: 20px; border-top: 1px solid #334155; padding-top: 20px;">
+              <h4 class="wr-prize-section-title">إعتماد نهائي</h4>
+              <div style="display: flex; gap: 10px;">
+                  <button id="approve-winners-btn" class="wr-btn wr-btn-success" ${state.winners.length === 0 ? 'disabled' : ''}>
+                      <i class="fas fa-check-double"></i> اعتماد الفائزين (${state.winners.length})
+                  </button>
+                  <button id="approve-no-winners-btn" class="wr-btn wr-btn-danger">
+                      <i class="fas fa-times-circle"></i> اعتماد المسابقة بدون فائزين
+                  </button>
+              </div>
+              <p style="font-size: 0.8rem; color: #9ca3af; margin-top: 10px;">
+                  سيؤدي هذا الإجراء إلى إغلاق المسابقة الحالية ومنع اختيار فائزين جدد.
+              </p>
+          </div>
+      `;
+
+        bottomContainer.innerHTML = html;
+
+        // Bind events for new buttons
+        const approveBtn = document.getElementById('approve-winners-btn');
+        approveBtn?.addEventListener('click', async () => {
+            if (!state.activeCompetition || !state.activeCompetition.id) {
+                console.error('Active competition state:', state.activeCompetition);
+                toast('لا توجد مسابقة نشطة لاعتمادها (معرف مفقود).', 'error');
+                return;
+            }
+            
+            // Direct approval without confirmation modal
+            try {
+                const authedFetch = window.authedFetch || fetch;
+                const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        winners: state.winners.map(w => w._id).filter(Boolean)
+                    })
+                });
+                
+                if (resp.ok) {
+                    toast('تم اعتماد المسابقة بنجاح', 'success');
+                    // Clear winners and entries after successful approval
+                    state.winners = [];
+                    state.entries = [];
+                    state.activeCompetition = null;
+                    saveSession();
+                    renderParticipants();
+                    renderWinners();
+                    updateCounts();
+                    // Optionally reload or redirect
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    const err = await resp.json();
+                    toast(`فشل الاعتماد: ${err.message} ${err.error || ''}`, 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                toast('حدث خطأ أثناء الاعتماد', 'error');
+            }
+        });
+
+        const approveNoWinnersBtn = document.getElementById('approve-no-winners-btn');
+        approveNoWinnersBtn?.addEventListener('click', async () => {
+            if (!state.activeCompetition || !state.activeCompetition.id) {
+                console.error('Active competition state:', state.activeCompetition);
+                toast('لا توجد مسابقة نشطة لاعتمادها (معرف مفقود).', 'error');
+                return;
+            }
+            
+            // Direct approval without confirmation modal
+            try {
+                const authedFetch = window.authedFetch || fetch;
+                const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        noWinners: true
+                    })
+                });
+                
+                if (resp.ok) {
+                    toast('تم إغلاق المسابقة بنجاح', 'success');
+                    state.winners = [];
+                    state.entries = [];
+                    state.activeCompetition = null;
+                    saveSession();
+                    renderParticipants();
+                    renderWinners();
+                    updateCounts();
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    const err = await resp.json();
+                    toast(`فشل الإغلاق: ${err.message} ${err.error || ''}`, 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                toast('حدث خطأ أثناء الإغلاق', 'error');
+            }
+        });
+
+        // Bind events
+        const sendAllBtn = document.getElementById('send-all-winners-btn');
+        if (sendAllBtn) {
+            sendAllBtn.addEventListener('click', sendWinnersReport);
+        }
+
+        const sendIDsBtn = document.getElementById('send-winners-ids-btn');
+        if (sendIDsBtn) {
+            sendIDsBtn.addEventListener('click', sendWinnersWithIDsToAgent);
+        }
+
+        bottomContainer.querySelectorAll('[data-copy]').forEach(btn => {
+            btn.addEventListener('click', handleCopyClick);
+        });
+        bottomContainer.querySelectorAll('input[data-warn]').forEach(input => {
+            input.addEventListener('change', handleWinnerWarningToggle);
+        });
+        bottomContainer.querySelectorAll('[data-return]').forEach(btn => {
+            btn.addEventListener('click', handleReturnClick);
+        });
+        bottomContainer.querySelectorAll('[data-send]').forEach(btn => {
             btn.addEventListener('click', handleSendClick);
-          });
-        }function handleCopyClick(ev) {
+        });
+    }function handleCopyClick(ev) {
       const text = ev.currentTarget.getAttribute('data-copy');
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
@@ -17376,12 +17673,53 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }
     }
     
-    function handleUndoClick(ev) {
-      const id = ev.currentTarget.getAttribute('data-undo');
-      const entry = state.entries.find(e=> e.id===id);
-      if(entry){ entry.selected=false; }
-      state.winners = state.winners.filter(w=> w.id!==id);
-      renderParticipants(); renderWinners(); updateCounts(); saveSession();
+    function handleReturnClick(ev) {
+      const id = ev.currentTarget.getAttribute('data-return');
+      
+      // Find the winner to return
+      const winnerIndex = state.winners.findIndex(w => w.id === id);
+      if (winnerIndex === -1) return;
+      
+      const winner = state.winners[winnerIndex];
+      
+      // Remove from winners list
+      state.winners.splice(winnerIndex, 1);
+      
+      // Check if already in entries
+      let entry = state.entries.find(e => e.id === id);
+      
+      if (!entry) {
+          // Re-create entry
+          entry = {
+              id: winner.id,
+              name: winner.name,
+              account: winner.account,
+              label: winner.label || winner.name,
+              selected: false,
+              seq: winner.seq
+          };
+          state.entries.push(entry);
+      } else {
+          entry.selected = false;
+      }
+      
+      // Update the textarea to reflect the returned participant
+      const ta = document.getElementById('participants-input');
+      if (ta) {
+          ta.value = state.entries.map(e => `${e.name} — ${e.account}`).join('\n');
+      }
+
+      // Decrement current winners count in active competition
+      if (state.activeCompetition && state.activeCompetition.currentWinners > 0) {
+          state.activeCompetition.currentWinners--;
+      }
+
+      renderParticipants(); 
+      renderWinners(); 
+      updateCounts(); 
+      drawWheel(); 
+      saveSession();
+      toast('تم استرجاع الفائز للروليت', 'info');
     }
     
     function handleWinnerWarningToggle(ev) {
@@ -17478,6 +17816,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const prizeTypeEl = document.getElementById('celebration-prize-type');
       const prizeValueEl = document.getElementById('celebration-prize-value');
       const confirmBtn = document.getElementById('confirm-winner');
+      const skipBtn = document.getElementById('skip-winner'); // NEW: Skip button
       
       console.log('🔍 [showWinnerModal] Elements check:');
       console.log('  - modal:', modal ? 'FOUND' : 'MISSING');
@@ -17521,7 +17860,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       // Populate winner info (include stable sequence prefix if available)
       const seqPrefix = (entry && (entry.seq || entry.seq === 0)) ? `${entry.seq}- ` : '';
-      winnerName.textContent = seqPrefix + (entry.name || '—');
+      winnerName.textContent = `الاسم: ${seqPrefix + (entry.name || '—')}`;
       winnerAccount.textContent = `رقم الحساب: ${entry.account || '—'}`;
     
     
@@ -17574,6 +17913,16 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         emailInput.value = '';
         setTimeout(() => emailInput.focus(), 100);
       }
+
+      // --- NEW: Clear ID Image Input and Preview ---
+      const idInput = document.getElementById('winner-id-image');
+      const idPreview = document.getElementById('winner-id-image-preview');
+      if (idInput) idInput.value = ''; // Clear file input
+      if (idPreview) {
+          idPreview.src = '';
+          idPreview.style.display = 'none';
+      }
+      // ---------------------------------------------
       
       // Helper function to compress image
       const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
@@ -17761,9 +18110,15 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             : (state.activeCompetition?.prizePerWinner ?? 0);
         console.log('[PrizeValueConfirm] Final prize:', { type: selectedPrizeType, value: selectedPrizeValue });
         
-        // Email is optional: validate only if provided
+        // Email is REQUIRED: validate existence and format
         const emailErrorEl = document.getElementById('winner-email-error');
-        if (email && !/.+@.+\..+/.test(email)) {
+        if (!email) {
+          emailInput?.classList.add('wr-input-error');
+          toast('يجب إدخال البريد الإلكتروني','error');
+          setTimeout(()=> emailInput?.classList.remove('wr-input-error'), 2000);
+          return;
+        }
+        if (!/.+@.+\..+/.test(email)) {
           if (emailErrorEl) emailErrorEl.style.display = 'block';
           emailInput?.classList.add('wr-input-error');
           toast('البريد الإلكتروني غير صالح','error');
@@ -17923,12 +18278,20 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         if(state.spinQueue>0){ setTimeout(()=> startSpin(), 350); }
         else { state.spinQueue = 0; }
       };
+
+      // --- NEW: Skip Logic ---
+      const onSkip = () => {
+        onClose();
+        // User requested to stop automatic re-spin on skip
+      };
       
       function cleanup(){
         confirmBtn?.removeEventListener('click', onConfirm);
+        skipBtn?.removeEventListener('click', onSkip);
       }
       
       confirmBtn?.addEventListener('click', onConfirm);
+      skipBtn?.addEventListener('click', onSkip);
     }
     
     function showAutoWinnerModal(entry){
@@ -17975,7 +18338,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       // Populate winner info (include stable sequence prefix if available)
       const seqPrefix = (entry && (entry.seq || entry.seq === 0)) ? `${entry.seq}- ` : '';
-      winnerName.textContent = seqPrefix + (entry.name || '—');
+      winnerName.textContent = `الاسم: ${seqPrefix + (entry.name || '—')}`;
       winnerAccount.textContent = `رقم الحساب: ${entry.account || '—'}`;
       
       // Auto-determine and display prize info
@@ -18018,10 +18381,52 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         setTimeout(() => emailInput.focus(), 100);
       }
       
+      // Helper function to compress image
+      const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+              
+              // Calculate new dimensions maintaining aspect ratio
+              if (width > maxWidth) {
+                height = (height * maxWidth) / width;
+                width = maxWidth;
+              }
+              
+              canvas.width = width;
+              canvas.height = height;
+              
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              // Convert canvas to blob
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  console.log(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
+                  resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                } else {
+                  reject(new Error('Failed to compress image'));
+                }
+              }, 'image/jpeg', quality);
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      };
+
       // Add paste/change event handler for ID image (auto mode)
       const nationalIdImageInputAuto = document.getElementById('winner-id-image');
       const idPreviewImgAuto = document.getElementById('winner-id-image-preview');
       let idPreviewUrlAuto = null;
+      let compressedFile = null; // Store compressed file
     
       const openLightboxAuto = () => {
         if (!idPreviewUrlAuto) return;
@@ -18039,40 +18444,76 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         document.body.appendChild(overlay);
       };
     
-      const updateIdPreviewAuto = () => {
+      const updateIdPreviewAuto = async () => {
         if (!nationalIdImageInputAuto || !nationalIdImageInputAuto.files || nationalIdImageInputAuto.files.length === 0) {
           if (idPreviewImgAuto) { idPreviewImgAuto.style.display = 'none'; idPreviewImgAuto.src = ''; }
           if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} idPreviewUrlAuto = null; }
+          compressedFile = null;
           return;
         }
         const file = nationalIdImageInputAuto.files[0];
         if (!file || !file.type || !file.type.startsWith('image/')) {
           if (idPreviewImgAuto) { idPreviewImgAuto.style.display = 'none'; idPreviewImgAuto.src = ''; }
           if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} idPreviewUrlAuto = null; }
+          compressedFile = null;
           return;
         }
-        if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} }
-        idPreviewUrlAuto = URL.createObjectURL(file);
-        if (idPreviewImgAuto) { idPreviewImgAuto.src = idPreviewUrlAuto; idPreviewImgAuto.style.display = 'block'; }
+        
+        try {
+          // Compress the image
+          toast('جاري ضغط الصورة...', 'info');
+          compressedFile = await compressImage(file);
+          
+          if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} }
+          idPreviewUrlAuto = URL.createObjectURL(compressedFile);
+          if (idPreviewImgAuto) { idPreviewImgAuto.src = idPreviewUrlAuto; idPreviewImgAuto.style.display = 'block'; }
+          toast('تم ضغط الصورة بنجاح', 'success');
+        } catch (error) {
+          console.error('Failed to compress image:', error);
+          // Fallback to original file
+          if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} }
+          idPreviewUrlAuto = URL.createObjectURL(file);
+          if (idPreviewImgAuto) { idPreviewImgAuto.src = idPreviewUrlAuto; idPreviewImgAuto.style.display = 'block'; }
+          compressedFile = file;
+          toast('تم رفع الصورة الأصلية', 'warning');
+        }
       };
     
       const onIdImageChangeAuto = () => updateIdPreviewAuto();
       nationalIdImageInputAuto?.addEventListener('change', onIdImageChangeAuto);
       idPreviewImgAuto?.addEventListener('click', openLightboxAuto);
-      const handlePasteAuto = (e) => {
+      const handlePasteAuto = async (e) => {
         const items = e.clipboardData?.items;
         if (!items) return;
         
         for (let i = 0; i < items.length; i++) {
           if (items[i].type.indexOf('image') !== -1) {
             const blob = items[i].getAsFile();
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(blob);
-            if (nationalIdImageInputAuto) {
-              nationalIdImageInputAuto.files = dataTransfer.files;
-              updateIdPreviewAuto();
-              toast('تم لصق الصورة بنجاح', 'success');
+            
+            try {
+              // Compress the pasted image
+              toast('جاري ضغط الصورة...', 'info');
+              const compressed = await compressImage(blob);
+              
+              const dataTransfer = new DataTransfer();
+              dataTransfer.items.add(compressed);
+              if (nationalIdImageInputAuto) {
+                nationalIdImageInputAuto.files = dataTransfer.files;
+                await updateIdPreviewAuto();
+                toast('تم لصق الصورة وضغطها بنجاح', 'success');
+              }
+            } catch (error) {
+              console.error('Failed to compress pasted image:', error);
+              // Fallback to original blob
+              const dataTransfer = new DataTransfer();
+              dataTransfer.items.add(blob);
+              if (nationalIdImageInputAuto) {
+                nationalIdImageInputAuto.files = dataTransfer.files;
+                await updateIdPreviewAuto();
+                toast('تم لصق الصورة الأصلية', 'warning');
+              }
             }
+            
             e.preventDefault();
             break;
           }
@@ -18086,9 +18527,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       try {
         const contentBox = modal.querySelector('.wr-celebration-content');
         if (contentBox) {
-          contentBox.style.overflowY = 'auto';
-          contentBox.style.overflowX = 'hidden';
-          contentBox.style.scrollbarGutter = 'stable';
+          // contentBox.style.overflowY = 'auto'; // REMOVED
+          // contentBox.style.overflowX = 'hidden'; // REMOVED
+          // contentBox.style.scrollbarGutter = 'stable'; // REMOVED
         }
       } catch(e) { /* ignore */ }
       // launchConfetti() removed - no animations
@@ -18171,6 +18612,25 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 const data = await resp.json();
                 const createdWinner = data.winners && data.winners[0];
                 
+                // If we have a pending video, upload it now (Added for Auto Mode)
+                if (state.pendingVideoBlob && createdWinner && createdWinner._id) {
+                    const formData = new FormData();
+                    // Determine extension based on recorded mimeType
+                    const extension = (state.recordingMimeType && state.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
+                    formData.append('video', state.pendingVideoBlob, `winner_${createdWinner._id}.${extension}`);
+                    
+                    const uploadResp = await authedFetch(`/api/winners/${createdWinner._id}/video`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!uploadResp.ok) console.warn('Failed to upload video for winner', createdWinner._id);
+                    else toast('تم حفظ الفيديو بنجاح', 'success');
+                    
+                    // Clear pending blob
+                    state.pendingVideoBlob = null;
+                }
+
                 // Upload national ID image if provided
                 if (compressedFile && createdWinner && createdWinner._id) {
                     const idImageFormData = new FormData();
@@ -18267,19 +18727,24 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     async function sendWinnersReport() {
+      console.log('[sendWinnersReport] Button clicked');
       if (!state.selectedAgent) {
+        console.warn('[sendWinnersReport] No agent selected');
         toast('يرجى اختيار وكيل أولاً', 'warning');
         return;
       }
       if (state.winners.length === 0) {
+        console.warn('[sendWinnersReport] No winners in list');
         toast('لا يوجد فائزين لإرسالهم', 'warning');
         return;
       }
     
       // Filter winners that have _id (saved to DB)
       const validWinners = state.winners.filter(w => w._id);
+      console.log('[sendWinnersReport] Valid winners count:', validWinners.length);
       
       if (validWinners.length === 0) {
+          console.error('[sendWinnersReport] No valid winners with DB IDs');
           toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
           return;
       }
@@ -18289,6 +18754,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       showConfirmModal(
           `سيتم إرسال تقرير الفائزين (${validWinners.length}) إلى مجموعة الوكيل على تلجرام. هل أنت متأكد؟`,
           async () => {
+              console.log('[sendWinnersReport] User confirmed send');
               try {
                   const authedFetch = window.authedFetch || fetch;
                   const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-report`, {
@@ -18300,25 +18766,33 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                       })
                   });
                   
+                  console.log('[sendWinnersReport] Response status:', resp.status);
+
                     if (resp.ok) {
+                      const result = await resp.json();
+                      console.log('[sendWinnersReport] Success response:', result);
                       toast('تم إرسال التقرير بنجاح', 'success');
                       // Mark report as sent to allow completion status
                       state.reportSent = true;
-                      // Clear winners list after successful send
-                      state.winners = [];
-                      renderWinners();
-                      updateCounts();
+                      
+                      // Do NOT clear winners or redirect, as per user request
+                      // state.winners = [];
+                      // renderWinners();
+                      // updateCounts();
+                      
                       saveSession();
-                      // Redirect to agent competitions page after a short delay
-                      setTimeout(() => {
-                          window.location.href = `/pages/agent-competitions.html?agent_id=${state.selectedAgent.id}`;
-                      }, 1500);
+                      
+                      // Redirect removed
+                      // setTimeout(() => {
+                      //    window.location.href = `/pages/agent-competitions.html?agent_id=${state.selectedAgent.id}`;
+                      // }, 1500);
                   } else {
                       const err = await resp.json();
+                      console.error('[sendWinnersReport] Error response:', err);
                       toast(`فشل الإرسال: ${err.message}`, 'error');
                   }
               } catch (e) {
-                  console.error(e);
+                  console.error('[sendWinnersReport] Exception:', e);
                   toast('حدث خطأ أثناء الإرسال', 'error');
               }
           }
@@ -18413,7 +18887,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 include_warn_meet: !!state.includeWarnMeet,
                 include_warn_prev: !!state.includeWarnPrev,
                 warnings,
-                override_chat_id: '-4840260366'
+                override_chat_id: '-5011395157'
               })
             });
             if (resp.ok) {

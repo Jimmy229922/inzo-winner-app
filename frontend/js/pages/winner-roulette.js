@@ -25,7 +25,7 @@
       modal.className='wr-celebration-modal';
       modal.style.display='none';
       modal.innerHTML = `
-        <div class="wr-celebration-content" role="dialog" aria-modal="true" style="width: 100%; max-width: 600px; padding: 2rem;">
+        <div class="wr-celebration-content" role="dialog" aria-modal="true" style="width: 100%; max-width: 600px; padding: 2rem; box-sizing: border-box;">
           <h2 class="wr-celebration-title" style="font-size: 2rem; margin-bottom: 1rem;">مبروك الفوز!</h2>
           <div class="wr-winner-card" style="margin-bottom: 1.5rem; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px;">
               <div class="wr-winner-name" id="celebration-winner-name" style="font-size: 1.5rem; font-weight: bold; color: #fff;">—</div>
@@ -69,9 +69,14 @@
               </div>
           </div>
   
-          <button id="confirm-winner" class="wr-confirm-btn" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
-              <i class="fas fa-check-circle"></i> اعتماد الفائز
-          </button>
+          <div style="display: flex; gap: 10px;">
+              <button id="confirm-winner" class="wr-confirm-btn" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
+                  <i class="fas fa-check-circle"></i> اعتماد الفائز
+              </button>
+              <button id="skip-winner" class="wr-skip-btn" style="flex: 1; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
+                  <i class="fas fa-redo"></i> تخطي
+              </button>
+          </div>
         </div>`;
       document.body.appendChild(modal);
       
@@ -209,8 +214,9 @@
         const currentWinners = competition.current_winners_count || 0;
         
         // Store competition info in state for reference (include prize data)
+        console.log('Active competition loaded:', competition);
         state.activeCompetition = {
-          id: competition._id,
+          id: competition._id || competition.id,
           tradingWinnersRequired: tradingWinners,
           depositWinnersRequired: depositWinners,
           totalRequired: totalWinners,
@@ -1053,6 +1059,7 @@
       
       window.addEventListener('resize', () => { drawWheel(); if(confettiCanvas){confettiCanvas.width=window.innerWidth;confettiCanvas.height=window.innerHeight;} });
       searchInput?.addEventListener('input', ()=> { state.filterTerm = searchInput.value.trim(); renderParticipants(); updateCounts(); });
+      /* Reset button removed per request
       resetWinnersBtn?.addEventListener('click', ()=> { 
         showConfirmModal(
           'سيتم مسح جميع الفائزين بشكل دائم من القائمة. هل أنت متأكد من المتابعة؟',
@@ -1065,6 +1072,7 @@
           }
         );
       });
+      */
       
       // Refresh participants button - adds winner to roulette after confirmation
       refreshParticipantsBtn?.addEventListener('click', () => {
@@ -1131,11 +1139,11 @@
     }
     
     function saveSession() {
-      // Do not persist entries/winners per requirement
+      // Persist entries and winners as requested
       const session = {
-        entries: [],
-        winners: [],
-        selectedAgent: null,
+        entries: state.entries,
+        winners: state.winners,
+        selectedAgent: state.selectedAgent,
         excludeWinner: state.excludeWinner,
         filterTerm: state.filterTerm
       };
@@ -1143,23 +1151,44 @@
     }
     
     function restoreSession(skipAgent = false) {
-      // Intentionally do not restore entries/winners. Clear UI on load.
       try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return;
+        const session = JSON.parse(raw);
+        
+        state.entries = session.entries || [];
+        state.winners = session.winners || [];
+        state.excludeWinner = !!session.excludeWinner;
+        state.filterTerm = session.filterTerm || '';
+        
+        if (!skipAgent && session.selectedAgent) {
+          state.selectedAgent = session.selectedAgent;
+          // We need to re-select the agent in the dropdown if possible
+          const agentSelect = document.getElementById('agent-select');
+          if (agentSelect) {
+             agentSelect.value = session.selectedAgent.id;
+             // Trigger change event to load competition info
+             agentSelect.dispatchEvent(new Event('change'));
+          }
+        }
+
         const excludeCb = document.getElementById('exclude-winner');
-        if (excludeCb) excludeCb.checked = true;
+        if (excludeCb) excludeCb.checked = state.excludeWinner;
+        
         const searchInput = document.getElementById('participants-search');
-        if (searchInput) searchInput.value = '';
+        if (searchInput) searchInput.value = state.filterTerm;
+        
+        // Restore participants text area
         const ta = document.getElementById('participants-input');
-        if (ta) ta.value = '';
-        state.entries = [];
-        state.winners = [];
-        state.selectedAgent = null;
-        state.filterTerm = '';
+        if (ta && state.entries.length > 0) {
+             ta.value = state.entries.map(e => e.account ? `${e.name} — ${e.account}` : e.name).join('\n');
+        }
+
         renderParticipants();
         renderWinners();
         updateCounts();
       } catch (e) {
-        console.warn('Skipping session restore due to requirement');
+        console.warn('Session restore failed', e);
       }
     }
     
@@ -1680,12 +1709,12 @@
       saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ الفيديو والمتابعة';
       btnContainer.appendChild(saveBtn);
     
-      // Skip Button
-      const skipBtn = document.createElement('button');
-      skipBtn.id = 'skip-video-btn';
-      skipBtn.style.cssText = 'background: #64748b; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 16px;';
-      skipBtn.textContent = 'تخطي';
-      btnContainer.appendChild(skipBtn);
+      // Skip Winner Button (Cancel Winner)
+      const skipWinnerBtn = document.createElement('button');
+      skipWinnerBtn.id = 'skip-winner-btn';
+      skipWinnerBtn.style.cssText = 'background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 16px;';
+      skipWinnerBtn.innerHTML = '<i class="fas fa-redo"></i> تخطي الفائز';
+      btnContainer.appendChild(skipWinnerBtn);
     
       container.appendChild(btnContainer);
       overlay.appendChild(container);
@@ -1721,9 +1750,13 @@
         URL.revokeObjectURL(url);
       };
       
-      skipBtn.addEventListener('click', () => {
+      skipWinnerBtn.addEventListener('click', () => {
         cleanup();
-        if(state.autoMode){ showAutoWinnerModal(winner); } else { showWinnerModal(winner); }
+        // Do NOT proceed to showWinnerModal.
+        // Just close the preview. The winner is not added to state.winners yet (that happens in showWinnerModal).
+        // We might want to re-spin if in auto mode or queue, similar to the other skip button.
+        // But for now, just closing effectively "skips" this winner selection.
+        toast('تم تخطي الفائز وإلغاء الاختيار', 'info');
       });
       
       saveBtn.addEventListener('click', async () => {
@@ -1962,7 +1995,7 @@
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
               <div class="wr-winner-card-body">
-                <div class="wr-winner-card-name">${w.name}</div>
+                <div class="wr-winner-card-name">الاسم: ${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
                 <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> ${w.prizeValue || 0}%</div>
@@ -1980,7 +2013,7 @@
               <div class="wr-winner-card-actions">
                 <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — ${w.prizeValue}%" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-undo="${w.id}" title="تراجع"><i class="fas fa-undo"></i></button>
+                <button class="wr-icon-btn" data-return="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
               </div>
             </div>`;
         });
@@ -2000,7 +2033,7 @@
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
               <div class="wr-winner-card-body">
-                <div class="wr-winner-card-name">${w.name}</div>
+                <div class="wr-winner-card-name">الاسم: ${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
     
@@ -2018,7 +2051,7 @@
               <div class="wr-winner-card-actions">
                 <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — $${w.prizeValue}" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-undo="${w.id}" title="تراجع"><i class="fas fa-undo"></i></button>
+                <button class="wr-icon-btn" data-return="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
               </div>
             </div>`;
         });
@@ -2026,32 +2059,130 @@
         html += '</div></div>';
       }
       
-      bottomContainer.innerHTML = html;
-    
-      // Bind events
-      const sendAllBtn = document.getElementById('send-all-winners-btn');
-      if(sendAllBtn) {
-          sendAllBtn.addEventListener('click', sendWinnersReport);
-      }
-    
-      const sendIDsBtn = document.getElementById('send-winners-ids-btn');
-      if(sendIDsBtn) {
-          sendIDsBtn.addEventListener('click', sendWinnersWithIDsToAgent);
-      }
-    
-      bottomContainer.querySelectorAll('[data-copy]').forEach(btn => {
-        btn.addEventListener('click', handleCopyClick);
-      });
-      bottomContainer.querySelectorAll('input[data-warn]').forEach(input => {
-        input.addEventListener('change', handleWinnerWarningToggle);
-      });
-          bottomContainer.querySelectorAll('[data-undo]').forEach(btn => {
-            btn.addEventListener('click', handleUndoClick);
-          });
-          bottomContainer.querySelectorAll('[data-send]').forEach(btn => {
+        html += `
+          <div id="approval-section" style="width:100%; margin-top: 20px; border-top: 1px solid #334155; padding-top: 20px;">
+              <h4 class="wr-prize-section-title">إعتماد نهائي</h4>
+              <div style="display: flex; gap: 10px;">
+                  <button id="approve-winners-btn" class="wr-btn wr-btn-success" ${state.winners.length === 0 ? 'disabled' : ''}>
+                      <i class="fas fa-check-double"></i> اعتماد الفائزين (${state.winners.length})
+                  </button>
+                  <button id="approve-no-winners-btn" class="wr-btn wr-btn-danger">
+                      <i class="fas fa-times-circle"></i> اعتماد المسابقة بدون فائزين
+                  </button>
+              </div>
+              <p style="font-size: 0.8rem; color: #9ca3af; margin-top: 10px;">
+                  سيؤدي هذا الإجراء إلى إغلاق المسابقة الحالية ومنع اختيار فائزين جدد.
+              </p>
+          </div>
+      `;
+
+        bottomContainer.innerHTML = html;
+
+        // Bind events for new buttons
+        const approveBtn = document.getElementById('approve-winners-btn');
+        approveBtn?.addEventListener('click', async () => {
+            if (!state.activeCompetition || !state.activeCompetition.id) {
+                console.error('Active competition state:', state.activeCompetition);
+                toast('لا توجد مسابقة نشطة لاعتمادها (معرف مفقود).', 'error');
+                return;
+            }
+            
+            // Direct approval without confirmation modal
+            try {
+                const authedFetch = window.authedFetch || fetch;
+                const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        winners: state.winners.map(w => w._id).filter(Boolean)
+                    })
+                });
+                
+                if (resp.ok) {
+                    toast('تم اعتماد المسابقة بنجاح', 'success');
+                    // Clear winners and entries after successful approval
+                    state.winners = [];
+                    state.entries = [];
+                    state.activeCompetition = null;
+                    saveSession();
+                    renderParticipants();
+                    renderWinners();
+                    updateCounts();
+                    // Optionally reload or redirect
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    const err = await resp.json();
+                    toast(`فشل الاعتماد: ${err.message} ${err.error || ''}`, 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                toast('حدث خطأ أثناء الاعتماد', 'error');
+            }
+        });
+
+        const approveNoWinnersBtn = document.getElementById('approve-no-winners-btn');
+        approveNoWinnersBtn?.addEventListener('click', async () => {
+            if (!state.activeCompetition || !state.activeCompetition.id) {
+                console.error('Active competition state:', state.activeCompetition);
+                toast('لا توجد مسابقة نشطة لاعتمادها (معرف مفقود).', 'error');
+                return;
+            }
+            
+            // Direct approval without confirmation modal
+            try {
+                const authedFetch = window.authedFetch || fetch;
+                const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        noWinners: true
+                    })
+                });
+                
+                if (resp.ok) {
+                    toast('تم إغلاق المسابقة بنجاح', 'success');
+                    state.winners = [];
+                    state.entries = [];
+                    state.activeCompetition = null;
+                    saveSession();
+                    renderParticipants();
+                    renderWinners();
+                    updateCounts();
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    const err = await resp.json();
+                    toast(`فشل الإغلاق: ${err.message} ${err.error || ''}`, 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                toast('حدث خطأ أثناء الإغلاق', 'error');
+            }
+        });
+
+        // Bind events
+        const sendAllBtn = document.getElementById('send-all-winners-btn');
+        if (sendAllBtn) {
+            sendAllBtn.addEventListener('click', sendWinnersReport);
+        }
+
+        const sendIDsBtn = document.getElementById('send-winners-ids-btn');
+        if (sendIDsBtn) {
+            sendIDsBtn.addEventListener('click', sendWinnersWithIDsToAgent);
+        }
+
+        bottomContainer.querySelectorAll('[data-copy]').forEach(btn => {
+            btn.addEventListener('click', handleCopyClick);
+        });
+        bottomContainer.querySelectorAll('input[data-warn]').forEach(input => {
+            input.addEventListener('change', handleWinnerWarningToggle);
+        });
+        bottomContainer.querySelectorAll('[data-return]').forEach(btn => {
+            btn.addEventListener('click', handleReturnClick);
+        });
+        bottomContainer.querySelectorAll('[data-send]').forEach(btn => {
             btn.addEventListener('click', handleSendClick);
-          });
-        }function handleCopyClick(ev) {
+        });
+    }function handleCopyClick(ev) {
       const text = ev.currentTarget.getAttribute('data-copy');
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
@@ -2064,12 +2195,53 @@
       }
     }
     
-    function handleUndoClick(ev) {
-      const id = ev.currentTarget.getAttribute('data-undo');
-      const entry = state.entries.find(e=> e.id===id);
-      if(entry){ entry.selected=false; }
-      state.winners = state.winners.filter(w=> w.id!==id);
-      renderParticipants(); renderWinners(); updateCounts(); saveSession();
+    function handleReturnClick(ev) {
+      const id = ev.currentTarget.getAttribute('data-return');
+      
+      // Find the winner to return
+      const winnerIndex = state.winners.findIndex(w => w.id === id);
+      if (winnerIndex === -1) return;
+      
+      const winner = state.winners[winnerIndex];
+      
+      // Remove from winners list
+      state.winners.splice(winnerIndex, 1);
+      
+      // Check if already in entries
+      let entry = state.entries.find(e => e.id === id);
+      
+      if (!entry) {
+          // Re-create entry
+          entry = {
+              id: winner.id,
+              name: winner.name,
+              account: winner.account,
+              label: winner.label || winner.name,
+              selected: false,
+              seq: winner.seq
+          };
+          state.entries.push(entry);
+      } else {
+          entry.selected = false;
+      }
+      
+      // Update the textarea to reflect the returned participant
+      const ta = document.getElementById('participants-input');
+      if (ta) {
+          ta.value = state.entries.map(e => `${e.name} — ${e.account}`).join('\n');
+      }
+
+      // Decrement current winners count in active competition
+      if (state.activeCompetition && state.activeCompetition.currentWinners > 0) {
+          state.activeCompetition.currentWinners--;
+      }
+
+      renderParticipants(); 
+      renderWinners(); 
+      updateCounts(); 
+      drawWheel(); 
+      saveSession();
+      toast('تم استرجاع الفائز للروليت', 'info');
     }
     
     function handleWinnerWarningToggle(ev) {
@@ -2166,6 +2338,7 @@
       const prizeTypeEl = document.getElementById('celebration-prize-type');
       const prizeValueEl = document.getElementById('celebration-prize-value');
       const confirmBtn = document.getElementById('confirm-winner');
+      const skipBtn = document.getElementById('skip-winner'); // NEW: Skip button
       
       console.log('🔍 [showWinnerModal] Elements check:');
       console.log('  - modal:', modal ? 'FOUND' : 'MISSING');
@@ -2209,7 +2382,7 @@
       
       // Populate winner info (include stable sequence prefix if available)
       const seqPrefix = (entry && (entry.seq || entry.seq === 0)) ? `${entry.seq}- ` : '';
-      winnerName.textContent = seqPrefix + (entry.name || '—');
+      winnerName.textContent = `الاسم: ${seqPrefix + (entry.name || '—')}`;
       winnerAccount.textContent = `رقم الحساب: ${entry.account || '—'}`;
     
     
@@ -2262,6 +2435,16 @@
         emailInput.value = '';
         setTimeout(() => emailInput.focus(), 100);
       }
+
+      // --- NEW: Clear ID Image Input and Preview ---
+      const idInput = document.getElementById('winner-id-image');
+      const idPreview = document.getElementById('winner-id-image-preview');
+      if (idInput) idInput.value = ''; // Clear file input
+      if (idPreview) {
+          idPreview.src = '';
+          idPreview.style.display = 'none';
+      }
+      // ---------------------------------------------
       
       // Helper function to compress image
       const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
@@ -2449,9 +2632,15 @@
             : (state.activeCompetition?.prizePerWinner ?? 0);
         console.log('[PrizeValueConfirm] Final prize:', { type: selectedPrizeType, value: selectedPrizeValue });
         
-        // Email is optional: validate only if provided
+        // Email is REQUIRED: validate existence and format
         const emailErrorEl = document.getElementById('winner-email-error');
-        if (email && !/.+@.+\..+/.test(email)) {
+        if (!email) {
+          emailInput?.classList.add('wr-input-error');
+          toast('يجب إدخال البريد الإلكتروني','error');
+          setTimeout(()=> emailInput?.classList.remove('wr-input-error'), 2000);
+          return;
+        }
+        if (!/.+@.+\..+/.test(email)) {
           if (emailErrorEl) emailErrorEl.style.display = 'block';
           emailInput?.classList.add('wr-input-error');
           toast('البريد الإلكتروني غير صالح','error');
@@ -2611,12 +2800,20 @@
         if(state.spinQueue>0){ setTimeout(()=> startSpin(), 350); }
         else { state.spinQueue = 0; }
       };
+
+      // --- NEW: Skip Logic ---
+      const onSkip = () => {
+        onClose();
+        // User requested to stop automatic re-spin on skip
+      };
       
       function cleanup(){
         confirmBtn?.removeEventListener('click', onConfirm);
+        skipBtn?.removeEventListener('click', onSkip);
       }
       
       confirmBtn?.addEventListener('click', onConfirm);
+      skipBtn?.addEventListener('click', onSkip);
     }
     
     function showAutoWinnerModal(entry){
@@ -2663,7 +2860,7 @@
       
       // Populate winner info (include stable sequence prefix if available)
       const seqPrefix = (entry && (entry.seq || entry.seq === 0)) ? `${entry.seq}- ` : '';
-      winnerName.textContent = seqPrefix + (entry.name || '—');
+      winnerName.textContent = `الاسم: ${seqPrefix + (entry.name || '—')}`;
       winnerAccount.textContent = `رقم الحساب: ${entry.account || '—'}`;
       
       // Auto-determine and display prize info
@@ -2706,10 +2903,52 @@
         setTimeout(() => emailInput.focus(), 100);
       }
       
+      // Helper function to compress image
+      const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+              
+              // Calculate new dimensions maintaining aspect ratio
+              if (width > maxWidth) {
+                height = (height * maxWidth) / width;
+                width = maxWidth;
+              }
+              
+              canvas.width = width;
+              canvas.height = height;
+              
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              // Convert canvas to blob
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  console.log(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
+                  resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                } else {
+                  reject(new Error('Failed to compress image'));
+                }
+              }, 'image/jpeg', quality);
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      };
+
       // Add paste/change event handler for ID image (auto mode)
       const nationalIdImageInputAuto = document.getElementById('winner-id-image');
       const idPreviewImgAuto = document.getElementById('winner-id-image-preview');
       let idPreviewUrlAuto = null;
+      let compressedFile = null; // Store compressed file
     
       const openLightboxAuto = () => {
         if (!idPreviewUrlAuto) return;
@@ -2727,40 +2966,76 @@
         document.body.appendChild(overlay);
       };
     
-      const updateIdPreviewAuto = () => {
+      const updateIdPreviewAuto = async () => {
         if (!nationalIdImageInputAuto || !nationalIdImageInputAuto.files || nationalIdImageInputAuto.files.length === 0) {
           if (idPreviewImgAuto) { idPreviewImgAuto.style.display = 'none'; idPreviewImgAuto.src = ''; }
           if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} idPreviewUrlAuto = null; }
+          compressedFile = null;
           return;
         }
         const file = nationalIdImageInputAuto.files[0];
         if (!file || !file.type || !file.type.startsWith('image/')) {
           if (idPreviewImgAuto) { idPreviewImgAuto.style.display = 'none'; idPreviewImgAuto.src = ''; }
           if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} idPreviewUrlAuto = null; }
+          compressedFile = null;
           return;
         }
-        if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} }
-        idPreviewUrlAuto = URL.createObjectURL(file);
-        if (idPreviewImgAuto) { idPreviewImgAuto.src = idPreviewUrlAuto; idPreviewImgAuto.style.display = 'block'; }
+        
+        try {
+          // Compress the image
+          toast('جاري ضغط الصورة...', 'info');
+          compressedFile = await compressImage(file);
+          
+          if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} }
+          idPreviewUrlAuto = URL.createObjectURL(compressedFile);
+          if (idPreviewImgAuto) { idPreviewImgAuto.src = idPreviewUrlAuto; idPreviewImgAuto.style.display = 'block'; }
+          toast('تم ضغط الصورة بنجاح', 'success');
+        } catch (error) {
+          console.error('Failed to compress image:', error);
+          // Fallback to original file
+          if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} }
+          idPreviewUrlAuto = URL.createObjectURL(file);
+          if (idPreviewImgAuto) { idPreviewImgAuto.src = idPreviewUrlAuto; idPreviewImgAuto.style.display = 'block'; }
+          compressedFile = file;
+          toast('تم رفع الصورة الأصلية', 'warning');
+        }
       };
     
       const onIdImageChangeAuto = () => updateIdPreviewAuto();
       nationalIdImageInputAuto?.addEventListener('change', onIdImageChangeAuto);
       idPreviewImgAuto?.addEventListener('click', openLightboxAuto);
-      const handlePasteAuto = (e) => {
+      const handlePasteAuto = async (e) => {
         const items = e.clipboardData?.items;
         if (!items) return;
         
         for (let i = 0; i < items.length; i++) {
           if (items[i].type.indexOf('image') !== -1) {
             const blob = items[i].getAsFile();
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(blob);
-            if (nationalIdImageInputAuto) {
-              nationalIdImageInputAuto.files = dataTransfer.files;
-              updateIdPreviewAuto();
-              toast('تم لصق الصورة بنجاح', 'success');
+            
+            try {
+              // Compress the pasted image
+              toast('جاري ضغط الصورة...', 'info');
+              const compressed = await compressImage(blob);
+              
+              const dataTransfer = new DataTransfer();
+              dataTransfer.items.add(compressed);
+              if (nationalIdImageInputAuto) {
+                nationalIdImageInputAuto.files = dataTransfer.files;
+                await updateIdPreviewAuto();
+                toast('تم لصق الصورة وضغطها بنجاح', 'success');
+              }
+            } catch (error) {
+              console.error('Failed to compress pasted image:', error);
+              // Fallback to original blob
+              const dataTransfer = new DataTransfer();
+              dataTransfer.items.add(blob);
+              if (nationalIdImageInputAuto) {
+                nationalIdImageInputAuto.files = dataTransfer.files;
+                await updateIdPreviewAuto();
+                toast('تم لصق الصورة الأصلية', 'warning');
+              }
             }
+            
             e.preventDefault();
             break;
           }
@@ -2774,9 +3049,9 @@
       try {
         const contentBox = modal.querySelector('.wr-celebration-content');
         if (contentBox) {
-          contentBox.style.overflowY = 'auto';
-          contentBox.style.overflowX = 'hidden';
-          contentBox.style.scrollbarGutter = 'stable';
+          // contentBox.style.overflowY = 'auto'; // REMOVED
+          // contentBox.style.overflowX = 'hidden'; // REMOVED
+          // contentBox.style.scrollbarGutter = 'stable'; // REMOVED
         }
       } catch(e) { /* ignore */ }
       // launchConfetti() removed - no animations
@@ -2859,6 +3134,25 @@
                 const data = await resp.json();
                 const createdWinner = data.winners && data.winners[0];
                 
+                // If we have a pending video, upload it now (Added for Auto Mode)
+                if (state.pendingVideoBlob && createdWinner && createdWinner._id) {
+                    const formData = new FormData();
+                    // Determine extension based on recorded mimeType
+                    const extension = (state.recordingMimeType && state.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
+                    formData.append('video', state.pendingVideoBlob, `winner_${createdWinner._id}.${extension}`);
+                    
+                    const uploadResp = await authedFetch(`/api/winners/${createdWinner._id}/video`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!uploadResp.ok) console.warn('Failed to upload video for winner', createdWinner._id);
+                    else toast('تم حفظ الفيديو بنجاح', 'success');
+                    
+                    // Clear pending blob
+                    state.pendingVideoBlob = null;
+                }
+
                 // Upload national ID image if provided
                 if (compressedFile && createdWinner && createdWinner._id) {
                     const idImageFormData = new FormData();
@@ -2955,19 +3249,24 @@
     }
     
     async function sendWinnersReport() {
+      console.log('[sendWinnersReport] Button clicked');
       if (!state.selectedAgent) {
+        console.warn('[sendWinnersReport] No agent selected');
         toast('يرجى اختيار وكيل أولاً', 'warning');
         return;
       }
       if (state.winners.length === 0) {
+        console.warn('[sendWinnersReport] No winners in list');
         toast('لا يوجد فائزين لإرسالهم', 'warning');
         return;
       }
     
       // Filter winners that have _id (saved to DB)
       const validWinners = state.winners.filter(w => w._id);
+      console.log('[sendWinnersReport] Valid winners count:', validWinners.length);
       
       if (validWinners.length === 0) {
+          console.error('[sendWinnersReport] No valid winners with DB IDs');
           toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
           return;
       }
@@ -2977,6 +3276,7 @@
       showConfirmModal(
           `سيتم إرسال تقرير الفائزين (${validWinners.length}) إلى مجموعة الوكيل على تلجرام. هل أنت متأكد؟`,
           async () => {
+              console.log('[sendWinnersReport] User confirmed send');
               try {
                   const authedFetch = window.authedFetch || fetch;
                   const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-report`, {
@@ -2988,25 +3288,33 @@
                       })
                   });
                   
+                  console.log('[sendWinnersReport] Response status:', resp.status);
+
                     if (resp.ok) {
+                      const result = await resp.json();
+                      console.log('[sendWinnersReport] Success response:', result);
                       toast('تم إرسال التقرير بنجاح', 'success');
                       // Mark report as sent to allow completion status
                       state.reportSent = true;
-                      // Clear winners list after successful send
-                      state.winners = [];
-                      renderWinners();
-                      updateCounts();
+                      
+                      // Do NOT clear winners or redirect, as per user request
+                      // state.winners = [];
+                      // renderWinners();
+                      // updateCounts();
+                      
                       saveSession();
-                      // Redirect to agent competitions page after a short delay
-                      setTimeout(() => {
-                          window.location.href = `/pages/agent-competitions.html?agent_id=${state.selectedAgent.id}`;
-                      }, 1500);
+                      
+                      // Redirect removed
+                      // setTimeout(() => {
+                      //    window.location.href = `/pages/agent-competitions.html?agent_id=${state.selectedAgent.id}`;
+                      // }, 1500);
                   } else {
                       const err = await resp.json();
+                      console.error('[sendWinnersReport] Error response:', err);
                       toast(`فشل الإرسال: ${err.message}`, 'error');
                   }
               } catch (e) {
-                  console.error(e);
+                  console.error('[sendWinnersReport] Exception:', e);
                   toast('حدث خطأ أثناء الإرسال', 'error');
               }
           }
@@ -3101,7 +3409,7 @@
                 include_warn_meet: !!state.includeWarnMeet,
                 include_warn_prev: !!state.includeWarnPrev,
                 warnings,
-                override_chat_id: '-4840260366'
+                override_chat_id: '-5011395157'
               })
             });
             if (resp.ok) {

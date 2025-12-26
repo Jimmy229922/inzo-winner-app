@@ -564,7 +564,7 @@ async function renderCompetitionCreatePage(agentId) {
                 <div class="override-fields-grid">
                     <div class="form-group">
                         <label for="override-trading-winners">عدد الفائزين (تداولي)</label>
-                        <input type="number" id="override-trading-winners" value="${agent.winners_count || 0}">
+                        <input type="number" id="override-trading-winners" value="${agent.winners_count !== undefined ? agent.winners_count : 1}" min="0">
                     </div>
                     <div class="form-group">
                         <label for="override-prize">الجائزة لكل فائز ($)</label>
@@ -572,12 +572,13 @@ async function renderCompetitionCreatePage(agentId) {
                     </div>
                     <div class="form-group">
                         <label for="override-deposit-winners">عدد الفائزين (إيداع)</label>
-                        <input type="number" id="override-deposit-winners" value="${agent.deposit_bonus_winners_count || 0}">
+                        <input type="number" id="override-deposit-winners" value="${agent.deposit_bonus_winners_count !== undefined ? agent.deposit_bonus_winners_count : 0}" min="0">
                     </div>
                     <div class="form-group">
                         <label for="override-duration">مدة المسابقة</label>
                         <select id="override-duration">
                             <option value="" disabled>-- اختر مدة --</option>
+                            <option value="10s">10 ثواني</option>
                             <option value="1d" ${agent.competition_duration === '24h' || !agent.competition_duration || (agent.competition_duration !== '48h' && agent.competition_duration !== '168h') ? 'selected' : ''}>يوم واحد</option>
                             <option value="2d" ${agent.competition_duration === '48h' ? 'selected' : ''}>يومين</option>
                             <option value="1w" ${agent.competition_duration === '168h' ? 'selected' : ''}>أسبوع</option>
@@ -857,6 +858,11 @@ async function renderCompetitionCreatePage(agentId) {
             const winnersCount = parseInt(document.getElementById('override-trading-winners').value) || 0;
             const prizePerWinner = parseFloat(document.getElementById('override-prize').value) || 0;
             const depositWinnersCount = parseInt(document.getElementById('override-deposit-winners').value) || 0;
+            
+            if (winnersCount === 0 && depositWinnersCount === 0) {
+                throw new Error('يجب تحديد فائز واحد على الأقل (تداولي أو إيداع).');
+            }
+
             const totalCost = winnersCount * prizePerWinner;
 
             if (totalCost > (agent.remaining_balance || 0) || depositWinnersCount > (agent.remaining_deposit_bonus || 0)) {
@@ -956,32 +962,9 @@ async function renderCompetitionCreatePage(agentId) {
             }
             // --- End of FIX ---
 
-            // --- NEW: Use the correct PUT endpoint to update the agent's balance and deposit bonus ---
-            const newRemainingBalance = (agent.remaining_balance || 0) - totalCost;
-            const newConsumedBalance = (agent.consumed_balance || 0) + totalCost;
-            const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) - depositWinnersCount;
-            const newUsedDepositBonus = (agent.used_deposit_bonus || 0) + depositWinnersCount;
-
-            const updatePayload = {
-                remaining_balance: newRemainingBalance,
-                consumed_balance: newConsumedBalance,
-                remaining_deposit_bonus: newRemainingDepositBonus,
-                used_deposit_bonus: newUsedDepositBonus
-            };
-
-            const balanceUpdateResponse = await authedFetch(`/api/agents/${agent._id}`, {
-                method: 'PUT',
-                body: JSON.stringify(updatePayload)
-            });
-
-            if (!balanceUpdateResponse.ok) {
-                const result = await balanceUpdateResponse.json();
-                // Log the error and perhaps show a warning to the user that the balance deduction failed
-                console.error(`فشل خصم الرصيد أو البونص: ${result.message}`);
-                showToast(`تم إرسال المسابقة، لكن فشل تحديث الرصيد أو البونص: ${result.message}`, 'warning');
-            } else {
-                showToast('تم خصم التكاليف من الرصيد والبونص بنجاح.', 'success');
-            }
+            // --- UPDATE: Balance deduction is now handled by the backend in createCompetition ---
+            // We no longer need to send a separate PUT request here.
+            showToast('تم خصم التكاليف من الرصيد والبونص بنجاح.', 'success');
 
             // --- FIX: Force a full page reload to show updated balance ---
             // Using .hash only changes the URL fragment without reloading, which can show stale cached data.

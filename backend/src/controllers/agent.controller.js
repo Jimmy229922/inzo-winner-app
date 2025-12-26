@@ -280,7 +280,6 @@ exports.updateAgent = async (req, res) => {
         const changes = Object.entries(req.body).map(([field, newValue]) => {
             const oldValue = agentBeforeUpdate[field];
             // Ù†ØªØ­Ù‚Ù‚ ÙÙ‚Ø· Ù…Ù† Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„ØªÙŠ ØªØºÙŠØ±Øª Ù‚ÙŠÙ…ØªÙ‡Ø§
-            if (field === 'deposit_bonus_winners_count' && isFinancialUpdate) return null; // ØªØ¬Ø§Ù‡Ù„ Ù‡Ø°Ø§ Ø§Ù„Ø­Ù‚Ù„ Ø¥Ø°Ø§ ÙƒØ§Ù† Ù‡Ù†Ø§Ùƒ ØªØ­Ø¯ÙŠØ« Ù…Ø§Ù„ÙŠ Ø¢Ø®Ø±
             if (String(oldValue) === String(newValue)) return null;
             
             const arabicFieldName = translateField(field);
@@ -304,7 +303,6 @@ exports.updateAgent = async (req, res) => {
 
         // --- NEW DEBUG: Log the saved data to see what was actually persisted ---
         console.log('[Agent Update] Data after saving to database:', JSON.stringify(updatedAgent, null, 2));
-        console.log(`[DEBUG] Verifying save for "deposit_bonus_winners_count". Value in DB: ${updatedAgent.deposit_bonus_winners_count}. Value from request: ${req.body.deposit_bonus_winners_count}`);
 
         res.json({ data: updatedAgent });
     } catch (error) {
@@ -860,16 +858,7 @@ exports.sendWinnersReport = async (req, res) => {
              // If no videos, just send text
              await bot.sendMessage(agent.telegram_chat_id, messageText, { parse_mode: 'HTML' });
              
-            // Update active competition status to 'completed'
-            const activeCompetition = await Competition.findOne({ 
-                agent_id: agentId, 
-                status: { $in: ['active', 'awaiting_winners'] } 
-            });
-
-            if (activeCompetition) {
-                activeCompetition.status = 'completed';
-                await activeCompetition.save();
-            }
+             // Competition status update removed to prevent auto-completion
 
              return res.json({ message: 'Text report sent (no videos found)' });
         }
@@ -883,63 +872,86 @@ exports.sendWinnersReport = async (req, res) => {
                 mediaSource = path.join(__dirname, '../../', relativePath);
             }
             
+            // Generate caption for single winner
+            const prizeText = w.prize_type === 'deposit' 
+                ? `${w.prize_value}% بونص ايداع كونه فائز مسبقا ببونص تداولي` 
+                : `${w.prize_value}$`;
+            
+            let caption = `◃ الفائز: ${w.name}\n`;
+            caption += `           الجائزة: ${prizeText}\n\n`;
+            caption += `********************************************************\n`;
+            caption += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
+            caption += `https://t.me/Ibinzo`;
+
             await bot.sendVideo(agent.telegram_chat_id, mediaSource, { 
-                caption: messageText, 
+                caption: caption,
                 parse_mode: 'HTML',
                 supports_streaming: true
             });
 
-            // Update active competition status to 'completed'
-            const activeCompetition = await Competition.findOne({ 
-                agent_id: agentId, 
-                status: { $in: ['active', 'awaiting_winners'] } 
-            });
-
-            if (activeCompetition) {
-                activeCompetition.status = 'completed';
-                await activeCompetition.save();
-            }
+            // Competition status update removed to prevent auto-completion
 
             return res.json({ message: 'Winner report sent successfully' });
         }
 
-        // Construct media group
-        const mediaItems = winnersWithVideos.map(w => {
-            let mediaSource = w.video_url;
-            // Resolve local file path if it starts with /uploads
-            if (mediaSource && mediaSource.startsWith('/uploads')) {
-                const relativePath = mediaSource.startsWith('/') ? mediaSource.slice(1) : mediaSource;
-                mediaSource = path.join(__dirname, '../../', relativePath);
-            }
+        // Helper to generate caption for a chunk of winners
+        const generateChunkCaption = (chunkWinners, startIndex) => {
+            const ordinals = ['الاول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'];
+            let msg = '';
+            chunkWinners.forEach((w, i) => {
+                const globalIndex = startIndex + i;
+                const rank = ordinals[globalIndex] || (globalIndex + 1);
+                const prizeText = w.prize_type === 'deposit' 
+                    ? `${w.prize_value}% بونص ايداع كونه فائز مسبقا ببونص تداولي` 
+                    : `${w.prize_value}$`;
+        
+                msg += `◃ الفائز ${rank}: ${w.name}\n`;
+                msg += `           الجائزة: ${prizeText}\n\n`;
+                msg += `********************************************************\n`;
+            });
             
-            return {
-                type: 'video',
-                media: mediaSource,
-                parse_mode: 'HTML',
-                supports_streaming: true
-            };
-        });
+            msg += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
+            msg += `https://t.me/Ibinzo`;
+            return msg;
+        };
 
-        // Attach caption to the first item
-        mediaItems[0].caption = messageText;
+        // Split into chunks of 6 (User requested limit to avoid Telegram issues)
+        const chunkSize = 6;
+        for (let i = 0; i < winnersWithVideos.length; i += chunkSize) {
+            const winnersChunk = winnersWithVideos.slice(i, i + chunkSize);
+            
+            // Construct media group for this chunk
+            const mediaItems = winnersChunk.map(w => {
+                let mediaSource = w.video_url;
+                if (mediaSource && mediaSource.startsWith('/uploads')) {
+                    const relativePath = mediaSource.startsWith('/') ? mediaSource.slice(1) : mediaSource;
+                    mediaSource = path.join(__dirname, '../../', relativePath);
+                }
+                return {
+                    type: 'video',
+                    media: mediaSource,
+                    parse_mode: 'HTML',
+                    supports_streaming: true
+                };
+            });
 
-        // Split into chunks of 10 (Telegram limit)
-        const chunkSize = 10;
-        for (let i = 0; i < mediaItems.length; i += chunkSize) {
-            const chunk = mediaItems.slice(i, i + chunkSize);
-            await sendMediaGroupToTelegram(bot, chunk, agent.telegram_chat_id);
+            // Generate caption for this chunk
+            const chunkCaption = generateChunkCaption(winnersChunk, i);
+            
+            // Attach caption to the first item of the chunk
+            if (mediaItems.length > 0) {
+                mediaItems[0].caption = chunkCaption;
+            }
+
+            await sendMediaGroupToTelegram(bot, mediaItems, agent.telegram_chat_id);
+            
+            // Add a small delay between chunks to prevent rate limiting
+            if (i + chunkSize < winnersWithVideos.length) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
         }
 
-        // Update active competition status to 'completed'
-        const activeCompetition = await Competition.findOne({ 
-            agent_id: agentId, 
-            status: { $in: ['active', 'awaiting_winners'] } 
-        });
-
-        if (activeCompetition) {
-            activeCompetition.status = 'completed';
-            await activeCompetition.save();
-        }
+        // Competition status update removed to prevent auto-completion
 
         res.json({ message: 'Winners report sent successfully' });
 

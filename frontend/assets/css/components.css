@@ -46,7 +46,7 @@
     position: fixed;
     top: 80px; /* Below navbar */
     left: 20px;
-    z-index: 2000;
+    z-index: 20000; /* Increased z-index to be above winner modal (10000) */
     display: flex;
     flex-direction: column;
     gap: 10px;

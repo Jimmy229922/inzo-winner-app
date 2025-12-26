@@ -102,12 +102,21 @@ exports.updateTask = async (req, res) => {
                 // Prevent duplicate competition for the same agent on the same day
                 const startOfDay = new Date(taskDate); startOfDay.setHours(0,0,0,0);
                 const endOfDay = new Date(startOfDay); endOfDay.setDate(startOfDay.getDate()+1);
+
+                // NEW: Check for ANY competition created in the last 5 minutes to prevent race conditions with manual creation
+                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+                const recentlyCreated = await Competition.findOne({
+                    agent_id: agent._id,
+                    createdAt: { $gte: fiveMinutesAgo }
+                });
+
                 const existingToday = await Competition.findOne({
                     agent_id: agent._id,
                     createdAt: { $gte: startOfDay, $lt: endOfDay }
                 });
-                if (existingToday) {
-                    await logActivity(userId, agentId, 'COMPETITION_SENT', `تم بالفعل إرسال مسابقة اليوم للوكيل ${agent.name}.`);
+
+                if (existingToday || recentlyCreated) {
+                    await logActivity(userId, agentId, 'COMPETITION_SENT', `تم بالفعل إرسال مسابقة اليوم (أو مؤخراً) للوكيل ${agent.name}.`);
                 } else {
                     // Select an active template matching classification and not archived & usage within limit
                     const template = await CompetitionTemplate.findOne({

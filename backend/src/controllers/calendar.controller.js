@@ -20,12 +20,24 @@ exports.getCalendarData = async (req, res) => {
             '_id agent_id name avatar_url classification audit_days'
         ).lean();
 
-        // 2. جلب جميع المهام المسجلة للوكلاء الذين تم جلبهم
-        // --- إصلاح: إزالة التقييد بتاريخ الأسبوع الحالي ---
-        // هذا يضمن أن الواجهة الأمامية لديها كل تاريخ المهام اللازم لتقييم حالة كل وكيل في كل يوم من أيام الأسبوع الحالي،
-        // حتى لو كانت آخر مهمة مسجلة له في أسبوع سابق.
+        // 2. جلب جميع المهام المسجلة للوكلاء الذين تم جلبهم للأسبوع الحالي فقط
+        // --- إصلاح: إعادة التقييد بتاريخ الأسبوع الحالي ---
+        // هذا يضمن أن الواجهة الأمامية تعرض فقط حالة المهام للأسبوع الحالي،
+        // مما يمنع تداخل البيانات القديمة مع الحالة الحالية.
+        const today = new Date();
+        const currentDayOfWeek = today.getDay(); // Sunday = 0
+        const sunday = new Date(today);
+        sunday.setDate(today.getDate() - currentDayOfWeek);
+        sunday.setHours(0, 0, 0, 0);
+        
+        const nextSunday = new Date(sunday);
+        nextSunday.setDate(sunday.getDate() + 7);
+
         const agentIds = agents.map(a => a._id);
-        const tasks = await Task.find({ agent_id: { $in: agentIds } }).lean();
+        const tasks = await Task.find({ 
+            agent_id: { $in: agentIds },
+            task_date: { $gte: sunday, $lt: nextSunday }
+        }).lean();
 
         // 3. إرسال البيانات إلى الواجهة الأمامية
         res.json({ agents, tasks });

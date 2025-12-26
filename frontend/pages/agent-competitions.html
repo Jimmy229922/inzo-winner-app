@@ -2026,14 +2026,32 @@
         }
     </style>
 </head>
-<body>
+<body class="dark-mode">
+    <!-- Top Navigation Bar -->
+    <nav class="navbar" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; background-color: #1B263B; color: white;">
+        <div class="navbar-container" style="display: flex; align-items: center; width: 100%;">
+            <div class="navbar-left" style="display: flex; align-items: center; gap: 20px;">
+                <a href="../index.html#home" class="brand-v2" title="IB Competition system" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: white;">
+                    <img src="../images/logo.png" alt="IB Competition Logo" class="brand-logo" loading="lazy" style="height: 40px;">
+                    <span class="brand-text" style="font-weight: bold; font-size: 1.2em;">IB Competition system</span>
+                </a>
+                <a href="../index.html#home" class="nav-link" style="text-decoration: none; font-weight: 500; color: white;"><i class="fas fa-home"></i> الرئيسية</a>
+                <a href="../index.html#winner-roulette" class="nav-link" style="text-decoration: none; font-weight: 500; color: white;"><i class="fas fa-random"></i> اختيار الفائزين</a>
+            </div>
+        </div>
+    </nav>
     <div id="main-content" class="agent-competitions-page">
         <!-- Modern Hero Section -->
         <div class="agent-competitions-hero">
             <div class="hero-content">
-                <div class="hero-text">
-                    <h1 id="agentName"></h1>
-                    <p>إدارة ومتابعة جميع المسابقات المرسلة من قبل الوكيل</p>
+                <div style="width: 100%; display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div class="hero-text">
+                        <h1 id="agentName"></h1>
+                        <p>إدارة ومتابعة جميع المسابقات المرسلة من قبل الوكيل</p>
+                    </div>
+                    <a href="../index.html#winner-roulette" class="btn-back-roulette" style="background: rgba(255,255,255,0.2); color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; display: flex; align-items: center; gap: 8px; transition: all 0.3s ease; border: 1px solid rgba(255,255,255,0.3); margin-top: 10px;">
+                        <i class="fas fa-arrow-right"></i> الرجوع للروليت
+                    </a>
                 </div>
                 <div class="hero-stats" id="heroStats">
                     <!-- Stats will be populated by JS -->

@@ -42,6 +42,7 @@ router.put('/bulk-update', competitionController.bulkUpdateCompetitions);
 router.delete('/bulk-delete', competitionController.bulkDeleteCompetitions);
 
 router.put('/:id', competitionController.updateCompetition);
+router.post('/:id/complete', competitionController.completeCompetition);
 router.delete('/:id', competitionController.deleteCompetition);
 
 module.exports = router;
