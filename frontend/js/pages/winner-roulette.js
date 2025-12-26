@@ -71,7 +71,7 @@
   
           <div style="display: flex; gap: 10px;">
               <button id="confirm-winner" class="wr-confirm-btn" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
-                  <i class="fas fa-check-circle"></i> اعتماد الفائز
+                  <i class="fas fa-check-circle"></i> تجهيز فائز
               </button>
               <button id="skip-winner" class="wr-skip-btn" style="flex: 1; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
                   <i class="fas fa-redo"></i> تخطي
@@ -2529,6 +2529,7 @@
                 <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — ${w.prizeValue}%" title="نسخ"><i class="fas fa-copy"></i></button>
                 <button class="wr-icon-btn" data-return="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
+                <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="background: #ef4444; color: white;"><i class="fas fa-trash"></i></button>
               </div>
             </div>`;
         });
@@ -2567,6 +2568,7 @@
                 <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — $${w.prizeValue}" title="نسخ"><i class="fas fa-copy"></i></button>
                 <button class="wr-icon-btn" data-return="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
+                <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="background: #ef4444; color: white;"><i class="fas fa-trash"></i></button>
               </div>
             </div>`;
         });
@@ -2697,6 +2699,9 @@
         bottomContainer.querySelectorAll('[data-send]').forEach(btn => {
             btn.addEventListener('click', handleSendClick);
         });
+        bottomContainer.querySelectorAll('[data-delete]').forEach(btn => {
+            btn.addEventListener('click', handleDeleteClick);
+        });
     }function handleCopyClick(ev) {
       const text = ev.currentTarget.getAttribute('data-copy');
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2757,6 +2762,21 @@
       drawWheel(); 
       saveSession();
       toast('تم استرجاع الفائز للروليت', 'info');
+    }
+
+    function handleDeleteClick(ev) {
+      const id = ev.currentTarget.getAttribute('data-delete');
+      if (!id) return;
+      
+      if (!confirm('هل أنت متأكد من حذف هذا الفائز؟')) return;
+      
+      // Remove from winners list
+      state.winners = state.winners.filter(w => w.id !== id);
+      
+      saveSession();
+      renderWinners();
+      updateCounts();
+      toast('تم حذف الفائز', 'success');
     }
     
     function handleRestoreClick(ev) {

@@ -1180,7 +1180,7 @@ function baseRouletteMarkup() {
                     <div id="winner-email-error" class="wr-error-msg" style="display:none;color:#f87171;font-size:.75rem;margin-top:4px;">البريد غير صالح أو فارغ</div>
                     <div class="wr-prize-type" id="celebration-prize-type">نوع الجائزة</div>
                     <div class="wr-prize-value" id="celebration-prize-value">—</div>
-                    <button id="confirm-winner" class="wr-confirm-btn"><i class="fas fa-check-circle"></i> اعتماد الفائز</button>
+                    <button id="confirm-winner" class="wr-confirm-btn"><i class="fas fa-check-circle"></i> تجهيز فائز</button>
                   </div>
                 </div>
 <canvas id=\"wr-confetti-canvas\"></canvas>`;

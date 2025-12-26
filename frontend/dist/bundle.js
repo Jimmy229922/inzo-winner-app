@@ -15888,7 +15888,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
   
           <div style="display: flex; gap: 10px;">
               <button id="confirm-winner" class="wr-confirm-btn" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
-                  <i class="fas fa-check-circle"></i> اعتماد الفائز
+                  <i class="fas fa-check-circle"></i> تجهيز فائز
               </button>
               <button id="skip-winner" class="wr-skip-btn" style="flex: 1; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
                   <i class="fas fa-redo"></i> تخطي
@@ -23728,7 +23728,7 @@ function baseRouletteMarkup() {
                     <div id="winner-email-error" class="wr-error-msg" style="display:none;color:#f87171;font-size:.75rem;margin-top:4px;">البريد غير صالح أو فارغ</div>
                     <div class="wr-prize-type" id="celebration-prize-type">نوع الجائزة</div>
                     <div class="wr-prize-value" id="celebration-prize-value">—</div>
-                    <button id="confirm-winner" class="wr-confirm-btn"><i class="fas fa-check-circle"></i> اعتماد الفائز</button>
+                    <button id="confirm-winner" class="wr-confirm-btn"><i class="fas fa-check-circle"></i> تجهيز فائز</button>
                   </div>
                 </div>
 <canvas id=\"wr-confetti-canvas\"></canvas>`;
