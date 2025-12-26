@@ -80,19 +80,6 @@ const taskStore = {
    * @param {boolean} status
    */
   async updateTaskStatus(agentId, dayIndex, taskType, status) {
-    console.log(`[TaskStore] updateTaskStatus called with:`, {
-      agentId,
-      dayIndex,
-      taskType,
-      status,
-    });
-
-    // Log state before
-    console.log(
-      `[TaskStore] State for agent ${agentId} BEFORE update:`,
-      JSON.parse(JSON.stringify(this.state.tasks[agentId] || {}))
-    );
-
     try {
       const response = await authedFetch("/api/tasks", {
         method: "POST",
@@ -141,12 +128,6 @@ const taskStore = {
           ? savedTask.updatedAt
           : new Date().toISOString();
 
-      // Log state after
-      console.log(
-        `[TaskStore] State for agent ${agentId} AFTER update:`,
-        JSON.parse(JSON.stringify(this.state.tasks[agentId] || {}))
-      );
-
       // Notify UI subscribers (do not persist locally; server is authoritative)
       this._notify();
     } catch (error) {
@@ -157,7 +138,6 @@ const taskStore = {
   },
 
   async resetAllTasks() {
-    console.log("[TaskStore] Resetting all tasks.");
     try {
       // Perform API call to reset all tasks on the backend
       const response = await authedFetch("/api/tasks/reset-all", {
@@ -177,9 +157,6 @@ const taskStore = {
       // If API call is successful, reset the in-memory state (server will reflect this)
       this.state.tasks = {};
       this._notify();
-      console.log(
-        "[TaskStore] All tasks have been reset locally and on the server."
-      );
     } catch (error) {
       console.error("Error resetting all tasks:", error);
       throw error; // Re-throw for the UI to handle
@@ -195,11 +172,18 @@ const taskStore = {
       const response = await authedFetch("/api/calendar/data");
       if (!response.ok) throw new Error("Failed to fetch calendar data");
       const { tasks: serverTasks } = await response.json();
-
+      
       // Build authoritative in-memory state based on server tasks only.
       const incoming = {};
       (serverTasks || []).forEach((task) => {
-        const dayIndex = new Date(task.task_date).getDay();
+        // --- FIX: Use explicit day_index if available, else fallback to date parsing ---
+        let dayIndex;
+        if (task.day_index !== undefined && task.day_index !== null) {
+            dayIndex = task.day_index;
+        } else {
+            dayIndex = new Date(task.task_date).getDay();
+        }
+        
         const agentId = String(
           task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? ""
         );
@@ -215,7 +199,7 @@ const taskStore = {
       // Replace in-memory state with server state (server is source-of-truth)
       this.state.tasks = incoming;
     } catch (error) {
-      console.error("Failed to fetch initial task data:", error);
+      console.error("[TaskStore] ❌ Failed to fetch initial task data:", error);
     }
   },
 
@@ -231,7 +215,14 @@ const taskStore = {
       // Rebuild authoritative state from server and replace in-memory state.
       const incoming = {};
       (serverTasks || []).forEach((task) => {
-        const dayIndex = new Date(task.task_date).getDay();
+        // --- FIX: Use explicit day_index if available, else fallback to date parsing ---
+        let dayIndex;
+        if (task.day_index !== undefined && task.day_index !== null) {
+            dayIndex = task.day_index;
+        } else {
+            dayIndex = new Date(task.task_date).getDay();
+        }
+
         const agentId = String(
           task.agent_id ?? task.agentId ?? task._id ?? task.agent ?? ""
         );
@@ -247,7 +238,7 @@ const taskStore = {
       this.state.tasks = incoming;
       this._notify();
     } catch (error) {
-      console.error("TaskStore sync failed:", error);
+      console.error("[TaskStore] ❌ Sync failed:", error);
     }
   },
 
@@ -297,7 +288,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setInterval(() => taskStore.syncWithServer(), 20000);
   });
 });
-
 
 
 // == home.js ==
@@ -489,8 +479,8 @@ async function updateHomePageUI(stats) {
                     /* logs suppressed: fallback map */
                 }
 
-                // A daily task for an agent has two components: audit and competition.
-                const totalTodayActions = totalTodayAgents * 2;
+                // A daily task for an agent counts as complete when audited only
+                const totalTodayActions = totalTodayAgents; // Count auditing only
                 let completedActions = 0;
 
                 /* logs suppressed: calculating completed actions */
@@ -501,16 +491,14 @@ async function updateHomePageUI(stats) {
                     if (task.audited) {
                         completedActions++;
                     }
-                    if (task.competition_sent) {
-                        completedActions++;
-                    }
+                    // Competition is not counted in progress anymore
                 });
 
                 /* logs suppressed: final calculations */
                 
                 const pendingAgents = agentsForToday.filter(agent => {
                     const task = tasksMap[agent._id];
-                    return !task || !task.audited || !task.competition_sent;
+                    return !task || !task.audited; // Only check audited status
                 });
                 
                 /* logs suppressed: pending count */
@@ -2113,7 +2101,10 @@ function generateCompetitionGridHtml(competitions) {
                 <span class="checkmark"></span>
             </label>
             <div class="competition-card-name">
-                <h3>${comp.name}</h3>
+                <div class="competition-info-wrapper">
+                    <h3>${comp.name}</h3>
+                    ${comp.description ? `<div class="competition-question-text" title="${comp.description}"><i class="fas fa-question-circle"></i> <span>${comp.description}</span></div>` : ''}
+                </div>
                 ${countdownHtml}
             </div>
             <div class="competition-card-status">
@@ -2308,7 +2299,11 @@ async function renderCompetitionCreatePage(agentId) {
                     <label for="competition-template-select">المسابقات المقترحة</label>
                     <select id="competition-template-select" required>
                         <option value="" disabled selected>-- اختار مسابقة --</option>
-                        ${templates.map(t => `<option value="${t._id}">${t.question}</option>`).join('')}
+                        ${templates.map(t => {
+                            const q = t.question || '';
+                            const displayQ = q.length > 120 ? q.substring(0, 120) + '...' : q;
+                            return `<option value="${t._id}" title="${q.replace(/"/g, '&quot;')}">${displayQ}</option>`;
+                        }).join('')}
                     </select>
                     <div id="template-usage-info" class="form-hint" style="display: none;"></div>
                 </div>
@@ -2625,13 +2620,20 @@ async function renderCompetitionCreatePage(agentId) {
 
             let finalImageUrl = selectedTemplate.image_url || '/images/competition_bg.jpg'; // Default to template image
 
-            // --- FIX: Handle absolute localhost URLs from old templates ---
-            if (finalImageUrl && finalImageUrl.startsWith('http://localhost')) {
-                try {
-                    const url = new URL(finalImageUrl);
-                    finalImageUrl = url.pathname; // Convert to relative path
-                } catch (e) {
-                    console.error('Could not parse template image URL, leaving as is:', e);
+            // --- FIX: Normalize image URL so Telegram can fetch it from the backend ---
+            if (finalImageUrl) {
+                // Handle absolute localhost URLs from old templates
+                if (finalImageUrl.startsWith('http://localhost')) {
+                    try {
+                        const url = new URL(finalImageUrl);
+                        finalImageUrl = url.pathname; // Convert to relative path
+                    } catch (e) {
+                        console.error('Could not parse template image URL, leaving as is:', e);
+                    }
+                }
+                // If we have a relative path without a leading slash (e.g., "uploads/competitions/xxx"), prefix it
+                if (!finalImageUrl.startsWith('/') && !finalImageUrl.startsWith('http')) {
+                    finalImageUrl = `/${finalImageUrl}`;
                 }
             }
             // --- End of FIX ---
@@ -2649,6 +2651,10 @@ async function renderCompetitionCreatePage(agentId) {
                 
                 const uploadResult = await uploadResponse.json();
                 finalImageUrl = uploadResult.imageUrl;
+                // Uploaded paths from backend should start with "/uploads", but guard just in case
+                if (finalImageUrl && !finalImageUrl.startsWith('/')) {
+                    finalImageUrl = `/${finalImageUrl}`;
+                }
             }
 
 
@@ -2671,13 +2677,23 @@ async function renderCompetitionCreatePage(agentId) {
                 duration: durationInput.value,
                 total_cost: totalCost,
                 deposit_winners_count: depositWinnersCount,
+                trading_winners_count: winnersCount,
+                required_winners: winnersCount + depositWinnersCount,
                 correct_answer: document.getElementById('override-correct-answer').value,
-                winners_count: winnersCount,
                 prize_per_winner: prizePerWinner,
                 template_id: selectedTemplate._id,
                 image_url: finalImageUrl,
-                client_request_id: requestKey
+                client_request_id: requestKey,
+                deposit_bonus_percentage: agent.deposit_bonus_percentage || 0 // Ensure this is sent
             };
+
+            console.log('🎯 [Create Competition] Payload being sent to backend:', {
+                trading_winners_count: competitionPayload.trading_winners_count,
+                deposit_winners_count: competitionPayload.deposit_winners_count,
+                required_winners: competitionPayload.required_winners,
+                total_cost: competitionPayload.total_cost,
+                prize_per_winner: competitionPayload.prize_per_winner
+            });
 
             const compResponse = await authedFetch('/api/competitions', {
                 method: 'POST',
@@ -2685,19 +2701,19 @@ async function renderCompetitionCreatePage(agentId) {
             });
 
             if (!compResponse.ok) {
-                if (compResponse.status === 409) throw new Error('فشل الإرسال: تم إرسال هذه المسابقة لهذا الوكيل من قبل.');
-                const result = await compResponse.json();
+                const result = await compResponse.json().catch(() => ({}));
+                if (compResponse.status === 409) {
+                    throw new Error(result.message || 'فشل الإرسال: تم إرسال هذه المسابقة لهذا الوكيل من قبل.');
+                }
                 throw new Error(result.message || 'فشل حفظ المسابقة.');
             }
 
-            // --- FIX: Re-add Telegram sending logic after successful save ---
-            const telegramResponse = await authedFetch('/api/post-announcement', {
-                method: 'POST',
-                body: JSON.stringify({
-                    message: competitionPayload.description,
-                    chatId: agent.telegram_chat_id,
-                    imageUrl: finalImageUrl
-                })
+            const savedCompetition = await compResponse.json();
+            console.log('✅ [Create Competition] Competition saved successfully:', {
+                id: savedCompetition.data?._id,
+                trading_winners_count: savedCompetition.data?.trading_winners_count,
+                deposit_winners_count: savedCompetition.data?.deposit_winners_count,
+                required_winners: savedCompetition.data?.required_winners
             });
 
             if (!telegramResponse.ok) {
@@ -4818,17 +4834,20 @@ class CalendarUI {
       "الثلاثاء",
       "الأربعاء",
       "الخميس",
-      "الجمعة",
+      "الجمعة"
     ];
     this.searchDebounceTimer = null;
     this._syncInterval = null;
 
     this.boundHandleChange = this._handleChange.bind(this);
     this.boundHandleResetAll = this.handleResetAllTasks.bind(this);
+    this.boundUpdateUIFromState = this.updateCalendarUIFromState.bind(this);
   }
 
   destroy() {
-    // window.taskStore.unsubscribe(this.boundUpdateUIFromState); // Removed to fix bug
+    if (window.taskStore && this.boundUpdateUIFromState) {
+        window.taskStore.unsubscribe(this.boundUpdateUIFromState);
+    }
     clearTimeout(this.searchDebounceTimer);
     if (weeklyResetCountdownInterval) {
       clearInterval(weeklyResetCountdownInterval);
@@ -4874,12 +4893,26 @@ class CalendarUI {
     }
 
     this.calendarData = this.daysOfWeek.map(() => []);
+    
+    // --- FIX: Build calendar data from ALL agents, showing them on ALL days where they have tasks ---
     agents.forEach((agent) => {
+      // Check if agent has any tasks in the store
+      const agentTasks = this.tasksState.tasks[agent._id] || {};
+      const daysWithTasks = Object.keys(agentTasks).map(d => parseInt(d, 10));
+      
+      // FIX: Always use audit_days as the source of truth for which days to show agent
+      // Tasks are just status indicators, not day assignment
       const dayIndices = agent.audit_days || [];
       dayIndices.forEach((dayIndex) => {
-        if (dayIndex >= 0 && dayIndex < 6) {
-          // Corrected to include Saturday
-          this.calendarData[dayIndex].push(agent);
+        if (dayIndex >= 0 && dayIndex <= 5) {
+          // Ensure the array exists before checking
+          if (!this.calendarData[dayIndex]) {
+            this.calendarData[dayIndex] = [];
+          }
+          const alreadyAdded = this.calendarData[dayIndex].some(a => a._id === agent._id);
+          if (!alreadyAdded) {
+            this.calendarData[dayIndex].push(agent);
+          }
         }
       });
     });
@@ -4907,9 +4940,25 @@ class CalendarUI {
       }
     }, 20000); // كل 20 ثانية
 
-    // The global subscription is removed to fix the bug.
-    // this.boundUpdateUIFromState = updateCalendarUIFromState.bind(this);
-    // window.taskStore.subscribe(this.boundUpdateUIFromState);
+    // The global subscription is enabled
+    if (window.taskStore) {
+        window.taskStore.subscribe(this.boundUpdateUIFromState);
+    }
+  }
+
+  updateCalendarUIFromState(newState) {
+      console.log('[Calendar] Received store update');
+      this.tasksState = newState;
+      // Re-render columns to reflect changes
+      // We could optimize this to only update changed cells, but re-rendering columns is fast enough
+      this._renderDayColumns();
+      this._renderAllAgentCards();
+      
+      // Re-apply filters if any
+      const searchInput = document.getElementById("calendar-search-input");
+      if (searchInput && searchInput.value) {
+          searchInput.dispatchEvent(new Event('input'));
+      }
   }
 
   _renderDayColumns() {
@@ -5473,7 +5522,6 @@ function setupCalendarFilters(uiInstance) {
 }
 
 
-
 // == topAgents.js ==
 ﻿// topAgents.js - Updated: 2025-11-16 with Clear Filter Button
 let agentStats = [];
@@ -5859,8 +5907,29 @@ function displayTopAgents(sortedAgents, sortKey) {
     const exclusiveRanks = ['CENTER', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND', 'وكيل حصري بدون مرتبة'];
     const regularRanks = ['BEGINNING', 'GROWTH', 'PRO', 'ELITE'];
     
-    const exclusiveRunnersUp = runnersUp.filter(agent => exclusiveRanks.includes(agent.rank));
-    const regularRunnersUp = runnersUp.filter(agent => regularRanks.includes(agent.rank));
+    const orderAgentsByRank = (agents, rankOrder) => {
+        const orderMap = rankOrder.reduce((acc, rank, idx) => {
+            acc[rank] = idx;
+            return acc;
+        }, {});
+        return agents.slice().sort((a, b) => {
+            const aOrder = orderMap.hasOwnProperty(a.rank) ? orderMap[a.rank] : Number.MAX_SAFE_INTEGER;
+            const bOrder = orderMap.hasOwnProperty(b.rank) ? orderMap[b.rank] : Number.MAX_SAFE_INTEGER;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            const metricDiff = (b[sortKey] || 0) - (a[sortKey] || 0);
+            if (metricDiff !== 0) return metricDiff;
+            return (a.name || '').localeCompare(b.name || '', 'ar');
+        });
+    };
+
+    const exclusiveRunnersUp = orderAgentsByRank(
+        runnersUp.filter(agent => exclusiveRanks.includes(agent.rank)),
+        exclusiveRanks
+    );
+    const regularRunnersUp = orderAgentsByRank(
+        runnersUp.filter(agent => regularRanks.includes(agent.rank)),
+        regularRanks
+    );
 
     // Debug logging
     console.log('Top Agents Debug:');
@@ -5893,6 +5962,12 @@ function displayTopAgents(sortedAgents, sortKey) {
                 ? `<img src="${agent.avatar_url}" alt="Avatar" class="leaderboard-avatar" loading="lazy">`
                 : `<div class="leaderboard-avatar-placeholder"><i class="fas fa-user"></i></div>`;
 
+            // Determine if agent is exclusive
+            const isExclusive = exclusiveRanks.includes(agent.rank);
+            const exclusiveBadge = isExclusive 
+                ? `<div class="exclusive-badge" title="وكيل حصري"><i class="fas fa-crown"></i></div>` 
+                : `<div class="regular-badge" title="وكيل اعتيادي"><i class="fas fa-star"></i></div>`;
+
             return `
                 <div class="leaderboard-card ${isTopThree ? `top-rank ${rankClass}` : ''}" data-agent-id="${agent._id}" style="cursor: pointer;">
                     <div class="leaderboard-rank">
@@ -5900,7 +5975,10 @@ function displayTopAgents(sortedAgents, sortKey) {
                     </div>
                     ${rank === 1 ? '<div class="glow-bar"></div>' : ''}
                     <div class="leaderboard-agent-profile">
-                        ${avatarHtml}
+                        <div style="position: relative;">
+                            ${avatarHtml}
+                            ${exclusiveBadge}
+                        </div>
                         <div class="leaderboard-agent-info">
                             <h3 class="leaderboard-agent-name">${agent.name} ${trendIcon}</h3>
                             <div class="leaderboard-agent-meta" data-agent-id-copy="${agent.agent_id || 'N/A'}" title="نسخ الرقم">
@@ -5915,6 +5993,25 @@ function displayTopAgents(sortedAgents, sortKey) {
                     ${(() => {
                         const metricKeys = ['total_views','total_reactions','total_participants'];
                         const isMetricSort = metricKeys.includes(sortKey);
+                        
+                        // Special layout for Top 3
+                        if (isTopThree) {
+                             return `
+                                <div class="stat-item top-stat-item">
+                                    <span class="stat-label"><i class="fas fa-eye"></i> مشاهدات</span>
+                                    <span class="stat-value">${formatNumber(agent.total_views)}</span>
+                                </div>
+                                <div class="stat-item top-stat-item">
+                                    <span class="stat-label"><i class="fas fa-heart"></i> تفاعلات</span>
+                                    <span class="stat-value">${formatNumber(agent.total_reactions)}</span>
+                                </div>
+                                <div class="stat-item top-stat-item">
+                                    <span class="stat-label"><i class="fas fa-users"></i> مشاركات</span>
+                                    <span class="stat-value">${formatNumber(agent.total_participants)}</span>
+                                </div>
+                            `;
+                        }
+
                         // If sorting by a metric and this agent is not top 3, show only that metric
                         if (isMetricSort && rank > 3) {
                             if (sortKey === 'total_views') {
@@ -5950,12 +6047,18 @@ function displayTopAgents(sortedAgents, sortKey) {
                 ? `<img src="${agent.avatar_url}" alt="Avatar" class="leaderboard-avatar-simple" loading="lazy">`
                 : `<div class="leaderboard-avatar-placeholder-simple"><i class="fas fa-user"></i></div>`;
 
+            // Determine if agent is exclusive
+            const isExclusive = exclusiveRanks.includes(agent.rank);
+            const exclusiveIcon = isExclusive 
+                ? `<i class="fas fa-crown" style="color: #f1c40f; margin-left: 5px;" title="وكيل حصري"></i>` 
+                : `<i class="fas fa-star" style="color: #95a5a6; margin-left: 5px;" title="وكيل اعتيادي"></i>`;
+
             return `
                 <div class="leaderboard-card-simple" data-agent-id="${agent._id}" style="cursor: pointer;">
                     <span class="simple-rank">${rank}</span>
                     ${avatarHtml}
                     <div class="simple-agent-info">
-                        <span class="simple-agent-name">${agent.name}</span>
+                        <span class="simple-agent-name">${agent.name} ${exclusiveIcon}</span>
                         <span class="simple-agent-id" data-agent-id-copy="${agent.agent_id || 'N/A'}" title="نسخ الرقم">#${agent.agent_id || 'N/A'}</span>
                         <span class="simple-agent-classification"><span class="classification-badge classification-${(agent.classification || '').toLowerCase()}">${agent.classification || ''}</span></span>
                     </div>
@@ -6339,6 +6442,12 @@ function stopAllProfileTimers() {
         if (element) element.removeEventListener(type, handler);
     });
     profilePageEventListeners = [];
+
+    // --- NEW: Unsubscribe from task store ---
+    if (window.taskStore && window.profileStoreSubscription) {
+        window.taskStore.unsubscribe(window.profileStoreSubscription);
+        window.profileStoreSubscription = null;
+    }
 }
 
 // Function to show rank change modal with reason and action inputs
@@ -6648,6 +6757,49 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const agentTaskToday = window.taskStore.state.tasks[agentId]?.[todayDayIndex] || { audited: false, competition_sent: false };
     const isAuditedToday = agentTaskToday.audited;
 
+    // --- NEW: Subscribe to task store updates ---
+    if (window.taskStore) {
+        // Define the update function
+        const updateProfileAuditButton = (newState) => {
+            const updatedTask = newState.tasks[agentId]?.[todayDayIndex] || { audited: false };
+            const isNowAudited = updatedTask.audited;
+            
+            const auditStatusContainer = document.getElementById('header-audit-status');
+            const auditBtn = document.getElementById('perform-audit-btn');
+            const auditText = document.querySelector('.audit-status-text');
+            
+            if (auditStatusContainer && auditBtn && auditText) {
+                // Update container class
+                if (isNowAudited) {
+                    auditStatusContainer.classList.add('audited');
+                    auditStatusContainer.classList.remove('pending');
+                } else {
+                    auditStatusContainer.classList.add('pending');
+                    auditStatusContainer.classList.remove('audited');
+                }
+                
+                // Update button icon and title
+                auditBtn.title = isNowAudited ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
+                auditBtn.innerHTML = `<i class="fas fa-${isNowAudited ? 'check-circle' : 'clipboard-check'}"></i>`;
+                
+                // Update text
+                auditText.textContent = isNowAudited ? 'تم التدقيق' : 'التدقيق';
+            }
+        };
+
+        // Subscribe
+        window.taskStore.subscribe(updateProfileAuditButton);
+
+        // Store the subscription for cleanup
+        if (!window.profileStoreSubscription) {
+            window.profileStoreSubscription = updateProfileAuditButton;
+        } else {
+            // If there was an old subscription, unsubscribe it first (though stopAllProfileTimers should have handled it)
+            window.taskStore.unsubscribe(window.profileStoreSubscription);
+            window.profileStoreSubscription = updateProfileAuditButton;
+        }
+    }
+
     const activeCompetition = agentCompetitions.find(c => c.is_active === true);
     const hasActiveCompetition = !!activeCompetition;
     const hasInactiveCompetition = !hasActiveCompetition && agentCompetitions.length > 0;
@@ -6665,14 +6817,13 @@ async function renderAgentProfilePage(agentId, options = {}) {
     }
 
     // --- NEW: Create the audit button for the header ---
-    const auditButtonHtml = isTaskDay
-        ? `<div id="header-audit-status" class="header-audit-status ${isAuditedToday ? 'audited' : 'pending'}">
+    // Modified: Always show audit button
+    const auditButtonHtml = `<div id="header-audit-status" class="header-audit-status ${isAuditedToday ? 'audited' : 'pending'}">
                <button id="perform-audit-btn" class="btn-icon-action" title="${isAuditedToday ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"'}">
                    <i class="fas fa-${isAuditedToday ? 'check-circle' : 'clipboard-check'}"></i>
                </button>
-               <span class="audit-status-text">${isAuditedToday ? 'تم التدقيق' : 'التدقيق مطلوب اليوم'}</span>
-           </div>`
-        : '';
+               <span class="audit-status-text">${isAuditedToday ? 'تم التدقيق' : 'التدقيق'}</span>
+           </div>`;
 
     // Helper for audit days in Action Tab
     // --- تعديل: عرض أيام التدقيق المحددة فقط كعلامات (tags) ---
@@ -6794,11 +6945,13 @@ async function renderAgentProfilePage(agentId, options = {}) {
     if (createCompBtn) {
         if (canCreateComp) { // This will be migrated later
             createCompBtn.addEventListener('click', () => {
-                // التحقق من تفعيل التدقيق قبل السماح بإنشاء مسابقة
+                // التحقق من تفعيل التدقيق قبل السماح بإنشاء مسابقة - REMOVED per user request
+                /*
                 if (!agent.is_auditing_enabled) {
                     showToast('عذراً، لا يمكن إنشاء مسابقة قبل إتمام عملية التدقيق لهذا الوكيل.', 'error');
                     return;
                 }
+                */
                 window.location.hash = `competitions/new?agentId=${agent._id}`;
             });
         } else {
@@ -6830,7 +6983,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
             statusContainer.classList.toggle('pending', !newAuditStatus);
             statusContainer.classList.toggle('audited', newAuditStatus);
             iconEl.className = `fas fa-${newAuditStatus ? 'check-circle' : 'clipboard-check'}`;
-            statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق مطلوب اليوم';
+            statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق';
             auditBtn.title = newAuditStatus ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
  
             // 2. Call the new backend endpoint to toggle is_auditing_enabled
@@ -6865,7 +7018,7 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 statusContainer.classList.toggle('pending', wasAudited);
                 statusContainer.classList.toggle('audited', !wasAudited);
                 iconEl.className = `fas fa-${wasAudited ? 'check-circle' : 'clipboard-check'}`;
-                statusTextEl.textContent = wasAudited ? 'تم التدقيق' : 'التدقيق مطلوب اليوم';
+                statusTextEl.textContent = wasAudited ? 'تم التدقيق' : 'التدقيق';
                 auditBtn.title = wasAudited ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
             } finally {
                 auditBtn.disabled = false; // Re-enable the button
@@ -9829,7 +9982,7 @@ function renderEditUserModal(user) {
                     </div>
                     <div class="form-group">
                         <label for="edit-user-password">كلمة المرور الجديدة</label>
-                        <input type="password" id="edit-user-password" minlength="8" placeholder="اتركه فارغاً لعدم التغيير">
+                        <input type="password" id="edit-user-password" minlength="8" placeholder="${isCurrentUserSuperAdmin ? 'اتركه فارغاً لعدم التغيير' : 'السوبر أدمن فقط'}" ${isCurrentUserSuperAdmin ? '' : 'disabled'}>
                     </div>
                 </div>
                 <!-- Actions Section -->
@@ -9861,23 +10014,29 @@ function renderEditUserModal(user) {
         e.stopPropagation(); // Prevent event bubbling if needed
         avatarUploadInput.click();
     };
-    // Allow clicking the entire avatar container to open the file dialog
-    avatarPreview.closest('.profile-avatar-edit').addEventListener('click', openFileDialog);
-    changeAvatarBtn.addEventListener('click', openFileDialog);
+    if (isCurrentUserSuperAdmin) {
+        // Allow clicking the entire avatar container to open the file dialog
+        avatarPreview.closest('.profile-avatar-edit').addEventListener('click', openFileDialog);
+        changeAvatarBtn.addEventListener('click', openFileDialog);
 
-    deleteAvatarBtn.addEventListener('click', () => {
-        avatarUploadInput.value = null; // Clear the file input
-        avatarPreview.src = originalAvatarUrl;
+        deleteAvatarBtn.addEventListener('click', () => {
+            avatarUploadInput.value = null; // Clear the file input
+            avatarPreview.src = originalAvatarUrl;
+            avatarActions.style.display = 'none';
+        });
+
+        avatarUploadInput.addEventListener('change', () => {
+            const file = avatarUploadInput.files[0];
+            if (file) {
+                avatarPreview.src = URL.createObjectURL(file);
+                avatarActions.style.display = 'flex';
+            }
+        });
+    } else {
+        // Hide actions and disable click for non-super-admin editors
         avatarActions.style.display = 'none';
-    });
-
-    avatarUploadInput.addEventListener('change', () => {
-        const file = avatarUploadInput.files[0];
-        if (file) {
-            avatarPreview.src = URL.createObjectURL(file);
-            avatarActions.style.display = 'flex';
-        }
-    });
+        avatarPreview.closest('.profile-avatar-edit').style.cursor = 'not-allowed';
+    }
 
     // --- Form Submission Logic ---
     modal.querySelector('#edit-user-form').addEventListener('submit', async (e) => {
@@ -9888,7 +10047,7 @@ function renderEditUserModal(user) {
 
         try {
             const avatarFile = modal.querySelector('#avatar-upload').files[0];
-            if (avatarFile) {
+            if (avatarFile && isCurrentUserSuperAdmin) {
                 const formData = new FormData();
                 formData.append('avatar', avatarFile);
 
@@ -9903,8 +10062,13 @@ function renderEditUserModal(user) {
 
             const userData = {
                 full_name: modal.querySelector('#edit-user-fullname').value,
-                password: modal.querySelector('#edit-user-password').value,
             };
+            if (isCurrentUserSuperAdmin) {
+                const newPwd = modal.querySelector('#edit-user-password').value;
+                if (newPwd) {
+                    userData.password = newPwd;
+                }
+            }
 
             // Send other user data update request
             const response = await authedFetch(`/api/users/${user._id}`, {
@@ -10120,7 +10284,7 @@ async function renderProfileSettingsPage() {
 
         <div class="form-container" style="max-width: 800px;">
             <form id="profile-settings-form">
-                ${currentUserProfile.role === 'admin' ? `
+                ${currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin' ? `
                     <h3 class="details-section-title">المعلومات الأساسية</h3>
                     <div class="details-grid" style="grid-template-columns: 1fr; gap: 20px;"><div class="form-group"><label for="profile-full-name">الاسم الكامل</label><input type="text" id="profile-full-name" class="profile-name-input" value="${currentUserProfile.full_name || ''}" required></div></div>
                 ` : ''}
@@ -10130,7 +10294,7 @@ async function renderProfileSettingsPage() {
                     <div class="form-group">
                         <label for="profile-current-password">كلمة المرور الحالية</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-current-password" placeholder="أدخل كلمة المرور الحالية للتغيير">
+                            <input type="password" id="profile-current-password" placeholder="متاح للسوبر أدمن فقط" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                             <div id="current-password-validation-msg" class="validation-status-inline"></div>
                         </div>
@@ -10138,22 +10302,23 @@ async function renderProfileSettingsPage() {
                     <div class="form-group">
                         <label for="profile-new-password">كلمة المرور الجديدة</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-new-password" placeholder="اتركه فارغاً لعدم التغيير">
+                            <input type="password" id="profile-new-password" placeholder="متاح للسوبر أدمن فقط" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                         </div>
                         <div class="password-strength-meter"><div class="strength-bar"></div></div>
                         <div class="password-actions">
-                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small">إنشاء كلمة مرور قوية</button>
+                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>إنشاء كلمة مرور قوية</button>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="profile-confirm-password">تأكيد كلمة المرور الجديدة</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-confirm-password">
+                            <input type="password" id="profile-confirm-password" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                             <div id="password-match-error" class="validation-error-inline" style="display: none;">كلمتا المرور غير متطابقتين.</div>
                         </div>
                     </div>
+                    ${currentUserProfile.role !== 'super_admin' ? '<div class="alert alert-warning">تغيير كلمة المرور مسموح للسوبر أدمن فقط.</div>' : ''}
                 </div>
 
                 <div class="form-actions">
@@ -10172,8 +10337,9 @@ async function renderProfileSettingsPage() {
     const currentPasswordInput = form.querySelector('#profile-current-password');
     const validationMsgEl = form.querySelector('#current-password-validation-msg');
 
-    // --- NEW: Real-time current password validation on blur ---
+    // --- NEW: Real-time current password validation on blur (super_admin only) ---
     currentPasswordInput.addEventListener('blur', async () => {
+        if (currentUserProfile.role !== 'super_admin') return;
         const password = currentPasswordInput.value;
 
         // Clear previous message if input is empty
@@ -10188,21 +10354,21 @@ async function renderProfileSettingsPage() {
         validationMsgEl.className = 'validation-status-inline checking';
 
         try {
-            // TODO: Implement a backend endpoint to verify current password
-            // For now, this will always fail or succeed based on a placeholder
             const response = await authedFetch('/api/auth/verify-password', {
                 method: 'POST',
-                body: JSON.stringify({ password: password })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
             });
+
             if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.message || 'كلمة المرور الحالية غير صحيحة.');
-                validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>كلمة المرور الحالية غير صحيحة.</span>';
+                const result = await response.json().catch(() => ({}));
+                validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>' + (result.message || 'كلمة المرور الحالية غير صحيحة.') + '</span>';
                 validationMsgEl.className = 'validation-status-inline error';
-            } else {
-                validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
-                validationMsgEl.className = 'validation-status-inline success';
+                return;
             }
+
+            validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
+            validationMsgEl.className = 'validation-status-inline success';
         } catch (e) {
             validationMsgEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>حدث خطأ أثناء التحقق.</span>';
             validationMsgEl.className = 'validation-status-inline error';
@@ -10216,7 +10382,8 @@ async function renderProfileSettingsPage() {
 
     if (avatarEditContainer) {
         avatarEditContainer.addEventListener('click', () => {
-            if (currentUserProfile.role === 'admin') {
+            // Allow both admin and super_admin to change avatar
+            if (currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin') {
                 avatarUploadInput.click();
             }
         });
@@ -10291,7 +10458,7 @@ async function renderProfileSettingsPage() {
     confirmPasswordInput.addEventListener('input', validatePasswordMatch);
 
     // --- Disable form elements for non-admins ---
-    if (currentUserProfile.role !== 'admin') {
+    if (currentUserProfile.role !== 'admin' && currentUserProfile.role !== 'super_admin') {
         const fullNameInput = form.querySelector('#profile-full-name');
         if (fullNameInput) fullNameInput.disabled = true;
         avatarEditContainer.style.cursor = 'not-allowed';
@@ -10312,12 +10479,17 @@ async function renderProfileSettingsPage() {
         const currentPassword = document.getElementById('profile-current-password').value;
 
         try {
-            // --- Password Validation ---
-            if (newPassword && !currentPassword) {
-                throw new Error('يجب إدخال كلمة المرور الحالية لتغييرها.');
-            }
-            if (newPassword !== confirmPassword) {
-                throw new Error('كلمتا المرور الجديدتان غير متطابقتين.');
+            // --- Password Validation (super_admin only) ---
+            if (newPassword || confirmPassword || currentPassword) {
+                if (currentUserProfile.role !== 'super_admin') {
+                    throw new Error('تغيير كلمة المرور مسموح للسوبر أدمن فقط.');
+                }
+                if (newPassword && !currentPassword) {
+                    throw new Error('يجب إدخال كلمة المرور الحالية لتغييرها.');
+                }
+                if (newPassword !== confirmPassword) {
+                    throw new Error('كلمتا المرور الجديدتان غير متطابقتين.');
+                }
             }
 
             // 1. Handle avatar upload if a new file is selected
@@ -10325,20 +10497,29 @@ async function renderProfileSettingsPage() {
             let newAvatarUrl = currentUserProfile.avatar_url;
 
             if (avatarFile) {
-                // TODO: Implement backend endpoint for avatar upload
-                // For now, this will be a placeholder
-                console.warn('Avatar upload is not yet implemented in the new backend.');
-                if (true) { // Simulate an error for now
-                    throw new Error('فشل رفع الصورة. يرجى المحاولة مرة أخرى.');
+                const formData = new FormData();
+                formData.append('avatar', avatarFile);
+
+                const uploadResp = await authedFetch(`/api/users/${currentUserProfile._id}/avatar`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!uploadResp.ok) {
+                    const result = await uploadResp.json().catch(() => ({}));
+                    throw new Error(result.message || 'فشل رفع الصورة. يرجى المحاولة مرة أخرى.');
                 }
 
-                const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-                newAvatarUrl = urlData.publicUrl;
+                const uploadResult = await uploadResp.json();
+                newAvatarUrl = uploadResult.avatar_url || newAvatarUrl;
+                // تحديث المعاينة فوراً
+                if (newAvatarUrl && avatarPreview) {
+                    avatarPreview.src = newAvatarUrl;
+                }
             }
 
             // 2. Update public profile table (users)
             const profileUpdateData = { avatar_url: newAvatarUrl };
-            if (currentUserProfile.role === 'admin' && fullNameInput) {
+            if ((currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin') && fullNameInput) {
                 profileUpdateData.full_name = fullName;
             }
 
@@ -10354,11 +10535,18 @@ async function renderProfileSettingsPage() {
             }
 
 
-            // 3. If a new password is provided, verify old and update in auth
-            if (newPassword && currentPassword) {
-                // TODO: Implement backend endpoint for changing password
-                console.warn('Password change is not yet implemented in the new backend.');
-                if (true) throw new Error('تغيير كلمة المرور غير متاح حالياً.'); // Simulate error
+            // 3. If a new password is provided, verify old and update in auth (super_admin only)
+            if (newPassword && currentPassword && currentUserProfile.role === 'super_admin') {
+                const resp = await authedFetch('/api/auth/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ currentPassword, newPassword })
+                });
+
+                if (!resp.ok) {
+                    const result = await resp.json().catch(() => ({}));
+                    throw new Error(result.message || 'فشل تغيير كلمة المرور.');
+                }
             }
 
             // 4. Refresh local user profile data to reflect changes
@@ -10609,6 +10797,7 @@ async function handlePurgeAllUsers() {
 
             // Bind methods
             this.boundHandleEvents = this.handleEvents.bind(this);
+            this.boundUpdateUIFromStore = this.updateUIFromStore.bind(this);
         }
 
         async render() {
@@ -10617,23 +10806,35 @@ async function handlePurgeAllUsers() {
             
             this.setupEventListeners();
             
-            // FIX: Subscription removed to prevent buggy global UI updates.
-            // window.taskStore.subscribe(this.boundUpdateUIFromStore);
+            // Subscribe to store updates
+            if (window.taskStore) {
+                window.taskStore.subscribe(this.boundUpdateUIFromStore);
+            }
 
             await this.fetchAndRenderTasks();
         }
 
         async fetchAndRenderTasks() {
+            // Removed Saturday check to allow tasks on all days
+            /*
             if (this.dayIndex === 6) { // Saturday
                 this.contentWrapper.innerHTML = '<p class="no-results-message">لا توجد مهام مجدولة في أيام العطلات.</p>';
                 return;
             }
+            */
 
             try {
-                const response = await authedFetch('/api/tasks/today');
+                // Pass the local day index to the backend to ensure consistency
+                const response = await authedFetch(`/api/tasks/today?day=${this.dayIndex}`);
                 if (!response.ok) throw new Error('Failed to fetch tasks');
                 
                 const { agents, tasksMap } = await response.json();
+                
+                console.log('[TASKS PAGE DEBUG] Response from /api/tasks/today:');
+                console.log('  - Agents count:', agents?.length || 0);
+                console.log('  - Agents:', agents);
+                console.log('  - Current day index:', this.dayIndex);
+                
                 this.agents = agents || [];
                 this.tasksMap = tasksMap || {};
 
@@ -10898,13 +11099,22 @@ async function handlePurgeAllUsers() {
             overviewEl.querySelector('[data-stat="pending"] h3').textContent = total - completed;
         }
 
+        updateUIFromStore(newState) {
+            console.log('[Tasks Page] Received store update:', newState);
+            this.tasksMap = newState.tasks || {};
+            
+            // Efficiently update only visible cards
+            this.agents.forEach(agent => {
+                this.updateSingleCard(agent._id);
+            });
+        }
+
         destroy() {
             console.log('[Tasks Page] Destroying instance and cleaning up listeners.');
             this.container.removeEventListener('click', this.boundHandleEvents);
             this.container.removeEventListener('change', this.boundHandleEvents);
             clearTimeout(this.searchDebounceTimer);
             
-            // FIX: Subscription removed
             if (window.taskStore && this.boundUpdateUIFromStore) {
                 window.taskStore.unsubscribe(this.boundUpdateUIFromStore);
             }
@@ -13138,6 +13348,7 @@ async function fetchAnalyticsData(filter) {
         let url = '/api/analytics';
     dlog && dlog('DEBUG: fetchAnalyticsData - initial filter:', filter);
         const qp = new URLSearchParams();
+        qp.append('_t', Date.now()); // Cache busting
 
         if (filter) {
             if (typeof filter === 'object') {
@@ -13980,6 +14191,15 @@ function renderGrantedBalances(data) {
         showError(grantedBalancesError, '', false);
     }
 
+    // Debug Log for Granted Balances
+    console.log('%c[Analytics] Granted Balances Update:', 'color: #00ff00; font-weight: bold; font-size: 12px;');
+    console.log('Trading Bonus Data:', data.trading_bonus);
+    console.log('Total Amount:', data.trading_bonus?.total_amount);
+    console.log('Winners Count:', data.trading_bonus?.winners_count);
+    console.log('Breakdown:', data.trading_bonus?.breakdown);
+    console.log('[Deposit Bonus] Raw details from DB:', data.deposit_bonus_details);
+    console.log('[Deposit Bonus] Totals by band:', (data.deposit_bonus || []).map(b => ({ value: b.bonus_value ?? b.percentage, winners: b.winners_count })));
+
     // Update trading bonus
     if (tradingBonusAmount) {
         tradingBonusAmount.textContent = `$${data.trading_bonus?.total_amount?.toLocaleString() || 0}`;
@@ -13988,32 +14208,46 @@ function renderGrantedBalances(data) {
         tradingBonusWinners.textContent = data.trading_bonus?.winners_count || 0;
     }
 
-    // Update deposit bonus table - show only percentages that have winners (>0), hide unused
+    // Remove trading bonus breakdown controls per latest requirement
+    document.getElementById('toggleTradingBreakdown')?.remove();
+    document.getElementById('tradingBonusBreakdownContainer')?.remove();
+
+    // Update deposit bonus table - show aggregated list
     if (depositBonusTableBody) {
-        const fixedArray = Array.isArray(data.deposit_bonus) ? data.deposit_bonus : [];
-        const dynamicArray = Array.isArray(data.deposit_bonus_dynamic) ? data.deposit_bonus_dynamic : [];
+        const details = Array.isArray(data.deposit_bonus_details) ? data.deposit_bonus_details : [];
+        const REQUIRED_PERCENTAGES = [40, 50, 60, 75, 85, 90, 95, 100];
+        const percentTotals = details.reduce((acc, item) => {
+            const rawValue = typeof item.bonus_value === 'string' ? parseFloat(item.bonus_value) : item.bonus_value;
+            if (!Number.isFinite(rawValue)) {
+                return acc;
+            }
+            const winners = Number(item.total_winners) || 0;
+            acc[rawValue] = (acc[rawValue] || 0) + winners;
+            return acc;
+        }, {});
 
-        // Merge dynamic first (authoritative), then add fixed if missing
-        const combined = new Map(); // percentage -> winners_count
-        dynamicArray.forEach(d => {
-            const p = Number(d.percentage);
-            const c = Number(d.winners_count) || 0;
-            if (p && c > 0) combined.set(p, c);
-        });
-        fixedArray.forEach(d => {
-            const p = Number(d.percentage);
-            const c = Number(d.winners_count) || 0;
-            if (p && c > 0 && !combined.has(p)) combined.set(p, c);
+        const normalizedRows = [];
+        REQUIRED_PERCENTAGES.forEach((pct) => {
+            normalizedRows.push({ bonus_value: pct, total_winners: percentTotals[pct] || 0, required: true });
+            delete percentTotals[pct];
         });
 
-        // Build sorted rows
-        const entries = Array.from(combined.entries()).sort((a, b) => a[0] - b[0]);
-        let rowsHtml = '';
-        if (entries.length === 0) {
-            rowsHtml = `<tr><td colspan=\"2\" class=\"no-deposit-winners\">لا يوجد فائزون ببونص الإيداع في الفترة المحددة.</td></tr>`;
-        } else {
-            rowsHtml = entries.map(([p, c]) => `<tr><td>${c}</td><td>${p}%</td></tr>`).join('');
-        }
+        Object.keys(percentTotals)
+            .map((key) => Number(key))
+            .filter((pct) => Number.isFinite(pct))
+            .sort((a, b) => a - b)
+            .forEach((pct) => {
+                normalizedRows.push({ bonus_value: pct, total_winners: percentTotals[pct] || 0, required: false });
+            });
+
+        const rowsHtml = normalizedRows.map((item) => `
+            <tr>
+                <td style="font-weight:bold; color:#10b981;">
+                    ${item.bonus_value}%${item.required ? '' : ' *'}
+                </td>
+                <td>${item.total_winners}</td>
+            </tr>
+        `).join('');
 
         const tableWrapper = depositBonusTableBody.closest('.deposit-bonus-table');
         if (tableWrapper) tableWrapper.style.display = 'block';
@@ -14173,6 +14407,11 @@ function renderCompetitionPerformanceChart(data) {
 }
 
 
+// Global variables for Rank Changes Pagination
+let allRankChangesData = [];
+let currentRankChangesPage = 1;
+const RANK_CHANGES_PER_PAGE = 7;
+
 // Function to fetch and render agent rank changes
 async function fetchAndRenderRankChanges(filter) {
     const rankChangesTableBody = document.getElementById('rankChangesTableBody');
@@ -14185,7 +14424,7 @@ async function fetchAndRenderRankChanges(filter) {
     
     try {
         // Build query params
-        let url = '/api/stats/rank-changes?limit=50';
+        let url = '/api/stats/rank-changes?limit=100'; // Increased limit to fetch more for client-side pagination
         
         if (filter) {
             if (typeof filter === 'object') {
@@ -14213,130 +14452,227 @@ async function fetchAndRenderRankChanges(filter) {
         }
         
         const result = await response.json();
-        const rankChanges = result.rankChanges || [];
+        allRankChangesData = result.rankChanges || [];
+        currentRankChangesPage = 1; // Reset to first page
         
-        if (rankChanges.length === 0) {
-            rankChangesTableBody.innerHTML = `
-                <tr>
-                    <td colspan="10" style="text-align: center; padding: 30px;">
-                        <i class="fas fa-info-circle" style="font-size: 48px; color: #95a5a6; margin-bottom: 10px;"></i>
-                        <p style="color: #7f8c8d; font-size: 16px;">لا توجد تغييرات في المراتب خلال هذه الفترة</p>
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-        
-        // Check if user is super_admin
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const isSuperAdmin = currentUser.role === 'super_admin';
-        
-        // Render table rows with truncated reason/action and click-to-expand
-        rankChangesTableBody.innerHTML = rankChanges.map((change, index) => {
-            const date = new Date(change.createdAt);
-            const formattedDate = date.toLocaleDateString('ar-EG', {
-                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
-            const truncate = (text, max=50) => {
-                if (!text) return '';
-                const t = String(text);
-                return t.length > max ? t.slice(0, max) + '…' : t;
-            };
-            const esc = (s='') => String(s)
-                .replace(/&/g,'&amp;')
-                .replace(/</g,'&lt;')
-                .replace(/>/g,'&gt;')
-                .replace(/"/g,'&quot;')
-                .replace(/'/g,'&#39;');
-            const classification = change.classification || change.agent_classification || change.class || 'غير محدد';
-            const classificationSlug = classification ? classification.toString().trim().toLowerCase() : 'unknown';
-            
-            // Determine if this is a rank change or classification change
-            const isClassificationChange = change.change_type === 'classification';
-            
-            let changeDisplay = '';
-            if (isClassificationChange) {
-                // Display classification change
-                changeDisplay = `
-                    <td colspan="2" style="text-align: center;">
-                        <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
-                            <span class="classification-badge classification-${(change.old_classification || '').toLowerCase()}">${esc(change.old_classification || 'غير محدد')}</span>
-                            <i class="fas fa-arrow-left" style="color: #4fa3ff;"></i>
-                            <span class="classification-badge classification-${(change.new_classification || '').toLowerCase()}">${esc(change.new_classification || 'غير محدد')}</span>
-                        </div>
-                        <div style="font-size: 11px; color: #7f8c8d; margin-top: 4px;">تغيير التصنيف</div>
-                    </td>
-                `;
-            } else {
-                // Display rank change
-                changeDisplay = `
-                    <td><span class="rank-badge rank-old">${esc(change.old_rank)}</span></td>
-                    <td><span class="rank-badge rank-new">${esc(change.new_rank)}</span></td>
-                `;
-            }
-            
-            return `
-                <tr>
-                    <td>${index + 1}</td>
-                    <td><strong>${esc(change.agent_name)}</strong></td>
-                    <td>${esc(change.agent_number)}</td>
-                    <td><span class="classification-badge classification-${classificationSlug}">${esc(classification)}</span></td>
-                    ${changeDisplay}
-                    <td><div class="reason-cell" data-fulltext="${esc(change.reason)}">${truncate(change.reason, 60)}</div></td>
-                    <td><div class="action-cell" data-fulltext="${esc(change.action_taken)}">${truncate(change.action_taken, 60)}</div></td>
-                    <td style="white-space: nowrap;">${formattedDate}</td>
-                    <td style="text-align: center;">
-                        <button class="btn btn-danger btn-sm delete-rank-change-btn" data-change-id="${change._id}" title="حذف هذا التغيير">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        renderRankChangesPage(currentRankChangesPage);
 
-        // Attach click handlers for expanding full text
-        rankChangesTableBody.querySelectorAll('.reason-cell, .action-cell').forEach(el => {
-            el.style.cursor = 'pointer';
-            el.title = 'انقر لعرض النص كاملًا';
-            el.addEventListener('click', () => {
-                const full = el.getAttribute('data-fulltext') || '';
-                const label = el.classList.contains('reason-cell') ? 'السبب' : 'الإجراء';
-                if (typeof showConfirmationModal === 'function') {
-                    const styled = `
-                        <div class="dark-expand-modal-wrapper">
-                            <div class="dark-expand-modal">
-                                <div class="dark-expand-modal-header">
-                                    <i class="fas fa-align-left" style="color:#4fa3ff"></i>${label} الكامل
-                                </div>
-                                <div class="dark-expand-modal-body">
-                                    <pre>${full}</pre>
-                                </div>
-                            </div>
-                        </div>`;
-                    showConfirmationModal(styled, async () => true, { title: '', confirmText: '<i class="fas fa-times"></i> إغلاق', showCancel: false });
-                } else { alert(full); }
-            });
-        });
-        
-        // Attach delete button handlers
-        rankChangesTableBody.querySelectorAll('.delete-rank-change-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const changeId = btn.getAttribute('data-change-id');
-                await handleDeleteRankChange(changeId, filter);
-            });
-        });
-        
     } catch (error) {
+        console.error('Error fetching rank changes:', error);
+        if (rankChangesError) {
+            showError(rankChangesError, 'حدث خطأ أثناء جلب البيانات', true);
+        }
+        if (rankChangesTableBody) {
+            rankChangesTableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:red;">فشل تحميل البيانات</td></tr>`;
+        }
+    }
+}
+
+function renderRankChangesPage(page) {
+    const rankChangesTableBody = document.getElementById('rankChangesTableBody');
+    if (!rankChangesTableBody) return;
+
+    if (allRankChangesData.length === 0) {
         rankChangesTableBody.innerHTML = `
             <tr>
-                <td colspan="10" style="text-align: center; padding: 30px; color: #e74c3c;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 10px;"></i>
-                    <p>${error.message}</p>
+                <td colspan="10" style="text-align: center; padding: 30px;">
+                    <i class="fas fa-info-circle" style="font-size: 48px; color: #95a5a6; margin-bottom: 10px;"></i>
+                    <p style="color: #7f8c8d; font-size: 16px;">لا توجد تغييرات في المراتب خلال هذه الفترة</p>
                 </td>
             </tr>
         `;
+        renderRankChangesPaginationControls();
+        return;
     }
+
+    const startIndex = (page - 1) * RANK_CHANGES_PER_PAGE;
+    const endIndex = startIndex + RANK_CHANGES_PER_PAGE;
+    const pageData = allRankChangesData.slice(startIndex, endIndex);
+
+    // Check if user is super_admin
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const isSuperAdmin = currentUser.role === 'super_admin';
+    
+    // Render table rows with truncated reason/action and click-to-expand
+    rankChangesTableBody.innerHTML = pageData.map((change, index) => {
+        const globalIndex = startIndex + index + 1;
+        const date = new Date(change.createdAt);
+        const formattedDate = date.toLocaleDateString('ar-EG', {
+            year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        const truncate = (text, max=50) => {
+            if (!text) return '';
+            const t = String(text);
+            return t.length > max ? t.slice(0, max) + '…' : t;
+        };
+        const esc = (s='') => String(s)
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#39;');
+        const classification = change.classification || change.agent_classification || change.class || 'غير محدد';
+        const classificationSlug = classification ? classification.toString().trim().toLowerCase() : 'unknown';
+        
+        // Determine if this is a rank change or classification change
+        const isClassificationChange = change.change_type === 'classification';
+        
+        // Ensure we have valid strings for ranks
+        const oldRank = change.old_rank ? String(change.old_rank) : '---';
+        const newRank = change.new_rank ? String(change.new_rank) : '---';
+
+        let changeDisplay = '';
+        if (isClassificationChange) {
+            // Display classification change from → to (Reversed for RTL: New <- Old)
+            changeDisplay = `
+                <td colspan="2" style="text-align: center;">
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 8px;">
+                        <span class="classification-badge classification-${(change.old_classification || '').toLowerCase()}">${esc(change.old_classification || 'غير محدد')}</span>
+                        <i class="fas fa-arrow-left" style="color: #4fa3ff;"></i>
+                        <span class="classification-badge classification-${(change.new_classification || '').toLowerCase()}">${esc(change.new_classification || 'غير محدد')}</span>
+                    </div>
+                    <div style="font-size: 11px; color: #7f8c8d; margin-top: 4px;">تغيير التصنيف</div>
+                </td>
+            `;
+        } else {
+            // Display rank change - Using inline styles to debug visibility
+            changeDisplay = `
+                <td colspan="2" style="text-align: center; vertical-align: middle;">
+                    <span style="color: #2ecc71; font-weight: bold; padding: 4px 8px; background: rgba(46, 204, 113, 0.1); border-radius: 4px;">${newRank}</span>
+                    <i class="fas fa-arrow-left" style="color: #7f8c8d; margin: 0 8px;"></i>
+                    <span style="color: #e74c3c; font-weight: bold; padding: 4px 8px; background: rgba(231, 76, 60, 0.1); border-radius: 4px;">${oldRank}</span>
+                </td>
+            `;
+        }
+        
+        return `
+            <tr>
+                <td>${globalIndex}</td>
+                <td><strong>${esc(change.agent_name)}</strong></td>
+                <td>${esc(change.agent_number)}</td>
+                <td><span class="classification-badge classification-${classificationSlug}">${esc(classification)}</span></td>
+                ${changeDisplay}
+                <td><div class="reason-cell" data-fulltext="${esc(change.reason)}">${truncate(change.reason, 60)}</div></td>
+                <td><div class="action-cell" data-fulltext="${esc(change.action_taken)}">${truncate(change.action_taken, 60)}</div></td>
+                <td style="white-space: nowrap;">${formattedDate}</td>
+                <td style="text-align: center;">
+                    <button class="btn btn-danger btn-sm delete-rank-change-btn" data-change-id="${change._id}" title="حذف هذا التغيير">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    // Attach click handlers for expanding full text
+    rankChangesTableBody.querySelectorAll('.reason-cell, .action-cell').forEach(el => {
+        el.style.cursor = 'pointer';
+        el.title = 'انقر لعرض النص كاملًا';
+        el.addEventListener('click', () => {
+            const full = el.getAttribute('data-fulltext') || '';
+            const label = el.classList.contains('reason-cell') ? 'السبب' : 'الإجراء';
+            if (typeof showConfirmationModal === 'function') {
+                const styled = `
+                    <div class="dark-expand-modal-wrapper">
+                        <div class="dark-expand-modal">
+                            <div class="dark-expand-modal-header">
+                                <i class="fas fa-align-left" style="color:#4fa3ff"></i>${label} الكامل
+                            </div>
+                            <div class="dark-expand-modal-body">
+                                <pre>${full}</pre>
+                            </div>
+                        </div>
+                    </div>`;
+                showConfirmationModal(styled, async () => true, { title: '', confirmText: '<i class="fas fa-times"></i> إغلاق', showCancel: false });
+            } else { alert(full); }
+        });
+    });
+
+    // Attach delete handlers
+    rankChangesTableBody.querySelectorAll('.delete-rank-change-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const changeId = btn.getAttribute('data-change-id');
+            if (!changeId) return;
+            
+            const confirmDelete = await new Promise(resolve => {
+                if (typeof showConfirmationModal === 'function') {
+                    showConfirmationModal('هل أنت متأكد من حذف هذا السجل؟', async () => {
+                        resolve(true);
+                    }, { title: 'تأكيد الحذف', confirmText: 'حذف', cancelText: 'إلغاء' });
+                } else {
+                    resolve(confirm('هل أنت متأكد من حذف هذا السجل؟'));
+                }
+            });
+
+            if (confirmDelete) {
+                try {
+                    const res = await fetchWithAuth(`/api/stats/rank-changes/${changeId}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        showToast('تم حذف السجل بنجاح', 'success');
+                        // Remove from local data and re-render
+                        allRankChangesData = allRankChangesData.filter(item => item._id !== changeId);
+                        renderRankChangesPage(currentRankChangesPage);
+                    } else {
+                        showToast('فشل حذف السجل', 'error');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('حدث خطأ أثناء الحذف', 'error');
+                }
+            }
+        });
+    });
+
+    renderRankChangesPaginationControls();
+}
+
+function renderRankChangesPaginationControls() {
+    const table = document.getElementById('rankChangesTable');
+    if (!table) return;
+    
+    let paginationContainer = document.getElementById('rankChangesPagination');
+    if (!paginationContainer) {
+        paginationContainer = document.createElement('div');
+        paginationContainer.id = 'rankChangesPagination';
+        paginationContainer.className = 'pagination-controls';
+        paginationContainer.style.cssText = 'display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 15px; direction: ltr;';
+        table.parentNode.insertAdjacentElement('afterend', paginationContainer);
+    }
+
+    const totalPages = Math.ceil(allRankChangesData.length / RANK_CHANGES_PER_PAGE);
+    
+    if (totalPages <= 1) {
+        paginationContainer.style.display = 'none';
+        return;
+    }
+
+    paginationContainer.style.display = 'flex';
+    paginationContainer.innerHTML = `
+        <button id="nextRankPage" class="btn btn-secondary btn-sm" ${currentRankChangesPage === totalPages ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+            التالي <i class="fas fa-chevron-right"></i>
+        </button>
+        <span style="font-weight: bold; color: var(--text-primary-color);">
+            صفحة ${currentRankChangesPage} من ${totalPages}
+        </span>
+        <button id="prevRankPage" class="btn btn-secondary btn-sm" ${currentRankChangesPage === 1 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+            <i class="fas fa-chevron-left"></i> السابق
+        </button>
+    `;
+
+    document.getElementById('prevRankPage')?.addEventListener('click', () => {
+        if (currentRankChangesPage > 1) {
+            currentRankChangesPage--;
+            renderRankChangesPage(currentRankChangesPage);
+        }
+    });
+
+    document.getElementById('nextRankPage')?.addEventListener('click', () => {
+        if (currentRankChangesPage < totalPages) {
+            currentRankChangesPage++;
+            renderRankChangesPage(currentRankChangesPage);
+        }
+    });
 }
 
 // Function to update all charts and table with performance optimization
@@ -14534,7 +14870,7 @@ async function renderComparisonView() {
                 const r2 = list2.find(d=>d.percentage==p)?.winners_count||0;
                 const diff = r1 - r2;
                 const cls = diff>0?'positive':diff<0?'negative':'neutral';
-                return `<tr><td>${r1}</td><td>${p}%</td><td class="comparison ${cls}">${r2}</td><td class="diff ${cls}">${diff>=0?'+':''}${diff}</td></tr>`;
+                return `<tr><td>${p}%</td><td class="comparison ${cls}">${r1}</td><td class="comparison ${cls}">${r2}</td><td class="diff ${cls}">${diff>=0?'+':''}${diff}</td></tr>`;
             }).join('');
             depositBonusTableBody.innerHTML = rows || '<tr><td colspan="4">لا يوجد فائزون في أي فترة.</td></tr>';
         } else {
@@ -15294,8 +15630,8 @@ const fetchAndRenderAgentsCompetitions = (classification = 'all') => {
             
             if (!latestComp) return '';
             
-            // اختصار السؤال
-            const questionText = latestComp.description || latestComp.name || 'غير متوفر';
+            // اختصار السؤال - استخدام الاسم (السؤال) بدلاً من الوصف (القالب الكامل)
+            const questionText = latestComp.name || latestComp.description || 'غير متوفر';
             const shortQuestion = questionText.length > 50 
                 ? questionText.substring(0, 50) + '...' 
                 : questionText;
@@ -15599,8 +15935,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     };
     
     const LS_KEY = 'winnerRouletteSession.v1';
-    // Enforce no persistence of participants/winners across reloads
-    try { localStorage.removeItem(LS_KEY); } catch {}
+    // Persist session across reloads
     
     function cleanName(name) {
       if (!name) return '';
@@ -15667,28 +16002,295 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       nameEl.textContent = state.selectedAgent.name || '—';
       idEl.textContent = state.selectedAgent.agentId || '—';
       
+      // Clear active competition before loading new one
+      state.activeCompetition = null;
+      restoreSession(); // Clear UI while loading
+
       // Show loading state
       competitionInfo.innerHTML = '<div class="wr-agent-info-empty"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
-      
+
+      // Render the competitions dropdown AND auto-load the default competition
+      await renderAgentCompetitionsDropdown(agentId);
+    }
+
+    async function renderAgentCompetitionsDropdown(agentId) {
+      // Target the agent selector container in the header
+      const agentSelector = document.querySelector('.wr-agent-selector');
+      if (!agentSelector) {
+          console.warn('Agent selector container not found');
+          return;
+      }
+
+      // Check if dropdown container exists
+      let dropdownContainer = document.getElementById('agent-competitions-dropdown-container');
+      if (!dropdownContainer) {
+        dropdownContainer = document.createElement('div');
+        dropdownContainer.id = 'agent-competitions-dropdown-container';
+        dropdownContainer.className = 'wr-competitions-selector';
+        dropdownContainer.style.display = 'inline-flex';
+        dropdownContainer.style.alignItems = 'center';
+        dropdownContainer.style.gap = '10px';
+        dropdownContainer.style.marginLeft = '20px';
+        
+        dropdownContainer.innerHTML = `
+            <label for="agent-competitions-select" style="font-weight:600; color:var(--wr-text-primary); display:flex; align-items:center; gap:6px;">
+                <i class="fas fa-history" style="color:var(--wr-primary);"></i>
+                سجل المسابقات:
+            </label>
+            <select id="agent-competitions-select" class="wr-agent-dropdown" style="min-width: 250px;">
+                <option value="">جاري التحميل...</option>
+            </select>
+        `;
+        // Append to the agent selector container
+        agentSelector.appendChild(dropdownContainer);
+      }
+
       try {
         const authedFetch = window.authedFetch || fetch;
-        const response = await authedFetch(`/api/competitions/agent/${agentId}/active`);
+        console.log(`Fetching competitions for agent: ${agentId}`);
+        // Ensure agentId is passed correctly as query param (backend expects 'agentId', not 'agent_id')
+        const response = await authedFetch(`/api/competitions?agentId=${agentId}&sort=-createdAt&limit=100`);
         
-        if (!response.ok) {
-          competitionInfo.innerHTML = '<div class="wr-agent-info-empty">لا توجد مسابقة نشطة</div>';
-          return;
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Competitions data:', data);
+            // Support both formats (data.competitions or data.data)
+            const competitions = data.competitions || data.data || [];
+            
+            // --- DEBUG LOGS ---
+            console.log(`[DEBUG] Found ${competitions.length} competitions for agent ${agentId}`);
+            console.log('[DEBUG] All competition statuses:', competitions.map(c => c.status));
+            // ------------------
+
+            const select = document.getElementById('agent-competitions-select');
+            
+            if (competitions.length === 0) {
+                console.log('[DEBUG] No competitions found, showing empty message.');
+                select.innerHTML = '<option value="">لا توجد مسابقات لهذا الوكيل</option>';
+                return;
+            }
+
+            const activeCompetitions = competitions.filter(c => ['active', 'awaiting_winners', 'sent'].includes(c.status));
+            // const endedCompetitions = competitions.filter(c => ['completed', 'archived'].includes(c.status)); // Hidden as per request
+
+            console.log(`[DEBUG] Active count: ${activeCompetitions.length}`);
+            // console.log(`[DEBUG] Ended count: ${endedCompetitions.length}`);
+
+            // Determine default selection (Latest Active only)
+            let defaultCompId = null;
+            if (activeCompetitions.length > 0) {
+                defaultCompId = activeCompetitions[0]._id;
+            }
+
+            const renderOption = (c) => {
+                const date = new Date(c.createdAt).toLocaleDateString('ar-EG');
+                const statusMap = {
+                    'active': 'نشطة',
+                    'completed': 'مكتملة',
+                    'sent': 'جديدة',
+                    'awaiting_winners': 'انتظار الفائزين',
+                    'archived': 'مؤرشفة'
+                };
+                const status = statusMap[c.status] || c.status;
+                // Select if it matches active competition OR if it's the default and no active competition is set
+                const isSelected = (state.activeCompetition && state.activeCompetition.id === c._id) || 
+                                   (!state.activeCompetition && c._id === defaultCompId);
+                return `<option value="${c._id}" ${isSelected ? 'selected' : ''}>
+                    ${c.name || 'مسابقة'} (${date}) - ${status}
+                </option>`;
+            };
+
+            const renderAllOptions = () => {
+                let html = '<option value="">-- اختر مسابقة --</option>';
+
+                if (activeCompetitions.length > 0) {
+                    // No optgroup needed if only showing active, but keeping structure is fine or just listing them
+                    html += activeCompetitions.map(renderOption).join('');
+                } else {
+                    html += '<option value="" disabled>لا توجد مسابقات نشطة</option>';
+                }
+
+                return html;
+            };
+            
+            select.innerHTML = renderAllOptions();
+
+            // Remove old listener
+            const newSelect = select.cloneNode(true);
+            select.parentNode.replaceChild(newSelect, select);
+            
+            newSelect.addEventListener('change', async (e) => {
+                const compId = e.target.value;
+                if (compId) {
+                    await loadCompetitionById(compId);
+                }
+            });
+            
+            // Store render function to update selection later
+            state.renderCompetitionsDropdown = () => {
+                const s = document.getElementById('agent-competitions-select');
+                if(s) s.innerHTML = renderAllOptions();
+            };
+
+            // Auto-load default competition if none is active
+            if (defaultCompId && !state.activeCompetition) {
+                console.log(`[DEBUG] Auto-loading default competition: ${defaultCompId}`);
+                await loadCompetitionById(defaultCompId);
+            } else if (!defaultCompId) {
+                 const competitionInfo = document.getElementById('agent-competition-info');
+                 if(competitionInfo) competitionInfo.innerHTML = '<div class="wr-agent-info-empty">لا توجد مسابقات نشطة لهذا الوكيل</div>';
+            }
+
+        } else {
+            console.error('Failed to fetch competitions:', response.status);
         }
+      } catch (e) {
+        console.error('Failed to load agent competitions list', e);
+      }
+    }
+
+    async function loadCompetitionById(compId) {
+        const competitionInfo = document.getElementById('agent-competition-info');
+        competitionInfo.innerHTML = '<div class="wr-agent-info-empty"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
         
-        const result = await response.json();
-        const competition = result.competition;
+        // Clear current state
+        const previousCompetitionId = state.activeCompetition ? state.activeCompetition.id : null;
+        state.activeCompetition = null;
         
-        if (!competition) {
-          competitionInfo.innerHTML = '<div class="wr-agent-info-empty">لا توجد مسابقة نشطة</div>';
-          return;
+        try {
+            const authedFetch = window.authedFetch || fetch;
+            
+            // 1. Fetch Competition Details
+            const response = await authedFetch(`/api/competitions/${compId}`);
+            if (response.ok) {
+                const data = await response.json();
+                const competition = data.competition;
+
+                // 2. Fetch Winners for this competition
+                const winnersResponse = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${compId}`);
+                let winners = [];
+                if (winnersResponse.ok) {
+                    const winnersData = await winnersResponse.json();
+                    if (winnersData.competitions && winnersData.competitions.length > 0) {
+                        winners = winnersData.competitions[0].winners || [];
+                    }
+                }
+
+                // Set reportSent state based on competition status
+                if (competition.status === 'completed' || competition.status === 'archived') {
+                    state.reportSent = true;
+                    // If there are no winners but status is completed, it means "No Winners" was approved
+                    if (winners.length === 0) {
+                        state.noWinnersApproved = true;
+                    }
+                } else {
+                    state.reportSent = false;
+                    state.noWinnersApproved = false;
+                }
+
+                // Map backend winners to frontend state.winners format
+                const mappedWinners = winners.map(w => ({
+                    id: w.id,
+                    name: w.name,
+                    account: w.account_number,
+                    email: w.email,
+                    prizeType: w.prize_type === 'deposit_prev' ? 'deposit_prev' : (w.prize_type === 'deposit' ? 'deposit' : (w.prize_type === 'trading' ? 'trading' : 'deposit')),
+                    prizeValue: w.prize_value,
+                    videoUrl: w.video_url,
+                    nationalIdImage: w.national_id_image,
+                    selected: true,
+                    _id: w.id // Ensure _id is set for DB winners
+                }));
+
+                // --- FIX: Merge with local session winners if they belong to this competition ---
+                // If we have local winners in state (restored from session) and they are NOT in the DB list,
+                // and the DB list is empty (or we are in active state), we should probably keep the local ones.
+                // However, to be safe, let's check if the local winners match the current competition ID.
+                // Since local winners don't store competition ID explicitly in the array, we rely on the fact
+                // that restoreSession runs before this.
+                
+                // If DB returns winners, they are the source of truth.
+                // If DB returns NO winners, but we have local winners, we should keep them IF the competition status allows.
+                
+                if (mappedWinners.length > 0) {
+                    state.winners = mappedWinners;
+                } else {
+                    // DB has no winners. Check if we have local winners restored from session.
+                    // We only keep them if we are NOT switching to a different competition.
+                    // If previousCompetitionId is null (first load) or same as current, we might keep them.
+                    // But wait, loadCompetitionById is called when switching dropdowns too.
+                    
+                    // Better approach: Check if the restored session's activeCompetitionId matches this compId.
+                    // We need to access the raw session data or store activeCompetitionId in state during restore.
+                    
+                    const key = getSessionKey();
+                    let sessionCompId = null;
+                    try {
+                        const raw = localStorage.getItem(key);
+                        if (raw) {
+                            const saved = JSON.parse(raw);
+                            // We need to check if the saved session was for THIS competition
+                            // But the saved object structure in saveSession uses 'activeCompetitionId'
+                            // Let's check if we can retrieve it.
+                            // Note: saveSession saves: activeCompetitionId: state.activeCompetition ? state.activeCompetition.id : null
+                            sessionCompId = saved.activeCompetitionId;
+                        }
+                    } catch(e) {}
+
+                    if (sessionCompId === compId && state.winners.length > 0) {
+                        console.log('[loadCompetitionById] Keeping local winners from session for this competition.');
+                        // Keep state.winners as is (restored from session)
+                    } else {
+                        state.winners = [];
+                    }
+                }
+                
+                // state.entries = []; // Clear entries as we are loading a specific state -> REMOVED to allow restoring entries from session if needed
+                // Actually, if we switch competitions, we probably want to clear entries unless they are generic.
+                // But if we are reloading the page, we want to keep entries.
+                
+                // Re-declare sessionCompId here because it's block-scoped above
+                let currentSessionCompId = null;
+                try {
+                    const key = getSessionKey();
+                    const raw = localStorage.getItem(key);
+                    if (raw) currentSessionCompId = JSON.parse(raw).activeCompetitionId;
+                } catch(e) {}
+
+                if (currentSessionCompId !== compId) {
+                     state.entries = [];
+                }
+
+                // Render without restoring session (since we just loaded it)
+                renderCompetitionData(competition, previousCompetitionId, state.selectedAgent.id, false);
+                
+                // Update dropdown selection
+                if(state.renderCompetitionsDropdown) state.renderCompetitionsDropdown();
+                
+                // Force update of winners list UI
+                renderWinners();
+                updateCounts();
+                drawWheel();
+
+            } else {
+                 competitionInfo.innerHTML = '<div class="wr-agent-info-empty">فشل تحميل المسابقة</div>';
+            }
+        } catch (e) {
+             competitionInfo.innerHTML = '<div class="wr-agent-info-empty">فشل تحميل المسابقة</div>';
+             console.error(e);
         }
+    }
+
+    async function renderCompetitionData(competition, previousCompetitionId, agentId, shouldRestoreSession = true) {
+        const competitionInfo = document.getElementById('agent-competition-info');
         
         // Display comprehensive competition information
-        const tradingWinners = competition.trading_winners_count || 0;
+        // Support both new schema (trading_winners_count, deposit_winners_count) and old schema (winners_count)
+        // FIX: Check for undefined/null explicitly because 0 is a valid value
+        const tradingWinners = (competition.trading_winners_count !== undefined && competition.trading_winners_count !== null)
+            ? competition.trading_winners_count
+            : (competition.winners_count || 0);
+            
         const depositWinners = competition.deposit_winners_count || 0;
         const totalWinners = tradingWinners + depositWinners;
         const currentWinners = competition.current_winners_count || 0;
@@ -15699,15 +16301,38 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           id: competition._id || competition.id,
           tradingWinnersRequired: tradingWinners,
           depositWinnersRequired: depositWinners,
-          totalRequired: totalWinners,
+          // Prefer backend required_winners if provided; fallback to sum
+          totalRequired: (typeof competition.required_winners === 'number' && competition.required_winners > 0)
+            ? competition.required_winners
+            : totalWinners,
+          requiredWinners: (typeof competition.required_winners === 'number' && competition.required_winners > 0)
+            ? competition.required_winners
+            : totalWinners,
           currentWinners: currentWinners,
           prizePerWinner: competition.prize_per_winner || 0,
           depositBonusPercentage: competition.deposit_bonus_percentage || 0
         };
+        
+        // If competition ID changed, ensure we start fresh (though restoreSession handles it, we can be explicit)
+        if (previousCompetitionId && previousCompetitionId !== competition._id) {
+             console.log('[winner-roulette] Competition changed from', previousCompetitionId, 'to', competition._id, '- forcing clean slate');
+             // Only clear if we are going to restore session or if we didn't load anything
+             if (shouldRestoreSession) {
+                 state.winners = [];
+                 state.entries = [];
+                 const ta = document.getElementById('participants-input');
+                 if (ta) ta.value = '';
+             }
+        }
+
+        // Restore session for this specific competition ONLY if requested
+        if (shouldRestoreSession) {
+            restoreSession(true);
+        }
     
         // --- NEW: Fetch agent winner history for validation ---
         try {
-            const historyResp = await authedFetch(`/api/agents/${agentId}/winners`);
+            const historyResp = await window.authedFetch(`/api/agents/${agentId}/winners`);
             if (historyResp.ok) {
                 const historyData = await historyResp.json();
                 // Flatten the competitions structure to get a simple list of winners
@@ -15733,18 +16358,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         }
         // -----------------------------------------------------
     
-        // Check if competition is completed
+        // Check if competition is completed (only if winners are already sent/approved)
         if (currentWinners >= totalWinners && totalWinners > 0) {
-          competitionInfo.innerHTML = `
-            <div class="wr-agent-info-empty" style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; color: #10b981;">
-              <i class="fas fa-check-circle" style="font-size: 2rem; margin-bottom: 10px;"></i>
-              <br>
-              تم اكتمال اختيار الفائزين لهذه المسابقة
-            </div>`;
-          // Disable controls
-          const autoBtn = document.getElementById('auto-pick-btn');
-          if(autoBtn) { autoBtn.disabled = true; autoBtn.classList.add('wr-btn-disabled'); }
-          return;
+          // Don't show completion message here, only show it after approval
+          // This prevents showing "completed" when user just loads the page
         }
     
         // Show engagement stats modal if stats are missing (0)
@@ -15765,13 +16382,15 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         const statusText = {
           'sent': 'تم الإرسال',
           'active': 'نشطة',
-          'awaiting_winners': 'قيد الانتظار'
+          'awaiting_winners': 'قيد الانتظار',
+          'completed': 'مكتملة'
         }[competition.status] || competition.status;
         
         const statusColor = {
           'sent': '#f59e0b',
           'active': '#10b981',
-          'awaiting_winners': '#3b82f6'
+          'awaiting_winners': '#3b82f6',
+          'completed': '#6b7280'
         }[competition.status] || '#6b7280';
         
         let html = `
@@ -15790,6 +16409,16 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               <i class="fas fa-calendar"></i>
               <span>تم الإنشاء: ${createdDate}</span>
             </div>
+            ${state.selectedAgent && state.selectedAgent.agentId ? `
+            <div class="wr-meta-row">
+              <i class="fas fa-id-badge"></i>
+              <span>رقم الوكالة: ${state.selectedAgent.agentId}</span>
+            </div>` : ''}
+            ${competition.correct_answer ? `
+            <div class="wr-meta-row">
+              <i class="fas fa-question-circle"></i>
+              <span>الإجابة الصحيحة: ${competition.correct_answer}</span>
+            </div>` : ''}
             ${(() => {
               // Determine Arabic type label from template.type or legacy competition_type
               const t = competition.template?.type; // Arabic preferred
@@ -15819,28 +16448,41 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               <span>إحصائيات الفائزين المطلوبين</span>
             </div>`;
         
-        if (totalWinners > 0) {
-          html += `<div class="wr-competition-stat-row wr-stat-total">
-            <span class="wr-competition-stat-label"><i class="fas fa-trophy"></i> إجمالي الفائزين</span>
-            <span class="wr-competition-stat-value">${totalWinners} فائز</span>
+        // Always show stats - even if totalWinners is 0, we need to display the breakdown
+        // Use local session selections for clearer UX while picking
+        const requiredTotal = (typeof competition.required_winners === 'number' && competition.required_winners > 0) 
+          ? competition.required_winners 
+          : totalWinners;
+        const localSelected = (state && Array.isArray(state.winners)) ? state.winners.length : 0;
+        const remainingLocal = Math.max(requiredTotal - localSelected, 0);
+
+        html += `<div class="wr-competition-stat-row wr-stat-total">
+          <span class="wr-competition-stat-label"><i class="fas fa-trophy"></i> إجمالي الفائزين</span>
+          <span class="wr-competition-stat-value">${requiredTotal} فائز</span>
+        </div>`;
+
+        html += `<div class="wr-competition-stat-row">
+          <span class="wr-competition-stat-label"><i class="fas fa-hourglass-half"></i> المتبقي</span>
+          <span class="wr-competition-stat-value">${remainingLocal}</span>
+        </div>`;
+
+        // Bonus breakdown - show REQUIRED counts from competition, not selected
+        const depositWinnersRequired = competition.deposit_winners_count || 0;
+        const tradingWinnersRequired = competition.trading_winners_count || 0;
+        
+        // Also show how many have been selected locally (for progress)
+        const localDepositCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length : 0;
+        const localTradingCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'trading').length : 0;
+
+        html += `<div class="wr-competition-stat-row">
+            <span class="wr-competition-stat-label"><i class="fas fa-dollar-sign"></i> بونص إيداع</span>
+            <span class="wr-competition-stat-value deposit">${localDepositCount} / ${depositWinnersRequired} فائز</span>
           </div>`;
-          
-          if (depositWinners > 0) {
-            html += `<div class="wr-competition-stat-row">
-              <span class="wr-competition-stat-label"><i class="fas fa-dollar-sign"></i> بونص إيداع</span>
-              <span class="wr-competition-stat-value deposit">${depositWinners} فائز</span>
-            </div>`;
-          }
-          
-          if (tradingWinners > 0) {
-            html += `<div class="wr-competition-stat-row">
-              <span class="wr-competition-stat-label"><i class="fas fa-chart-line"></i> بونص تداولي</span>
-              <span class="wr-competition-stat-value trading">${tradingWinners} فائز</span>
-            </div>`;
-          }
-        } else {
-          html += '<div class="wr-agent-info-empty">لم يتم تحديد فائزين في المسابقة</div>';
-        }
+
+        html += `<div class="wr-competition-stat-row">
+            <span class="wr-competition-stat-label"><i class="fas fa-chart-line"></i> بونص تداولي</span>
+            <span class="wr-competition-stat-value trading">${localTradingCount} / ${tradingWinnersRequired} فائز</span>
+          </div>`;
         
         // Add prize information - always show if deposit bonus percentage exists
         if (competition.deposit_bonus_percentage) {
@@ -15901,9 +16543,49 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         html += '</div>';
         competitionInfo.innerHTML = html;
         
-      } catch(e) {
-        console.warn('Failed to load agent competition:', e);
-        competitionInfo.innerHTML = '<div class="wr-agent-info-empty">فشل تحميل البيانات</div>';
+        // تحديث الإحصائيات فوق الروليت
+        updateCompetitionStats();
+    }
+    
+    // دالة لتحديث الإحصائيات فقط بدون إعادة تحميل كل البيانات
+    function updateCompetitionStats() {
+      if (!state.activeCompetition) return;
+      
+      const requiredTotal = state.activeCompetition.requiredWinners || state.activeCompetition.totalRequired || 0;
+      const localSelected = (state && Array.isArray(state.winners)) ? state.winners.length : 0;
+      const remainingLocal = Math.max(requiredTotal - localSelected, 0);
+      
+      const depositWinnersRequired = state.activeCompetition.depositWinnersRequired || 0;
+      const tradingWinnersRequired = state.activeCompetition.tradingWinnersRequired || 0;
+      
+      const localDepositCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length : 0;
+      const localTradingCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'trading').length : 0;
+      
+      // تحديث العناصر في قسم معلومات المسابقة (الجانب الأيسر)
+      const remainingEl = document.querySelector('.wr-competition-stat-row:nth-child(2) .wr-competition-stat-value');
+      if (remainingEl) {
+        remainingEl.textContent = remainingLocal;
+      }
+      
+      const depositEl = document.querySelector('.wr-competition-stat-row:nth-child(3) .wr-competition-stat-value.deposit');
+      if (depositEl) {
+        depositEl.textContent = `${localDepositCount} / ${depositWinnersRequired} فائز`;
+      }
+      
+      const tradingEl = document.querySelector('.wr-competition-stat-row:nth-child(4) .wr-competition-stat-value.trading');
+      if (tradingEl) {
+        tradingEl.textContent = `${localTradingCount} / ${tradingWinnersRequired} فائز`;
+      }
+      
+      // تحديث العناصر فوق الروليت (الجانب الأيمن)
+      const wrDepositCount = document.getElementById('wr-deposit-count');
+      if (wrDepositCount) {
+        wrDepositCount.textContent = `${localDepositCount} / ${depositWinnersRequired} فائز`;
+      }
+      
+      const wrTradingCount = document.getElementById('wr-trading-count');
+      if (wrTradingCount) {
+        wrTradingCount.textContent = `${localTradingCount} / ${tradingWinnersRequired} فائز`;
       }
     }
     
@@ -16225,6 +16907,40 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       state.selectedAgent = null; // تأكيد التفريغ بعد الاسترجاع
       updateSpinControls?.();
       drawWheel();
+
+      // مزامنة تلقائية للمتبقي: حدث دوري يحدث كل 25 ثانية لجلب حالة المسابقة الحالية
+      try {
+        if (window._wrAutoSyncTimer) { clearInterval(window._wrAutoSyncTimer); }
+        window._wrAutoSyncTimer = setInterval(async () => {
+          try {
+            if (!state.selectedAgent || !state.selectedAgent.id) return;
+            const authedFetch = window.authedFetch || fetch;
+            const resp = await authedFetch(`/api/competitions/agent/${state.selectedAgent.id}/active`);
+            if (!resp.ok) return;
+            const result = await resp.json();
+            const competition = result.competition;
+            if (!competition) return;
+            const currentWinners = competition.current_winners_count || 0;
+            const requiredTotal = (typeof competition.required_winners === 'number' && competition.required_winners > 0)
+              ? competition.required_winners
+              : ((competition.trading_winners_count || 0) + (competition.deposit_winners_count || 0));
+            state.activeCompetition = {
+              ...(state.activeCompetition || {}),
+              id: competition._id,
+              tradingWinnersRequired: competition.trading_winners_count || 0,
+              depositWinnersRequired: competition.deposit_winners_count || 0,
+              totalRequired: requiredTotal,
+              requiredWinners: requiredTotal,
+              currentWinners: currentWinners,
+              prizePerWinner: competition.prize_per_winner || 0,
+              depositBonusPercentage: competition.deposit_bonus_percentage || 0
+            };
+            updateCounts();
+          } catch (e) {
+            // تجاهل أخطاء الشبكة المؤقتة
+          }
+        }, 25000);
+      } catch (e) { /* ignore */ }
     
       // Log screen size for debugging
       // Screen size log removed to reduce noise
@@ -16328,7 +17044,6 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         };
         updateAgentStatus(agentName, agentIdNum);
         await loadAgentCompetitionInfo(agentId);
-        saveSession();
         updateSpinControls?.();
         updateBatchCount?.();
       });
@@ -16523,16 +17238,29 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // Bottom section buttons
       const exportBottomBtn = document.getElementById('export-winners-bottom');
       const resetBottomBtn = document.getElementById('reset-winners-bottom');
+      // Hide and disable reset button under roulette per request
+      if (resetBottomBtn) { resetBottomBtn.style.display = 'none'; }
       exportBottomBtn?.addEventListener('click', exportWinners);
       resetBottomBtn?.addEventListener('click', ()=> { 
         showConfirmModal(
-          'سيتم مسح جميع الفائزين بشكل دائم من القائمة. هل أنت متأكد من المتابعة؟',
+          'سيتم مسح جميع الفائزين وإعادة تحميل جميع المشاركين لاختيار الفائزين من جديد. هل أنت متأكد؟',
           () => {
+            // Clear winners
             state.winners = [];
+            // Re-add all participants from textarea/source
+            const ta = document.getElementById('participants-input');
+            const lines = (ta?.value || '').split('\n').map(s=>s.trim()).filter(Boolean);
+            state.entries = lines.map((line, idx) => {
+              const parts = line.split(' — ');
+              const name = parts[0] || line;
+              const account = parts[1] || '';
+              return { id: `entry_${idx}_${Date.now()}`, name, account, label: account ? `${name} — ${account}` : name, selected: false };
+            });
+            renderParticipants();
             renderWinners();
             updateCounts();
             saveSession();
-            toast('تم مسح الفائزين بنجاح', 'success');
+            toast('تم إعادة التهيئة: مسح الفائزين وإرجاع المشاركين', 'success');
           }
         );
       });
@@ -16618,6 +17346,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         }
     }
     
+    function getSessionKey() {
+        if (state.selectedAgent && state.selectedAgent.id && state.activeCompetition && state.activeCompetition.id) {
+            return `winnerRouletteSession_${state.selectedAgent.id}_${state.activeCompetition.id}`;
+        }
+        return null;
+    }
+
     function saveSession() {
       // Persist entries and winners as requested
       const session = {
@@ -16627,7 +17362,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         excludeWinner: state.excludeWinner,
         filterTerm: state.filterTerm
       };
-      try { localStorage.setItem(LS_KEY, JSON.stringify(session)); } catch {}
+      try { localStorage.setItem(key, JSON.stringify(session)); } catch {}
     }
     
     function restoreSession(skipAgent = false) {
@@ -16667,6 +17402,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         renderParticipants();
         renderWinners();
         updateCounts();
+        drawWheel();
       } catch (e) {
         console.warn('Session restore failed', e);
       }
@@ -16843,11 +17579,24 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function updateCounts() {
-        const countEl = document.getElementById('participants-count');
-        if (countEl) countEl.textContent = state.entries.length;
-        
+        // Total participants
+        const totalEl = document.getElementById('participants-count-total');
+        if (totalEl) totalEl.textContent = state.entries.length;
+        // Winners selected
         const winnersCountEl = document.getElementById('winners-count');
         if (winnersCountEl) winnersCountEl.textContent = state.winners.length;
+        // Remaining required winners (bind to backend required_winners if available)
+        const remainingEl = document.getElementById('participants-count-remaining');
+        if (remainingEl) {
+          if (state.activeCompetition) {
+            const totalReq = state.activeCompetition.totalRequired || state.activeCompetition.requiredWinners || 0;
+            const current = (state.activeCompetition.currentWinners ?? state.winners.length);
+            const remaining = Math.max(totalReq - current, 0);
+            remainingEl.textContent = remaining;
+          } else {
+            remainingEl.textContent = Math.max(state.entries.length - state.winners.length, 0);
+          }
+        }
     }
     
     function showConfirmModal(message, onConfirm) {
@@ -16894,10 +17643,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         return;
       }
       // منع الدوران إذا تم اختيار جميع الفائزين المطلوبين
-      const currentTotal = state.activeCompetition.currentWinners || 0;
+      const currentTotal = state.winners.length;
       if (state.activeCompetition && currentTotal >= state.activeCompetition.totalRequired) {
         const agentLabel = state.selectedAgent ? state.selectedAgent.name : 'هذا الوكيل';
-        toast(`تم اختيار جميع الفائزين للوكيل ${agentLabel} (عددهم ${state.activeCompetition.totalRequired}).`, 'info');
+        toast(`تم اختيار جميع الفائزين للوكيل ${agentLabel} (عددهم ${state.activeCompetition.totalRequired}). يرجى اعتماد الفائزين أو استرجاع فائز لإعادة الدوران.`, 'warning');
         return;
       }
       state.spinQueue = count; // Set directly instead of adding
@@ -16912,7 +17661,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }
       
       // Check if the number of winners has been reached
-      const currentTotal = state.activeCompetition.currentWinners || 0;
+      const currentTotal = state.winners.length;
       if (state.activeCompetition && currentTotal >= state.activeCompetition.totalRequired) {
         const agentLabel = state.selectedAgent ? state.selectedAgent.name : 'هذا الوكيل';
         toast(`تم اختيار جميع الفائزين للوكيل ${agentLabel} (عددهم ${state.activeCompetition.totalRequired}).`, 'info');
@@ -16938,14 +17687,30 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         return;
       }
       // منع الدوران إذا تم اختيار جميع الفائزين المطلوبين
-      const currentTotal = state.activeCompetition.currentWinners || 0;
+      const currentTotal = state.winners.length;
       if (state.activeCompetition && currentTotal >= state.activeCompetition.totalRequired) {
         const agentLabel = state.selectedAgent ? state.selectedAgent.name : 'هذا الوكيل';
-        toast(`تم اختيار جميع الفائزين للوكيل ${agentLabel} (عددهم ${state.activeCompetition.totalRequired}).`, 'info');
+        toast(`تم اختيار جميع الفائزين للوكيل ${agentLabel} (عددهم ${state.activeCompetition.totalRequired}). يرجى اعتماد الفائزين أو استرجاع فائز لإعادة الدوران.`, 'warning');
         return;
       }
-      const candidates = state.entries.filter(e => !e.selected || !state.excludeWinner);
-      if(candidates.length===0){toast('أضف مشاركين أولاً'); state.spinQueue=0; return;}
+      const candidates = state.entries.filter(e => {
+          // Filter out if not selected (unless excludeWinner is false, but wait...)
+          // The logic was: !e.selected || !state.excludeWinner
+          // This means: include if NOT selected OR (selected AND we don't exclude winners)
+          
+          // BUT, we also want to strictly filter out anyone who is ALREADY in state.winners
+          // regardless of the 'selected' flag on the entry itself, to be safe.
+          const isAlreadyWinner = state.winners.some(w => 
+              (w.account && e.account && w.account === e.account) || 
+              (w.name === e.name)
+          );
+          
+          if (isAlreadyWinner) return false; // Always exclude confirmed winners from spinning again
+          
+          return !e.selected || !state.excludeWinner;
+      });
+      
+      if(candidates.length===0){toast('أضف مشاركين أولاً (أو جميع المشاركين فازوا بالفعل)'); state.spinQueue=0; return;}
     
       // Normalize starting angle so each spin has consistent full rotations
       state.angle = 0;
@@ -16965,6 +17730,26 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       // Store chosen winner based on snapshot/index
       const chosenWinner = state.spinSnapshot[winningIndex];
+
+      // --- NEW: Check if this winner has already been selected in the current session ---
+      // This prevents re-selecting the same winner if they are still on the wheel (e.g. excludeWinner=false)
+      // or if they were manually added back but somehow still flagged.
+      const alreadyWon = state.winners.find(w => 
+          (w.account && chosenWinner.account && w.account === chosenWinner.account) || 
+          (w.name === chosenWinner.name)
+      );
+
+      if (alreadyWon) {
+          toast(`تنبيه: هذا المتسابق (${chosenWinner.name}) فاز بالفعل في هذه المسابقة!`, 'warning');
+          // We can either stop the spin or let it spin but show a different modal at the end.
+          // For better UX, let's stop immediately or re-spin.
+          // Re-spinning might be complex if only 1 candidate left.
+          // Let's just proceed but flag it, or maybe we should have filtered them out in candidates?
+          // Ideally, candidates should filter out state.winners if we want to strictly enforce "one win per person per competition".
+          
+          // Let's filter candidates properly at the start of startSpin instead.
+          // But if we are here, let's just continue and handle it in the completion callback.
+      }
       
       // Calculate target angle to make the chosen slice land under the pointer
       // In drawWheel: slice i center is at (i * slice + slice/2 + PI/2)
@@ -17139,7 +17924,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function showVideoPreview(blob, winner) {
+      console.log('🎥 [Video Preview] Starting showVideoPreview');
+      console.log('🎥 [Video Preview] Blob:', blob);
+      console.log('🎥 [Video Preview] Winner:', winner);
+      
       if (!blob) {
+        console.warn('🎥 [Video Preview] No blob provided, falling back to normal flow');
         // Fallback to normal flow if recording failed
         if(state.autoMode){ showAutoWinnerModal(winner); } else { showWinnerModal(winner); }
         return;
@@ -17170,8 +17960,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const video = document.createElement('video');
       video.id = 'preview-video-el';
       video.controls = true;
-      video.autoplay = true;
-      video.muted = true;
+      video.autoplay = false;
+      video.muted = false;
+      video.loop = true;
       video.playsInline = true;
       video.style.cssText = 'width: 100%; border-radius: 8px; margin-bottom: 20px; max-height: 400px;';
       // Set src directly to avoid innerHTML safety checks
@@ -17200,9 +17991,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       overlay.appendChild(container);
       document.body.appendChild(overlay);
     
-      // Force play attempt
-      video.play().catch(e => console.error('🎥 [Preview] Auto-play failed:', e));
-      video.onloadedmetadata = () => console.log('🎥 [Preview] Metadata loaded, duration:', video.duration);
+      // Load metadata and prepare video
+      video.onloadedmetadata = () => {
+        console.log('🎥 [Preview] Metadata loaded, duration:', video.duration);
+      };
       video.onerror = (e) => {
           console.error('🎥 [Preview] Video error:', video.error);
           const errDiv = document.createElement('div');
@@ -17240,25 +18032,76 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       });
       
       saveBtn.addEventListener('click', async () => {
-        // بدلاً من الحفظ المباشر، ننتقل إلى نافذة إدخال البريد الإلكتروني
-        // ونمرر الفيديو المسجل ليتم حفظه مع بيانات الفائز
-        state.pendingVideoBlob = blob;
-        cleanup();
-        if(state.autoMode){ 
-            showAutoWinnerModal(winner); 
-        } else { 
-            showWinnerModal(winner); 
+        // حفظ الفيديو ثم فتح نافذة بيانات الفائز بشكل موثوق
+        console.log('🎬 [Save Video Continue] Button clicked');
+        console.log('🎬 [Save Video Continue] Winner:', winner);
+        console.log('🎬 [Save Video Continue] Auto mode:', state.autoMode);
+        console.log('🎬 [Save Video Continue] Blob:', blob);
+        
+        try {
+          state.pendingVideoBlob = blob;
+          console.log('🎬 [Save Video Continue] Pending video blob stored');
+          
+          // تأكد من وجود هيكل المودال قبل الفتح
+          try { 
+            console.log('🎬 [Save Video Continue] Ensuring winner modal structure...');
+            ensureWinnerModalStructure(); 
+            console.log('🎬 [Save Video Continue] Winner modal structure ensured');
+          } catch(e) {
+            console.error('🎬 [Save Video Continue] Failed to ensure modal structure:', e);
+          }
+          
+          console.log('🎬 [Save Video Continue] Calling cleanup...');
+          cleanup();
+          console.log('🎬 [Save Video Continue] Cleanup done');
+          
+          // افتح المودال بعد إزالة طبقة المعاينة لضمان الطبقات/z-index صحيحة
+          console.log('🎬 [Save Video Continue] Setting timeout to open modal...');
+          setTimeout(() => {
+            try {
+              console.log('🎬 [Save Video Continue] Timeout callback executing...');
+              if (state.autoMode) {
+                console.log('🎬 [Save Video Continue] Opening AUTO winner modal');
+                showAutoWinnerModal(winner);
+              } else {
+                console.log('🎬 [Save Video Continue] Opening MANUAL winner modal');
+                showWinnerModal(winner);
+              }
+              console.log('🎬 [Save Video Continue] Modal opened successfully');
+            } catch (e) {
+              console.error('🎬 [Save Video Continue] Failed to open winner modal after video save:', e);
+              // كحل أخير، أعد إنشاء المودال وافتحه مرة أخرى
+              try { ensureWinnerModalStructure(); } catch {}
+              if (state.autoMode) {
+                showAutoWinnerModal(winner);
+              } else {
+                showWinnerModal(winner);
+              }
+            }
+          }, 50);
+        } catch (e) {
+          console.error('🎬 [Save Video Continue] CRITICAL ERROR in flow:', e);
+          toast('حدث خطأ أثناء المتابعة. سنفتح نموذج بيانات الفائز مباشرة.', 'warning');
+          // فلو بديل مباشر
+          try { ensureWinnerModalStructure(); } catch {}
+          if (state.autoMode) {
+            showAutoWinnerModal(winner);
+          } else {
+            showWinnerModal(winner);
+          }
         }
       });
     }
     
     function checkCompletion() {
-      const currentTotal = state.activeCompetition ? (state.activeCompetition.currentWinners || 0) : state.winners.length;
+      // استخدام عدد الفائزين المحليين فقط (state.winners.length)
+      const currentTotal = state.winners.length;
       if (state.activeCompetition && currentTotal >= state.activeCompetition.totalRequired) {
         if (state.reportSent) {
           const agentLabel = state.selectedAgent ? state.selectedAgent.name : 'هذا الوكيل';
+          // عرض إشعار بسيط بدلاً من modal
           setTimeout(() => {
-            showCompletionModal(agentLabel, state.activeCompetition.totalRequired);
+            toast(`تم اكتمال اختيار الفائزين (${state.activeCompetition.totalRequired}) للوكيل ${agentLabel}`, 'success');
           }, 500);
         } else {
           // Do not show completion text until winners are sent to agent
@@ -17400,63 +18243,63 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       if (!bottomContainer) return;
       
-      if (state.winners.length === 0) {
-        bottomContainer.innerHTML = '<div class="wr-winner-empty"><i class="fas fa-trophy" style="font-size:2rem;opacity:.3;margin-bottom:8px;"></i><p>لا يوجد اسماء</p></div>';
-        return;
-      }
-      
       // Separate winners by prize type
-      const depositWinners = state.winners.filter(w => w.prizeType === 'deposit');
+      const depositWinners = state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev');
       const tradingWinners = state.winners.filter(w => w.prizeType === 'trading');
       
       let html = '';
+
+      if (state.winners.length === 0) {
+        html += '<div class="wr-winner-empty"><i class="fas fa-trophy" style="font-size:2rem;opacity:.3;margin-bottom:8px;"></i><p>لا يوجد اسماء</p></div>';
+      }
     
       // Add "Send All" button at the top of the bottom container if there are winners
-      if (state.winners.length > 0) {
+      // Only show these buttons if the competition is NOT approved yet
+      if (state.winners.length > 0 && !state.reportSent && !state.noWinnersApproved) {
           html += `
           <div style="width:100%; margin-bottom: 20px;">
             <button id="send-all-winners-btn" class="wr-btn" style="
-                width: 100%;
-                background: linear-gradient(90deg, #2AABEE 0%, #229ED9 100%);
-                color: white;
-                box-shadow: 0 4px 15px rgba(42, 171, 238, 0.4);
-                border: none;
-                padding: 14px;
-                font-size: 1.1rem;
-                font-weight: bold;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 12px;
-                border-radius: 12px;
-                cursor: pointer;
-                transition: all 0.3s ease;
-            " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(42, 171, 238, 0.6)'" 
-               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(42, 171, 238, 0.4)'">
-                <i class="fas fa-paper-plane" style="font-size: 1.2em;"></i> 
-                <span>إرسال الكل للوكيل (${state.winners.length})</span>
+              width: 100%;
+              background: #0ea5e9;
+              color: #fff;
+              border: none;
+              padding: 12px 16px;
+              font-size: 1rem;
+              font-weight: 600;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 10px;
+              border-radius: 999px;
+              cursor: pointer;
+              transition: transform 0.2s ease, box-shadow 0.2s ease;
+              box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(14, 165, 233, 0.45)'" 
+               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(14, 165, 233, 0.35)'">
+              <i class="fas fa-paper-plane" style="font-size: 1em;"></i> 
+              <span>إرسال الكل للوكيل (${state.winners.length})</span>
             </button>
             <div style="height: 15px;"></div>
             <button id="send-winners-ids-btn" style="
-                width: 100%;
-                background: linear-gradient(90deg, #0ea5e9 0%, #0284c7 100%);
-                color: white;
-                box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4);
-                border: none;
-                padding: 14px;
-                font-size: 1.1rem;
-                font-weight: bold;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 12px;
-                border-radius: 12px;
-                cursor: pointer;
-                transition: all 0.3s ease;
-            " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(14, 165, 233, 0.6)'" 
-               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(14, 165, 233, 0.4)'">
-                <i class="fas fa-id-card" style="font-size: 1.2em;"></i> 
-                <span>إرسال الهوية والكليشة لجروب Agent competitions (${state.winners.length})</span>
+              width: 100%;
+              background: #22c55e;
+              color: #fff;
+              border: none;
+              padding: 12px 16px;
+              font-size: 1rem;
+              font-weight: 600;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 10px;
+              border-radius: 999px;
+              cursor: pointer;
+              transition: transform 0.2s ease, box-shadow 0.2s ease;
+              box-shadow: 0 4px 12px rgba(34, 197, 94, 0.35);
+            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(34, 197, 94, 0.45)'" 
+               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(34, 197, 94, 0.35)'">
+              <i class="fas fa-id-card" style="font-size: 1em;"></i> 
+              <span>إرسال الهوية والكليشة لجروب Agent competitions (${state.winners.length})</span>
             </button>
           </div>
           `;
@@ -17471,6 +18314,14 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         depositWinners.forEach((w, i) => {
           const warnMeetChecked = w.includeWarnMeet ? 'checked' : '';
           const warnPrevChecked = w.includeWarnPrev ? 'checked' : '';
+          
+          let prizeDisplay = '';
+          if (w.prizeType === 'deposit_prev') {
+              prizeDisplay = `${w.prizeValue || 0}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+          } else {
+              prizeDisplay = `${w.prizeValue || 0}% بونص إيداع`;
+          }
+
           html += `
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
@@ -17478,8 +18329,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 <div class="wr-winner-card-name">الاسم: ${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
-                <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> ${w.prizeValue || 0}%</div>
-                ${w.agent ? `<div class="wr-winner-card-agent"><i class="fas fa-user-tie"></i> ${w.agent.name} (#${w.agent.agentId})</div>` : ''}
+                <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> ${prizeDisplay}</div>
+                ${w.agent ? `<div class="wr-winner-card-agent"><i class="fas fa-user-tie"></i> <a href="#profile/${w.agent.id}" style="color:inherit;text-decoration:underline;cursor:pointer;">${w.agent.name} (#${w.agent.agentId})</a></div>` : ''}
                 <div class="wr-winner-warnings">
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ الاجتماع والتحقق أولاً
@@ -17517,8 +18368,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
     
-                <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> $${w.prizeValue || 0}</div>
-                ${w.agent ? `<div class="wr-winner-card-agent"><i class="fas fa-user-tie"></i> ${w.agent.name} (#${w.agent.agentId})</div>` : ''}
+                <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> $${w.prizeValue || 0} بونص تداولي</div>
+                ${w.agent ? `<div class="wr-winner-card-agent"><i class="fas fa-user-tie"></i> <a href="#profile/${w.agent.id}" style="color:inherit;text-decoration:underline;cursor:pointer;">${w.agent.name} (#${w.agent.agentId})</a></div>` : ''}
                 <div class="wr-winner-warnings">
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ الاجتماع والتحقق أولاً
@@ -17724,6 +18575,86 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       toast('تم استرجاع الفائز للروليت', 'info');
     }
     
+    function handleRestoreClick(ev) {
+      const id = ev.currentTarget.getAttribute('data-restore');
+      const winner = state.winners.find(w => w.id === id);
+      
+      if (!winner) {
+        toast('لم يتم العثور على الفائز', 'error');
+        return;
+      }
+      
+      showConfirmModal(
+        `هل تريد استرجاع <strong>${winner.name}</strong> إلى الروليت؟ سيتم إلغاء اختياره كفائز وإعادته للمشاركين.`,
+        async () => {
+          // إزالة الفائز من قائمة الفائزين
+          state.winners = state.winners.filter(w => w.id !== id);
+          
+          // إعادة ضبط حالة جميع المشاركين لضمان أن الجميع متاح للروليت ما عدا الفائزين الحاليين
+          const currentWinnerIds = new Set(state.winners.map(w => w.id));
+          
+          // التحقق من وجود الفائز المسترجع في القائمة، وإضافته إذا لم يكن موجوداً
+          const restoredEntryExists = state.entries.some(e => e.id === id);
+          if (!restoredEntryExists) {
+            state.entries.push({
+              id: winner.id,
+              name: winner.name,
+              account: winner.account,
+              label: `${winner.name} — ${winner.account}`,
+              selected: false,
+              seq: state.entries.length + 1
+            });
+          }
+
+          // تحديث حالة الاختيار لجميع المشاركين
+          state.entries.forEach(entry => {
+            // المشارك يعتبر "مختاراً" (مستبعداً من الروليت) فقط إذا كان في قائمة الفائزين الحالية
+            entry.selected = currentWinnerIds.has(entry.id);
+          });
+          
+          // حذف الفائز من قاعدة البيانات إذا كان محفوظاً
+          if (winner._id && state.selectedAgent && state.selectedAgent.id) {
+            try {
+              const authedFetch = window.authedFetch || fetch;
+              await authedFetch(`/api/agents/${state.selectedAgent.id}/winners/${winner._id}`, {
+                method: 'DELETE'
+              });
+
+              // NEW: If we delete a winner, we should ensure the competition is not "completed" anymore
+              // This allows the user to spin again and select a replacement
+              if (state.activeCompetition && state.activeCompetition.id) {
+                  // We optimistically update local state
+                  state.reportSent = false;
+                  state.noWinnersApproved = false;
+
+                  // And update backend status to 'active' (or 'awaiting_winners' if supported, but 'active' is safer)
+                  await authedFetch(`/api/competitions/${state.activeCompetition.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'active' })
+                  });
+              }
+            } catch (e) {
+              console.error('فشل حذف الفائز من قاعدة البيانات:', e);
+            }
+          } else {
+             // Even if not saved in DB, we should unlock the UI locally
+             state.reportSent = false;
+             state.noWinnersApproved = false;
+          }
+          
+          // تحديث الواجهة
+          renderParticipants();
+          renderWinners();
+          updateCounts();
+          drawWheel();
+          saveSession();
+          
+          toast(`تم استرجاع ${winner.name} إلى الروليت بنجاح`, 'success');
+        }
+      );
+    }
+    
     function handleWinnerWarningToggle(ev) {
       const id = ev.currentTarget.getAttribute('data-id');
       const warnType = ev.currentTarget.getAttribute('data-warn');
@@ -17809,7 +18740,21 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function showWinnerModal(entry){
-      console.log('🎉 [showWinnerModal] Called with entry:', entry.name);
+      console.log('🎉 [showWinnerModal] Called with entry:', entry);
+      console.log('🎉 [showWinnerModal] Entry name:', entry?.name);
+
+      // --- NEW: Final check before showing modal ---
+      const isAlreadyWinner = state.winners.some(w => 
+          (w.account && entry.account && w.account === entry.account) || 
+          (w.name === entry.name)
+      );
+      
+      if (isAlreadyWinner) {
+          toast(`عذراً، المتسابق ${entry.name} موجود بالفعل في قائمة الفائزين!`, 'error');
+          // Don't show modal
+          return;
+      }
+      // ---------------------------------------------
       
       const modal = document.getElementById('winner-modal');
       const winnerName = document.getElementById('celebration-winner-name');
@@ -17819,6 +18764,17 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const prizeValueEl = document.getElementById('celebration-prize-value');
       const confirmBtn = document.getElementById('confirm-winner');
       const skipBtn = document.getElementById('skip-winner'); // NEW: Skip button
+      
+      // Reset ID image input and preview to avoid leaking previous winner's image
+      const idInput = document.getElementById('winner-id-image');
+      const idPreview = document.getElementById('winner-id-image-preview');
+      try { if (idInput) idInput.value = ''; } catch(e){}
+      if (idPreview) { idPreview.style.display = 'none'; idPreview.src = ''; }
+      
+      // Initialize variables after using them for cleanup
+      let idPreviewUrl = null;
+      let compressedFile = null;
+      let isImageUploading = false;
       
       console.log('🔍 [showWinnerModal] Elements check:');
       console.log('  - modal:', modal ? 'FOUND' : 'MISSING');
@@ -17917,13 +18873,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }
 
       // --- NEW: Clear ID Image Input and Preview ---
-      const idInput = document.getElementById('winner-id-image');
-      const idPreview = document.getElementById('winner-id-image-preview');
-      if (idInput) idInput.value = ''; // Clear file input
-      if (idPreview) {
-          idPreview.src = '';
-          idPreview.style.display = 'none';
-      }
+      // (Cleared at the top of the function)
+
       // ---------------------------------------------
       
       // Helper function to compress image
@@ -17970,8 +18921,6 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // Add paste event handler for ID image
       const nationalIdImageInput = document.getElementById('winner-id-image');
       const idPreviewImg = document.getElementById('winner-id-image-preview');
-      let idPreviewUrl = null;
-      let compressedFile = null; // Store compressed file
     
       const openLightbox = () => {
         if (!idPreviewUrl) return;
@@ -17992,7 +18941,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const updateIdPreview = async () => {
         if (!nationalIdImageInput || !nationalIdImageInput.files || nationalIdImageInput.files.length === 0) {
           if (idPreviewImg) { idPreviewImg.style.display = 'none'; idPreviewImg.src = ''; }
-          if (idPreviewUrl) { try { URL.revokeObjectURL(idPreviewUrl); } catch(e){} idPreviewUrl = null; }
+          if (idPreviewUrl) { try { URL.revokeObjectURL(idPreviewUrl); } catch(e){} }
+          idPreviewUrl = null;
           compressedFile = null;
           return;
         }
@@ -18006,12 +18956,14 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         
         try {
           // Compress the image
+          isImageUploading = true;
           toast('جاري ضغط الصورة...', 'info');
           compressedFile = await compressImage(file);
           
           if (idPreviewUrl) { try { URL.revokeObjectURL(idPreviewUrl); } catch(e){} }
           idPreviewUrl = URL.createObjectURL(compressedFile);
           if (idPreviewImg) { idPreviewImg.src = idPreviewUrl; idPreviewImg.style.display = 'block'; }
+          isImageUploading = false;
           toast('تم ضغط الصورة بنجاح', 'success');
         } catch (error) {
           console.error('Failed to compress image:', error);
@@ -18020,6 +18972,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           idPreviewUrl = URL.createObjectURL(file);
           if (idPreviewImg) { idPreviewImg.src = idPreviewUrl; idPreviewImg.style.display = 'block'; }
           compressedFile = file;
+          isImageUploading = false;
           toast('تم رفع الصورة الأصلية', 'warning');
         }
       };
@@ -18098,16 +19051,14 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         const nationalIdImageInput = document.getElementById('winner-id-image');
         const autoDisplay = document.getElementById('winner-prize-auto-display');
         let selectedPrizeType = prizeTypeInput?.value || autoPrize.prizeType;
-        console.log('[PrizeTypeConfirm] Selected type before mapping:', selectedPrizeType);
+        console.log('[PrizeTypeConfirm] Selected type:', selectedPrizeType);
         
-        // Map special option to deposit for backend
-        if (selectedPrizeType === 'deposit_prev') {
-          console.log('[PrizeTypeConfirm] Mapping deposit_prev to deposit for backend payload');
-          selectedPrizeType = 'deposit';
-        }
+        // REMOVED: Mapping deposit_prev to deposit. Now we keep it as is.
+        // if (selectedPrizeType === 'deposit_prev') { ... }
         
         // Get prize value from active competition based on type
-        const selectedPrizeValue = selectedPrizeType === 'deposit'
+        // Treat deposit_prev same as deposit for value calculation
+        const selectedPrizeValue = (selectedPrizeType === 'deposit' || selectedPrizeType === 'deposit_prev')
             ? (state.activeCompetition?.depositBonusPercentage ?? 0)
             : (state.activeCompetition?.prizePerWinner ?? 0);
         console.log('[PrizeValueConfirm] Final prize:', { type: selectedPrizeType, value: selectedPrizeValue });
@@ -18127,6 +19078,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           setTimeout(()=>{ emailErrorEl && (emailErrorEl.style.display='none'); emailInput?.classList.remove('wr-input-error'); }, 2500);
           return; // Do not close modal
         }
+        
+        // Check if image is still uploading
+        if (isImageUploading) {
+          toast('يرجى الانتظار حتى يتم رفع صورة الهوية بالكامل', 'warning');
+          return;
+        }
+        
         // Require ID image before confirming
         if (!(nationalIdImageInput?.files?.length > 0)) {
           const idInput = document.getElementById('winner-id-image');
@@ -18152,108 +19110,26 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           timestamp: new Date().toISOString()
         };
         
-        // --- SAVE TO DATABASE IMMEDIATELY (Manual Mode) ---
-        if (state.selectedAgent && state.selectedAgent.id) {
-          const payload = {
-            winners: [{
-              id: `import_${winnerData.id}`,
-              name: winnerData.name,
-              account_number: winnerData.account || '',
-              email: winnerData.email || '',
-              national_id: winnerData.nationalId || '',
-              prize_type: winnerData.prizeType || '',
-              prize_value: Number(winnerData.prizeValue) || 0,
-              selected_at: winnerData.timestamp,
-              meta: {
-                email: winnerData.email || '',
-                national_id: winnerData.nationalId || '',
-                prize_type: winnerData.prizeType || '',
-                prize_value: Number(winnerData.prizeValue) || 0,
-                original_import_id: `import_${winnerData.id}`
-              }
-            }]
-          };
-          
-          const authedFetch = window.authedFetch || fetch;
-          
-          // Disable button to prevent double clicks
-          if(confirmBtn) {
-              confirmBtn.disabled = true;
-              confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
-          }
-    
-          authedFetch(`/api/agents/${encodeURIComponent(state.selectedAgent.id)}/winners/import`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          }).then(async (resp) => {
-            if(!resp.ok) throw new Error('Failed to save winner');
-            const data = await resp.json();
-            const createdWinner = data.winners && data.winners[0];
-            
-            // If we have a pending video, upload it now
-            if (state.pendingVideoBlob && createdWinner && createdWinner._id) {
-                const formData = new FormData();
-                // Determine extension based on recorded mimeType
-                const extension = (state.recordingMimeType && state.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
-                formData.append('video', state.pendingVideoBlob, `winner_${createdWinner._id}.${extension}`);
-                
-                const uploadResp = await authedFetch(`/api/winners/${createdWinner._id}/video`, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!uploadResp.ok) console.warn('Failed to upload video for winner', createdWinner._id);
-                else toast('تم حفظ الفيديو بنجاح', 'success');
-                
-                // Clear pending blob
-                state.pendingVideoBlob = null;
-            }
-            
-            // Upload national ID image if provided
-            if (compressedFile && createdWinner && createdWinner._id) {
-                const idImageFormData = new FormData();
-                idImageFormData.append('id_image', compressedFile);
-                
-                const idImageResp = await authedFetch(`/api/winners/${createdWinner._id}/id-image`, {
-                    method: 'POST',
-                    body: idImageFormData
-                });
-                
-                if (!idImageResp.ok) console.warn('Failed to upload ID image for winner', createdWinner._id);
-                else toast('تم حفظ صورة الهوية بنجاح', 'success');
-            }
-            
-            // UPDATE LOCAL WINNER WITH DB ID
-            if (createdWinner && createdWinner._id) {
-                const localWinner = state.winners.find(w => w.id === winnerData.id);
-                if (localWinner) {
-                    localWinner._id = createdWinner._id;
-                    saveSession(); // Save the _id to local storage
-                }
-            }
-            
-            toast('تم حفظ الفائز في قاعدة البيانات', 'success');
-          }).catch(err => {
-            console.error('Error saving winner to DB', err);
-            toast('حدث خطأ أثناء الحفظ في قاعدة البيانات', 'error');
-          }).finally(() => {
-            if(confirmBtn) {
-                confirmBtn.disabled = false;
-                confirmBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد الفائز';
-            }
-          });
+        // --- الحفظ المحلي فقط (لن يتم الحفظ في قاعدة البيانات حتى الضغط على "اعتماد الفائزين") ---
+        // حفظ الفيديو والصورة مؤقتاً في الكائن المحلي
+        if (state.pendingVideoBlob) {
+          winnerData.pendingVideoBlob = state.pendingVideoBlob;
+          winnerData.recordingMimeType = state.recordingMimeType;
+          state.pendingVideoBlob = null; // Clear from state
         }
+        
+        if (compressedFile) {
+          winnerData.pendingIdImage = compressedFile;
+          winnerData.idImageUploaded = true; // Mark as having image
+        }
+        
+        toast('تم إضافة الفائز محلياً. اضغط "اعتماد الفائزين" للحفظ النهائي', 'success');
         // ------------------------------------
     
         const idx = state.entries.findIndex(e => e.id === entry.id);
         if (idx !== -1) state.entries[idx].selected = true;
         if (!state.winners.find(w => w.id === entry.id)) {
           state.winners.push(winnerData);
-          // Increment global counter
-          if (state.activeCompetition) {
-            state.activeCompetition.currentWinners = (state.activeCompetition.currentWinners || 0) + 1;
-          }
         }
         
         // مسح الفائز من قائمة المشاركين
@@ -18269,8 +19145,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         saveSession();
         updateBatchCount?.();
         
+        // تحديث إحصائيات المسابقة في القسم العلوي
+        if (state.selectedAgent && state.selectedAgent.id) {
+          updateCompetitionStats();
+        }
+        
         // إظهار شاشة منبثقة عند اكتمال عدد الفائزين
-        const currentTotal = state.activeCompetition ? (state.activeCompetition.currentWinners || 0) : state.winners.length;
+        const currentTotal = state.winners.length;
         if (state.activeCompetition && currentTotal >= state.activeCompetition.totalRequired) {
           const agentLabel = state.selectedAgent ? state.selectedAgent.name : 'هذا الوكيل';
           checkCompletion();
@@ -18297,6 +19178,19 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function showAutoWinnerModal(entry){
+      let isImageUploadingAuto = false;
+      // --- NEW: Final check before showing modal ---
+      const isAlreadyWinner = state.winners.some(w => 
+          (w.account && entry.account && w.account === entry.account) || 
+          (w.name === entry.name)
+      );
+      
+      if (isAlreadyWinner) {
+          toast(`عذراً، المتسابق ${entry.name} موجود بالفعل في قائمة الفائزين!`, 'error');
+          return;
+      }
+      // ---------------------------------------------
+
       const modal = document.getElementById('winner-modal');
       const winnerName = document.getElementById('celebration-winner-name');
       const winnerAccount = document.getElementById('celebration-winner-account');
@@ -18463,12 +19357,14 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         
         try {
           // Compress the image
+          isImageUploadingAuto = true;
           toast('جاري ضغط الصورة...', 'info');
           compressedFile = await compressImage(file);
           
           if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} }
           idPreviewUrlAuto = URL.createObjectURL(compressedFile);
           if (idPreviewImgAuto) { idPreviewImgAuto.src = idPreviewUrlAuto; idPreviewImgAuto.style.display = 'block'; }
+          isImageUploadingAuto = false;
           toast('تم ضغط الصورة بنجاح', 'success');
         } catch (error) {
           console.error('Failed to compress image:', error);
@@ -18477,6 +19373,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           idPreviewUrlAuto = URL.createObjectURL(file);
           if (idPreviewImgAuto) { idPreviewImgAuto.src = idPreviewUrlAuto; idPreviewImgAuto.style.display = 'block'; }
           compressedFile = file;
+          isImageUploadingAuto = false;
           toast('تم رفع الصورة الأصلية', 'warning');
         }
       };
@@ -18558,6 +19455,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           setTimeout(()=>{ emailErrorEl && (emailErrorEl.style.display='none'); emailInput?.classList.remove('wr-input-error'); }, 2500);
           return;
         }
+        
+        // Check if image is still uploading (auto mode)
+        if (isImageUploadingAuto) {
+          toast('يرجى الانتظار حتى يتم رفع صورة الهوية بالكامل', 'warning');
+          return;
+        }
+        
         // Require ID image before confirming
         if (!(nationalIdImageInput?.files?.length > 0)) {
           const idInput = document.getElementById('winner-id-image');
@@ -18665,10 +19569,6 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         if (idx !== -1) state.entries[idx].selected = true;
         if (!state.winners.find(w => w.id === entry.id)) {
           state.winners.push(winnerData);
-          // Increment global counter
-          if (state.activeCompetition) {
-            state.activeCompetition.currentWinners = (state.activeCompetition.currentWinners || 0) + 1;
-          }
         }
         
         // مسح الفائز من قائمة المشاركين
@@ -18683,6 +19583,11 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         renderParticipants(); renderWinners(); updateCounts(); drawWheel(); saveSession();
         state.autoRemaining--; onClose();
         updateBatchCount?.();
+        
+        // تحديث إحصائيات المسابقة في القسم العلوي
+        if (state.selectedAgent && state.selectedAgent.id) {
+          updateCompetitionStats();
+        }
         
         if(state.autoRemaining>0){ 
           setTimeout(()=> startSpin(), 400); 
@@ -18728,6 +19633,133 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         });
     }
     
+    // دالة لحفظ جميع الفائزين في قاعدة البيانات
+    async function saveAllWinnersToDatabase() {
+      if (!state.selectedAgent || !state.selectedAgent.id) {
+        throw new Error('لا يوجد وكيل محدد');
+      }
+      
+      const authedFetch = window.authedFetch || fetch;
+      
+      // Filter only unsaved winners (those without a valid MongoDB _id)
+      // Assuming MongoDB _id is 24 hex characters. Local IDs are usually shorter or different format.
+      // Also check if w._id exists (which we set after saving)
+      const unsavedWinners = state.winners.filter(w => !w._id && (!w.id || w.id.length !== 24));
+      
+      if (unsavedWinners.length === 0) {
+          console.log('[saveAllWinnersToDatabase] All winners are already saved.');
+          return;
+      }
+
+      // تحضير بيانات الفائزين الجدد فقط
+      const winnersPayload = unsavedWinners.map(winner => ({
+        id: `import_${winner.id}`,
+        name: winner.name,
+        account_number: winner.account || '',
+        email: winner.email || '',
+        national_id: winner.nationalId || '',
+        prize_type: winner.prizeType || '',
+        prize_value: Number(winner.prizeValue) || 0,
+        selected_at: winner.timestamp,
+        meta: {
+          email: winner.email || '',
+          national_id: winner.nationalId || '',
+          prize_type: winner.prizeType || '',
+          prize_value: Number(winner.prizeValue) || 0,
+          original_import_id: `import_${winner.id}`
+        }
+      }));
+      
+      // حفظ الفائزين الجدد
+      const resp = await authedFetch(`/api/agents/${encodeURIComponent(state.selectedAgent.id)}/winners/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ winners: winnersPayload })
+      });
+      
+      if (!resp.ok) {
+        throw new Error('فشل حفظ الفائزين في قاعدة البيانات');
+      }
+      
+      const data = await resp.json();
+      const savedWinners = data.winners || [];
+      
+      // تحديث معرفات الفائزين المحلية
+      for (let i = 0; i < savedWinners.length; i++) {
+        const savedWinner = savedWinners[i];
+        // Find by original_import_id in meta
+        const localWinner = state.winners.find(w => `import_${w.id}` === savedWinner.meta?.original_import_id);
+        
+        if (localWinner && savedWinner._id) {
+          localWinner._id = savedWinner._id;
+          // Also update the main id to match _id for consistency
+          localWinner.id = savedWinner._id;
+          
+          // رفع الفيديو إن وجد
+          if (localWinner.pendingVideoBlob) {
+            try {
+              const formData = new FormData();
+              const extension = (localWinner.recordingMimeType && localWinner.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
+              formData.append('video', localWinner.pendingVideoBlob, `winner_${savedWinner._id}.${extension}`);
+              
+              await authedFetch(`/api/winners/${savedWinner._id}/video`, {
+                method: 'POST',
+                body: formData
+              });
+              
+              delete localWinner.pendingVideoBlob;
+              delete localWinner.recordingMimeType;
+            } catch (e) {
+              console.warn('Failed to upload video for winner', savedWinner._id, e);
+            }
+          }
+
+          // رفع صورة الهوية إن وجدت (pendingIdImageFile)
+          if (localWinner.pendingIdImageFile) {
+            try {
+              const formData = new FormData();
+              formData.append('id_image', localWinner.pendingIdImageFile);
+              
+              const uploadResp = await authedFetch(`/api/winners/${savedWinner._id}/id-image`, {
+                method: 'POST',
+                body: formData
+              });
+              
+              if (uploadResp.ok) {
+                  const uploadResult = await uploadResp.json();
+                  localWinner.national_id_image = uploadResult.imageUrl;
+                  localWinner.idImageUploaded = true; // Mark as uploaded
+              }
+              
+              delete localWinner.pendingIdImageFile;
+            } catch (e) {
+              console.warn('Failed to upload ID image for winner', savedWinner._id, e);
+            }
+          }
+          
+          // رفع صورة الهوية إن وجدت
+          if (localWinner.pendingIdImage) {
+            try {
+              const idFormData = new FormData();
+              idFormData.append('id_image', localWinner.pendingIdImage);
+              
+              await authedFetch(`/api/winners/${savedWinner._id}/id-image`, {
+                method: 'POST',
+                body: idFormData
+              });
+              
+              delete localWinner.pendingIdImage;
+            } catch (e) {
+              console.warn('Failed to upload ID image for winner', savedWinner._id, e);
+            }
+          }
+        }
+      }
+      
+      saveSession();
+      return savedWinners;
+    }
+
     async function sendWinnersReport() {
       console.log('[sendWinnersReport] Button clicked');
       if (!state.selectedAgent) {
@@ -18740,21 +19772,45 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         toast('لا يوجد فائزين لإرسالهم', 'warning');
         return;
       }
-    
-      // Filter winners that have _id (saved to DB)
+      
+      // التحقق من وجود فائزين غير محفوظين في قاعدة البيانات، مع الحفظ التلقائي قبل الإرسال
+      let unsavedWinners = state.winners.filter(w => !w._id);
+      console.log('[sendWinnersReport] clicked:', {
+        total: state.winners.length,
+        unsaved: unsavedWinners.length,
+        agentId: state.selectedAgent && state.selectedAgent.id
+      });
+
+      if (unsavedWinners.length > 0) {
+        try {
+          console.log('[sendWinnersReport] auto-saving unsaved winners before send...', unsavedWinners);
+          toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
+          await saveAllWinnersToDatabase();
+          console.log('[sendWinnersReport] auto-save completed successfully');
+        } catch (error) {
+          console.error('[sendWinnersReport] auto-save failed:', error);
+          toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
+          return;
+        }
+      }
+
+      // Filter winners that have _id (saved to DB) بعد الحفظ التلقائي
       const validWinners = state.winners.filter(w => w._id);
       console.log('[sendWinnersReport] Valid winners count:', validWinners.length);
       
       if (validWinners.length === 0) {
           console.error('[sendWinnersReport] No valid winners with DB IDs');
           toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
+          console.error('[sendWinnersReport] no winners with _id after filtering');
           return;
       }
     
       const messageText = generateWinnersMessage();
       
-      showConfirmModal(
-          `سيتم إرسال تقرير الفائزين (${validWinners.length}) إلى مجموعة الوكيل على تلجرام. هل أنت متأكد؟`,
+        // Directly send without confirmation modal
+          // Confirm before sending all winners to agent
+          showConfirmModal(
+          `سيتم إرسال جميع الفائزين (${validWinners.length}) إلى الوكيل. هل أنت متأكد من المتابعة؟`,
           async () => {
               console.log('[sendWinnersReport] User confirmed send');
               try {
@@ -18798,7 +19854,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                   toast('حدث خطأ أثناء الإرسال', 'error');
               }
           }
-      );
+          );
     }
     
     async function sendWinnersDetails() {
@@ -18810,7 +19866,29 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         toast('لا يوجد فائزين لإرسال بياناتهم', 'warning');
         return;
       }
+      
+      // التحقق من وجود فائزين غير محفوظين
+      const unsavedWinners = state.winners.filter(w => !w._id);
+      console.log('[sendWinnersDetails] clicked: current winners:', {
+        total: state.winners.length,
+        unsaved: unsavedWinners.length,
+        agentId: state.selectedAgent && state.selectedAgent.id
+      });
+      if (unsavedWinners.length > 0) {
+        try {
+            console.log('[sendWinnersDetails] auto-saving unsaved winners before send...', unsavedWinners);
+            toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
+            await saveAllWinnersToDatabase();
+            console.log('[sendWinnersDetails] auto-save completed successfully');
+        } catch (error) {
+            console.error('[sendWinnersDetails] auto-save failed:', error);
+            toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
+            return;
+        }
+      }
+      
       const validWinners = state.winners.filter(w => w._id);
+      console.log('[sendWinnersDetails] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
         return;
@@ -18840,7 +19918,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             });
             if (resp.ok) {
               toast('تم إرسال بيانات الفائزين بنجاح', 'success');
-              state.reportSent = true;
+              // state.reportSent = true; // Removed to allow manual approval
               // لا نمسح الفائزين هنا بالضرورة؛ اترك التحكم لزر التقرير الكامل
             } else {
               const err = await resp.json();
@@ -18863,9 +19941,39 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         toast('لا يوجد فائزين لإرسال بياناتهم', 'warning');
         return;
       }
+      
+      // التحقق من وجود فائزين غير محفوظين
+      const unsavedWinners = state.winners.filter(w => !w._id);
+      console.log('[sendWinnersWithIDsToAgent] clicked: current winners:', {
+        total: state.winners.length,
+        unsaved: unsavedWinners.length,
+        agentId: state.selectedAgent && state.selectedAgent.id
+      });
+      if (unsavedWinners.length > 0) {
+        try {
+            console.log('[sendWinnersWithIDsToAgent] auto-saving unsaved winners before send...', unsavedWinners);
+            toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
+            await saveAllWinnersToDatabase();
+            console.log('[sendWinnersWithIDsToAgent] auto-save completed successfully');
+        } catch (error) {
+            console.error('[sendWinnersWithIDsToAgent] auto-save failed:', error);
+            toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
+            return;
+        }
+      }
+      
       const validWinners = state.winners.filter(w => w._id);
+      console.log('[sendWinnersWithIDsToAgent] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
+        return;
+      }
+
+      // Precheck: ensure each winner has ID image uploaded
+      const missingIdImages = validWinners.filter(w => !w.idImageUploaded);
+      console.log('[sendWinnersWithIDsToAgent] winners missing ID image:', missingIdImages.map(w => w._id));
+      if (missingIdImages.length > 0) {
+        toast(`يوجد ${missingIdImages.length} فائز بدون صورة هوية مرفوعة. يرجى رفع الصورة من نافذة اعتماد الفائز قبل الإرسال.`, 'warning');
         return;
       }
     
@@ -18894,7 +20002,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             });
             if (resp.ok) {
               toast('تم إرسال بيانات الفائزين إلى جروب الشركة بنجاح', 'success');
-              state.reportSent = true;
+              // state.reportSent = true; // Removed to allow manual approval
             } else {
               const err = await resp.json();
               toast(`فشل الإرسال: ${err.message}`, 'error');
@@ -18913,9 +20021,15 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         let msg = '';
         state.winners.forEach((w, i) => {
             const rank = ordinals[i] || (i + 1);
-            const prizeText = w.prizeType === 'deposit' 
-                ? `${w.prizeValue}% بونص ايداع كونه فائز مسبقا ببونص تداولي` 
-                : `${w.prizeValue}$`;
+            let prizeText = '';
+            
+            if (w.prizeType === 'deposit_prev') {
+                prizeText = `${w.prizeValue}% بونص إيداع كونه فائز مسبقًا ببونص تداولي`;
+            } else if (w.prizeType === 'deposit') {
+                prizeText = `${w.prizeValue}% بونص إيداع`;
+            } else {
+                prizeText = `${w.prizeValue}$ بونص تداولي`;
+            }
     
             msg += `◃ الفائز ${rank}: ${w.name}\n`;
             msg += `           الجائزة: ${prizeText}\n\n`;
@@ -18969,40 +20083,73 @@ function initQuestionSuggestions() {
     loadMySuggestions();
     setupFormSubmission();
     setupFilters();
-    checkForNotifications();
+    // checkForNotifications(); // Removed old notification check
     setupCustomCategoryToggle();
+    setupScrollObserver(); // NEW: Mark updates as seen on scroll
+    setupDelegation();
 }
 
 // ==========================
-// التحقق من وجود تقييمات جديدة
+// إعداد تفويض الأحداث (Event Delegation)
 // ==========================
-async function checkForNotifications() {
+function setupDelegation() {
+    const container = document.getElementById('suggestionsContainer');
+    if (!container) return;
+
+    container.addEventListener('click', function(e) {
+        const editBtn = e.target.closest('.btn-edit-suggestion');
+        if (editBtn) {
+            const id = editBtn.dataset.id;
+            console.log('🔘 Edit button clicked (Delegated) for ID:', id);
+            if (window.openEditModal) {
+                window.openEditModal(id);
+            } else {
+                console.error('❌ openEditModal function is not defined');
+            }
+        }
+    });
+}
+
+// ==========================
+// مراقبة التمرير لتحديث حالة القراءة
+// ==========================
+function setupScrollObserver() {
+    const suggestionsList = document.getElementById('suggestionsContainer');
+    if (!suggestionsList) return;
+
+    // Create an intersection observer to detect when the list is viewed
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                markUpdatesAsSeen();
+                // Disconnect after marking as seen to avoid repeated calls
+                observer.disconnect();
+            }
+        });
+    }, { threshold: 0.1 }); // Trigger when 10% of the list is visible
+
+    observer.observe(suggestionsList);
+}
+
+// ==========================
+// تحديث حالة الإشعارات إلى "مقروءة"
+// ==========================
+async function markUpdatesAsSeen() {
     try {
-        const response = await utils.authedFetch('/api/question-suggestions/my-suggestions?status=');
-        const data = await response.json();
+        console.log('👀 [Suggestions] Marking updates as seen...');
+        const response = await utils.authedFetch('/api/question-suggestions/mark-seen', {
+            method: 'POST'
+        });
         
-        if (data.success && data.data) {
-            const unnotified = data.data.filter(s => 
-                !s.employee_notified && 
-                s.status !== 'pending' && 
-                s.evaluation && 
-                s.evaluation.feedback
-            );
-            
-            if (unnotified.length > 0) {
-                utils.showToast(`لديك ${unnotified.length} تقييم جديد على اقتراحاتك!`, 'info');
-                
-                // تحديث حالة الإشعار
-                for (const suggestion of unnotified) {
-                    // تعديل: المسار الصحيح في الراوتر هو /notify/:id وليس /mark-notified/:id
-                    await utils.authedFetch(`/api/question-suggestions/notify/${suggestion._id}`, {
-                        method: 'PUT'
-                    });
-                }
+        if (response.ok) {
+            console.log('✅ [Suggestions] Updates marked as seen');
+            // Update the global counter immediately
+            if (typeof loadGlobalUnreadCount === 'function') {
+                loadGlobalUnreadCount();
             }
         }
     } catch (error) {
-        console.error('Error checking notifications:', error);
+        console.error('❌ [Suggestions] Error marking updates as seen:', error);
     }
 }
 
@@ -19069,7 +20216,8 @@ async function loadMySuggestions(status = '') {
         const data = await response.json();
         
         if (data.success) {
-            displayMySuggestions(data.data);
+            allMySuggestions = data.data;
+            displayMySuggestions(allMySuggestions);
         }
     } catch (error) {
         console.error('Error loading suggestions:', error);
@@ -19108,14 +20256,18 @@ function displayMySuggestions(suggestions) {
     }
     const titles = {
         pending: 'قيد المراجعة',
+        needs_revision: 'تحتاج تعديل',
         approved: 'مقبولة',
-        rejected: 'مرفوضة',
-        needs_revision: 'تحتاج تعديل'
+        rejected: 'مرفوضة'
     };
+    
+    // ترتيب مخصص للعرض
+    const statusOrder = ['pending', 'needs_revision', 'approved', 'rejected'];
+    
     let html = '';
-    Object.keys(groups).forEach(status => {
+    statusOrder.forEach(status => {
         const list = groups[status];
-        if (list.length === 0) return; // لا تظهر القسم الفارغ
+        if (!list || list.length === 0) return; // لا تظهر القسم الفارغ
         html += `
             <div class="status-group ${status}" data-status="${status}">
                 <div class="status-group-header" role="button" tabindex="0" aria-expanded="true">
@@ -19131,6 +20283,27 @@ function displayMySuggestions(suggestions) {
         `;
     });
     container.innerHTML = html;
+
+    // إضافة event listeners للطي والفتح
+    document.querySelectorAll('.status-group-header').forEach(header => {
+        header.addEventListener('click', function() {
+            const body = this.nextElementSibling;
+            const icon = this.querySelector('.toggle-icon i');
+            const isExpanded = this.getAttribute('aria-expanded') === 'true';
+            
+            if (isExpanded) {
+                body.style.display = 'none';
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-left');
+                this.setAttribute('aria-expanded', 'false');
+            } else {
+                body.style.display = 'grid';
+                icon.classList.remove('fa-chevron-left');
+                icon.classList.add('fa-chevron-down');
+                this.setAttribute('aria-expanded', 'true');
+            }
+        });
+    });
 }
 
 function createSuggestionCard(suggestion) {
@@ -19191,6 +20364,14 @@ function createSuggestionCard(suggestion) {
                     </div>
                 ` : ''}
             </div>
+            
+            ${suggestion.status === 'needs_revision' ? `
+                <div class="card-footer text-end mt-3 pt-3 border-top border-secondary">
+                    <button class="btn btn-warning btn-sm btn-edit-suggestion" data-id="${suggestion._id}">
+                        <i class="fas fa-edit"></i> تعديل وإعادة إرسال
+                    </button>
+                </div>
+            ` : ''}
         </div>
     `;
 }
@@ -19207,11 +20388,12 @@ function getStatusBadge(status) {
 
 function getCategoryLabel(category) {
     const labels = {
-        general: 'عام',
-        technical: 'تقني',
-        trading: 'تداول',
-        market: 'سوق',
-        other: 'أخرى'
+        trading: 'تداولية',
+        interactive: 'تفاعلية',
+        company_features: 'مميزات الشركة',
+        educational: 'تعليمية',
+        highlight_site: 'تبرز الموقع',
+        other: 'اخري'
     };
     return labels[category] || category;
 }
@@ -19274,6 +20456,9 @@ function setupFormSubmission() {
             if (category === 'other') {
                 payload.custom_category = custom_category;
             }
+            
+            console.log('🚀 [Employee Suggestion] Sending suggestion:', payload);
+            
             const response = await utils.authedFetch('/api/question-suggestions/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -19282,16 +20467,20 @@ function setupFormSubmission() {
             
             const data = await response.json();
             
+            console.log('✅ [Employee Suggestion] Server response:', data);
+            
             if (data.success) {
+                console.log('✅ [Employee Suggestion] Suggestion saved successfully with ID:', data.data?._id);
                 utils.showToast('تم إرسال الاقتراح بنجاح! سيتم مراجعته قريباً', 'success');
                 form.reset();
                 loadMyStats();
                 loadMySuggestions();
             } else {
+                console.error('❌ [Employee Suggestion] Failed to save:', data.message);
                 utils.showToast(data.message || 'حدث خطأ', 'error');
             }
         } catch (error) {
-            console.error('Error submitting suggestion:', error);
+            console.error('❌ [Employee Suggestion] Error submitting suggestion:', error);
             utils.showToast('حدث خطأ في إرسال الاقتراح', 'error');
         } finally {
             submitBtn.disabled = false;
@@ -19321,6 +20510,9 @@ function setupCustomCategoryToggle() {
 // ==========================
 // الفلاتر
 // ==========================
+let allMySuggestions = [];
+let currentStatusFilter = '';
+
 function setupFilters() {
     const filterButtons = document.querySelectorAll('.filter-btn');
     filterButtons.forEach(btn => {
@@ -19328,10 +20520,97 @@ function setupFilters() {
             filterButtons.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             
-            const status = this.dataset.status;
-            loadMySuggestions(status);
+            currentStatusFilter = this.dataset.status;
+            loadMySuggestions(currentStatusFilter);
         });
     });
+    
+    // Advanced search setup
+    const applySearchBtn = document.getElementById('applySearchBtn');
+    const resetSearchBtn = document.getElementById('resetSearchBtn');
+    const searchText = document.getElementById('searchText');
+    
+    if (applySearchBtn) {
+        applySearchBtn.addEventListener('click', () => {
+            applyAdvancedSearch();
+        });
+    }
+    
+    if (resetSearchBtn) {
+        resetSearchBtn.addEventListener('click', () => {
+            document.getElementById('searchText').value = '';
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            document.getElementById('filterCategory').value = '';
+            displayMySuggestions(allMySuggestions);
+        });
+    }
+    
+    // Real-time search on typing
+    if (searchText) {
+        searchText.addEventListener('input', debounce(() => {
+            applyAdvancedSearch();
+        }, 500));
+    }
+}
+
+// Apply advanced search
+function applyAdvancedSearch() {
+    const searchText = document.getElementById('searchText')?.value.toLowerCase().trim();
+    const dateFrom = document.getElementById('filterDateFrom')?.value;
+    const dateTo = document.getElementById('filterDateTo')?.value;
+    const category = document.getElementById('filterCategory')?.value;
+    
+    let filtered = [...allMySuggestions];
+    
+    // Filter by search text
+    if (searchText) {
+        filtered = filtered.filter(s => 
+            s.question?.toLowerCase().includes(searchText) ||
+            s.correct_answer?.toLowerCase().includes(searchText)
+        );
+    }
+    
+    // Filter by date range
+    if (dateFrom) {
+        const fromDate = new Date(dateFrom);
+        fromDate.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(s => {
+            const suggestionDate = new Date(s.createdAt);
+            suggestionDate.setHours(0, 0, 0, 0);
+            return suggestionDate >= fromDate;
+        });
+    }
+    
+    if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(s => {
+            const suggestionDate = new Date(s.createdAt);
+            return suggestionDate <= toDate;
+        });
+    }
+    
+    // Filter by category
+    if (category) {
+        filtered = filtered.filter(s => s.category === category);
+    }
+    
+    console.log('[EmployeeSuggest] Advanced search applied. Results:', filtered.length);
+    displayMySuggestions(filtered);
+}
+
+// Debounce helper function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 // ==========================
@@ -19368,6 +20647,116 @@ document.addEventListener('click', function(e){
     header.setAttribute('aria-expanded', (!isCollapsed).toString());
 });
 
+// ==========================
+// تعديل الاقتراح
+// ==========================
+window.openEditModal = function(id) {
+    console.log('📝 [Edit] Opening modal for ID:', id);
+    
+    if (!allMySuggestions || allMySuggestions.length === 0) {
+        console.error('❌ [Edit] No suggestions loaded');
+        utils.showToast('حدث خطأ: لم يتم تحميل البيانات', 'error');
+        return;
+    }
+
+    const suggestion = allMySuggestions.find(s => s._id === id);
+    if (!suggestion) {
+        console.error('❌ [Edit] Suggestion not found in local list:', id);
+        utils.showToast('حدث خطأ: الاقتراح غير موجود', 'error');
+        return;
+    }
+
+    document.getElementById('editSuggestionId').value = suggestion._id;
+    document.getElementById('editQuestion').value = suggestion.question;
+    document.getElementById('editAnswer').value = suggestion.correct_answer;
+    document.getElementById('editCategory').value = suggestion.category;
+    document.getElementById('editDifficulty').value = suggestion.difficulty;
+    document.getElementById('editNotes').value = suggestion.additional_notes || '';
+    
+    const customGroup = document.getElementById('editCustomCategoryGroup');
+    const customInput = document.getElementById('editCustomCategory');
+    
+    if (suggestion.category === 'other') {
+        customGroup.style.display = 'block';
+        customInput.value = suggestion.custom_category || '';
+    } else {
+        customGroup.style.display = 'none';
+        customInput.value = '';
+    }
+
+    // Setup category change listener for edit modal
+    const categorySelect = document.getElementById('editCategory');
+    if (categorySelect) {
+        categorySelect.onchange = function() {
+            if (this.value === 'other') {
+                customGroup.style.display = 'block';
+            } else {
+                customGroup.style.display = 'none';
+            }
+        };
+    }
+
+    try {
+        const modalEl = document.getElementById('editSuggestionModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    } catch (e) {
+        console.error('❌ [Edit] Error showing modal:', e);
+        utils.showToast('حدث خطأ في فتح النافذة', 'error');
+    }
+};
+
+// Setup Edit Form Submission
+document.addEventListener('DOMContentLoaded', () => {
+    const editForm = document.getElementById('editSuggestionForm');
+    if (editForm) {
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const id = document.getElementById('editSuggestionId').value;
+            const submitBtn = editForm.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+            
+            try {
+                const formData = {
+                    question: document.getElementById('editQuestion').value,
+                    correct_answer: document.getElementById('editAnswer').value,
+                    category: document.getElementById('editCategory').value,
+                    difficulty: document.getElementById('editDifficulty').value,
+                    additional_notes: document.getElementById('editNotes').value,
+                    custom_category: document.getElementById('editCustomCategory').value
+                };
+
+                const response = await utils.authedFetch(`/api/question-suggestions/${id}/update`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    utils.showToast('تم تحديث الاقتراح وإعادة إرساله بنجاح', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('editSuggestionModal')).hide();
+                    loadMySuggestions();
+                    loadMyStats();
+                } else {
+                    utils.showToast(data.message || 'حدث خطأ', 'error');
+                }
+            } catch (error) {
+                console.error('Error updating suggestion:', error);
+                utils.showToast('حدث خطأ في تحديث الاقتراح', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            }
+        });
+    }
+});
+
 // دعم Enter و Space للولوج عبر لوحة المفاتيح
 document.addEventListener('keydown', function(e){
     if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('status-group-header')) {
@@ -19385,21 +20774,88 @@ document.addEventListener('keydown', function(e){
 let allSuggestions = [];
 let stats = null;
 let adminSuggestionsCurrentFilter = 'pending';
+let currentUserRole = null; // Track user role
+let isSuperAdmin = false; // Track if user is super admin
+let currentEvaluatedSuggestion = null;
+let suggestionTemplateModalInstance = null;
+let suggestionTemplateData = null;
+let templateQuestionCheckTimeout = null;
 
 // ==========================
 // التهيئة عند تحميل الصفحة
 // ==========================
-function initAdminQuestionSuggestions() {
+async function initAdminQuestionSuggestions() {
     // Check if we're on the correct page
     if (!document.getElementById('adminSuggestionsContainer')) {
         return; // Not on admin-question-suggestions.html, skip initialization
     }
     
+    // Check user permissions and get role
+    const userInfo = await checkUserAccess();
+    if (!userInfo) {
+        const appContent = document.getElementById('app-content');
+        if (appContent) {
+            appContent.innerHTML = `
+                <div style="text-align: center; padding: 50px;">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                    <h3>خطأ في التحقق من الصلاحيات</h3>
+                    <p>لم نتمكن من التحقق من صلاحياتك</p>
+                    <a href="#home" class="btn btn-primary mt-3">
+                        <i class="fas fa-home"></i> العودة للرئيسية
+                    </a>
+                </div>
+            `;
+        }
+        return;
+    }
+    
+    currentUserRole = userInfo.role;
+    isSuperAdmin = userInfo.role === 'super_admin'; // فقط السوبر أدمن له صلاحية التقييم والحذف
+    
+    // عرض جميع الاقتراحات لجميع المستخدمين (موظف، أدمن، سوبر أدمن)
+    // صلاحية التقييم والحذف: السوبر أدمن فقط
+    
     loadStats();
+    loadUnreadCount(); // Load unread suggestions count for super admin
     loadAllSuggestions();
     setupFilters();
     setupEvaluationModal();
     setupCardDelegation();
+    setupSuggestionTemplateModalHandlers();
+}
+
+// ==========================
+// ملاحظة: تم إزالة دالة hideAdminElements
+// لأن الصفحة أصبحت متاحة لعرض جميع الاقتراحات للجميع
+// ==========================
+// صلاحيات التقييم والحذف: السوبر أدمن فقط
+// الموظفون والأدمن: يمكنهم العرض فقط
+
+// ==========================
+// التحقق من صلاحيات المستخدم
+// ==========================
+async function checkUserAccess() {
+    try {
+        const response = await utils.authedFetch('/api/auth/me');
+        
+        if (!response.ok) {
+            return null;
+        }
+        
+        const data = await response.json();
+        
+        // API returns user object directly, not wrapped in success/user
+        if (data && data.role) {
+            return {
+                role: data.role,
+                name: data.full_name
+            };
+        }
+        
+        return null;
+    } catch (error) {
+        return null;
+    }
 }
 
 // ==========================
@@ -19408,6 +20864,11 @@ function initAdminQuestionSuggestions() {
 async function loadStats() {
     try {
         const response = await utils.authedFetch('/api/question-suggestions/all?page=1&limit=1');
+        
+        if (!response.ok) {
+            return;
+        }
+        
         const data = await response.json();
         
         if (data.success && data.stats) {
@@ -19415,7 +20876,7 @@ async function loadStats() {
             displayStats(stats);
         }
     } catch (error) {
-        console.error('Error loading stats:', error);
+        // Silent fail
     }
 }
 
@@ -19425,6 +20886,59 @@ function displayStats(stats) {
     document.getElementById('approvedCount').textContent = stats.approved || 0;
     document.getElementById('rejectedCount').textContent = stats.rejected || 0;
     document.getElementById('revisionCount').textContent = stats.needs_revision || 0;
+
+    // Update header badge with pending count (show only if > 0)
+    const pendingBadge = document.getElementById('pendingHeaderCountBadge');
+    const pendingHeaderCount = document.getElementById('pendingHeaderCount');
+    if (pendingBadge && pendingHeaderCount) {
+        const pending = stats.pending || 0;
+        pendingHeaderCount.textContent = pending;
+        pendingBadge.style.display = pending > 0 ? 'inline-flex' : 'none';
+    }
+}
+
+// ==========================
+// تحميل عدد الاقتراحات غير المقروءة
+// ==========================
+async function loadUnreadCount() {
+
+    try {
+        
+        // Determine endpoint based on role
+        const endpoint = isSuperAdmin 
+            ? '/api/question-suggestions/unread-count' 
+            : '/api/question-suggestions/employee-unread-count';
+            
+        const response = await utils.authedFetch(endpoint);
+
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            const unreadCount = data.data.unreadCount || 0;
+            displayUnreadCount(unreadCount);
+        }
+    } catch (error) {
+        console.error('❌ [Unread Count] Error loading unread count:', error);
+    }
+}
+
+function displayUnreadCount(count) {
+    const unreadCounter = document.getElementById('pendingHeaderCountBadge');
+    const unreadCountElement = document.getElementById('pendingHeaderCount');
+
+    if (unreadCounter && unreadCountElement) {
+        if (count > 0) {
+            unreadCountElement.textContent = count;
+            unreadCounter.style.display = 'inline-flex'; // Use inline-flex to match HTML style
+        } else {
+            unreadCounter.style.display = 'none';
+        }
+    }
 }
 
 // ==========================
@@ -19432,19 +20946,25 @@ function displayStats(stats) {
 // ==========================
 async function loadAllSuggestions(status = 'pending') {
     try {
-        console.log('[AdminSuggest] loadAllSuggestions status=', status);
-        const url = `/api/question-suggestions/all?status=${status}&limit=100`;
+        // عرض جميع الاقتراحات لجميع المستخدمين
+        const url = status && status !== 'all'
+            ? `/api/question-suggestions/all?status=${status}&limit=100`
+            : `/api/question-suggestions/all?limit=100`;
+        
         const response = await utils.authedFetch(url);
-        console.log('[AdminSuggest] fetch response status', response.status);
+        
         const data = await response.json();
-        console.log('[AdminSuggest] suggestions received count=', data.success ? data.data.length : 'NO-DATA', data);
         
         if (data.success) {
             allSuggestions = data.data;
+            
             displayAllSuggestions(allSuggestions);
+            loadEmployeeList(); // Load employee dropdown after data is loaded
+        } else {
+            console.error('❌ [Admin Suggestions] Failed to load:', data.message);
         }
     } catch (error) {
-        console.error('Error loading suggestions:', error);
+        console.error('❌ [Admin Suggestions] Error loading suggestions:', error);
         utils.showToast('حدث خطأ في تحميل الاقتراحات', 'error');
     }
 }
@@ -19541,26 +21061,35 @@ function createAdminSuggestionCard(suggestion) {
                 ` : ''}
             </div>
             
-            <div class="card-footer">
-                ${canEvaluate ? `
-                    <button class="btn btn-success" data-action="evaluate" data-status="approved" data-id="${suggestion._id}">
-                        <i class="fas fa-check"></i> قبول
+            ${isSuperAdmin ? `
+                <div class="card-footer">
+                    ${canEvaluate ? `
+                        <button class="btn btn-success" data-action="evaluate" data-status="approved" data-id="${suggestion._id}">
+                            <i class="fas fa-check"></i> قبول
+                        </button>
+                        <button class="btn btn-warning" data-action="evaluate" data-status="needs_revision" data-id="${suggestion._id}">
+                            <i class="fas fa-edit"></i> يحتاج تعديل
+                        </button>
+                        <button class="btn btn-danger" data-action="evaluate" data-status="rejected" data-id="${suggestion._id}">
+                            <i class="fas fa-times"></i> رفض
+                        </button>
+                    ` : `
+                        <button class="btn btn-secondary" data-action="evaluate" data-status="${suggestion.status}" data-id="${suggestion._id}">
+                            <i class="fas fa-eye"></i> عرض التفاصيل
+                        </button>
+                    `}
+                    
+                    ${(suggestion.status === 'approved' || suggestion.status === 'needs_revision') ? `
+                        <button class="btn btn-secondary" data-action="archive" data-id="${suggestion._id}">
+                            <i class="fas fa-archive"></i> أرشفة
+                        </button>
+                    ` : ''}
+
+                    <button class="btn btn-outline-danger" data-action="delete" data-id="${suggestion._id}">
+                        <i class="fas fa-trash"></i> حذف
                     </button>
-                    <button class="btn btn-warning" data-action="evaluate" data-status="needs_revision" data-id="${suggestion._id}">
-                        <i class="fas fa-edit"></i> يحتاج تعديل
-                    </button>
-                    <button class="btn btn-danger" data-action="evaluate" data-status="rejected" data-id="${suggestion._id}">
-                        <i class="fas fa-times"></i> رفض
-                    </button>
-                ` : `
-                    <button class="btn btn-secondary" data-action="evaluate" data-status="${suggestion.status}" data-id="${suggestion._id}">
-                        <i class="fas fa-eye"></i> عرض التفاصيل
-                    </button>
-                `}
-                <button class="btn btn-outline-danger" data-action="delete" data-id="${suggestion._id}">
-                    <i class="fas fa-trash"></i> حذف
-                </button>
-            </div>
+                </div>
+            ` : ''}
         </div>
     `;
 }
@@ -19569,13 +21098,21 @@ function createAdminSuggestionCard(suggestion) {
 // فتح نافذة التقييم
 // ==========================
 function openEvaluationModal(suggestionId, status) {
-    console.log('[AdminSuggest] openEvaluationModal id=', suggestionId, 'targetStatus=', status);
-    const suggestion = allSuggestions.find(s => s._id === suggestionId);
-    if (!suggestion) {
-        console.warn('[AdminSuggest] suggestion not found in allSuggestions for id', suggestionId);
+    
+    // فحص صلاحية السوبر أدمن
+    if (!isSuperAdmin) {
+        utils.showToast('هذه الصلاحية متاحة للمدير العام فقط', 'error');
         return;
     }
-    console.log('[AdminSuggest] found suggestion currentStatus=', suggestion.status);
+    
+    const suggestion = allSuggestions.find(s => s._id === suggestionId);
+    if (!suggestion) {
+        return;
+    }
+    currentEvaluatedSuggestion = {
+        ...suggestion,
+        evaluation: suggestion.evaluation ? { ...suggestion.evaluation } : null
+    };
     
     // تعبئة البيانات
     document.getElementById('evalSuggestionId').value = suggestionId;
@@ -19605,10 +21142,14 @@ function openEvaluationModal(suggestionId, status) {
 // ==========================
 function setupEvaluationModal() {
     const form = document.getElementById('evaluationForm');
-    console.log('[AdminSuggest] setupEvaluationModal binding submit listener');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        console.log('[AdminSuggest] evaluationForm submit triggered');
+        
+        // فحص صلاحية السوبر أدمن
+        if (!isSuperAdmin) {
+            utils.showToast('هذه الصلاحية متاحة للمدير العام فقط', 'error');
+            return;
+        }
         
         const suggestionId = document.getElementById('evalSuggestionId').value;
         const status = document.getElementById('evalStatus').value;
@@ -19625,19 +21166,33 @@ function setupEvaluationModal() {
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
         
+        const payload = { status, rating, feedback, admin_notes };
+        
         try {
             const response = await utils.authedFetch(`/api/question-suggestions/evaluate/${suggestionId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status, rating, feedback, admin_notes })
+                body: JSON.stringify(payload)
             });
-            console.log('[AdminSuggest] evaluate fetch status', response.status);
             const data = await response.json();
-            console.log('[AdminSuggest] evaluate response body', data);
             if (data.success) {
                 utils.showToast('تم تقييم الاقتراح بنجاح', 'success');
                 bootstrap.Modal.getInstance(document.getElementById('evaluationModal')).hide();
+                if (currentEvaluatedSuggestion && currentEvaluatedSuggestion._id === suggestionId) {
+                    currentEvaluatedSuggestion.status = status;
+                    currentEvaluatedSuggestion.evaluation = currentEvaluatedSuggestion.evaluation || {};
+                    currentEvaluatedSuggestion.evaluation.rating = rating || null;
+                    currentEvaluatedSuggestion.evaluation.feedback = feedback || '';
+                }
+                if (status === 'approved' && currentEvaluatedSuggestion && currentEvaluatedSuggestion._id === suggestionId) {
+                    try {
+                        showSuggestionTemplateModal(currentEvaluatedSuggestion);
+                    } catch (modalError) {
+                        console.error('Error opening template modal:', modalError);
+                    }
+                }
                 loadStats();
+                loadUnreadCount(); // Update unread count after evaluation
                 loadAllSuggestions(adminSuggestionsCurrentFilter);
             } else {
                 utils.showToast(data.message || 'حدث خطأ', 'error');
@@ -19653,34 +21208,393 @@ function setupEvaluationModal() {
 }
 
 // ==========================
+// حفظ الاقتراح كقالب مسابقة
+// ==========================
+function setupSuggestionTemplateModalHandlers() {
+    const modalEl = document.getElementById('suggestionTemplateModal');
+    if (!modalEl) {
+        return;
+    }
+
+    suggestionTemplateModalInstance = new bootstrap.Modal(modalEl);
+    modalEl.addEventListener('hidden.bs.modal', () => {
+        suggestionTemplateData = null;
+        resetSuggestionTemplateModal();
+    });
+
+    const saveBtn = document.getElementById('saveSuggestionTemplateBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveSuggestionAsTemplate);
+    }
+
+    const skipBtn = document.getElementById('skipSuggestionTemplateBtn');
+    if (skipBtn) {
+        skipBtn.addEventListener('click', () => {
+            suggestionTemplateData = null;
+        });
+    }
+
+    const questionInput = document.getElementById('templateSuggestionQuestionInput');
+    if (questionInput) {
+        questionInput.addEventListener('input', () => {
+            if (templateQuestionCheckTimeout) {
+                clearTimeout(templateQuestionCheckTimeout);
+            }
+            templateQuestionCheckTimeout = setTimeout(() => {
+                checkTemplateAvailability(questionInput.value.trim());
+            }, 500);
+        });
+    }
+}
+
+function showSuggestionTemplateModal(suggestion) {
+    if (!isSuperAdmin || !suggestionTemplateModalInstance || !suggestion) {
+        return;
+    }
+
+    suggestionTemplateData = { ...suggestion };
+    const questionInput = document.getElementById('templateSuggestionQuestionInput');
+    const answerInput = document.getElementById('templateSuggestionAnswerInput');
+    const classificationSelect = document.getElementById('templateClassificationSelect');
+    const typeSelect = document.getElementById('templateTypeSelect');
+    const usageLimitInput = document.getElementById('templateUsageLimitInput');
+    const contentInput = document.getElementById('templateContentInput');
+    const employeeEl = document.getElementById('templateSuggestionEmployee');
+    const categoryEl = document.getElementById('templateSuggestionCategory');
+
+    if (questionInput) {
+        questionInput.value = suggestion.question || '';
+    }
+    if (answerInput) {
+        answerInput.value = suggestion.correct_answer || '';
+    }
+    if (classificationSelect) {
+        classificationSelect.value = 'All';
+    }
+    if (typeSelect) {
+        typeSelect.value = suggestion.category === 'interactive' ? 'تفاعلية' : 'مميزات';
+    }
+    if (usageLimitInput) {
+        usageLimitInput.value = '';
+    }
+    if (contentInput) {
+        contentInput.value = generateTemplateContentFromSuggestion(
+            suggestion.question,
+            suggestion.correct_answer
+        );
+        contentInput.setAttribute('readonly', 'true');
+        contentInput.setAttribute('disabled', 'true');
+    }
+    if (employeeEl) {
+        employeeEl.textContent = suggestion.suggested_by_name || 'غير معروف';
+    }
+    if (categoryEl) {
+        categoryEl.textContent = getCategoryLabel(suggestion.category) || 'غير محدد';
+    }
+
+    const questionText = questionInput ? questionInput.value.trim() : '';
+    checkTemplateAvailability(questionText);
+    suggestionTemplateModalInstance.show();
+}
+
+function resetSuggestionTemplateModal() {
+    const form = document.getElementById('suggestionTemplateForm');
+    if (form) {
+        form.reset();
+    }
+    const alertEl = document.getElementById('templateSuggestionExistsAlert');
+    if (alertEl) {
+        alertEl.classList.add('d-none');
+        alertEl.textContent = '';
+    }
+    if (templateQuestionCheckTimeout) {
+        clearTimeout(templateQuestionCheckTimeout);
+        templateQuestionCheckTimeout = null;
+    }
+    const contentInput = document.getElementById('templateContentInput');
+    if (contentInput) {
+        contentInput.value = '';
+    }
+    const saveBtn = document.getElementById('saveSuggestionTemplateBtn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        delete saveBtn.dataset.saving;
+        saveBtn.removeAttribute('data-saving');
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ القالب';
+    }
+}
+
+function generateTemplateContentFromSuggestion() {
+    return `مسابقة جديدة من شركة إنزو للتداول 🏆
+
+✨ هل تملك عينًا خبيرة في قراءة الشارتات؟ اختبر نفسك واربح!
+
+💰 الجائزة: {{prize_details}}
+                 {{deposit_bonus_prize_details}}
+
+❓ سؤال المسابقة:
+{{question}}
+
+📝 كيفية المشاركة:
+ضع تعليقك على منشور المسابقة بالقناة باستخدام حسابك الشخصي على تليجرام.
+
+يجب أن يتضمن تعليقك:
+• إجابتك على السؤال.
+• اسمك الثلاثي المسجل بالوثائق.
+• رقم الحساب التداولي.
+
+يُمنع تعديل التعليق بعد نشره، وأي تعليق مُعدل سيتم استبعاده مباشرة.
+
+⏳ مدة المسابقة: {{competition_duration}}
+
+📚 يمكنك معرفة الإجابة وتعلّم المزيد عن النماذج الفنية وأساليب التحليل مع الكورس المجاني المقدم من الخبير العالمي أ. شريف خورشيد على موقع إنزو. 🆓
+
+✨ لا تفوت الفرصة!
+جاوب صح، اختبر معرفتك، وكن الفائز مع إنزو 🎁`;
+}
+
+async function checkTemplateAvailability(questionText) {
+    const alertEl = document.getElementById('templateSuggestionExistsAlert');
+    const saveBtn = document.getElementById('saveSuggestionTemplateBtn');
+
+    if (alertEl) {
+        alertEl.classList.add('d-none');
+        alertEl.textContent = '';
+    }
+
+    if (!questionText) {
+        if (saveBtn && !saveBtn.dataset.saving) {
+            saveBtn.disabled = true;
+        }
+        return;
+    }
+
+    if (saveBtn && !saveBtn.dataset.saving) {
+        saveBtn.disabled = false;
+        delete saveBtn.dataset.disabledReason;
+    }
+
+    try {
+        const response = await utils.authedFetch(`/api/templates/check-existence?question=${encodeURIComponent(questionText)}`);
+        if (!response.ok) {
+            return;
+        }
+        const data = await response.json();
+        if (data.exists) {
+            if (alertEl) {
+                alertEl.textContent = data.archived
+                    ? 'هذا السؤال موجود داخل قالب مؤرشف. يمكنك استعادته من شاشة القوالب.'
+                    : 'يوجد قالب نشط بنفس هذا السؤال بالفعل.';
+                alertEl.classList.remove('d-none');
+            }
+            if (saveBtn && !data.archived) {
+                saveBtn.disabled = true;
+                saveBtn.dataset.disabledReason = 'exists';
+            } else if (saveBtn && data.archived) {
+                saveBtn.disabled = false;
+                delete saveBtn.dataset.disabledReason;
+            }
+        } else if (saveBtn && !saveBtn.dataset.saving) {
+            saveBtn.disabled = false;
+            delete saveBtn.dataset.disabledReason;
+        }
+    } catch (error) {
+        console.error('Error checking template availability:', error);
+    }
+}
+
+async function saveSuggestionAsTemplate() {
+    if (!suggestionTemplateData) {
+        utils.showToast('لا توجد بيانات اقتراح لحفظها كقالب.', 'error');
+        return;
+    }
+
+    const questionInput = document.getElementById('templateSuggestionQuestionInput');
+    const answerInput = document.getElementById('templateSuggestionAnswerInput');
+    const classificationSelect = document.getElementById('templateClassificationSelect');
+    const typeSelect = document.getElementById('templateTypeSelect');
+    const usageLimitInput = document.getElementById('templateUsageLimitInput');
+    const contentInput = document.getElementById('templateContentInput');
+    const saveBtn = document.getElementById('saveSuggestionTemplateBtn');
+
+    const question = questionInput?.value.trim();
+    const answer = answerInput?.value.trim();
+    const classification = classificationSelect?.value || 'All';
+    const type = typeSelect?.value || 'مميزات';
+    const content = contentInput?.value.trim();
+    const usageLimitValue = usageLimitInput?.value.trim();
+
+    if (!question || !answer || !content) {
+        utils.showToast('يرجى تعبئة السؤال والإجابة والمحتوى قبل الحفظ.', 'warning');
+        return;
+    }
+
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.dataset.saving = 'true';
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+    }
+
+    let usageLimit = null;
+    if (usageLimitValue) {
+        const parsed = parseInt(usageLimitValue, 10);
+        if (Number.isNaN(parsed) || parsed <= 0) {
+            utils.showToast('عدد مرات الاستخدام يجب أن يكون رقماً أكبر من صفر.', 'warning');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                delete saveBtn.dataset.saving;
+                saveBtn.removeAttribute('data-saving');
+                saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ القالب';
+            }
+            return;
+        }
+        usageLimit = parsed;
+    }
+
+    const payload = {
+        question,
+        content,
+        correct_answer: answer,
+        classification,
+        type,
+        competition_type: type === 'تفاعلية' ? 'special' : 'standard',
+        status: 'active',
+        description: `تم إنشاء هذا القالب من اقتراح السؤال للموظف ${suggestionTemplateData.suggested_by_name || ''}`.trim()
+    };
+
+    if (usageLimit !== null) {
+        payload.usage_limit = usageLimit;
+    }
+
+    try {
+        const response = await utils.authedFetch('/api/templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+
+        if (!response.ok || result.success === false) {
+            utils.showToast(result.message || 'فشل إنشاء القالب. يرجى المحاولة مرة أخرى.', 'error');
+            return;
+        }
+
+        utils.showToast('تم إنشاء القالب وإضافته بنجاح 🎉', 'success');
+        suggestionTemplateModalInstance.hide();
+    } catch (error) {
+        console.error('Error saving template from suggestion:', error);
+        utils.showToast('حدث خطأ أثناء حفظ القالب.', 'error');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            delete saveBtn.dataset.saving;
+            saveBtn.removeAttribute('data-saving');
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> حفظ القالب';
+        }
+    }
+}
+
+// ==========================
 // حذف اقتراح
 // ==========================
+let pendingDeleteId = null; // Store the ID to delete
+
 async function deleteSuggestion(suggestionId) {
-    console.log('[AdminSuggest] deleteSuggestion clicked id=', suggestionId);
-    if (!confirm('هل أنت متأكد من حذف هذا الاقتراح؟')) {
+    
+    // فحص صلاحية السوبر أدمن
+    if (!isSuperAdmin) {
+        utils.showToast('هذه الصلاحية متاحة للمدير العام فقط', 'error');
         return;
     }
     
-    try {
-        const response = await utils.authedFetch(`/api/question-suggestions/${suggestionId}`, {
-            method: 'DELETE'
-        });
-        console.log('[AdminSuggest] delete fetch status', response.status);
-        const data = await response.json();
-        console.log('[AdminSuggest] delete response body', data);
-        
-        if (data.success) {
-            utils.showToast('تم حذف الاقتراح بنجاح', 'success');
-            loadStats();
-            loadAllSuggestions(adminSuggestionsCurrentFilter);
-        } else {
-            utils.showToast(data.message || 'حدث خطأ', 'error');
-        }
-    } catch (error) {
-        console.error('Error deleting suggestion:', error);
-        utils.showToast('حدث خطأ في حذف الاقتراح', 'error');
-    }
+    // Store ID and show modal
+    pendingDeleteId = suggestionId;
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    deleteModal.show();
 }
+
+// Handle confirm delete button
+document.addEventListener('DOMContentLoaded', () => {
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', async () => {
+            if (!pendingDeleteId) return;
+            
+            const deleteModal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
+            deleteModal.hide();
+            
+            try {
+                const response = await utils.authedFetch(`/api/question-suggestions/${pendingDeleteId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    utils.showToast('تم حذف الاقتراح بنجاح', 'success');
+                    loadStats();
+                    loadUnreadCount(); // Update unread count after deletion
+                    loadAllSuggestions(adminSuggestionsCurrentFilter);
+                } else {
+                    utils.showToast(data.message || 'حدث خطأ', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting suggestion:', error);
+                utils.showToast('حدث خطأ في حذف الاقتراح', 'error');
+            } finally {
+                pendingDeleteId = null;
+            }
+        });
+    }
+});
+
+// ==========================
+// أرشفة اقتراح
+// ==========================
+let suggestionToArchiveId = null;
+
+function archiveSuggestion(suggestionId) {
+    suggestionToArchiveId = suggestionId;
+    const modal = new bootstrap.Modal(document.getElementById('archiveModal'));
+    modal.show();
+}
+
+// Setup Archive Confirmation
+document.addEventListener('DOMContentLoaded', () => {
+    const confirmBtn = document.getElementById('confirmArchiveBtn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', async () => {
+            if (!suggestionToArchiveId) return;
+            
+            const btn = document.getElementById('confirmArchiveBtn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري...';
+
+            try {
+                const response = await utils.authedFetch(`/api/question-suggestions/${suggestionToArchiveId}/archive`, {
+                    method: 'PUT'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    utils.showToast('تم أرشفة الاقتراح بنجاح', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('archiveModal')).hide();
+                    loadStats();
+                    loadAllSuggestions(adminSuggestionsCurrentFilter);
+                } else {
+                    utils.showToast(data.message || 'حدث خطأ', 'error');
+                }
+            } catch (error) {
+                console.error('Error archiving suggestion:', error);
+                utils.showToast('حدث خطأ في أرشفة الاقتراح', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                suggestionToArchiveId = null;
+            }
+        });
+    }
+});
 
 // ==========================
 // الفلاتر
@@ -19693,10 +21607,200 @@ function setupFilters() {
             this.classList.add('active');
             
             adminSuggestionsCurrentFilter = this.dataset.status;
-            console.log('[AdminSuggest] filter changed to', adminSuggestionsCurrentFilter);
             loadAllSuggestions(adminSuggestionsCurrentFilter);
         });
     });
+    
+    // Advanced filters setup
+    const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+    const resetFiltersBtn = document.getElementById('resetFiltersBtn');
+    const employeeFilter = document.getElementById('employeeFilter');
+    const dateFromFilter = document.getElementById('dateFromFilter');
+    const dateToFilter = document.getElementById('dateToFilter');
+    const categoryFilter = document.getElementById('categoryFilter');
+    
+    // Apply filters button
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener('click', () => {
+            applyAdvancedFilters();
+        });
+    }
+    
+    // Reset filters button
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', () => {
+            if (employeeFilter) employeeFilter.value = '';
+            if (dateFromFilter) dateFromFilter.value = '';
+            if (dateToFilter) dateToFilter.value = '';
+            if (categoryFilter) categoryFilter.value = '';
+            loadAllSuggestions(adminSuggestionsCurrentFilter);
+            // Reload original stats
+            loadStats();
+        });
+    }
+    
+    // Copy approved questions button
+    const copyApprovedQuestionsBtn = document.getElementById('copyApprovedQuestionsBtn');
+    if (copyApprovedQuestionsBtn) {
+        copyApprovedQuestionsBtn.addEventListener('click', () => {
+            copyApprovedQuestions();
+        });
+    }
+    
+    // Export to Excel button
+    const exportToExcelBtn = document.getElementById('exportToExcelBtn');
+    if (exportToExcelBtn) {
+        exportToExcelBtn.addEventListener('click', () => {
+            exportToExcel();
+        });
+    }
+}
+
+// Load employee list from suggestions
+async function loadEmployeeList() {
+    try {
+        const employeeFilter = document.getElementById('employeeFilter');
+        if (!employeeFilter) return;
+
+        // Clear existing options except the first one (all employees)
+        while (employeeFilter.options.length > 1) {
+            employeeFilter.remove(1);
+        }
+
+        // Load ALL employees regardless of current filter status
+        const response = await utils.authedFetch('/api/question-suggestions/all?limit=1000');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                // Get unique employee names from ALL suggestions
+                const uniqueEmployees = [...new Set(data.data.map(s => s.suggested_by_name))]
+                    .filter(name => name)
+                    .sort();
+
+                // Add options to select
+                uniqueEmployees.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    employeeFilter.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error loading employee list:', error);
+    }
+}
+
+// Apply advanced filters
+async function applyAdvancedFilters() {
+    const employeeName = document.getElementById('employeeFilter')?.value.trim();
+    const dateFrom = document.getElementById('dateFromFilter')?.value;
+    const dateTo = document.getElementById('dateToFilter')?.value;
+    const category = document.getElementById('categoryFilter')?.value;
+
+    try {
+        // Load ALL suggestions regardless of current status filter
+        const response = await utils.authedFetch('/api/question-suggestions/all?limit=1000');
+        if (!response.ok) {
+            console.error('Failed to load all suggestions for filtering');
+            return;
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+            console.error('Failed to get suggestions data');
+            return;
+        }
+
+        // Update global allSuggestions so modal lookups work
+        allSuggestions = data.data;
+        let filtered = [...allSuggestions];
+
+        // Filter by employee name
+        if (employeeName) {
+            filtered = filtered.filter(s =>
+                s.suggested_by_name === employeeName
+            );
+        }
+
+        // Filter by date range
+        if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            fromDate.setHours(0, 0, 0, 0);
+            filtered = filtered.filter(s => {
+                const suggestionDate = new Date(s.createdAt);
+                suggestionDate.setHours(0, 0, 0, 0);
+                return suggestionDate >= fromDate;
+            });
+        }
+
+        if (dateTo) {
+            const toDate = new Date(dateTo);
+            toDate.setHours(23, 59, 59, 999);
+            filtered = filtered.filter(s => {
+                const suggestionDate = new Date(s.createdAt);
+                return suggestionDate <= toDate;
+            });
+        }
+
+        // Filter by category
+        if (category) {
+            filtered = filtered.filter(s => s.category === category);
+        }
+
+        // Update statistics cards based on filtered results
+        updateStatsCards(filtered);
+
+        displayAllSuggestions(filtered);
+    } catch (error) {
+        console.error('Error applying advanced filters:', error);
+        utils.showToast('حدث خطأ في تطبيق الفلاتر', 'error');
+    }
+}
+
+// Update statistics cards
+function updateStatsCards(suggestions) {
+    const totalCount = suggestions.length;
+    const pendingCount = suggestions.filter(s => s.status === 'pending').length;
+    const approvedCount = suggestions.filter(s => s.status === 'approved').length;
+    const rejectedCount = suggestions.filter(s => s.status === 'rejected').length;
+    const revisionCount = suggestions.filter(s => s.status === 'needs_revision').length;
+
+    // Update the UI
+    const totalEl = document.getElementById('totalCount');
+    const pendingEl = document.getElementById('pendingCount');
+    const approvedEl = document.getElementById('approvedCount');
+    const rejectedEl = document.getElementById('rejectedCount');
+    const revisionEl = document.getElementById('revisionCount');
+
+    if (totalEl) totalEl.textContent = totalCount;
+    if (pendingEl) pendingEl.textContent = pendingCount;
+    if (approvedEl) approvedEl.textContent = approvedCount;
+    if (rejectedEl) rejectedEl.textContent = rejectedCount;
+    if (revisionEl) revisionEl.textContent = revisionCount;
+
+    // Update pending header badge
+    const pendingHeaderBadge = document.getElementById('pendingHeaderCountBadge');
+    const pendingHeaderCount = document.getElementById('pendingHeaderCount');
+    if (pendingHeaderBadge && pendingHeaderCount) {
+        if (pendingCount > 0) {
+            pendingHeaderBadge.style.display = 'inline-flex';
+            pendingHeaderCount.textContent = pendingCount;
+        } else {
+            pendingHeaderBadge.style.display = 'none';
+        }
+    }
+}// Debounce helper function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 // ==========================
@@ -19712,16 +21816,22 @@ function setupCardDelegation() {
         if (!action) return;
         const id = btn.dataset.id;
         if (!id) return;
+        
+        // Block actions for non-super admin users
+        if (!isSuperAdmin) {
+            utils.showToast('هذه الصلاحية متاحة للمدير العام فقط', 'error');
+            return;
+        }
+        
         if (action === 'evaluate') {
             const targetStatus = btn.dataset.status || 'pending';
-            console.log('[AdminSuggest][Delegation] evaluate click id=', id, 'status=', targetStatus);
             openEvaluationModal(id, targetStatus);
         } else if (action === 'delete') {
-            console.log('[AdminSuggest][Delegation] delete click id=', id);
             deleteSuggestion(id);
+        } else if (action === 'archive') {
+            archiveSuggestion(id);
         }
     });
-    console.log('[AdminSuggest] Card delegation attached');
 }
 
 // ==========================
@@ -19739,11 +21849,12 @@ function getStatusBadge(status) {
 
 function getCategoryLabel(category) {
     const labels = {
-        general: 'عام',
-        technical: 'تقني',
-        trading: 'تداول',
-        market: 'سوق',
-        other: 'أخرى'
+        trading: 'تداولية',
+        interactive: 'تفاعلية',
+        company_features: 'مميزات الشركة',
+        educational: 'تعليمية',
+        highlight_site: 'تبرز الموقع',
+        other: 'اخري'
     };
     return labels[category] || category;
 }
@@ -19772,14 +21883,665 @@ function getRatingStars(rating) {
 // ==========================
 // التهيئة عند تحميل الصفحة
 // ==========================
-document.addEventListener('DOMContentLoaded', initAdminQuestionSuggestions);
+document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('adminSuggestionsContainer');
+    
+    initAdminQuestionSuggestions();
+});
+
+// ==========================
+// نسخ الأسئلة المقبولة
+// ==========================
+async function copyApprovedQuestions() {
+    try {
+        const employeeName = document.getElementById('employeeFilter')?.value.trim();
+        const dateFrom = document.getElementById('dateFromFilter')?.value;
+        const dateTo = document.getElementById('dateToFilter')?.value;
+        const category = document.getElementById('categoryFilter')?.value;
+
+        // Load all suggestions
+        const response = await utils.authedFetch('/api/question-suggestions/all?limit=1000');
+        if (!response.ok) {
+            showToast('فشل تحميل الاقتراحات', 'error');
+            return;
+        }
+
+        const data = await response.json();
+        if (!data.success || !data.data) {
+            showToast('لا توجد بيانات متاحة', 'error');
+            return;
+        }
+
+        // Filter approved suggestions only
+        let filteredSuggestions = data.data.filter(s => s.status === 'approved');
+
+        // Apply employee filter
+        if (employeeName) {
+            filteredSuggestions = filteredSuggestions.filter(s => 
+                s.suggested_by_name && s.suggested_by_name.trim() === employeeName
+            );
+        }
+
+        // Apply date filters
+        if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            fromDate.setHours(0, 0, 0, 0);
+            filteredSuggestions = filteredSuggestions.filter(s => {
+                const suggestionDate = new Date(s.createdAt);
+                suggestionDate.setHours(0, 0, 0, 0);
+                return suggestionDate >= fromDate;
+            });
+        }
+
+        if (dateTo) {
+            const toDate = new Date(dateTo);
+            toDate.setHours(23, 59, 59, 999);
+            filteredSuggestions = filteredSuggestions.filter(s => {
+                const suggestionDate = new Date(s.createdAt);
+                return suggestionDate <= toDate;
+            });
+        }
+
+        // Apply category filter
+        if (category) {
+            filteredSuggestions = filteredSuggestions.filter(s => s.category === category);
+        }
+
+        // Check if there are any approved questions
+        if (filteredSuggestions.length === 0) {
+            showToast('لا توجد أسئلة مقبولة حسب الفلتر المحدد', 'warning');
+            return;
+        }
+
+        // Format questions for copying
+        let copiedText = '📋 الأسئلة المقبولة\n';
+        copiedText += '═══════════════════════════════\n\n';
+
+        filteredSuggestions.forEach((suggestion, index) => {
+            copiedText += `${index + 1}. ${suggestion.question}\n\n`;
+        });
+
+        copiedText += `═══════════════════════════════\n`;
+        copiedText += `إجمالي الأسئلة: ${filteredSuggestions.length}\n`;
+
+        // Copy to clipboard
+        await navigator.clipboard.writeText(copiedText);
+        
+        showToast(`تم نسخ ${filteredSuggestions.length} سؤال مقبول بنجاح! ✅`, 'success');
+
+    } catch (error) {
+        console.error('Error copying approved questions:', error);
+        showToast('حدث خطأ أثناء نسخ الأسئلة', 'error');
+    }
+}
+
+// ==========================
+// تصدير إلى Excel
+// ==========================
+async function exportToExcel() {
+    try {
+        const employeeName = document.getElementById('employeeFilter')?.value.trim();
+        const dateFrom = document.getElementById('dateFromFilter')?.value;
+        const dateTo = document.getElementById('dateToFilter')?.value;
+        const category = document.getElementById('categoryFilter')?.value;
+
+        // Load all suggestions
+        const response = await utils.authedFetch('/api/question-suggestions/all?limit=1000');
+        if (!response.ok) {
+            showToast('فشل تحميل الاقتراحات', 'error');
+            return;
+        }
+
+        const data = await response.json();
+        if (!data.success || !data.data) {
+            showToast('لا توجد بيانات متاحة', 'error');
+            return;
+        }
+
+        let filteredSuggestions = [...data.data];
+
+        // Apply employee filter
+        if (employeeName) {
+            filteredSuggestions = filteredSuggestions.filter(s => 
+                s.suggested_by_name && s.suggested_by_name.trim() === employeeName
+            );
+        }
+
+        // Apply date filters
+        if (dateFrom) {
+            const fromDate = new Date(dateFrom);
+            fromDate.setHours(0, 0, 0, 0);
+            filteredSuggestions = filteredSuggestions.filter(s => {
+                const suggestionDate = new Date(s.createdAt);
+                suggestionDate.setHours(0, 0, 0, 0);
+                return suggestionDate >= fromDate;
+            });
+        }
+
+        if (dateTo) {
+            const toDate = new Date(dateTo);
+            toDate.setHours(23, 59, 59, 999);
+            filteredSuggestions = filteredSuggestions.filter(s => {
+                const suggestionDate = new Date(s.createdAt);
+                return suggestionDate <= toDate;
+            });
+        }
+
+        // Apply category filter
+        if (category) {
+            filteredSuggestions = filteredSuggestions.filter(s => s.category === category);
+        }
+
+        // Check if there are any suggestions
+        if (filteredSuggestions.length === 0) {
+            showToast('لا توجد اقتراحات للتصدير حسب الفلتر المحدد', 'warning');
+            return;
+        }
+
+        // Format maps
+        const statusMap = {
+            'pending': 'قيد المراجعة',
+            'approved': 'مقبولة',
+            'rejected': 'مرفوضة',
+            'needs_revision': 'تحتاج تعديل'
+        };
+
+        const categoryMap = {
+            'trading': 'تداولية',
+            'interactive': 'تفاعلية',
+            'company_features': 'مميزات الشركة',
+            'educational': 'تعليمية',
+            'highlight_site': 'تبرز الموقع',
+            'other': 'اخري'
+        };
+
+        const difficultyMap = {
+            'easy': 'سهل',
+            'medium': 'متوسط',
+            'hard': 'صعب'
+        };
+
+        const formatDate = (dateStr) => {
+            if (!dateStr) return '-';
+            try {
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return '-';
+                const day = date.getDate().toString().padStart(2, '0');
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const year = date.getFullYear();
+                let hours = date.getHours();
+                const minutes = date.getMinutes().toString().padStart(2, '0');
+                const ampm = hours >= 12 ? 'م' : 'ص';
+                hours = hours % 12;
+                hours = hours ? hours : 12; // 0 => 12
+                hours = hours.toString().padStart(2, '0');
+                return `${day}/${month}/${year} - ${hours}:${minutes} ${ampm}`;
+            } catch (error) {
+                console.error('Error formatting date:', error);
+                return '-';
+            }
+        };
+
+        // Prepare header
+        const headers = [
+            '#', 
+            'السؤال', 
+            'الإجابة الصحيحة', 
+            'التصنيف', 
+            'المستوى', 
+            'الحالة', 
+            'اسم الموظف', 
+            'تاريخ الإقتراح', 
+            'التقييم', 
+            'الملاحظات', 
+            'مراجع بواسطة', 
+            'تاريخ المراجعة', 
+            'ملاحظات الإدارة'
+        ];
+
+        // Prepare data rows
+        const dataRows = filteredSuggestions.map((suggestion, index) => [
+            index + 1,
+            suggestion.question || '-',
+            suggestion.correct_answer || '-',
+            categoryMap[suggestion.category] || suggestion.category || '-',
+            difficultyMap[suggestion.difficulty] || suggestion.difficulty || '-',
+            statusMap[suggestion.status] || suggestion.status || '-',
+            suggestion.suggested_by_name || '-',
+            formatDate(suggestion.createdAt),
+            suggestion.evaluation?.rating ? `${suggestion.evaluation.rating} / 5` : '-',
+            suggestion.evaluation?.feedback || '-',
+            suggestion.evaluation?.reviewed_by_name || '-',
+            formatDate(suggestion.evaluation?.reviewed_at),
+            suggestion.evaluation?.admin_notes || '-'
+        ]);
+
+        // Combine headers and data
+        const allData = [headers, ...dataRows];
+
+        // Create workbook and worksheet with graceful fallbacks for older XLSX builds
+        let ws;
+        const xlsxUtils = (XLSX && XLSX.utils) ? XLSX.utils : {};
+        const wb = (xlsxUtils && typeof xlsxUtils.book_new === 'function')
+            ? xlsxUtils.book_new()
+            : { SheetNames: [], Sheets: {} }; // fallback shape used by xlsx-style
+
+        // Helper to build sheet from AOA
+        const buildSheetFromAOA = (aoa) => {
+            if (xlsxUtils.aoa_to_sheet) return xlsxUtils.aoa_to_sheet(aoa);
+            let sheet = {};
+            if (xlsxUtils.sheet_add_aoa) {
+                xlsxUtils.sheet_add_aoa(sheet, aoa);
+            } else if (xlsxUtils.encode_cell && xlsxUtils.encode_range) {
+                // Manual cell assignment
+                aoa.forEach((row, rIdx) => {
+                    row.forEach((val, cIdx) => {
+                        const cellRef = xlsxUtils.encode_cell({ r: rIdx, c: cIdx });
+                        sheet[cellRef] = { v: val };
+                    });
+                });
+                const range = {
+                    s: { r: 0, c: 0 },
+                    e: { r: aoa.length - 1, c: headers.length - 1 }
+                };
+                sheet['!ref'] = xlsxUtils.encode_range(range);
+            }
+            return sheet;
+        };
+
+        // Build worksheet with layered fallbacks
+        try {
+            if (xlsxUtils && typeof xlsxUtils.aoa_to_sheet === 'function') {
+                ws = xlsxUtils.aoa_to_sheet(allData);
+            } else if (xlsxUtils && typeof xlsxUtils.json_to_sheet === 'function') {
+                const jsonArray = dataRows.map(row => {
+                    const obj = {};
+                    headers.forEach((h, i) => obj[h] = row[i]);
+                    return obj;
+                });
+                ws = xlsxUtils.json_to_sheet(jsonArray, { header: headers });
+            } else {
+                ws = buildSheetFromAOA(allData);
+            }
+        } catch (err) {
+            // As a last resort convert via cell-by-cell - create empty sheet to continue gracefully
+            ws = buildSheetFromAOA([headers]);
+        }
+
+        // Ensure worksheet exists before proceeding
+        if (!ws || !ws['!ref']) {
+            // If we have no ref yet, initialize with headers to build a valid sheet
+            ws = buildSheetFromAOA([headers]);
+        }
+
+        // Set column widths
+        ws['!cols'] = [
+            { wch: 5 },      // #
+            { wch: 60 },     // السؤال
+            { wch: 30 },     // الإجابة
+            { wch: 15 },     // التصنيف
+            { wch: 12 },     // المستوى
+            { wch: 15 },     // الحالة
+            { wch: 25 },     // اسم الموظف
+            { wch: 20 },     // تاريخ الإقتراح
+            { wch: 10 },     // التقييم
+            { wch: 40 },     // الملاحظات
+            { wch: 25 },     // مراجع بواسطة
+            { wch: 20 },     // تاريخ المراجعة
+            { wch: 40 }      // ملاحظات الإدارة
+        ];
+
+        // Header style - Dark blue background with white text
+        const headerStyle = {
+            font: { bold: true, color: { rgb: 'FFFFFFFF' }, sz: 12 },
+            fill: { fgColor: { rgb: 'FF2C3E50' }, patternType: 'solid' },
+            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+            border: {
+                top: { style: 'thin', color: { rgb: 'FF000000' } },
+                bottom: { style: 'thin', color: { rgb: 'FF000000' } },
+                left: { style: 'thin', color: { rgb: 'FF000000' } },
+                right: { style: 'thin', color: { rgb: 'FF000000' } }
+            }
+        };
+
+        // Alternate row styles
+        const whiteRowStyle = {
+            fill: { fgColor: { rgb: 'FFFFFFFF' }, patternType: 'solid' },
+            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+            border: {
+                top: { style: 'thin', color: { rgb: 'FFD0D0D0' } },
+                bottom: { style: 'thin', color: { rgb: 'FFD0D0D0' } },
+                left: { style: 'thin', color: { rgb: 'FFD0D0D0' } },
+                right: { style: 'thin', color: { rgb: 'FFD0D0D0' } }
+            }
+        };
+
+        const grayRowStyle = {
+            fill: { fgColor: { rgb: 'FFF0F0F0' }, patternType: 'solid' },
+            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+            border: {
+                top: { style: 'thin', color: { rgb: 'FFD0D0D0' } },
+                bottom: { style: 'thin', color: { rgb: 'FFD0D0D0' } },
+                left: { style: 'thin', color: { rgb: 'FFD0D0D0' } },
+                right: { style: 'thin', color: { rgb: 'FFD0D0D0' } }
+            }
+        };
+
+        const encodeCell = xlsxUtils.encode_cell || ((ref) => {
+            // Minimal fallback for encode_cell
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            const colPart = letters[ref.c] || ('C' + ref.c); // crude fallback
+            return `${colPart}${ref.r + 1}`;
+        });
+
+        // Status-specific styles with colors
+        const statusStyles = {
+            'مقبولة': {
+                fill: { fgColor: { rgb: 'FFC6EFCE' }, patternType: 'solid' }, // Light green
+                font: { bold: true, color: { rgb: 'FF006100' } }, // Dark green
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: {
+                    top: { style: 'thin', color: { rgb: 'FF00B050' } },
+                    bottom: { style: 'thin', color: { rgb: 'FF00B050' } },
+                    left: { style: 'thin', color: { rgb: 'FF00B050' } },
+                    right: { style: 'thin', color: { rgb: 'FF00B050' } }
+                }
+            },
+            'مرفوضة': {
+                fill: { fgColor: { rgb: 'FFFFC7CE' }, patternType: 'solid' }, // Light red
+                font: { bold: true, color: { rgb: 'FF9C0006' } }, // Dark red
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: {
+                    top: { style: 'thin', color: { rgb: 'FFFF0000' } },
+                    bottom: { style: 'thin', color: { rgb: 'FFFF0000' } },
+                    left: { style: 'thin', color: { rgb: 'FFFF0000' } },
+                    right: { style: 'thin', color: { rgb: 'FFFF0000' } }
+                }
+            },
+            'قيد المراجعة': {
+                fill: { fgColor: { rgb: 'FFFFEB9C' }, patternType: 'solid' }, // Light yellow
+                font: { bold: true, color: { rgb: 'FF9C6500' } }, // Dark orange
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: {
+                    top: { style: 'thin', color: { rgb: 'FFFFC000' } },
+                    bottom: { style: 'thin', color: { rgb: 'FFFFC000' } },
+                    left: { style: 'thin', color: { rgb: 'FFFFC000' } },
+                    right: { style: 'thin', color: { rgb: 'FFFFC000' } }
+                }
+            },
+            'تحتاج تعديل': {
+                fill: { fgColor: { rgb: 'FFE4DFEC' }, patternType: 'solid' }, // Light purple
+                font: { bold: true, color: { rgb: 'FF5B2C6F' } }, // Dark purple
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: {
+                    top: { style: 'thin', color: { rgb: 'FF9B59B6' } },
+                    bottom: { style: 'thin', color: { rgb: 'FF9B59B6' } },
+                    left: { style: 'thin', color: { rgb: 'FF9B59B6' } },
+                    right: { style: 'thin', color: { rgb: 'FF9B59B6' } }
+                }
+            }
+        };
+
+        // Difficulty-specific styles with colors
+        const difficultyStyles = {
+            'سهل': {
+                fill: { fgColor: { rgb: 'FFD4EDDA' }, patternType: 'solid' }, // Light green
+                font: { bold: true, color: { rgb: 'FF155724' } }, // Dark green
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: {
+                    top: { style: 'thin', color: { rgb: 'FF28A745' } },
+                    bottom: { style: 'thin', color: { rgb: 'FF28A745' } },
+                    left: { style: 'thin', color: { rgb: 'FF28A745' } },
+                    right: { style: 'thin', color: { rgb: 'FF28A745' } }
+                }
+            },
+            'متوسط': {
+                fill: { fgColor: { rgb: 'FFFFF3CD' }, patternType: 'solid' }, // Light yellow
+                font: { bold: true, color: { rgb: 'FF856404' } }, // Dark yellow
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: {
+                    top: { style: 'thin', color: { rgb: 'FFFFC107' } },
+                    bottom: { style: 'thin', color: { rgb: 'FFFFC107' } },
+                    left: { style: 'thin', color: { rgb: 'FFFFC107' } },
+                    right: { style: 'thin', color: { rgb: 'FFFFC107' } }
+                }
+            },
+            'صعب': {
+                fill: { fgColor: { rgb: 'FFF8D7DA' }, patternType: 'solid' }, // Light red
+                font: { bold: true, color: { rgb: 'FF721C24' } }, // Dark red
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: {
+                    top: { style: 'thin', color: { rgb: 'FFDC3545' } },
+                    bottom: { style: 'thin', color: { rgb: 'FFDC3545' } },
+                    left: { style: 'thin', color: { rgb: 'FFDC3545' } },
+                    right: { style: 'thin', color: { rgb: 'FFDC3545' } }
+                }
+            }
+        };
+
+        // Status column index (column F = 5)
+        const statusColIndex = 5;
+        // Difficulty column index (column E = 4)
+        const difficultyColIndex = 4;
+
+        // Apply styles to all cells
+        for (let row = 0; row <= dataRows.length; row++) {
+            for (let col = 0; col < headers.length; col++) {
+                const cellRef = encodeCell({ r: row, c: col });
+                
+                // Ensure cell exists with proper structure
+                if (!ws[cellRef]) {
+                    ws[cellRef] = { t: 's', v: '' };
+                }
+                
+                // Make sure cell has required properties
+                if (!ws[cellRef].t) ws[cellRef].t = 's';
+                if (ws[cellRef].v === undefined) ws[cellRef].v = '';
+
+                if (row === 0) {
+                    // Header row
+                    ws[cellRef].s = headerStyle;
+                } else {
+                    // Check if this is the status column
+                    if (col === statusColIndex) {
+                        const statusValue = ws[cellRef].v;
+                        if (statusStyles[statusValue]) {
+                            ws[cellRef].s = statusStyles[statusValue];
+                        } else {
+                            // Default style for unknown status
+                            ws[cellRef].s = row % 2 === 0 ? whiteRowStyle : grayRowStyle;
+                        }
+                    } else if (col === difficultyColIndex) {
+                        // Check if this is the difficulty column
+                        const difficultyValue = ws[cellRef].v;
+                        if (difficultyStyles[difficultyValue]) {
+                            ws[cellRef].s = difficultyStyles[difficultyValue];
+                        } else {
+                            // Default style for unknown difficulty
+                            ws[cellRef].s = row % 2 === 0 ? whiteRowStyle : grayRowStyle;
+                        }
+                    } else {
+                        // Alternate row colors for non-status/difficulty columns
+                        ws[cellRef].s = row % 2 === 0 ? whiteRowStyle : grayRowStyle;
+                    }
+                }
+            }
+        }
+
+        // Set row height for header
+        ws['!rows'] = [{ hpx: 30 }];
+
+        // Add worksheet to workbook
+        if (xlsxUtils.book_append_sheet) {
+            xlsxUtils.book_append_sheet(wb, ws, 'اقتراحات الأسئلة');
+        } else {
+            wb.SheetNames.push('اقتراحات الأسئلة');
+            wb.Sheets['اقتراحات الأسئلة'] = ws;
+        }
+
+        // Generate filename and save (browser-compatible approach)
+        const fileName = `اقتراحات_الأسئلة_${new Date().toISOString().split('T')[0]}.xlsx`;
+        
+        console.log('[Excel Export] Starting export process...');
+        console.log('[Excel Export] Workbook structure:', { 
+            sheetNames: wb.SheetNames, 
+            hasSheets: !!wb.Sheets,
+            sheetCount: Object.keys(wb.Sheets || {}).length
+        });
+        console.log('[Excel Export] Worksheet structure:', {
+            hasRef: !!ws['!ref'],
+            ref: ws['!ref'],
+            hasCols: !!ws['!cols'],
+            hasRows: !!ws['!rows']
+        });
+        console.log('[Excel Export] XLSX library capabilities:', {
+            hasWrite: !!(XLSX && XLSX.write),
+            writeType: typeof XLSX.write,
+            hasWriteFile: !!(XLSX && XLSX.writeFile),
+            writeFileType: typeof XLSX.writeFile
+        });
+        
+        // Write workbook to binary string and trigger download
+        if (XLSX.writeFile && typeof XLSX.writeFile === 'function') {
+            console.log('[Excel Export] Trying XLSX.writeFile...');
+            try {
+                XLSX.writeFile(wb, fileName);
+                console.log('[Excel Export] ✅ writeFile succeeded');
+            } catch (writeErr) {
+                console.warn('[Excel Export] ⚠️ writeFile failed:', writeErr.message);
+                console.log('[Excel Export] Trying fallback with XLSX.write...');
+                
+                // Try different output types
+                const types = ['binary', 'base64', 'buffer'];
+                let success = false;
+                
+                for (const outputType of types) {
+                    try {
+                        console.log(`[Excel Export] Attempting type: ${outputType}`);
+                        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: outputType });
+                        console.log(`[Excel Export] Write succeeded with type ${outputType}, output length:`, wbout.length || wbout.byteLength);
+                        
+                        let blob;
+                        if (outputType === 'binary') {
+                            const buf = new ArrayBuffer(wbout.length);
+                            const view = new Uint8Array(buf);
+                            for (let i = 0; i < wbout.length; i++) {
+                                view[i] = wbout.charCodeAt(i) & 0xFF;
+                            }
+                            blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                        } else if (outputType === 'base64') {
+                            const binStr = atob(wbout);
+                            const buf = new ArrayBuffer(binStr.length);
+                            const view = new Uint8Array(buf);
+                            for (let i = 0; i < binStr.length; i++) {
+                                view[i] = binStr.charCodeAt(i) & 0xFF;
+                            }
+                            blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                        } else {
+                            blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                        }
+                        
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        console.log(`[Excel Export] ✅ Download triggered with type ${outputType}`);
+                        success = true;
+                        break;
+                    } catch (typeErr) {
+                        console.warn(`[Excel Export] ⚠️ Type ${outputType} failed:`, typeErr.message);
+                    }
+                }
+                
+                if (!success) {
+                    throw new Error('All write methods failed');
+                }
+            }
+        } else if (XLSX.write) {
+            console.log('[Excel Export] writeFile not available, using XLSX.write directly...');
+            
+            // Try different output types
+            const types = ['binary', 'base64', 'buffer'];
+            let success = false;
+            
+            for (const outputType of types) {
+                try {
+                    console.log(`[Excel Export] Attempting type: ${outputType}`);
+                    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: outputType });
+                    console.log(`[Excel Export] Write succeeded with type ${outputType}`);
+                    
+                    let blob;
+                    if (outputType === 'binary') {
+                        const buf = new ArrayBuffer(wbout.length);
+                        const view = new Uint8Array(buf);
+                        for (let i = 0; i < wbout.length; i++) {
+                            view[i] = wbout.charCodeAt(i) & 0xFF;
+                        }
+                        blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    } else if (outputType === 'base64') {
+                        const binStr = atob(wbout);
+                        const buf = new ArrayBuffer(binStr.length);
+                        const view = new Uint8Array(buf);
+                        for (let i = 0; i < binStr.length; i++) {
+                            view[i] = binStr.charCodeAt(i) & 0xFF;
+                        }
+                        blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    } else {
+                        blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    }
+                    
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    console.log(`[Excel Export] ✅ Download triggered with type ${outputType}`);
+                    success = true;
+                    break;
+                } catch (typeErr) {
+                    console.warn(`[Excel Export] ⚠️ Type ${outputType} failed:`, typeErr.message);
+                }
+            }
+            
+            if (!success) {
+                throw new Error('All write methods failed');
+            }
+        }
+
+        showToast(`تم تصدير ${filteredSuggestions.length} اقتراح بنجاح! ✅`, 'success');
+
+    } catch (error) {
+        console.error('Error exporting to Excel:', error);
+        showToast('حدث خطأ أثناء التصدير إلى Excel', 'error');
+    }
+}
 
 // جعل الدوال المستخدمة في onclick متاحة عالمياً بعد التجميع داخل IIFE
 // بسبب أن bundler يلف كل الملفات داخل (function(window){ ... }) فلا تصبح هذه الدوال على الكائن window تلقائياً
 // لذلك نُصدرها صراحة ليعمل الـ onclick داخل عناصر البطاقات
 window.openEvaluationModal = openEvaluationModal;
 window.deleteSuggestion = deleteSuggestion;
-console.log('[AdminSuggest] Global functions exposed');
+window.copyApprovedQuestions = copyApprovedQuestions;
+window.exportToExcel = exportToExcel;
+// Show this debug log only when running in development or for admin users
+try {
+    const isDev = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'));
+    const cachedProfile = localStorage.getItem('userProfile');
+    const role = cachedProfile ? (JSON.parse(cachedProfile).role) : null;
+    const isAdmin = role === 'admin' || role === 'super_admin';
+    if (isDev || isAdmin) {
+        console.log('[AdminSuggest] Global functions exposed');
+    }
+} catch (_) { /* noop */ }
 
 
 // == main.js ==
@@ -19887,12 +22649,6 @@ async function fetchUserProfile() {
 function updateUIAfterLogin(user) {
     if (!user) return;
 
-    // --- DEBUG: Log the user profile being used to update the UI ---
-    console.log(
-        `%c[UI Update] Updating interface for user: "${user.full_name}" with role: "${user.role}"`,
-        'color: #28a745; font-weight: bold; border: 1px solid #28a745; padding: 2px 5px; border-radius: 3px;'
-    );
-
     const settingsMenu = document.getElementById('settings-menu');
     const userNameDisplay = document.getElementById('user-name');
     const userEmailDisplay = document.getElementById('user-email');
@@ -19919,24 +22675,32 @@ function updateUIAfterLogin(user) {
         usersNavItem.style.display = 'block';
     }
 
-    // NEW: Show/Hide Question Suggestions links based on role
+    // NEW: Show Question Suggestions links for all users
+    // جميع المستخدمين (موظف، أدمن، سوبر أدمن) يمكنهم رؤية جميع الاقتراحات
     const navQuestionsDropdownContainer = document.getElementById('nav-questions-dropdown-container');
     const navAdminQuestionSuggestions = document.getElementById('nav-admin-question-suggestions');
     
-    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
-    
     if (navQuestionsDropdownContainer) {
-        navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all employees
+        navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all users
     }
     
     if (navAdminQuestionSuggestions) {
-        navAdminQuestionSuggestions.style.display = isAdmin ? 'block' : 'none'; // Show admin link only for admins
+        navAdminQuestionSuggestions.style.display = 'block'; // Show for all authenticated users
     }
 
-    // NEW: Show/Hide Tasks & Calendar dropdown for admins only
+    // NEW: Show Tasks & Calendar dropdown for all users (employees, admins, and super admins)
     const navTasksCalendarDropdownContainer = document.getElementById('nav-tasks-calendar-dropdown-container');
     if (navTasksCalendarDropdownContainer) {
-        navTasksCalendarDropdownContainer.style.display = isAdmin ? 'block' : 'none';
+        navTasksCalendarDropdownContainer.style.display = 'block'; // Show for all authenticated users
+    }
+
+    // Load global unread suggestions counter for all roles (Super Admin & Employees)
+    if (currentUserProfile) {
+        loadGlobalUnreadCount();
+        // Live polling every 30 seconds
+        if (!window._globalUnreadInterval) {
+            window._globalUnreadInterval = setInterval(loadGlobalUnreadCount, 30000);
+        }
     }
 }
 // NEW: Router function to handle page navigation based on URL hash
@@ -19981,6 +22745,7 @@ async function handleRouting() {
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
         '#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' },
         '#analytics': { func: renderAnalyticsPage, nav: 'nav-analytics' },
+        '#admin-suggestions': { func: renderAdminSuggestionsPage, nav: 'nav-admin-question-suggestions' },
         '#statistics': { func: renderStatisticsPage, nav: 'nav-statistics' },
         '#winner-roulette': { func: renderWinnerRoulettePage, nav: 'nav-winner-roulette' }
     };
@@ -20040,6 +22805,46 @@ async function handleRouting() {
         console.error("Routing error:", err);
     } finally {
         hideLoader();
+    }
+}
+
+// ==========================
+// Admin Suggestions Page Loader
+// ==========================
+async function renderAdminSuggestionsPage() {
+    if (!window.appContent) {
+        console.error('app-content element not found!');
+        return;
+    }
+    try {
+        const response = await fetch('/pages/admin-question-suggestions.html');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const html = await response.text();
+        window.appContent.innerHTML = html;
+
+        // Dynamically import and initialize the admin suggestions page script
+        try {
+            const adminModule = await import('/js/pages/admin-question-suggestions.js');
+            if (adminModule && typeof adminModule.initAdminQuestionSuggestions === 'function') {
+                // Ensure DOM is ready before init
+                setTimeout(() => {
+                    adminModule.initAdminQuestionSuggestions();
+                }, 0);
+            } else {
+                console.warn('Admin suggestions initialization function not found, attempting fallback');
+                // Fallback: if module exports default or different name
+                if (adminModule && typeof adminModule.init === 'function') {
+                    setTimeout(() => adminModule.init(), 0);
+                }
+            }
+        } catch (e) {
+            throw e;
+        }
+    } catch (error) {
+        console.error('Failed to load admin suggestions page:', error);
+        window.appContent.innerHTML = `<p class="error-message">فشل تحميل صفحة جميع الاقتراحات: ${error.message}</p>`;
     }
 }
 
@@ -20162,14 +22967,14 @@ function setupRealtimeListeners() {
     const wsUrl = `${protocol}://${window.location.host}`;
     let ws;
     let reconnectAttempts = 0;
-    let maxReconnectAttempts = 3;
+    let maxReconnectAttempts = 5;
     let reconnectTimeout;
 
     function connect() {
         // Check if token exists before connecting
         const token = localStorage.getItem('authToken');
         if (!token) {
-            console.warn('[WebSocket] No auth token found. Skipping connection.');
+            console.warn('[WebSocket] لا يوجد رمز مصادقة. تخطي الاتصال.');
             return;
         }
 
@@ -20178,7 +22983,7 @@ function setupRealtimeListeners() {
         try { window._realtimeWs = ws; } catch (e) { /* ignore in non-browser env */ }
 
         ws.onopen = () => {
-            /* logs suppressed: WebSocket connected */
+            console.log('[WebSocket] متصل الآن ✓');
             reconnectAttempts = 0; // Reset counter on successful connection
             const token = localStorage.getItem('authToken');
             if (token) {
@@ -20211,10 +23016,23 @@ function setupRealtimeListeners() {
                         if (Array.isArray(message.data)) {
                             window.onlineUsers.clear();
                             message.data.forEach(userId => window.onlineUsers.set(userId, true));
+                            // Add the current user to online list
+                            const currentUserId = currentUserProfile?.userId || currentUserProfile?._id;
+                            if (currentUserId) {
+                                window.onlineUsers.set(currentUserId, true);
+                            }
                             // Dispatch a global event that the user list can listen to
                             window.dispatchEvent(new CustomEvent('presence-update'));
+                            console.log('[WebSocket] تحديث الحالة المباشرة:', Array.from(window.onlineUsers.keys()));
                         }
                         break;
+                    
+                    case 'suggestion_update':
+                    case 'new_suggestion':
+                        console.log('🔔 [WebSocket] Received suggestion update/new suggestion');
+                        loadGlobalUnreadCount();
+                        break;
+
                     // Add other message types here
                 }
             } catch (error) {
@@ -20223,16 +23041,22 @@ function setupRealtimeListeners() {
         };
 
         ws.onclose = () => {
+            console.log('[WebSocket] قطع الاتصال ✗');
+            // Remove current user from online list
+            const currentUserId = currentUserProfile?.userId || currentUserProfile?._id;
+            if (currentUserId) {
+                window.onlineUsers.delete(currentUserId);
+            }
             // Clear the global reference when socket closes
             try { if (window._realtimeWs === ws) window._realtimeWs = null; } catch (e) { /* ignore */ }
             
             // Only reconnect if we haven't exceeded max attempts
             if (reconnectAttempts < maxReconnectAttempts) {
                 reconnectAttempts++;
-                console.log(`[WebSocket] Disconnected. Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in 5 seconds...`);
+                console.log(`[WebSocket] إعادة محاولة الاتصال (${reconnectAttempts}/${maxReconnectAttempts}) بعد 5 ثواني...`);
                 reconnectTimeout = setTimeout(connect, 5000);
             } else {
-                console.warn('[WebSocket] Max reconnection attempts reached. Please refresh the page or log in again.');
+                console.warn('[WebSocket] فشل الاتصال المباشر بعد عدة محاولات. يرجى تحديث الصفحة.');
             }
         };
 
@@ -20387,6 +23211,50 @@ function showFallbackToast(message, duration = 1600) {
         el.style.transform = 'translateY(6px)';
     }, duration);
 }
+try { window.showFallbackToast = showFallbackToast; } catch (e) { /* ignore */ }
+
+// Centralized logout flow used by all logout triggers
+function performLogoutFlow() {
+    try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (e) { /* ignore */ }
+
+    // Close realtime socket if present and stop reconnection attempts
+    try {
+        if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
+            window._realtimeWs.close();
+            window._realtimeWs = null;
+        }
+        if (typeof window.stopWebSocketReconnect === 'function') {
+            window.stopWebSocketReconnect();
+        }
+    } catch (err) {
+        console.warn('Failed to close realtime socket during logout:', err);
+    }
+
+    // Fire logout API call (fire-and-forget to log activity)
+    const logoutTimeout = setTimeout(() => {
+        console.warn('Logout API timeout - proceeding with client-side logout');
+    }, 2000);
+    try {
+        authedFetch('/api/auth/logout', { method: 'POST' })
+            .then(() => clearTimeout(logoutTimeout))
+            .catch(err => {
+                console.warn('Logout API call failed:', err);
+                clearTimeout(logoutTimeout);
+            });
+    } catch (e) { 
+        clearTimeout(logoutTimeout);
+    }
+
+    // Clear auth state immediately
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userProfile');
+
+    try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
+
+    // Redirect right away to the login page
+    setTimeout(() => window.location.replace('/login.html'), 250);
+}
+try { window.performLogoutFlow = performLogoutFlow; } catch (e) { /* ignore */ }
 
 function setupAutoHidingNavbar() {
     let lastScrollTop = 0;
@@ -20462,48 +23330,11 @@ function setupNavbar() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            // Immediate client-side logout without waiting for the server.
-            try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (e) { /* ignore */ }
-
-            // Close the realtime WebSocket if it's open to prevent further background requests
-            try {
-                if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
-                    window._realtimeWs.close();
-                    window._realtimeWs = null;
-                }
-                // Stop reconnection attempts
-                if (typeof window.stopWebSocketReconnect === 'function') {
-                    window.stopWebSocketReconnect();
-                }
-            } catch (err) {
-                console.warn('Failed to close realtime socket during logout:', err);
-            }
-
-            // Fire logout API call (fire-and-forget to log activity)
-            // Use a timeout to ensure we redirect even if API hangs
-            const logoutTimeout = setTimeout(() => {
-                console.warn('Logout API timeout - proceeding with client-side logout');
-            }, 2000);
-            
-            try {
-                authedFetch('/api/auth/logout', { method: 'POST' })
-                    .then(() => clearTimeout(logoutTimeout))
-                    .catch(err => {
-                        console.warn('Logout API call failed:', err);
-                        clearTimeout(logoutTimeout);
-                    });
-            } catch (e) { 
-                clearTimeout(logoutTimeout);
-            }
-
-            // Clear auth state immediately
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('userProfile');
-
-            try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
-
-            // Redirect right away to the login page
-            setTimeout(() => window.location.replace('/login.html'), 250);
+            showConfirmationModal(
+                'هل أنت متأكد أنك تريد تسجيل الخروج؟ سيتم إنهاء الجلسة وإغلاق الاتصال المباشر.',
+                () => performLogoutFlow(),
+                { title: 'تأكيد تسجيل الخروج', confirmText: 'تسجيل الخروج', cancelText: 'إلغاء', confirmClass: 'btn-danger' }
+            );
         });
     }
 
@@ -20627,12 +23458,12 @@ function setupNavbar() {
 
     // Show/Hide dropdown based on role
     if (currentUserProfile && navQuestionsDropdownContainer) {
-        const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
+        // const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
         
         navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all employees
         
         if (navAdminQuestionSuggestionsMenu) {
-            navAdminQuestionSuggestionsMenu.style.display = isAdmin ? 'block' : 'none'; // Show admin link only for admins
+            navAdminQuestionSuggestionsMenu.style.display = 'block'; // Show admin link for all employees
         }
     }
 
@@ -20870,7 +23701,6 @@ function baseRouletteMarkup() {
                         <canvas id=\"winner-roulette-wheel\"></canvas>
                         <div class=\"wr-actions-row\">
                             <button id=\"auto-pick-btn\" class=\"wr-btn wr-btn-secondary wr-btn-large\"><i class=\"fas fa-forward\"></i> متتالي</button>
-                            <button id=\"reset-wheel\" class=\"wr-btn wr-btn-danger wr-btn-large\"><i class=\"fas fa-rotate-left\"></i> إعادة</button>
                         </div>
                     </div>
                     <small style=\"text-align:center;color:var(--wr-text-dim);\">اختيار عشوائي دون تحيز.</small>
@@ -21086,49 +23916,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const clone = btn.cloneNode(true);
         btn.parentNode.replaceChild(clone, btn);
         // Attach a single, authoritative handler to the cloned element
-                clone.addEventListener('click', (e) => {
-                    // If a modal is already visible, don't duplicate
-                    if (document.querySelector('.modal-overlay')) return;
-                    e.preventDefault();
-                    // Immediate client-side logout without confirmation
-                    try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (err) { /* ignore */ }
-
-                    // Close realtime socket if present
-                    try {
-                        if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
-                            window._realtimeWs.close();
-                            window._realtimeWs = null;
-                        }
-                        // Stop reconnection attempts
-                        if (typeof window.stopWebSocketReconnect === 'function') {
-                            window.stopWebSocketReconnect();
-                        }
-                    } catch (err) {
-                        console.warn('Failed to close realtime socket during logout:', err);
-                    }
-
-                    // Fire logout API call (fire-and-forget to log activity)
-                    const logoutTimeout = setTimeout(() => {
-                        console.warn('Logout API timeout - proceeding with client-side logout');
-                    }, 2000);
-                    
-                    try {
-                        authedFetch('/api/auth/logout', { method: 'POST' })
-                            .then(() => clearTimeout(logoutTimeout))
-                            .catch(err => {
-                                console.warn('Logout API call failed:', err);
-                                clearTimeout(logoutTimeout);
-                            });
-                    } catch (e) { 
-                        clearTimeout(logoutTimeout);
-                    }
-
-                    // Clear auth state immediately
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('userProfile');
-                    try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
-                    setTimeout(() => window.location.replace('/login.html'), 250);
-                }, { passive: false });
+        clone.addEventListener('click', (e) => {
+            if (document.querySelector('.modal-overlay')) return; // Avoid stacking modals
+            e.preventDefault();
+            showConfirmationModal(
+                'هل أنت متأكد أنك تريد تسجيل الخروج؟ سيتم إنهاء الجلسة وإغلاق الاتصال المباشر.',
+                () => performLogoutFlow(),
+                { title: 'تأكيد تسجيل الخروج', confirmText: 'تسجيل الخروج', cancelText: 'إلغاء', confirmClass: 'btn-danger' }
+            );
+        }, { passive: false });
     } catch (e) {
         console.error('Failed to attach fallback logout handler', e);
     }

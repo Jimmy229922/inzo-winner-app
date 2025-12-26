@@ -219,6 +219,12 @@ exports.createCompetition = async (req, res) => {
         const totalCost = Number(req.body.total_cost) || 0;
         const depositWinners = Number(req.body.deposit_winners_count) || 0;
 
+        // --- FIX: Fetch agent before checking balance ---
+        const agent = await Agent.findById(agent_id);
+        if (!agent) {
+            return res.status(404).json({ message: 'Agent not found.' });
+        }
+
         if ((agent.remaining_balance || 0) < totalCost) {
             return res.status(400).json({ message: 'رصيد الوكيل غير كافٍ لإرسال المسابقة.' });
         }
@@ -420,7 +426,7 @@ exports.createCompetition = async (req, res) => {
 
         // --- NEW: Update Agent Balance and Deposit Bonus ---
         // This logic was moved from the frontend to ensure reliability and security.
-        const agent = await Agent.findById(agent_id);
+        // Agent is already fetched at the top
         if (agent) {
             const cost = Number(competitionData.total_cost) || 0;
             const depositWinners = Number(competitionData.deposit_winners_count) || 0;

@@ -4038,50 +4038,6 @@
                   toast('حدث خطأ أثناء الإرسال', 'error');
               }
           }
-          
-          try {
-          // إظهار رسالة تحميل
-          toast('جاري إرسال الفائزين إلى التليجرام...', 'info');
-          console.log('[sendWinnersReport] sending payload to API', {
-            url: `/api/agents/${state.selectedAgent.id}/send-winners-report`,
-            winnerIds: validWinners.map(w => w._id),
-            messageText
-          });
-          
-          const authedFetch = window.authedFetch || fetch;
-          const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-report`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              winnerIds: validWinners.map(w => w._id),
-              messageText
-            })
-          });
-          
-                if (resp.ok) {
-                  console.log('[sendWinnersReport] API response OK');
-                  toast('✅ تم إرسال التقرير بنجاح', 'success');
-                  // لا نقوم بعرض شريط اكتمال الاختيار من خلال الإرسال
-                  // لا نغير reportSent هنا بناءً على طلبك
-                  saveSession();
-              } else {
-            const err = await resp.json();
-            console.error('[sendWinnersReport] API error response:', err);
-            toast(`❌ فشل الإرسال: ${err.message}`, 'error');
-          }
-          } catch (e) {
-          console.error('[sendWinnersReport] unexpected error:', e);
-          toast('❌ حدث خطأ أثناء الإرسال', 'error');
-          } finally {
-            // إعادة تفعيل الزر
-            if (sendBtn && originalBtnText) {
-              sendBtn.disabled = false;
-              sendBtn.style.opacity = '1';
-              sendBtn.style.cursor = 'pointer';
-              sendBtn.innerHTML = originalBtnText;
-            }
-          }
-          }
           );
     }
     
