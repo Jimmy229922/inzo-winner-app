@@ -1,4 +1,7 @@
 process.env.TZ = 'Asia/Baghdad';
+// Fix Telegram Bot API deprecation warning regarding file uploads
+process.env.NTBA_FIX_350 = 1; 
+
 require('dotenv').config();
 // Silence noisy logs when requested
 const SILENCE_LOGS = process.env.SILENCE_LOGS === '1' || process.env.LOG_SILENT === '1';
@@ -63,7 +66,7 @@ async function createSuperAdmin() {
  */
 function broadcastPresence() {
     const onlineUserIds = Array.from(onlineClients.keys());
-    const message = JSON.stringify({ type: 'presence_update', onlineUserIds });
+    const message = JSON.stringify({ type: 'presence_update', data: onlineUserIds });
 
     onlineClients.forEach((client) => {
         if (client.readyState === client.OPEN) {
@@ -151,7 +154,7 @@ async function startServer() {
     }, 30000); // Ping every 30 seconds
 
     server.listen(port, () => {
-        // console.log(`Backend server is running at http://localhost:${port}`);
+        console.log(`[SERVER] Backend server is running at http://localhost:${port}`);
         
         // --- Start schedulers immediately with null bot (will update later) ---
         startAllSchedulers(onlineClients, null);

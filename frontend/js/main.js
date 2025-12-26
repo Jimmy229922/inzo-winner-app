@@ -102,12 +102,6 @@ async function fetchUserProfile() {
 function updateUIAfterLogin(user) {
     if (!user) return;
 
-    // --- DEBUG: Log the user profile being used to update the UI ---
-    console.log(
-        `%c[UI Update] Updating interface for user: "${user.full_name}" with role: "${user.role}"`,
-        'color: #28a745; font-weight: bold; border: 1px solid #28a745; padding: 2px 5px; border-radius: 3px;'
-    );
-
     const settingsMenu = document.getElementById('settings-menu');
     const userNameDisplay = document.getElementById('user-name');
     const userEmailDisplay = document.getElementById('user-email');
@@ -134,24 +128,32 @@ function updateUIAfterLogin(user) {
         usersNavItem.style.display = 'block';
     }
 
-    // NEW: Show/Hide Question Suggestions links based on role
+    // NEW: Show Question Suggestions links for all users
+    // جميع المستخدمين (موظف، أدمن، سوبر أدمن) يمكنهم رؤية جميع الاقتراحات
     const navQuestionsDropdownContainer = document.getElementById('nav-questions-dropdown-container');
     const navAdminQuestionSuggestions = document.getElementById('nav-admin-question-suggestions');
     
-    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
-    
     if (navQuestionsDropdownContainer) {
-        navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all employees
+        navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all users
     }
     
     if (navAdminQuestionSuggestions) {
-        navAdminQuestionSuggestions.style.display = isAdmin ? 'block' : 'none'; // Show admin link only for admins
+        navAdminQuestionSuggestions.style.display = 'block'; // Show for all authenticated users
     }
 
-    // NEW: Show/Hide Tasks & Calendar dropdown for admins only
+    // NEW: Show Tasks & Calendar dropdown for all users (employees, admins, and super admins)
     const navTasksCalendarDropdownContainer = document.getElementById('nav-tasks-calendar-dropdown-container');
     if (navTasksCalendarDropdownContainer) {
-        navTasksCalendarDropdownContainer.style.display = isAdmin ? 'block' : 'none';
+        navTasksCalendarDropdownContainer.style.display = 'block'; // Show for all authenticated users
+    }
+
+    // Load global unread suggestions counter for all roles (Super Admin & Employees)
+    if (currentUserProfile) {
+        loadGlobalUnreadCount();
+        // Live polling every 30 seconds
+        if (!window._globalUnreadInterval) {
+            window._globalUnreadInterval = setInterval(loadGlobalUnreadCount, 30000);
+        }
     }
 }
 // NEW: Router function to handle page navigation based on URL hash
@@ -196,6 +198,7 @@ async function handleRouting() {
         '#calendar': { func: renderCalendarPage, nav: 'nav-calendar' },
         '#activity-log': { func: renderActivityLogPage, nav: 'nav-activity-log' },
         '#analytics': { func: renderAnalyticsPage, nav: 'nav-analytics' },
+        '#admin-suggestions': { func: renderAdminSuggestionsPage, nav: 'nav-admin-question-suggestions' },
         '#statistics': { func: renderStatisticsPage, nav: 'nav-statistics' },
         '#winner-roulette': { func: renderWinnerRoulettePage, nav: 'nav-winner-roulette' }
     };
@@ -255,6 +258,46 @@ async function handleRouting() {
         console.error("Routing error:", err);
     } finally {
         hideLoader();
+    }
+}
+
+// ==========================
+// Admin Suggestions Page Loader
+// ==========================
+async function renderAdminSuggestionsPage() {
+    if (!window.appContent) {
+        console.error('app-content element not found!');
+        return;
+    }
+    try {
+        const response = await fetch('/pages/admin-question-suggestions.html');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const html = await response.text();
+        window.appContent.innerHTML = html;
+
+        // Dynamically import and initialize the admin suggestions page script
+        try {
+            const adminModule = await import('/js/pages/admin-question-suggestions.js');
+            if (adminModule && typeof adminModule.initAdminQuestionSuggestions === 'function') {
+                // Ensure DOM is ready before init
+                setTimeout(() => {
+                    adminModule.initAdminQuestionSuggestions();
+                }, 0);
+            } else {
+                console.warn('Admin suggestions initialization function not found, attempting fallback');
+                // Fallback: if module exports default or different name
+                if (adminModule && typeof adminModule.init === 'function') {
+                    setTimeout(() => adminModule.init(), 0);
+                }
+            }
+        } catch (e) {
+            throw e;
+        }
+    } catch (error) {
+        console.error('Failed to load admin suggestions page:', error);
+        window.appContent.innerHTML = `<p class="error-message">فشل تحميل صفحة جميع الاقتراحات: ${error.message}</p>`;
     }
 }
 
@@ -377,14 +420,14 @@ function setupRealtimeListeners() {
     const wsUrl = `${protocol}://${window.location.host}`;
     let ws;
     let reconnectAttempts = 0;
-    let maxReconnectAttempts = 3;
+    let maxReconnectAttempts = 5;
     let reconnectTimeout;
 
     function connect() {
         // Check if token exists before connecting
         const token = localStorage.getItem('authToken');
         if (!token) {
-            console.warn('[WebSocket] No auth token found. Skipping connection.');
+            console.warn('[WebSocket] لا يوجد رمز مصادقة. تخطي الاتصال.');
             return;
         }
 
@@ -393,7 +436,7 @@ function setupRealtimeListeners() {
         try { window._realtimeWs = ws; } catch (e) { /* ignore in non-browser env */ }
 
         ws.onopen = () => {
-            /* logs suppressed: WebSocket connected */
+            console.log('[WebSocket] متصل الآن ✓');
             reconnectAttempts = 0; // Reset counter on successful connection
             const token = localStorage.getItem('authToken');
             if (token) {
@@ -426,10 +469,23 @@ function setupRealtimeListeners() {
                         if (Array.isArray(message.data)) {
                             window.onlineUsers.clear();
                             message.data.forEach(userId => window.onlineUsers.set(userId, true));
+                            // Add the current user to online list
+                            const currentUserId = currentUserProfile?.userId || currentUserProfile?._id;
+                            if (currentUserId) {
+                                window.onlineUsers.set(currentUserId, true);
+                            }
                             // Dispatch a global event that the user list can listen to
                             window.dispatchEvent(new CustomEvent('presence-update'));
+                            console.log('[WebSocket] تحديث الحالة المباشرة:', Array.from(window.onlineUsers.keys()));
                         }
                         break;
+                    
+                    case 'suggestion_update':
+                    case 'new_suggestion':
+                        console.log('🔔 [WebSocket] Received suggestion update/new suggestion');
+                        loadGlobalUnreadCount();
+                        break;
+
                     // Add other message types here
                 }
             } catch (error) {
@@ -438,16 +494,22 @@ function setupRealtimeListeners() {
         };
 
         ws.onclose = () => {
+            console.log('[WebSocket] قطع الاتصال ✗');
+            // Remove current user from online list
+            const currentUserId = currentUserProfile?.userId || currentUserProfile?._id;
+            if (currentUserId) {
+                window.onlineUsers.delete(currentUserId);
+            }
             // Clear the global reference when socket closes
             try { if (window._realtimeWs === ws) window._realtimeWs = null; } catch (e) { /* ignore */ }
             
             // Only reconnect if we haven't exceeded max attempts
             if (reconnectAttempts < maxReconnectAttempts) {
                 reconnectAttempts++;
-                console.log(`[WebSocket] Disconnected. Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in 5 seconds...`);
+                console.log(`[WebSocket] إعادة محاولة الاتصال (${reconnectAttempts}/${maxReconnectAttempts}) بعد 5 ثواني...`);
                 reconnectTimeout = setTimeout(connect, 5000);
             } else {
-                console.warn('[WebSocket] Max reconnection attempts reached. Please refresh the page or log in again.');
+                console.warn('[WebSocket] فشل الاتصال المباشر بعد عدة محاولات. يرجى تحديث الصفحة.');
             }
         };
 
@@ -602,6 +664,50 @@ function showFallbackToast(message, duration = 1600) {
         el.style.transform = 'translateY(6px)';
     }, duration);
 }
+try { window.showFallbackToast = showFallbackToast; } catch (e) { /* ignore */ }
+
+// Centralized logout flow used by all logout triggers
+function performLogoutFlow() {
+    try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (e) { /* ignore */ }
+
+    // Close realtime socket if present and stop reconnection attempts
+    try {
+        if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
+            window._realtimeWs.close();
+            window._realtimeWs = null;
+        }
+        if (typeof window.stopWebSocketReconnect === 'function') {
+            window.stopWebSocketReconnect();
+        }
+    } catch (err) {
+        console.warn('Failed to close realtime socket during logout:', err);
+    }
+
+    // Fire logout API call (fire-and-forget to log activity)
+    const logoutTimeout = setTimeout(() => {
+        console.warn('Logout API timeout - proceeding with client-side logout');
+    }, 2000);
+    try {
+        authedFetch('/api/auth/logout', { method: 'POST' })
+            .then(() => clearTimeout(logoutTimeout))
+            .catch(err => {
+                console.warn('Logout API call failed:', err);
+                clearTimeout(logoutTimeout);
+            });
+    } catch (e) { 
+        clearTimeout(logoutTimeout);
+    }
+
+    // Clear auth state immediately
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userProfile');
+
+    try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
+
+    // Redirect right away to the login page
+    setTimeout(() => window.location.replace('/login.html'), 250);
+}
+try { window.performLogoutFlow = performLogoutFlow; } catch (e) { /* ignore */ }
 
 function setupAutoHidingNavbar() {
     let lastScrollTop = 0;
@@ -677,48 +783,11 @@ function setupNavbar() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            // Immediate client-side logout without waiting for the server.
-            try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (e) { /* ignore */ }
-
-            // Close the realtime WebSocket if it's open to prevent further background requests
-            try {
-                if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
-                    window._realtimeWs.close();
-                    window._realtimeWs = null;
-                }
-                // Stop reconnection attempts
-                if (typeof window.stopWebSocketReconnect === 'function') {
-                    window.stopWebSocketReconnect();
-                }
-            } catch (err) {
-                console.warn('Failed to close realtime socket during logout:', err);
-            }
-
-            // Fire logout API call (fire-and-forget to log activity)
-            // Use a timeout to ensure we redirect even if API hangs
-            const logoutTimeout = setTimeout(() => {
-                console.warn('Logout API timeout - proceeding with client-side logout');
-            }, 2000);
-            
-            try {
-                authedFetch('/api/auth/logout', { method: 'POST' })
-                    .then(() => clearTimeout(logoutTimeout))
-                    .catch(err => {
-                        console.warn('Logout API call failed:', err);
-                        clearTimeout(logoutTimeout);
-                    });
-            } catch (e) { 
-                clearTimeout(logoutTimeout);
-            }
-
-            // Clear auth state immediately
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('userProfile');
-
-            try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
-
-            // Redirect right away to the login page
-            setTimeout(() => window.location.replace('/login.html'), 250);
+            showConfirmationModal(
+                'هل أنت متأكد أنك تريد تسجيل الخروج؟ سيتم إنهاء الجلسة وإغلاق الاتصال المباشر.',
+                () => performLogoutFlow(),
+                { title: 'تأكيد تسجيل الخروج', confirmText: 'تسجيل الخروج', cancelText: 'إلغاء', confirmClass: 'btn-danger' }
+            );
         });
     }
 
@@ -842,12 +911,12 @@ function setupNavbar() {
 
     // Show/Hide dropdown based on role
     if (currentUserProfile && navQuestionsDropdownContainer) {
-        const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
+        // const isAdmin = currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin';
         
         navQuestionsDropdownContainer.style.display = 'block'; // Show dropdown for all employees
         
         if (navAdminQuestionSuggestionsMenu) {
-            navAdminQuestionSuggestionsMenu.style.display = isAdmin ? 'block' : 'none'; // Show admin link only for admins
+            navAdminQuestionSuggestionsMenu.style.display = 'block'; // Show admin link for all employees
         }
     }
 
@@ -1085,7 +1154,6 @@ function baseRouletteMarkup() {
                         <canvas id=\"winner-roulette-wheel\"></canvas>
                         <div class=\"wr-actions-row\">
                             <button id=\"auto-pick-btn\" class=\"wr-btn wr-btn-secondary wr-btn-large\"><i class=\"fas fa-forward\"></i> متتالي</button>
-                            <button id=\"reset-wheel\" class=\"wr-btn wr-btn-danger wr-btn-large\"><i class=\"fas fa-rotate-left\"></i> إعادة</button>
                         </div>
                     </div>
                     <small style=\"text-align:center;color:var(--wr-text-dim);\">اختيار عشوائي دون تحيز.</small>
@@ -1301,50 +1369,71 @@ document.addEventListener('DOMContentLoaded', () => {
         const clone = btn.cloneNode(true);
         btn.parentNode.replaceChild(clone, btn);
         // Attach a single, authoritative handler to the cloned element
-                clone.addEventListener('click', (e) => {
-                    // If a modal is already visible, don't duplicate
-                    if (document.querySelector('.modal-overlay')) return;
-                    e.preventDefault();
-                    // Immediate client-side logout without confirmation
-                    try { showFallbackToast('جاري تسجيل الخروج...', 800); } catch (err) { /* ignore */ }
-
-                    // Close realtime socket if present
-                    try {
-                        if (window._realtimeWs && typeof window._realtimeWs.close === 'function') {
-                            window._realtimeWs.close();
-                            window._realtimeWs = null;
-                        }
-                        // Stop reconnection attempts
-                        if (typeof window.stopWebSocketReconnect === 'function') {
-                            window.stopWebSocketReconnect();
-                        }
-                    } catch (err) {
-                        console.warn('Failed to close realtime socket during logout:', err);
-                    }
-
-                    // Fire logout API call (fire-and-forget to log activity)
-                    const logoutTimeout = setTimeout(() => {
-                        console.warn('Logout API timeout - proceeding with client-side logout');
-                    }, 2000);
-                    
-                    try {
-                        authedFetch('/api/auth/logout', { method: 'POST' })
-                            .then(() => clearTimeout(logoutTimeout))
-                            .catch(err => {
-                                console.warn('Logout API call failed:', err);
-                                clearTimeout(logoutTimeout);
-                            });
-                    } catch (e) { 
-                        clearTimeout(logoutTimeout);
-                    }
-
-                    // Clear auth state immediately
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('userProfile');
-                    try { showFallbackToast('تم تسجيل الخروج', 900); } catch (e) { /* ignore */ }
-                    setTimeout(() => window.location.replace('/login.html'), 250);
-                }, { passive: false });
+        clone.addEventListener('click', (e) => {
+            if (document.querySelector('.modal-overlay')) return; // Avoid stacking modals
+            e.preventDefault();
+            showConfirmationModal(
+                'هل أنت متأكد أنك تريد تسجيل الخروج؟ سيتم إنهاء الجلسة وإغلاق الاتصال المباشر.',
+                () => performLogoutFlow(),
+                { title: 'تأكيد تسجيل الخروج', confirmText: 'تسجيل الخروج', cancelText: 'إلغاء', confirmClass: 'btn-danger' }
+            );
+        }, { passive: false });
     } catch (e) {
         console.error('Failed to attach fallback logout handler', e);
     }
 });
+
+// ==========================
+// Global Unread Suggestions Counter
+// ==========================
+async function loadGlobalUnreadCount() {
+    try {
+        let endpoint = '';
+        if (currentUserProfile.role === 'super_admin') {
+            endpoint = '/api/question-suggestions/unread-count';
+        } else {
+            endpoint = '/api/question-suggestions/employee-unread-count';
+        }
+
+        const response = await window.utils.authedFetch(endpoint);
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            const unreadCount = data.data.unreadCount || 0;
+            displayGlobalUnreadCount(unreadCount);
+        }
+    } catch (error) {
+        console.error('❌ [Global Unread Count] Error loading unread count:', error);
+    }
+}
+
+function displayGlobalUnreadCount(count) {
+    const globalUnreadCountElement = document.getElementById('globalUnreadCount');
+
+    if (globalUnreadCountElement) {
+        if (count > 0) {
+            globalUnreadCountElement.textContent = count;
+            globalUnreadCountElement.style.display = 'inline-block';
+            
+            // Update click handler based on role
+            const badgeLink = globalUnreadCountElement.closest('a');
+            if (badgeLink) {
+                badgeLink.onclick = (e) => {
+                    e.preventDefault();
+                    if (currentUserProfile.role === 'super_admin') {
+                        window.location.href = '/pages/admin-question-suggestions.html';
+                    } else {
+                        window.location.href = '/pages/question-suggestions.html';
+                    }
+                };
+            }
+        } else {
+            globalUnreadCountElement.style.display = 'none';
+        }
+    }
+}

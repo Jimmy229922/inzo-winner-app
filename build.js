@@ -17,6 +17,7 @@ const cssFiles = [
     'assets/css/competitions.css',
     'assets/css/calendar.css',
     'assets/css/top-agents.css',
+    'assets/css/top-agents-custom.css',
     'assets/css/activity-log.css',
     'assets/css/analytics.css',
     'assets/css/day-competitions.css',

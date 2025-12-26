@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>إدارة اقتراحات الأسئلة - Inzo Winner</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="../images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="../images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="128x128" href="../images/Logo1.png">
+    <link rel="icon" type="image/png" sizes="256x256" href="../images/Logo1.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="../images/Logo1.png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../css/styles.css">
@@ -40,6 +47,79 @@
             gap: 6px;
         }
         .navbar-brand i { color: #ffd54f; }
+
+        /* Unread Counter Styles */
+        .unread-counter-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .unread-badge-header {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white !important;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 1rem;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+            animation: pulse 2s infinite;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid #ff4757;
+        }
+
+        .unread-badge-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shine 2s infinite;
+        }
+
+        .unread-badge-header:hover {
+            background: linear-gradient(135deg, #ff5252 0%, #d84315 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.5);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes shine {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
                 body {
                     background: #0a0e27;
                     color: #e0e0e0;
@@ -115,54 +195,134 @@
         }
 
         .admin-filter-btn {
-            padding: 10px 20px;
+            padding: 12px 24px;
             border: 2px solid #2a3155;
-            background: #0f1429;
-            border-radius: 8px;
+            background: linear-gradient(135deg, #0f1429 0%, #1a1f3a 100%);
+            border-radius: 12px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
             font-weight: 600;
-                    color: #e0e0e0;
+            color: #e0e0e0;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .admin-filter-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.2), transparent);
+            transition: left 0.5s;
         }
 
         .admin-filter-btn:hover {
             border-color: #667eea;
             color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .admin-filter-btn:hover::before {
+            left: 100%;
         }
 
         .admin-filter-btn.active {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border-color: transparent;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
         }
 
         .admin-suggestion-card {
-            background: #1a1f3a;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            margin-bottom: 20px;
+            background: linear-gradient(135deg, #1a1f3a 0%, #141937 100%);
+            border-radius: 16px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4), 0 0 0 1px rgba(42, 49, 85, 0.5);
+            margin-bottom: 25px;
             overflow: hidden;
-            border-right: 5px solid #2a3155;
-            transition: all 0.3s;
+            border-right: 6px solid #2a3155;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+
+        .admin-suggestion-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.6), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
         .admin-suggestion-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5), 0 0 0 1px rgba(102, 126, 234, 0.3);
         }
 
-        .admin-suggestion-card.pending { border-right-color: #ffc107; }
-        .admin-suggestion-card.approved { border-right-color: #28a745; }
-        .admin-suggestion-card.rejected { border-right-color: #dc3545; }
-        .admin-suggestion-card.needs_revision { border-right-color: #17a2b8; }
+        .admin-suggestion-card:hover::before {
+            opacity: 1;
+        }
+
+        .admin-suggestion-card.pending {
+            border-right-color: #ffc107;
+            box-shadow: 0 8px 25px rgba(255, 193, 7, 0.2), 0 0 0 1px rgba(42, 49, 85, 0.5);
+        }
+
+        .admin-suggestion-card.pending:hover {
+            box-shadow: 0 15px 35px rgba(255, 193, 7, 0.3), 0 0 0 1px rgba(255, 193, 7, 0.4);
+        }
+
+        .admin-suggestion-card.approved {
+            border-right-color: #28a745;
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.2), 0 0 0 1px rgba(42, 49, 85, 0.5);
+        }
+
+        .admin-suggestion-card.approved:hover {
+            box-shadow: 0 15px 35px rgba(40, 167, 69, 0.3), 0 0 0 1px rgba(40, 167, 69, 0.4);
+        }
+
+        .admin-suggestion-card.rejected {
+            border-right-color: #dc3545;
+            box-shadow: 0 8px 25px rgba(220, 53, 69, 0.2), 0 0 0 1px rgba(42, 49, 85, 0.5);
+        }
+
+        .admin-suggestion-card.rejected:hover {
+            box-shadow: 0 15px 35px rgba(220, 53, 69, 0.3), 0 0 0 1px rgba(220, 53, 69, 0.4);
+        }
+
+        .admin-suggestion-card.needs_revision {
+            border-right-color: #17a2b8;
+            box-shadow: 0 8px 25px rgba(23, 162, 184, 0.2), 0 0 0 1px rgba(42, 49, 85, 0.5);
+        }
+
+        .admin-suggestion-card.needs_revision:hover {
+            box-shadow: 0 15px 35px rgba(23, 162, 184, 0.3), 0 0 0 1px rgba(23, 162, 184, 0.4);
+        }
 
         .admin-suggestion-card .card-header {
-            padding: 15px 20px;
-            background: #141937;
+            padding: 18px 24px;
+            background: linear-gradient(135deg, #141937 0%, #0f1429 100%);
             border-bottom: 2px solid #2a3155;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
+        }
+
+        .admin-suggestion-card .card-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.3), transparent);
         }
 
         .employee-info {
@@ -185,23 +345,47 @@
         }
 
         .category-badge, .difficulty-badge {
-            padding: 4px 10px;
-            border-radius: 12px;
+            padding: 6px 14px;
+            border-radius: 20px;
             font-size: 0.8rem;
             font-weight: 600;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .category-badge:hover, .difficulty-badge:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
         .category-badge {
-            background: #e3f2fd;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
             color: #1976d2;
+            border-color: #1976d2;
         }
 
-        .difficulty-badge.easy { background: #c8e6c9; color: #2e7d32; }
-        .difficulty-badge.medium { background: #fff9c4; color: #f57f17; }
-        .difficulty-badge.hard { background: #ffcdd2; color: #c62828; }
+        .difficulty-badge.easy {
+            background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+            color: #2e7d32;
+            border-color: #2e7d32;
+        }
+
+        .difficulty-badge.medium {
+            background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%);
+            color: #f57f17;
+            border-color: #f57f17;
+        }
+
+        .difficulty-badge.hard {
+            background: linear-gradient(135deg, #ffcdd2 0%, #ef9a9a 100%);
+            color: #c62828;
+            border-color: #c62828;
+        }
 
         .admin-suggestion-card .card-body {
-            padding: 20px;
+            padding: 24px;
+            background: linear-gradient(135deg, rgba(26, 31, 58, 0.8) 0%, rgba(20, 25, 55, 0.8) 100%);
         }
 
         .section-title {
@@ -221,27 +405,66 @@
         }
 
         .question-text {
-            background: #0f1429;
-            padding: 15px;
-            border-radius: 8px;
+            background: linear-gradient(135deg, #0f1429 0%, #1a1f3a 100%);
+            padding: 18px;
+            border-radius: 12px;
             color: #e0e0e0;
-            border-right: 4px solid #667eea;
+            border-right: 5px solid #667eea;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            position: relative;
+        }
+
+        .question-text::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 12px 12px 0 0;
         }
 
         .answer-text {
-            background: #1a2f1a;
-            padding: 15px;
-            border-radius: 8px;
+            background: linear-gradient(135deg, #1a2f1a 0%, #2d4a2d 100%);
+            padding: 18px;
+            border-radius: 12px;
             color: #4caf50;
-            border-right: 4px solid #4caf50;
+            border-right: 5px solid #4caf50;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            position: relative;
+        }
+
+        .answer-text::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #4caf50, #66bb6a);
+            border-radius: 12px 12px 0 0;
         }
 
         .previous-evaluation {
-            background: #2a2410;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-                    border: 1px solid #3d3520;
+            background: linear-gradient(135deg, #2a2410 0%, #3d3520 100%);
+            padding: 18px;
+            border-radius: 12px;
+            margin-top: 18px;
+            border: 1px solid #3d3520;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            position: relative;
+        }
+
+        .previous-evaluation::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #ffc107, #fd7e14);
+            border-radius: 12px 12px 0 0;
         }
 
         .rating-display {
@@ -263,32 +486,112 @@
         }
 
         .admin-suggestion-card .card-footer {
-            padding: 15px 20px;
-            background: #141937;
+            padding: 18px 24px;
+            background: linear-gradient(135deg, #141937 0%, #0f1429 100%);
             border-top: 2px solid #2a3155;
             display: flex;
-            gap: 10px;
+            gap: 12px;
             justify-content: flex-end;
+            position: relative;
+        }
+
+        .admin-suggestion-card .card-footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.3), transparent);
         }
 
         .btn {
-            padding: 8px 16px;
-            border-radius: 8px;
+            padding: 10px 20px;
+            border-radius: 12px;
             font-weight: 600;
             cursor: pointer;
             border: none;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
-        .btn-success { background: #28a745; color: white; }
-        .btn-warning { background: #ffc107; color: #333; }
-        .btn-danger { background: #dc3545; color: white; }
-        .btn-secondary { background: #6c757d; color: white; }
-        .btn-outline-danger { background: white; color: #dc3545; border: 2px solid #dc3545; }
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
 
-        .btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: 2px solid transparent;
+        }
+
+        .btn-success:hover {
+            background: linear-gradient(135deg, #218838 0%, #17a2b8 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+            color: #333;
+            border: 2px solid transparent;
+        }
+
+        .btn-warning:hover {
+            background: linear-gradient(135deg, #e0a800 0%, #e8590c 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 193, 7, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
+            color: white;
+            border: 2px solid transparent;
+        }
+
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #c82333 0%, #d63384 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            color: white;
+            border: 2px solid transparent;
+        }
+
+        .btn-secondary:hover {
+            background: linear-gradient(135deg, #545b62 0%, #343a40 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4);
+        }
+
+        .btn-outline-danger {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(232, 62, 140, 0.1) 100%);
+            color: #dc3545;
+            border: 2px solid #dc3545;
+        }
+
+        .btn-outline-danger:hover {
+            background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
         }
 
         /* Evaluation Modal Overrides (Higher Specificity) */
@@ -301,6 +604,62 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
             color: #fff !important;
         }
+
+        /* Delete Confirmation Modal Styles */
+        #deleteConfirmModal .modal-content {
+            background: #121528;
+            color: #fff;
+            border: 2px solid #dc3545;
+            box-shadow: 0 10px 40px rgba(220, 53, 69, 0.3);
+        }
+        
+        #deleteConfirmModal .modal-header {
+            border-bottom: 1px solid rgba(220, 53, 69, 0.3);
+        }
+        
+        #deleteConfirmModal .modal-body {
+            background: #0f1429;
+        }
+        
+        #deleteConfirmModal .delete-icon {
+            font-size: 4rem;
+            color: #dc3545;
+            animation: shake 0.5s ease-in-out;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-10deg); }
+            75% { transform: rotate(10deg); }
+        }
+        
+        #deleteConfirmModal h5 {
+            color: #fff;
+            font-weight: 700;
+        }
+        
+        #deleteConfirmModal .text-muted {
+            color: #999 !important;
+        }
+        
+        #deleteConfirmModal .modal-footer {
+            border-top: 1px solid rgba(220, 53, 69, 0.3);
+            background: #0a0f1d;
+        }
+        
+        #deleteConfirmModal .btn-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            border: none;
+            font-weight: 600;
+            padding: 10px 24px;
+            transition: all 0.3s ease;
+        }
+        
+        #deleteConfirmModal .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
+        }
+
         #evaluationForm label.form-label { color: #fff !important; }
         /* تمييز اسم الموظف داخل نافذة التقييم */
         #evaluationForm #evalEmployeeName {
@@ -391,8 +750,13 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link pill-link active" href="admin-question-suggestions.html">
-                            <i class="fas fa-tasks"></i> إدارة الاقتراحات
+                        <a class="nav-link pill-link" href="question-suggestions.html">
+                            <i class="fas fa-lightbulb"></i> اقتراح الأسئلة
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link pill-link" href="archived-suggestions.html">
+                            <i class="fas fa-archive"></i> الأرشيف
                         </a>
                     </li>
                 </ul>
@@ -403,12 +767,19 @@
     <div class="admin-page">
         <!-- Page Header -->
         <div class="page-header">
-            <h1><i class="fas fa-tasks"></i> إدارة اقتراحات الأسئلة</h1>
-            <p>مراجعة وتقييم الأسئلة المقترحة من الموظفين</p>
+            <div style="display:flex; justify-content:center; margin-bottom:12px;">
+                <span id="pendingHeaderCountBadge" style="display:none; padding:8px 14px; border-radius:20px; background:linear-gradient(135deg,#ffc107 0%, #fd7e14 100%); color:#222; font-weight:700; box-shadow:0 4px 12px rgba(255,193,7,.35);">
+                    <i class="fas fa-clock"></i>
+                    <span id="pendingHeaderCount">0</span>
+                    قيد المراجعة
+                </span>
+            </div>
+            <h2 id="pageTitle"><i class="fas fa-list-check"></i> جميع اقتراحات الأسئلة</h2>
+            <p id="pageSubtitle">عرض جميع الأسئلة المقترحة من جميع المستخدمين (موظفين، إدارة)</p>
         </div>
 
         <!-- Stats Cards -->
-        <div class="stats-grid">
+        <div class="stats-grid" id="statsGrid">
             <div class="stat-card">
                 <div class="icon" style="color: #6c757d;"><i class="fas fa-inbox"></i></div>
                 <div class="label">إجمالي الاقتراحات</div>
@@ -436,9 +807,119 @@
             </div>
         </div>
 
-        <!-- Filter Bar -->
-        <div class="filter-bar">
-            <h3 style="margin-bottom: 15px;"><i class="fas fa-filter"></i> تصفية حسب الحالة</h3>
+        <!-- Advanced Filter Bar -->
+        <div class="filter-bar" id="filterBar">
+            <h3 style="margin-bottom: 20px;"><i class="fas fa-filter"></i> البحث والتصفية المتقدمة</h3>
+            
+            <!-- Search and Date Filters -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <!-- Employee Filter -->
+                <div style="position: relative;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #a0a0a0; font-size: 0.9rem;">
+                        <i class="fas fa-user"></i> اسم الموظف
+                    </label>
+                    <select 
+                        id="employeeFilter"
+                        style="width: 100%; padding: 12px 15px; background: #0f1429; border: 2px solid #2a3155; border-radius: 10px; color: #e0e0e0; font-size: 0.95rem; transition: all 0.3s;"
+                        onfocus="this.style.borderColor='#667eea'; this.style.background='#141937';"
+                        onblur="this.style.borderColor='#2a3155'; this.style.background='#0f1429';"
+                    >
+                        <option value="">-- جميع الموظفين --</option>
+                    </select>
+                </div>
+                
+                <!-- Date From -->
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #a0a0a0; font-size: 0.9rem;">
+                        <i class="fas fa-calendar-alt"></i> من تاريخ
+                    </label>
+                    <input 
+                        type="date" 
+                        id="dateFromFilter"
+                        style="width: 100%; padding: 12px 15px; background: #0f1429; border: 2px solid #2a3155; border-radius: 10px; color: #e0e0e0; font-size: 0.95rem; transition: all 0.3s;"
+                        onfocus="this.style.borderColor='#667eea'; this.style.background='#141937';"
+                        onblur="this.style.borderColor='#2a3155'; this.style.background='#0f1429';"
+                    >
+                </div>
+                
+                <!-- Date To -->
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #a0a0a0; font-size: 0.9rem;">
+                        <i class="fas fa-calendar-check"></i> إلى تاريخ
+                    </label>
+                    <input 
+                        type="date" 
+                        id="dateToFilter"
+                        style="width: 100%; padding: 12px 15px; background: #0f1429; border: 2px solid #2a3155; border-radius: 10px; color: #e0e0e0; font-size: 0.95rem; transition: all 0.3s;"
+                        onfocus="this.style.borderColor='#667eea'; this.style.background='#141937';"
+                        onblur="this.style.borderColor='#2a3155'; this.style.background='#0f1429';"
+                    >
+                </div>
+                
+                <!-- Category Filter -->
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #a0a0a0; font-size: 0.9rem;">
+                        <i class="fas fa-tags"></i> التصنيف
+                    </label>
+                    <select 
+                        id="categoryFilter"
+                        style="width: 100%; padding: 12px 15px; background: #0f1429; border: 2px solid #2a3155; border-radius: 10px; color: #e0e0e0; font-size: 0.95rem; cursor: pointer; transition: all 0.3s;"
+                        onfocus="this.style.borderColor='#667eea'; this.style.background='#141937';"
+                        onblur="this.style.borderColor='#2a3155'; this.style.background='#0f1429';"
+                    >
+                        <option value="">جميع التصنيفات</option>
+                        <option value="trading">تداولية</option>
+                        <option value="interactive">تفاعلية</option>
+                        <option value="company_features">مميزات الشركة</option>
+                        <option value="educational">تعليمية</option>
+                        <option value="highlight_site">تبرز الموقع</option>
+                        <option value="other">اخري</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
+                <button 
+                    id="applyFiltersBtn"
+                    style="padding: 12px 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(102,118,234,0.4);"
+                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(102,118,234,0.5)';"
+                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(102,118,234,0.4)';"
+                >
+                    <i class="fas fa-search"></i> تطبيق الفلاتر
+                </button>
+                <button 
+                    id="resetFiltersBtn"
+                    style="padding: 12px 25px; background: #2a3155; color: #e0e0e0; border: 2px solid #3a4165; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s;"
+                    onmouseover="this.style.background='#3a4165'; this.style.borderColor='#4a5175';"
+                    onmouseout="this.style.background='#2a3155'; this.style.borderColor='#3a4165';"
+                >
+                    <i class="fas fa-redo"></i> إعادة تعيين
+                </button>
+                <button 
+                    id="copyApprovedQuestionsBtn"
+                    style="padding: 12px 25px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(40,167,69,0.4);"
+                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(40,167,69,0.5)';"
+                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(40,167,69,0.4)';"
+                    title="نسخ جميع الأسئلة المقبولة حسب الفلتر الحالي"
+                >
+                    <i class="fas fa-copy"></i> نسخ الأسئلة المقبولة
+                </button>
+                <button 
+                    id="exportToExcelBtn"
+                    style="padding: 12px 25px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(23,162,184,0.4);"
+                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(23,162,184,0.5)';"
+                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(23,162,184,0.4)';"
+                    title="تصدير النتائج المفلترة إلى Excel"
+                >
+                    <i class="fas fa-file-excel"></i> تصدير إلى Excel
+                </button>
+            </div>
+            
+            <!-- Status Filter Buttons -->
+            <h4 style="margin-bottom: 12px; font-size: 1rem; color: #a0a0a0;">
+                <i class="fas fa-filter"></i> تصفية حسب الحالة
+            </h4>
             <div class="filter-buttons">
                 <button class="admin-filter-btn active" data-status="pending">
                     <i class="fas fa-clock"></i> قيد المراجعة
@@ -461,6 +942,27 @@
         <!-- Suggestions Container -->
         <div id="adminSuggestionsContainer">
             <!-- Will be populated by JS -->
+        </div>
+    </div>
+
+    <!-- Archive Confirmation Modal -->
+    <div class="modal fade" id="archiveModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: #1a1f3a; border: 1px solid #2a3155; color: #fff;">
+                <div class="modal-body text-center p-4">
+                    <div class="mb-3">
+                        <div style="width: 80px; height: 80px; background: rgba(255, 193, 7, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                            <i class="fas fa-archive fa-3x text-warning"></i>
+                        </div>
+                    </div>
+                    <h4 class="mb-3">أرشفة الاقتراح</h4>
+                    <p class="text-muted mb-4">هل أنت متأكد من أرشفة هذا الاقتراح؟ سيتم إخفاؤه من القائمة.</p>
+                    <div class="d-flex justify-content-center gap-3">
+                        <button type="button" class="btn btn-outline-light px-4" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="button" class="btn btn-warning px-4" id="confirmArchiveBtn">نعم، أرشفة</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -557,8 +1059,143 @@
         </div>
     </div>
 
+    <!-- Save Suggestion As Template Modal -->
+    <div class="modal fade" id="suggestionTemplateModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="background: #141937; border: 1px solid #2a3155; color: #fff;">
+                <div class="modal-header" style="border-bottom: 1px solid #2a3155;">
+                    <h5 class="modal-title"><i class="fas fa-file-export"></i> حفظ الاقتراح كقالب مسابقة</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 10px; color: #cfd8ff;">
+                        يمكنك تحويل هذا السؤال المعتمد إلى قالب يظهر في صفحة إنشاء وإرسال المسابقة ليتم استخدامه فوراً.
+                    </p>
+                    <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:15px; font-size:0.9rem; color:#9ea8d1;">
+                        <span><i class="fas fa-user-tie"></i> الموظف: <strong id="templateSuggestionEmployee">-</strong></span>
+                        <span><i class="fas fa-tags"></i> فئة الاقتراح: <strong id="templateSuggestionCategory">-</strong></span>
+                    </div>
+                    <div class="alert alert-warning d-none" id="templateSuggestionExistsAlert" style="background: rgba(255,193,7,0.2); color:#ffdd57; border:none;">
+                    </div>
+                    <form id="suggestionTemplateForm">
+                        <div class="mb-3">
+                            <label class="form-label">السؤال (يمكن تعديله قبل الحفظ)</label>
+                            <textarea id="templateSuggestionQuestionInput" class="form-control" rows="3" style="background:#0f1429; color:#fff; border:1px solid #2a3155;" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">الإجابة الصحيحة</label>
+                            <textarea id="templateSuggestionAnswerInput" class="form-control" rows="2" style="background:#0f1429; color:#fff; border:1px solid #2a3155;" required></textarea>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">التصنيف (R / A / B / C)</label>
+                                <select id="templateClassificationSelect" class="form-select" style="background:#0f1429; color:#fff; border:1px solid #2a3155;">
+                                    <option value="All">عام</option>
+                                    <option value="R">R</option>
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">نوع القالب</label>
+                                <select id="templateTypeSelect" class="form-select" style="background:#0f1429; color:#fff; border:1px solid #2a3155;">
+                                    <option value="مميزات">مميزات</option>
+                                    <option value="تفاعلية">تفاعلية</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">عدد مرات الاستخدام (اختياري)</label>
+                                <input type="number" id="templateUsageLimitInput" min="1" class="form-control" placeholder="غير محدود" style="background:#0f1429; color:#fff; border:1px solid #2a3155;">
+                            </div>
+                        </div>
+                        <div class="mb-3 mt-3">
+                            <label class="form-label">محتوى القالب (ثابت)</label>
+                            <textarea id="templateContentInput" class="form-control" rows="12" style="background:#0f1429; color:#fff; border:1px solid #2a3155;" readonly disabled></textarea>
+                            <small style="color:#9ea8d1;">هذا المحتوى ثابت للقوالب ويستخدم كما هو عند إنشاء المسابقة.</small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid #2a3155; display:flex; justify-content:space-between;">
+                    <button type="button" class="btn btn-outline-light" id="skipSuggestionTemplateBtn" data-bs-dismiss="modal">
+                        <i class="fas fa-check"></i> حفظ فقط
+                    </button>
+                    <button type="button" class="btn btn-primary" id="saveSuggestionTemplateBtn" disabled>
+                        <i class="fas fa-file-import"></i> حفظ في قوالب المسابقات
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        تأكيد الحذف
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <div class="delete-icon mb-3">
+                        <i class="fas fa-trash-alt"></i>
+                    </div>
+                    <h5 class="mb-3">هل أنت متأكد من حذف هذا الاقتراح؟</h5>
+                    <p class="text-muted mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        لا يمكن التراجع عن هذا الإجراء بعد الحذف
+                    </p>
+                </div>
+                <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> إلغاء
+                    </button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                        <i class="fas fa-trash"></i> نعم، احذف الاقتراح
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- SheetJS with styling support -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <script src="../js/utils.js"></script>
     <script src="../js/pages/admin-question-suggestions.js"></script>
+    <script>
+        (function setupFaviconDebug() {
+            const logSizes = () => {
+                try {
+                    const favicons = document.querySelectorAll('link[rel="icon"][href*="Logo1"]');
+                    if (!favicons.length) {
+                        console.warn('[Favicon Debug] لم يتم العثور على أي روابط للأيقونة');
+                        return;
+                    }
+                    favicons.forEach((link) => {
+                        const img = new Image();
+                        img.onload = function () {
+                            console.log(`[Favicon Debug] الحجم الفعلي: ${this.naturalWidth}x${this.naturalHeight} - ${link.href}`);
+                        };
+                        img.onerror = function () {
+                            console.error('[Favicon Debug] تعذر تحميل الأيقونة', link.href);
+                        };
+                        img.src = link.href;
+                    });
+                } catch (err) {
+                    console.error('[Favicon Debug] خطأ أثناء تتبع الأيقونة', err);
+                }
+            };
+
+            if (document.readyState === 'complete') {
+                logSizes();
+            } else {
+                window.addEventListener('load', logSizes, { once: true });
+            }
+        })();
+    </script>
 </body>
 </html>

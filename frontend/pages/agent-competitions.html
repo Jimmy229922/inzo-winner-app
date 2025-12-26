@@ -2024,6 +2024,55 @@
         .table-responsive::-webkit-scrollbar-thumb:hover {
             background: linear-gradient(135deg, #ff6b6b, var(--primary-color));
         }
+
+        /* Agent Top Bar */
+        .agent-top-bar {
+            background: white;
+            padding: 15px 30px;
+            margin-bottom: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        body.dark-mode .agent-top-bar {
+            background: var(--card-bg-color, #1e293b);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+
+        .nav-container {
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        body.dark-mode .nav-btn {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-color, #e2e8f0);
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            background: #e5e7eb;
+        }
+
+        body.dark-mode .nav-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
     </style>
 </head>
 <body class="dark-mode">
@@ -2137,7 +2186,7 @@
     </div>
 
         <script src="../js/utils.js"></script>
-        <script src="../js/pages/agent-competitions.js"></script>
+        <script src="../js/pages/agent-competitions.js?v=1.1"></script>
 
         <script>
             function confirmViewWinners(){

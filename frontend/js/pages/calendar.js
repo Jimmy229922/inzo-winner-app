@@ -164,17 +164,20 @@ class CalendarUI {
       "الثلاثاء",
       "الأربعاء",
       "الخميس",
-      "الجمعة",
+      "الجمعة"
     ];
     this.searchDebounceTimer = null;
     this._syncInterval = null;
 
     this.boundHandleChange = this._handleChange.bind(this);
     this.boundHandleResetAll = this.handleResetAllTasks.bind(this);
+    this.boundUpdateUIFromState = this.updateCalendarUIFromState.bind(this);
   }
 
   destroy() {
-    // window.taskStore.unsubscribe(this.boundUpdateUIFromState); // Removed to fix bug
+    if (window.taskStore && this.boundUpdateUIFromState) {
+        window.taskStore.unsubscribe(this.boundUpdateUIFromState);
+    }
     clearTimeout(this.searchDebounceTimer);
     if (weeklyResetCountdownInterval) {
       clearInterval(weeklyResetCountdownInterval);
@@ -220,12 +223,26 @@ class CalendarUI {
     }
 
     this.calendarData = this.daysOfWeek.map(() => []);
+    
+    // --- FIX: Build calendar data from ALL agents, showing them on ALL days where they have tasks ---
     agents.forEach((agent) => {
+      // Check if agent has any tasks in the store
+      const agentTasks = this.tasksState.tasks[agent._id] || {};
+      const daysWithTasks = Object.keys(agentTasks).map(d => parseInt(d, 10));
+      
+      // FIX: Always use audit_days as the source of truth for which days to show agent
+      // Tasks are just status indicators, not day assignment
       const dayIndices = agent.audit_days || [];
       dayIndices.forEach((dayIndex) => {
-        if (dayIndex >= 0 && dayIndex < 6) {
-          // Corrected to include Saturday
-          this.calendarData[dayIndex].push(agent);
+        if (dayIndex >= 0 && dayIndex <= 5) {
+          // Ensure the array exists before checking
+          if (!this.calendarData[dayIndex]) {
+            this.calendarData[dayIndex] = [];
+          }
+          const alreadyAdded = this.calendarData[dayIndex].some(a => a._id === agent._id);
+          if (!alreadyAdded) {
+            this.calendarData[dayIndex].push(agent);
+          }
         }
       });
     });
@@ -253,9 +270,25 @@ class CalendarUI {
       }
     }, 20000); // كل 20 ثانية
 
-    // The global subscription is removed to fix the bug.
-    // this.boundUpdateUIFromState = updateCalendarUIFromState.bind(this);
-    // window.taskStore.subscribe(this.boundUpdateUIFromState);
+    // The global subscription is enabled
+    if (window.taskStore) {
+        window.taskStore.subscribe(this.boundUpdateUIFromState);
+    }
+  }
+
+  updateCalendarUIFromState(newState) {
+      console.log('[Calendar] Received store update');
+      this.tasksState = newState;
+      // Re-render columns to reflect changes
+      // We could optimize this to only update changed cells, but re-rendering columns is fast enough
+      this._renderDayColumns();
+      this._renderAllAgentCards();
+      
+      // Re-apply filters if any
+      const searchInput = document.getElementById("calendar-search-input");
+      if (searchInput && searchInput.value) {
+          searchInput.dispatchEvent(new Event('input'));
+      }
   }
 
   _renderDayColumns() {

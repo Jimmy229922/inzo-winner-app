@@ -24,6 +24,9 @@ const questionSuggestionRoutes = require('./routes/questionSuggestion.routes'); 
 
 const app = express();
 
+// --- NEW: Shared cache for deduplication between controllers ---
+app.locals.recentMessages = new Map();
+
 // --- Global log silencer: hide noisy console output in production by default ---
 // Set DEBUG_LOGS=true in the environment to re-enable info/debug logs.
 (() => {

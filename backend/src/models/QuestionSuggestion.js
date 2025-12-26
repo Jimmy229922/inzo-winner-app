@@ -11,6 +11,12 @@ const questionSuggestionSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    suggested_by_role: {
+        type: String,
+        enum: ['user', 'employee', 'admin', 'super_admin'], // أضفنا 'user' لتوافق نموذج User
+        required: true,
+        default: 'user' // قيمة افتراضية للبيانات القديمة
+    },
     
     // السؤال المقترح
     question: {
@@ -42,6 +48,13 @@ const questionSuggestionSchema = new mongoose.Schema({
         type: String,
         enum: ['easy', 'medium', 'hard'],
         default: 'medium'
+    },
+    
+    // ملاحظات إضافية من المقترح
+    additional_notes: {
+        type: String,
+        trim: true,
+        default: ''
     },
     
     // حالة الاقتراح
@@ -83,6 +96,24 @@ const questionSuggestionSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Competition'
     },
+
+    // NEW: Flag for unread updates
+    has_new_update: {
+        type: Boolean,
+        default: false
+    },
+
+    // NEW: Flag for archived suggestions
+    is_archived: {
+        type: Boolean,
+        default: false
+    },
+    
+    // NEW: Who archived the suggestion
+    archived_by: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }
     
 }, {
     timestamps: true
@@ -95,3 +126,4 @@ questionSuggestionSchema.index({ status: 1, createdAt: -1 });
 const QuestionSuggestion = mongoose.model('QuestionSuggestion', questionSuggestionSchema);
 
 module.exports = QuestionSuggestion;
+

@@ -362,7 +362,10 @@ function generateCompetitionGridHtml(competitions) {
                 <span class="checkmark"></span>
             </label>
             <div class="competition-card-name">
-                <h3>${comp.name}</h3>
+                <div class="competition-info-wrapper">
+                    <h3>${comp.name}</h3>
+                    ${comp.description ? `<div class="competition-question-text" title="${comp.description}"><i class="fas fa-question-circle"></i> <span>${comp.description}</span></div>` : ''}
+                </div>
                 ${countdownHtml}
             </div>
             <div class="competition-card-status">
@@ -557,7 +560,11 @@ async function renderCompetitionCreatePage(agentId) {
                     <label for="competition-template-select">المسابقات المقترحة</label>
                     <select id="competition-template-select" required>
                         <option value="" disabled selected>-- اختار مسابقة --</option>
-                        ${templates.map(t => `<option value="${t._id}">${t.question}</option>`).join('')}
+                        ${templates.map(t => {
+                            const q = t.question || '';
+                            const displayQ = q.length > 120 ? q.substring(0, 120) + '...' : q;
+                            return `<option value="${t._id}" title="${q.replace(/"/g, '&quot;')}">${displayQ}</option>`;
+                        }).join('')}
                     </select>
                     <div id="template-usage-info" class="form-hint" style="display: none;"></div>
                 </div>
@@ -874,13 +881,20 @@ async function renderCompetitionCreatePage(agentId) {
 
             let finalImageUrl = selectedTemplate.image_url || '/images/competition_bg.jpg'; // Default to template image
 
-            // --- FIX: Handle absolute localhost URLs from old templates ---
-            if (finalImageUrl && finalImageUrl.startsWith('http://localhost')) {
-                try {
-                    const url = new URL(finalImageUrl);
-                    finalImageUrl = url.pathname; // Convert to relative path
-                } catch (e) {
-                    console.error('Could not parse template image URL, leaving as is:', e);
+            // --- FIX: Normalize image URL so Telegram can fetch it from the backend ---
+            if (finalImageUrl) {
+                // Handle absolute localhost URLs from old templates
+                if (finalImageUrl.startsWith('http://localhost')) {
+                    try {
+                        const url = new URL(finalImageUrl);
+                        finalImageUrl = url.pathname; // Convert to relative path
+                    } catch (e) {
+                        console.error('Could not parse template image URL, leaving as is:', e);
+                    }
+                }
+                // If we have a relative path without a leading slash (e.g., "uploads/competitions/xxx"), prefix it
+                if (!finalImageUrl.startsWith('/') && !finalImageUrl.startsWith('http')) {
+                    finalImageUrl = `/${finalImageUrl}`;
                 }
             }
             // --- End of FIX ---
@@ -898,6 +912,10 @@ async function renderCompetitionCreatePage(agentId) {
                 
                 const uploadResult = await uploadResponse.json();
                 finalImageUrl = uploadResult.imageUrl;
+                // Uploaded paths from backend should start with "/uploads", but guard just in case
+                if (finalImageUrl && !finalImageUrl.startsWith('/')) {
+                    finalImageUrl = `/${finalImageUrl}`;
+                }
             }
 
 
@@ -920,13 +938,23 @@ async function renderCompetitionCreatePage(agentId) {
                 duration: durationInput.value,
                 total_cost: totalCost,
                 deposit_winners_count: depositWinnersCount,
+                trading_winners_count: winnersCount,
+                required_winners: winnersCount + depositWinnersCount,
                 correct_answer: document.getElementById('override-correct-answer').value,
-                winners_count: winnersCount,
                 prize_per_winner: prizePerWinner,
                 template_id: selectedTemplate._id,
                 image_url: finalImageUrl,
-                client_request_id: requestKey
+                client_request_id: requestKey,
+                deposit_bonus_percentage: agent.deposit_bonus_percentage || 0 // Ensure this is sent
             };
+
+            console.log('🎯 [Create Competition] Payload being sent to backend:', {
+                trading_winners_count: competitionPayload.trading_winners_count,
+                deposit_winners_count: competitionPayload.deposit_winners_count,
+                required_winners: competitionPayload.required_winners,
+                total_cost: competitionPayload.total_cost,
+                prize_per_winner: competitionPayload.prize_per_winner
+            });
 
             const compResponse = await authedFetch('/api/competitions', {
                 method: 'POST',
@@ -934,19 +962,19 @@ async function renderCompetitionCreatePage(agentId) {
             });
 
             if (!compResponse.ok) {
-                if (compResponse.status === 409) throw new Error('فشل الإرسال: تم إرسال هذه المسابقة لهذا الوكيل من قبل.');
-                const result = await compResponse.json();
+                const result = await compResponse.json().catch(() => ({}));
+                if (compResponse.status === 409) {
+                    throw new Error(result.message || 'فشل الإرسال: تم إرسال هذه المسابقة لهذا الوكيل من قبل.');
+                }
                 throw new Error(result.message || 'فشل حفظ المسابقة.');
             }
 
-            // --- FIX: Re-add Telegram sending logic after successful save ---
-            const telegramResponse = await authedFetch('/api/post-announcement', {
-                method: 'POST',
-                body: JSON.stringify({
-                    message: competitionPayload.description,
-                    chatId: agent.telegram_chat_id,
-                    imageUrl: finalImageUrl
-                })
+            const savedCompetition = await compResponse.json();
+            console.log('✅ [Create Competition] Competition saved successfully:', {
+                id: savedCompetition.data?._id,
+                trading_winners_count: savedCompetition.data?.trading_winners_count,
+                deposit_winners_count: savedCompetition.data?.deposit_winners_count,
+                required_winners: savedCompetition.data?.required_winners
             });
 
             if (!telegramResponse.ok) {

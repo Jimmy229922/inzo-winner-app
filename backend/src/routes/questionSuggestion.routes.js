@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const questionSuggestionController = require('../controllers/questionSuggestion.controller');
+const { submitSuggestion, getAllSuggestions, getPublicApprovedSuggestions, evaluateSuggestion, deleteSuggestion } = require('../controllers/questionSuggestion.controller');
 const { authenticate } = require('../api/middleware/auth.middleware');
+const { requireRole } = require('../api/middleware/roles.middleware');
 
 // ==============================================
 // Routes للموظفين (يحتاج authentication فقط)
@@ -32,52 +34,37 @@ router.get(
 // Routes للإدارة (admin & super_admin فقط)
 // ==============================================
 
-// عرض جميع الاقتراحات
+// عرض جميع الاقتراحات - متاح للجميع (موظف، أدمن، سوبر أدمن)
 router.get(
     '/all',
     authenticate,
-    (req, res, next) => {
-        // التحقق من الصلاحيات
-        if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'غير مصرح لك بالوصول'
-            });
-        }
-        next();
-    },
     questionSuggestionController.getAllSuggestions
 );
 
-// تقييم اقتراح
+// عدد الاقتراحات غير المقروءة - متاح للسوبر أدمن
+router.get(
+    '/unread-count',
+    authenticate,
+    requireRole('super_admin'),
+    questionSuggestionController.getUnreadCount
+);
+    
+// Public endpoint for employees to view approved suggestions only
+router.get('/public', authenticate, requireRole('employee', 'admin', 'super_admin'), questionSuggestionController.getPublicApprovedSuggestions);
+
+// تقييم اقتراح - فقط للسوبر أدمن
 router.put(
     '/evaluate/:id',
     authenticate,
-    (req, res, next) => {
-        if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'غير مصرح لك بالوصول'
-            });
-        }
-        next();
-    },
+    requireRole('super_admin'),
     questionSuggestionController.evaluateSuggestion
 );
 
-// حذف اقتراح
+// حذف اقتراح - فقط للسوبر أدمن
 router.delete(
     '/:id',
     authenticate,
-    (req, res, next) => {
-        if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'غير مصرح لك بالوصول'
-            });
-        }
-        next();
-    },
+    requireRole('super_admin'),
     questionSuggestionController.deleteSuggestion
 );
 
@@ -86,6 +73,35 @@ router.put(
     '/notify/:id',
     authenticate,
     questionSuggestionController.markAsNotified
+);
+
+// NEW: Get unread updates count for employee
+router.get(
+    '/employee-unread-count',
+    authenticate,
+    questionSuggestionController.getEmployeeUnreadUpdatesCount
+);
+
+// NEW: Mark updates as seen for employee
+router.post(
+    '/mark-seen',
+    authenticate,
+    questionSuggestionController.markUpdatesAsSeen
+);
+
+// أرشفة اقتراح - فقط للسوبر أدمن
+router.put(
+    '/:id/archive',
+    authenticate,
+    requireRole('super_admin'),
+    questionSuggestionController.archiveSuggestion
+);
+
+// تعديل اقتراح - للموظف (عند طلب التعديل)
+router.put(
+    '/:id/update',
+    authenticate,
+    questionSuggestionController.updateSuggestion
 );
 
 module.exports = router;

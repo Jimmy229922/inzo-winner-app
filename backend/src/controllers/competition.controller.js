@@ -1,9 +1,25 @@
 ﻿const mongoose = require('mongoose');
+const path = require('path');
+const fs = require('fs').promises;
 const Competition = require('../models/Competition');
 const Agent = require('../models/agent.model');
 const CompetitionTemplate = require('../models/CompetitionTemplate'); // NEW: Import the template model
 const Winner = require('../models/Winner');
+const QuestionSuggestion = require('../models/QuestionSuggestion');
 const { logActivity } = require('../utils/logActivity');
+
+/**
+ * Creates a hash from the string for duplicate detection.
+ */
+function simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash;
+}
 
 /**
  * Calculates the UTC end date for a competition based on local timezone logic.
@@ -145,10 +161,11 @@ exports.getAgentActiveCompetition = async (req, res) => {
         const formattedCompetition = {
             ...competition,
             template: competition.template_id,
-            trading_winners_count: competition.winners_count || 0,
+            trading_winners_count: competition.trading_winners_count || 0,
             deposit_winners_count: competition.deposit_winners_count || 0,
             current_winners_count: currentWinnersCount,
-            deposit_bonus_percentage: effectiveDepositBonusPct
+            deposit_bonus_percentage: effectiveDepositBonusPct,
+            required_winners: competition.required_winners || 3
         };
         delete formattedCompetition.template_id;
 
@@ -177,10 +194,11 @@ exports.getCompetitionById = async (req, res) => {
         const formattedCompetition = {
             ...competition,
             template: competition.template_id,
-            trading_winners_count: competition.winners_count || 0,
+            trading_winners_count: competition.trading_winners_count || 0,
             deposit_winners_count: competition.deposit_winners_count || 0,
             current_winners_count: currentWinnersCount
         };
+        formattedCompetition.required_winners = competition.required_winners || 3;
         delete formattedCompetition.template_id;
 
         res.json({ competition: formattedCompetition });
@@ -192,11 +210,23 @@ exports.getCompetitionById = async (req, res) => {
 exports.createCompetition = async (req, res) => {
     console.log(`[BACKEND] Received POST /api/competitions at ${new Date().toISOString()}`);
     try {
-        const { agent_id, template_id } = req.body;
+        const { agent_id, template_id, image_url, description } = req.body;
 
         // --- PRE-SEND TELEGRAM GROUP VALIDATION ---
         // ... (existing code)
 
+        // 2. Balance Check
+        const totalCost = Number(req.body.total_cost) || 0;
+        const depositWinners = Number(req.body.deposit_winners_count) || 0;
+
+        if ((agent.remaining_balance || 0) < totalCost) {
+            return res.status(400).json({ message: 'رصيد الوكيل غير كافٍ لإرسال المسابقة.' });
+        }
+        if ((agent.remaining_deposit_bonus || 0) < depositWinners) {
+            return res.status(400).json({ message: 'عدد مرات بونص الإيداع غير كافٍ.' });
+        }
+
+        // 3. Duplicate Checks
         // Normalize idempotency key if provided by client
         const clientRequestId = req.body.client_request_id || req.body.clientRequestId;
         console.log(`[BACKEND] Using client_request_id: ${clientRequestId}`);
@@ -214,25 +244,154 @@ exports.createCompetition = async (req, res) => {
             }
         }
 
-        // --- NEW: Server-side check to prevent duplicate competitions ---
+        // Check if this template has EVER been sent to this agent
+        /* 
+        // DISABLED: Allow sending the same template multiple times as per user request
         if (agent_id && template_id) {
-            const duplicateWindowMs = 2 * 60 * 1000; // 2 minutes
-            const cutoff = new Date(Date.now() - duplicateWindowMs);
             const existingCompetition = await Competition.findOne({
                 agent_id,
-                template_id,
-                createdAt: { $gte: cutoff }
+                template_id
             });
             console.log(`[BACKEND] Time-based duplicate check (existingCompetition): ${existingCompetition ? existingCompetition._id : 'null'}`);
             if (existingCompetition) {
                 return res.status(409).json({
-                    message: 'Conflict: A competition with this template has already been sent to this agent just now.',
+                    message: 'عذراً، تم إرسال هذه المسابقة لهذا الوكيل من قبل.',
                     error: 'Duplicate competition entry.',
                     duplicateId: existingCompetition._id
                 });
             }
         }
+        */
 
+        // 4. Telegram Group Validation & Sending
+        const botInstance = req.app.locals.telegramBot;
+
+        if (agent.telegram_chat_id && botInstance) {
+            // A. Validate Group Name
+            try {
+                const chatInfo = await botInstance.getChat(agent.telegram_chat_id);
+                const realTitle = chatInfo?.title || '';
+                const storedTitle = agent.telegram_group_name || '';
+                
+                if (storedTitle && realTitle && storedTitle.trim() !== realTitle.trim()) {
+                    return res.status(409).json({
+                        message: 'فشل التحقق من اسم مجموعة التليجرام. الاسم المسجل لا يطابق الاسم الحالي للمجموعة.',
+                        error: 'Telegram group name mismatch',
+                        stored_group_name: storedTitle,
+                        actual_group_name: realTitle
+                    });
+                }
+            } catch (tgErr) {
+                return res.status(400).json({
+                    message: 'تعذر الوصول إلى مجموعة التليجرام للتحقق.',
+                    error: tgErr.message
+                });
+            }
+
+            // B. Prepare Image
+            let imageBuffer = null;
+            let filename = 'competition.jpg';
+            let contentType = 'image/jpeg';
+
+            if (image_url) {
+                try {
+                    const normalizedPath = image_url.replace(/^\/+/, '');
+                    let imagePath;
+                    if (image_url.startsWith('/images/')) {
+                        imagePath = path.join(__dirname, '..', '..', '..', 'frontend', normalizedPath);
+                    } else {
+                        imagePath = path.join(__dirname, '..', '..', normalizedPath);
+                    }
+                    
+                    imageBuffer = await fs.readFile(imagePath);
+                    const ext = path.extname(imagePath).toLowerCase();
+                    if (ext === '.png') contentType = 'image/png';
+                    else if (ext === '.gif') contentType = 'image/gif';
+                    filename = path.basename(imagePath);
+                } catch (err) {
+                    console.error('Image read error:', err);
+                    return res.status(400).json({ 
+                        message: 'فشل قراءة صورة المسابقة. لا يمكن إرسال المسابقة بدون صورة.',
+                        error: err.message 
+                    });
+                }
+            } else {
+                return res.status(400).json({ message: 'صورة المسابقة مطلوبة.' });
+            }
+
+            // C. Send to Telegram
+            try {
+                const caption = description || '';
+                
+                console.log(`[Competition] Attempting to send competition to Telegram group: ${agent.telegram_group_name} (ID: ${agent.telegram_chat_id})`);
+
+                // --- NEW: Register this message in the shared cache to prevent double-sending by telegram.controller.js ---
+                if (req.app.locals.recentMessages) {
+                    const msgHash = simpleHash(caption);
+                    const dedupKey = `${agent.telegram_chat_id}-${msgHash}`;
+                    // Set TTL to 10 seconds
+                    req.app.locals.recentMessages.set(dedupKey, Date.now() + 10000);
+                    console.log(`[Competition] Registered deduplication key: ${dedupKey}`);
+                }
+
+                if (caption.length <= 1024) {
+                    // Case 1: Text is short enough for one message
+                    await botInstance.sendPhoto(
+                        agent.telegram_chat_id,
+                        imageBuffer,
+                        { caption: caption, parse_mode: 'HTML' },
+                        { filename: filename, contentType: contentType }
+                    );
+                } else {
+                    // Case 2: Text is too long (> 1024 chars)
+                    // Strategy: Send Photo first (with title), then Reply with the full text
+                    console.log(`[Competition] Text length (${caption.length}) exceeds 1024 limit. Switching to Split Mode (Photo + Reply Text).`);
+                    
+                    // 1. Send Photo (with title only)
+                    const photoMsg = await botInstance.sendPhoto(
+                        agent.telegram_chat_id,
+                        imageBuffer,
+                        { caption: `<b>مسابقة جديدة</b>`, parse_mode: 'HTML' },
+                        { filename: filename, contentType: contentType }
+                    );
+
+                    // 2. Send Full Text as a Reply to the Photo
+                    if (photoMsg && photoMsg.message_id) {
+                        await botInstance.sendMessage(
+                            agent.telegram_chat_id,
+                            caption,
+                            { 
+                                parse_mode: 'HTML', 
+                                reply_to_message_id: photoMsg.message_id 
+                            }
+                        );
+                    }
+                }
+
+                console.log(`[Competition] Successfully sent competition to Telegram group: ${agent.telegram_group_name}`);
+
+            } catch (sendErr) {
+                console.error(`[Competition] Failed to send competition to Telegram group: ${agent.telegram_group_name}. Error: ${sendErr.message}`);
+                return res.status(500).json({ 
+                    message: 'فشل إرسال المسابقة إلى التليجرام.',
+                    error: sendErr.message 
+                });
+            }
+        } else {
+             if (!agent.telegram_chat_id) {
+                 return res.status(400).json({ message: 'الوكيل ليس لديه معرف مجموعة تليجرام.' });
+             }
+             if (!botInstance) {
+                 return res.status(503).json({ message: 'خدمة التليجرام غير متوفرة حالياً.' });
+             }
+        }
+
+        // 5. Deduct Balance (Only reached if Telegram send succeeded)
+        agent.remaining_balance = (agent.remaining_balance || 0) - totalCost;
+        agent.remaining_deposit_bonus = (agent.remaining_deposit_bonus || 0) - depositWinners;
+        await agent.save();
+
+        // 6. Save Competition
         const competitionData = req.body;
         
         // Calculate ends_at on the backend for consistency and accuracy.
@@ -245,6 +404,13 @@ exports.createCompetition = async (req, res) => {
         // Stamp server-side idempotency key when missing (helps future duplicate detection)
         if (!competitionData.client_request_id) {
             competitionData.client_request_id = new mongoose.Types.ObjectId().toString();
+        }
+
+        // Ensure deposit_bonus_percentage is saved from agent if missing
+        if (!competitionData.deposit_bonus_percentage || competitionData.deposit_bonus_percentage === 0) {
+            if (agent && agent.deposit_bonus_percentage) {
+                competitionData.deposit_bonus_percentage = agent.deposit_bonus_percentage;
+            }
         }
 
         const competition = new Competition(competitionData);
@@ -270,7 +436,42 @@ exports.createCompetition = async (req, res) => {
             console.log(`[BACKEND] Updated agent balance for agent: ${agent._id}. Cost: ${cost}, Deposit Winners: ${depositWinners}`);
         }
 
-        // --- NEW: Increment template usage count and archive if limit is reached ---
+        console.log(`[Competition] Competition created and saved successfully. ID: ${competition._id}`);
+
+        // Save competition questions as suggestions
+        if (competition.questions && competition.questions.length > 0) {
+            try {
+                const userId = req.user._id;
+                const userName = req.user.full_name;
+                
+                const questionSuggestions = competition.questions.map(q => ({
+                    suggested_by: userId,
+                    suggested_by_name: userName,
+                    question: q.question,
+                    correct_answer: q.correct_answer,
+                    category: 'general', // Default category
+                    difficulty: 'medium', // Default difficulty
+                    status: 'approved', // Auto-approve questions from competitions
+                    used_in_competition: true,
+                    competition_id: competition._id,
+                    evaluation: {
+                        reviewed_by: userId,
+                        reviewed_by_name: userName,
+                        reviewed_at: new Date(),
+                        rating: 5,
+                        feedback: 'تم إنشاؤه من مسابقة',
+                        admin_notes: `تم الإنشاء تلقائياً من مسابقة: ${competition.name || 'غير محدد'}`
+                    }
+                }));
+                
+                await QuestionSuggestion.insertMany(questionSuggestions);
+            } catch (suggestionError) {
+                console.error('Error saving questions as suggestions:', suggestionError);
+                // Don't fail the whole request if question saving fails
+            }
+        }
+
+        // Increment template usage count and archive if limit is reached
         if (req.body.template_id) {
             const template = await CompetitionTemplate.findById(req.body.template_id);
             if (template) {

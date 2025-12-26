@@ -186,8 +186,8 @@ async function updateHomePageUI(stats) {
                     /* logs suppressed: fallback map */
                 }
 
-                // A daily task for an agent has two components: audit and competition.
-                const totalTodayActions = totalTodayAgents * 2;
+                // A daily task for an agent counts as complete when audited only
+                const totalTodayActions = totalTodayAgents; // Count auditing only
                 let completedActions = 0;
 
                 /* logs suppressed: calculating completed actions */
@@ -198,16 +198,14 @@ async function updateHomePageUI(stats) {
                     if (task.audited) {
                         completedActions++;
                     }
-                    if (task.competition_sent) {
-                        completedActions++;
-                    }
+                    // Competition is not counted in progress anymore
                 });
 
                 /* logs suppressed: final calculations */
                 
                 const pendingAgents = agentsForToday.filter(agent => {
                     const task = tasksMap[agent._id];
-                    return !task || !task.audited || !task.competition_sent;
+                    return !task || !task.audited; // Only check audited status
                 });
                 
                 /* logs suppressed: pending count */

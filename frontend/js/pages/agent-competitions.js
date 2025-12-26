@@ -593,8 +593,8 @@ function renderCompetitionsTable() {
         };
         const statusText = statusMap[comp.status] || comp.status;
         
-        // اختصار السؤال
-        const questionText = comp.description || comp.name || 'غير متوفر';
+        // اختصار السؤال - استخدام الاسم (السؤال) بدلاً من الوصف (القالب الكامل)
+        const questionText = comp.name || comp.description || 'غير متوفر';
         const shortQuestion = questionText.length > 60 
             ? questionText.substring(0, 60) + '...' 
             : questionText;

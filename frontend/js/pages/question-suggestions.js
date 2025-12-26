@@ -19,40 +19,73 @@ function initQuestionSuggestions() {
     loadMySuggestions();
     setupFormSubmission();
     setupFilters();
-    checkForNotifications();
+    // checkForNotifications(); // Removed old notification check
     setupCustomCategoryToggle();
+    setupScrollObserver(); // NEW: Mark updates as seen on scroll
+    setupDelegation();
 }
 
 // ==========================
-// التحقق من وجود تقييمات جديدة
+// إعداد تفويض الأحداث (Event Delegation)
 // ==========================
-async function checkForNotifications() {
+function setupDelegation() {
+    const container = document.getElementById('suggestionsContainer');
+    if (!container) return;
+
+    container.addEventListener('click', function(e) {
+        const editBtn = e.target.closest('.btn-edit-suggestion');
+        if (editBtn) {
+            const id = editBtn.dataset.id;
+            console.log('🔘 Edit button clicked (Delegated) for ID:', id);
+            if (window.openEditModal) {
+                window.openEditModal(id);
+            } else {
+                console.error('❌ openEditModal function is not defined');
+            }
+        }
+    });
+}
+
+// ==========================
+// مراقبة التمرير لتحديث حالة القراءة
+// ==========================
+function setupScrollObserver() {
+    const suggestionsList = document.getElementById('suggestionsContainer');
+    if (!suggestionsList) return;
+
+    // Create an intersection observer to detect when the list is viewed
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                markUpdatesAsSeen();
+                // Disconnect after marking as seen to avoid repeated calls
+                observer.disconnect();
+            }
+        });
+    }, { threshold: 0.1 }); // Trigger when 10% of the list is visible
+
+    observer.observe(suggestionsList);
+}
+
+// ==========================
+// تحديث حالة الإشعارات إلى "مقروءة"
+// ==========================
+async function markUpdatesAsSeen() {
     try {
-        const response = await utils.authedFetch('/api/question-suggestions/my-suggestions?status=');
-        const data = await response.json();
+        console.log('👀 [Suggestions] Marking updates as seen...');
+        const response = await utils.authedFetch('/api/question-suggestions/mark-seen', {
+            method: 'POST'
+        });
         
-        if (data.success && data.data) {
-            const unnotified = data.data.filter(s => 
-                !s.employee_notified && 
-                s.status !== 'pending' && 
-                s.evaluation && 
-                s.evaluation.feedback
-            );
-            
-            if (unnotified.length > 0) {
-                utils.showToast(`لديك ${unnotified.length} تقييم جديد على اقتراحاتك!`, 'info');
-                
-                // تحديث حالة الإشعار
-                for (const suggestion of unnotified) {
-                    // تعديل: المسار الصحيح في الراوتر هو /notify/:id وليس /mark-notified/:id
-                    await utils.authedFetch(`/api/question-suggestions/notify/${suggestion._id}`, {
-                        method: 'PUT'
-                    });
-                }
+        if (response.ok) {
+            console.log('✅ [Suggestions] Updates marked as seen');
+            // Update the global counter immediately
+            if (typeof loadGlobalUnreadCount === 'function') {
+                loadGlobalUnreadCount();
             }
         }
     } catch (error) {
-        console.error('Error checking notifications:', error);
+        console.error('❌ [Suggestions] Error marking updates as seen:', error);
     }
 }
 
@@ -119,7 +152,8 @@ async function loadMySuggestions(status = '') {
         const data = await response.json();
         
         if (data.success) {
-            displayMySuggestions(data.data);
+            allMySuggestions = data.data;
+            displayMySuggestions(allMySuggestions);
         }
     } catch (error) {
         console.error('Error loading suggestions:', error);
@@ -158,14 +192,18 @@ function displayMySuggestions(suggestions) {
     }
     const titles = {
         pending: 'قيد المراجعة',
+        needs_revision: 'تحتاج تعديل',
         approved: 'مقبولة',
-        rejected: 'مرفوضة',
-        needs_revision: 'تحتاج تعديل'
+        rejected: 'مرفوضة'
     };
+    
+    // ترتيب مخصص للعرض
+    const statusOrder = ['pending', 'needs_revision', 'approved', 'rejected'];
+    
     let html = '';
-    Object.keys(groups).forEach(status => {
+    statusOrder.forEach(status => {
         const list = groups[status];
-        if (list.length === 0) return; // لا تظهر القسم الفارغ
+        if (!list || list.length === 0) return; // لا تظهر القسم الفارغ
         html += `
             <div class="status-group ${status}" data-status="${status}">
                 <div class="status-group-header" role="button" tabindex="0" aria-expanded="true">
@@ -181,6 +219,27 @@ function displayMySuggestions(suggestions) {
         `;
     });
     container.innerHTML = html;
+
+    // إضافة event listeners للطي والفتح
+    document.querySelectorAll('.status-group-header').forEach(header => {
+        header.addEventListener('click', function() {
+            const body = this.nextElementSibling;
+            const icon = this.querySelector('.toggle-icon i');
+            const isExpanded = this.getAttribute('aria-expanded') === 'true';
+            
+            if (isExpanded) {
+                body.style.display = 'none';
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-left');
+                this.setAttribute('aria-expanded', 'false');
+            } else {
+                body.style.display = 'grid';
+                icon.classList.remove('fa-chevron-left');
+                icon.classList.add('fa-chevron-down');
+                this.setAttribute('aria-expanded', 'true');
+            }
+        });
+    });
 }
 
 function createSuggestionCard(suggestion) {
@@ -241,6 +300,14 @@ function createSuggestionCard(suggestion) {
                     </div>
                 ` : ''}
             </div>
+            
+            ${suggestion.status === 'needs_revision' ? `
+                <div class="card-footer text-end mt-3 pt-3 border-top border-secondary">
+                    <button class="btn btn-warning btn-sm btn-edit-suggestion" data-id="${suggestion._id}">
+                        <i class="fas fa-edit"></i> تعديل وإعادة إرسال
+                    </button>
+                </div>
+            ` : ''}
         </div>
     `;
 }
@@ -257,11 +324,12 @@ function getStatusBadge(status) {
 
 function getCategoryLabel(category) {
     const labels = {
-        general: 'عام',
-        technical: 'تقني',
-        trading: 'تداول',
-        market: 'سوق',
-        other: 'أخرى'
+        trading: 'تداولية',
+        interactive: 'تفاعلية',
+        company_features: 'مميزات الشركة',
+        educational: 'تعليمية',
+        highlight_site: 'تبرز الموقع',
+        other: 'اخري'
     };
     return labels[category] || category;
 }
@@ -324,6 +392,9 @@ function setupFormSubmission() {
             if (category === 'other') {
                 payload.custom_category = custom_category;
             }
+            
+            console.log('🚀 [Employee Suggestion] Sending suggestion:', payload);
+            
             const response = await utils.authedFetch('/api/question-suggestions/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -332,16 +403,20 @@ function setupFormSubmission() {
             
             const data = await response.json();
             
+            console.log('✅ [Employee Suggestion] Server response:', data);
+            
             if (data.success) {
+                console.log('✅ [Employee Suggestion] Suggestion saved successfully with ID:', data.data?._id);
                 utils.showToast('تم إرسال الاقتراح بنجاح! سيتم مراجعته قريباً', 'success');
                 form.reset();
                 loadMyStats();
                 loadMySuggestions();
             } else {
+                console.error('❌ [Employee Suggestion] Failed to save:', data.message);
                 utils.showToast(data.message || 'حدث خطأ', 'error');
             }
         } catch (error) {
-            console.error('Error submitting suggestion:', error);
+            console.error('❌ [Employee Suggestion] Error submitting suggestion:', error);
             utils.showToast('حدث خطأ في إرسال الاقتراح', 'error');
         } finally {
             submitBtn.disabled = false;
@@ -371,6 +446,9 @@ function setupCustomCategoryToggle() {
 // ==========================
 // الفلاتر
 // ==========================
+let allMySuggestions = [];
+let currentStatusFilter = '';
+
 function setupFilters() {
     const filterButtons = document.querySelectorAll('.filter-btn');
     filterButtons.forEach(btn => {
@@ -378,10 +456,97 @@ function setupFilters() {
             filterButtons.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             
-            const status = this.dataset.status;
-            loadMySuggestions(status);
+            currentStatusFilter = this.dataset.status;
+            loadMySuggestions(currentStatusFilter);
         });
     });
+    
+    // Advanced search setup
+    const applySearchBtn = document.getElementById('applySearchBtn');
+    const resetSearchBtn = document.getElementById('resetSearchBtn');
+    const searchText = document.getElementById('searchText');
+    
+    if (applySearchBtn) {
+        applySearchBtn.addEventListener('click', () => {
+            applyAdvancedSearch();
+        });
+    }
+    
+    if (resetSearchBtn) {
+        resetSearchBtn.addEventListener('click', () => {
+            document.getElementById('searchText').value = '';
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            document.getElementById('filterCategory').value = '';
+            displayMySuggestions(allMySuggestions);
+        });
+    }
+    
+    // Real-time search on typing
+    if (searchText) {
+        searchText.addEventListener('input', debounce(() => {
+            applyAdvancedSearch();
+        }, 500));
+    }
+}
+
+// Apply advanced search
+function applyAdvancedSearch() {
+    const searchText = document.getElementById('searchText')?.value.toLowerCase().trim();
+    const dateFrom = document.getElementById('filterDateFrom')?.value;
+    const dateTo = document.getElementById('filterDateTo')?.value;
+    const category = document.getElementById('filterCategory')?.value;
+    
+    let filtered = [...allMySuggestions];
+    
+    // Filter by search text
+    if (searchText) {
+        filtered = filtered.filter(s => 
+            s.question?.toLowerCase().includes(searchText) ||
+            s.correct_answer?.toLowerCase().includes(searchText)
+        );
+    }
+    
+    // Filter by date range
+    if (dateFrom) {
+        const fromDate = new Date(dateFrom);
+        fromDate.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(s => {
+            const suggestionDate = new Date(s.createdAt);
+            suggestionDate.setHours(0, 0, 0, 0);
+            return suggestionDate >= fromDate;
+        });
+    }
+    
+    if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(s => {
+            const suggestionDate = new Date(s.createdAt);
+            return suggestionDate <= toDate;
+        });
+    }
+    
+    // Filter by category
+    if (category) {
+        filtered = filtered.filter(s => s.category === category);
+    }
+    
+    console.log('[EmployeeSuggest] Advanced search applied. Results:', filtered.length);
+    displayMySuggestions(filtered);
+}
+
+// Debounce helper function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 // ==========================
@@ -416,6 +581,116 @@ document.addEventListener('click', function(e){
     const group = header.parentElement;
     const isCollapsed = group.classList.toggle('collapsed');
     header.setAttribute('aria-expanded', (!isCollapsed).toString());
+});
+
+// ==========================
+// تعديل الاقتراح
+// ==========================
+window.openEditModal = function(id) {
+    console.log('📝 [Edit] Opening modal for ID:', id);
+    
+    if (!allMySuggestions || allMySuggestions.length === 0) {
+        console.error('❌ [Edit] No suggestions loaded');
+        utils.showToast('حدث خطأ: لم يتم تحميل البيانات', 'error');
+        return;
+    }
+
+    const suggestion = allMySuggestions.find(s => s._id === id);
+    if (!suggestion) {
+        console.error('❌ [Edit] Suggestion not found in local list:', id);
+        utils.showToast('حدث خطأ: الاقتراح غير موجود', 'error');
+        return;
+    }
+
+    document.getElementById('editSuggestionId').value = suggestion._id;
+    document.getElementById('editQuestion').value = suggestion.question;
+    document.getElementById('editAnswer').value = suggestion.correct_answer;
+    document.getElementById('editCategory').value = suggestion.category;
+    document.getElementById('editDifficulty').value = suggestion.difficulty;
+    document.getElementById('editNotes').value = suggestion.additional_notes || '';
+    
+    const customGroup = document.getElementById('editCustomCategoryGroup');
+    const customInput = document.getElementById('editCustomCategory');
+    
+    if (suggestion.category === 'other') {
+        customGroup.style.display = 'block';
+        customInput.value = suggestion.custom_category || '';
+    } else {
+        customGroup.style.display = 'none';
+        customInput.value = '';
+    }
+
+    // Setup category change listener for edit modal
+    const categorySelect = document.getElementById('editCategory');
+    if (categorySelect) {
+        categorySelect.onchange = function() {
+            if (this.value === 'other') {
+                customGroup.style.display = 'block';
+            } else {
+                customGroup.style.display = 'none';
+            }
+        };
+    }
+
+    try {
+        const modalEl = document.getElementById('editSuggestionModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    } catch (e) {
+        console.error('❌ [Edit] Error showing modal:', e);
+        utils.showToast('حدث خطأ في فتح النافذة', 'error');
+    }
+};
+
+// Setup Edit Form Submission
+document.addEventListener('DOMContentLoaded', () => {
+    const editForm = document.getElementById('editSuggestionForm');
+    if (editForm) {
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const id = document.getElementById('editSuggestionId').value;
+            const submitBtn = editForm.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+            
+            try {
+                const formData = {
+                    question: document.getElementById('editQuestion').value,
+                    correct_answer: document.getElementById('editAnswer').value,
+                    category: document.getElementById('editCategory').value,
+                    difficulty: document.getElementById('editDifficulty').value,
+                    additional_notes: document.getElementById('editNotes').value,
+                    custom_category: document.getElementById('editCustomCategory').value
+                };
+
+                const response = await utils.authedFetch(`/api/question-suggestions/${id}/update`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    utils.showToast('تم تحديث الاقتراح وإعادة إرساله بنجاح', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('editSuggestionModal')).hide();
+                    loadMySuggestions();
+                    loadMyStats();
+                } else {
+                    utils.showToast(data.message || 'حدث خطأ', 'error');
+                }
+            } catch (error) {
+                console.error('Error updating suggestion:', error);
+                utils.showToast('حدث خطأ في تحديث الاقتراح', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            }
+        });
+    }
 });
 
 // دعم Enter و Space للولوج عبر لوحة المفاتيح

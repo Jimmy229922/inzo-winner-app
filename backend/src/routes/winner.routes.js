@@ -31,6 +31,9 @@ router.post('/winners/:id/video', authenticate, upload.single('video'), winnerCo
 // Upload national ID image for a specific winner
 router.post('/winners/:id/id-image', authenticate, upload.single('id_image'), winnerController.uploadWinnerIdImage);
 
+// Update winner details
+router.put('/winners/:id', authenticate, winnerController.updateWinner);
+
 // Delete a winner (admin/super_admin)
 router.delete('/agents/:agentId/winners/:winnerId', authenticate, winnerController.deleteWinner);
 

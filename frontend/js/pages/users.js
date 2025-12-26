@@ -674,7 +674,7 @@ function renderEditUserModal(user) {
                     </div>
                     <div class="form-group">
                         <label for="edit-user-password">كلمة المرور الجديدة</label>
-                        <input type="password" id="edit-user-password" minlength="8" placeholder="اتركه فارغاً لعدم التغيير">
+                        <input type="password" id="edit-user-password" minlength="8" placeholder="${isCurrentUserSuperAdmin ? 'اتركه فارغاً لعدم التغيير' : 'السوبر أدمن فقط'}" ${isCurrentUserSuperAdmin ? '' : 'disabled'}>
                     </div>
                 </div>
                 <!-- Actions Section -->
@@ -706,23 +706,29 @@ function renderEditUserModal(user) {
         e.stopPropagation(); // Prevent event bubbling if needed
         avatarUploadInput.click();
     };
-    // Allow clicking the entire avatar container to open the file dialog
-    avatarPreview.closest('.profile-avatar-edit').addEventListener('click', openFileDialog);
-    changeAvatarBtn.addEventListener('click', openFileDialog);
+    if (isCurrentUserSuperAdmin) {
+        // Allow clicking the entire avatar container to open the file dialog
+        avatarPreview.closest('.profile-avatar-edit').addEventListener('click', openFileDialog);
+        changeAvatarBtn.addEventListener('click', openFileDialog);
 
-    deleteAvatarBtn.addEventListener('click', () => {
-        avatarUploadInput.value = null; // Clear the file input
-        avatarPreview.src = originalAvatarUrl;
+        deleteAvatarBtn.addEventListener('click', () => {
+            avatarUploadInput.value = null; // Clear the file input
+            avatarPreview.src = originalAvatarUrl;
+            avatarActions.style.display = 'none';
+        });
+
+        avatarUploadInput.addEventListener('change', () => {
+            const file = avatarUploadInput.files[0];
+            if (file) {
+                avatarPreview.src = URL.createObjectURL(file);
+                avatarActions.style.display = 'flex';
+            }
+        });
+    } else {
+        // Hide actions and disable click for non-super-admin editors
         avatarActions.style.display = 'none';
-    });
-
-    avatarUploadInput.addEventListener('change', () => {
-        const file = avatarUploadInput.files[0];
-        if (file) {
-            avatarPreview.src = URL.createObjectURL(file);
-            avatarActions.style.display = 'flex';
-        }
-    });
+        avatarPreview.closest('.profile-avatar-edit').style.cursor = 'not-allowed';
+    }
 
     // --- Form Submission Logic ---
     modal.querySelector('#edit-user-form').addEventListener('submit', async (e) => {
@@ -733,7 +739,7 @@ function renderEditUserModal(user) {
 
         try {
             const avatarFile = modal.querySelector('#avatar-upload').files[0];
-            if (avatarFile) {
+            if (avatarFile && isCurrentUserSuperAdmin) {
                 const formData = new FormData();
                 formData.append('avatar', avatarFile);
 
@@ -748,8 +754,13 @@ function renderEditUserModal(user) {
 
             const userData = {
                 full_name: modal.querySelector('#edit-user-fullname').value,
-                password: modal.querySelector('#edit-user-password').value,
             };
+            if (isCurrentUserSuperAdmin) {
+                const newPwd = modal.querySelector('#edit-user-password').value;
+                if (newPwd) {
+                    userData.password = newPwd;
+                }
+            }
 
             // Send other user data update request
             const response = await authedFetch(`/api/users/${user._id}`, {
@@ -965,7 +976,7 @@ async function renderProfileSettingsPage() {
 
         <div class="form-container" style="max-width: 800px;">
             <form id="profile-settings-form">
-                ${currentUserProfile.role === 'admin' ? `
+                ${currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin' ? `
                     <h3 class="details-section-title">المعلومات الأساسية</h3>
                     <div class="details-grid" style="grid-template-columns: 1fr; gap: 20px;"><div class="form-group"><label for="profile-full-name">الاسم الكامل</label><input type="text" id="profile-full-name" class="profile-name-input" value="${currentUserProfile.full_name || ''}" required></div></div>
                 ` : ''}
@@ -975,7 +986,7 @@ async function renderProfileSettingsPage() {
                     <div class="form-group">
                         <label for="profile-current-password">كلمة المرور الحالية</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-current-password" placeholder="أدخل كلمة المرور الحالية للتغيير">
+                            <input type="password" id="profile-current-password" placeholder="متاح للسوبر أدمن فقط" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                             <div id="current-password-validation-msg" class="validation-status-inline"></div>
                         </div>
@@ -983,22 +994,23 @@ async function renderProfileSettingsPage() {
                     <div class="form-group">
                         <label for="profile-new-password">كلمة المرور الجديدة</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-new-password" placeholder="اتركه فارغاً لعدم التغيير">
+                            <input type="password" id="profile-new-password" placeholder="متاح للسوبر أدمن فقط" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                         </div>
                         <div class="password-strength-meter"><div class="strength-bar"></div></div>
                         <div class="password-actions">
-                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small">إنشاء كلمة مرور قوية</button>
+                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>إنشاء كلمة مرور قوية</button>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="profile-confirm-password">تأكيد كلمة المرور الجديدة</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-confirm-password">
+                            <input type="password" id="profile-confirm-password" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                             <div id="password-match-error" class="validation-error-inline" style="display: none;">كلمتا المرور غير متطابقتين.</div>
                         </div>
                     </div>
+                    ${currentUserProfile.role !== 'super_admin' ? '<div class="alert alert-warning">تغيير كلمة المرور مسموح للسوبر أدمن فقط.</div>' : ''}
                 </div>
 
                 <div class="form-actions">
@@ -1017,8 +1029,9 @@ async function renderProfileSettingsPage() {
     const currentPasswordInput = form.querySelector('#profile-current-password');
     const validationMsgEl = form.querySelector('#current-password-validation-msg');
 
-    // --- NEW: Real-time current password validation on blur ---
+    // --- NEW: Real-time current password validation on blur (super_admin only) ---
     currentPasswordInput.addEventListener('blur', async () => {
+        if (currentUserProfile.role !== 'super_admin') return;
         const password = currentPasswordInput.value;
 
         // Clear previous message if input is empty
@@ -1033,21 +1046,21 @@ async function renderProfileSettingsPage() {
         validationMsgEl.className = 'validation-status-inline checking';
 
         try {
-            // TODO: Implement a backend endpoint to verify current password
-            // For now, this will always fail or succeed based on a placeholder
             const response = await authedFetch('/api/auth/verify-password', {
                 method: 'POST',
-                body: JSON.stringify({ password: password })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
             });
+
             if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.message || 'كلمة المرور الحالية غير صحيحة.');
-                validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>كلمة المرور الحالية غير صحيحة.</span>';
+                const result = await response.json().catch(() => ({}));
+                validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>' + (result.message || 'كلمة المرور الحالية غير صحيحة.') + '</span>';
                 validationMsgEl.className = 'validation-status-inline error';
-            } else {
-                validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
-                validationMsgEl.className = 'validation-status-inline success';
+                return;
             }
+
+            validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
+            validationMsgEl.className = 'validation-status-inline success';
         } catch (e) {
             validationMsgEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>حدث خطأ أثناء التحقق.</span>';
             validationMsgEl.className = 'validation-status-inline error';
@@ -1061,7 +1074,8 @@ async function renderProfileSettingsPage() {
 
     if (avatarEditContainer) {
         avatarEditContainer.addEventListener('click', () => {
-            if (currentUserProfile.role === 'admin') {
+            // Allow both admin and super_admin to change avatar
+            if (currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin') {
                 avatarUploadInput.click();
             }
         });
@@ -1136,7 +1150,7 @@ async function renderProfileSettingsPage() {
     confirmPasswordInput.addEventListener('input', validatePasswordMatch);
 
     // --- Disable form elements for non-admins ---
-    if (currentUserProfile.role !== 'admin') {
+    if (currentUserProfile.role !== 'admin' && currentUserProfile.role !== 'super_admin') {
         const fullNameInput = form.querySelector('#profile-full-name');
         if (fullNameInput) fullNameInput.disabled = true;
         avatarEditContainer.style.cursor = 'not-allowed';
@@ -1157,12 +1171,17 @@ async function renderProfileSettingsPage() {
         const currentPassword = document.getElementById('profile-current-password').value;
 
         try {
-            // --- Password Validation ---
-            if (newPassword && !currentPassword) {
-                throw new Error('يجب إدخال كلمة المرور الحالية لتغييرها.');
-            }
-            if (newPassword !== confirmPassword) {
-                throw new Error('كلمتا المرور الجديدتان غير متطابقتين.');
+            // --- Password Validation (super_admin only) ---
+            if (newPassword || confirmPassword || currentPassword) {
+                if (currentUserProfile.role !== 'super_admin') {
+                    throw new Error('تغيير كلمة المرور مسموح للسوبر أدمن فقط.');
+                }
+                if (newPassword && !currentPassword) {
+                    throw new Error('يجب إدخال كلمة المرور الحالية لتغييرها.');
+                }
+                if (newPassword !== confirmPassword) {
+                    throw new Error('كلمتا المرور الجديدتان غير متطابقتين.');
+                }
             }
 
             // 1. Handle avatar upload if a new file is selected
@@ -1170,20 +1189,29 @@ async function renderProfileSettingsPage() {
             let newAvatarUrl = currentUserProfile.avatar_url;
 
             if (avatarFile) {
-                // TODO: Implement backend endpoint for avatar upload
-                // For now, this will be a placeholder
-                console.warn('Avatar upload is not yet implemented in the new backend.');
-                if (true) { // Simulate an error for now
-                    throw new Error('فشل رفع الصورة. يرجى المحاولة مرة أخرى.');
+                const formData = new FormData();
+                formData.append('avatar', avatarFile);
+
+                const uploadResp = await authedFetch(`/api/users/${currentUserProfile._id}/avatar`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!uploadResp.ok) {
+                    const result = await uploadResp.json().catch(() => ({}));
+                    throw new Error(result.message || 'فشل رفع الصورة. يرجى المحاولة مرة أخرى.');
                 }
 
-                const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-                newAvatarUrl = urlData.publicUrl;
+                const uploadResult = await uploadResp.json();
+                newAvatarUrl = uploadResult.avatar_url || newAvatarUrl;
+                // تحديث المعاينة فوراً
+                if (newAvatarUrl && avatarPreview) {
+                    avatarPreview.src = newAvatarUrl;
+                }
             }
 
             // 2. Update public profile table (users)
             const profileUpdateData = { avatar_url: newAvatarUrl };
-            if (currentUserProfile.role === 'admin' && fullNameInput) {
+            if ((currentUserProfile.role === 'admin' || currentUserProfile.role === 'super_admin') && fullNameInput) {
                 profileUpdateData.full_name = fullName;
             }
 
@@ -1199,11 +1227,18 @@ async function renderProfileSettingsPage() {
             }
 
 
-            // 3. If a new password is provided, verify old and update in auth
-            if (newPassword && currentPassword) {
-                // TODO: Implement backend endpoint for changing password
-                console.warn('Password change is not yet implemented in the new backend.');
-                if (true) throw new Error('تغيير كلمة المرور غير متاح حالياً.'); // Simulate error
+            // 3. If a new password is provided, verify old and update in auth (super_admin only)
+            if (newPassword && currentPassword && currentUserProfile.role === 'super_admin') {
+                const resp = await authedFetch('/api/auth/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ currentPassword, newPassword })
+                });
+
+                if (!resp.ok) {
+                    const result = await resp.json().catch(() => ({}));
+                    throw new Error(result.message || 'فشل تغيير كلمة المرور.');
+                }
             }
 
             // 4. Refresh local user profile data to reflect changes

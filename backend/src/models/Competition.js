@@ -48,9 +48,19 @@ const competitionSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    trading_winners_count: {
+        type: Number,
+        default: 0
+    },
     deposit_bonus_percentage: {
         type: Number,
         default: 0
+    },
+    // عدد الفائزين المطلوب اختيارهم لهذه المسابقة
+    required_winners: {
+        type: Number,
+        default: 3,
+        min: 1
     },
     correct_answer: {
         type: String

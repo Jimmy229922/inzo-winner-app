@@ -47,7 +47,7 @@
     flex-grow: 1;
     display: flex;
     justify-content: center;
-    min-width: 300px; /* Ensure search bar has enough space */
+    min-width: 220px; /* Ensure search bar has enough space */
 }
 
 .brand-v2 { 
@@ -87,12 +87,12 @@
 .search-container {
     position: relative;
     width: 100%;
-    max-width: 450px; /* Increased width for a more prominent search bar */
+    max-width: 220px; /* Reduced width as requested */
 }
 
 .search-input {
-    padding: 8px 40px; /* Adjust padding for icons on both sides */
-    border-radius: 20px;
+    padding: 6px 34px; /* Tighter padding for a smaller search field */
+    border-radius: 14px;
     border: 1px solid var(--border-color);
     background-color: var(--bg-color);
     color: var(--text-color);
@@ -400,3 +400,43 @@ body.dark-mode .theme-toggle-btn .fa-moon { display: none; }
 .nav-item.dropdown .dropdown-toggle#nav-settings-dropdown::after {
     display: none;
 }
+
+/* Global Unread Suggestions Counter */
+.global-unread-counter {
+    margin-left: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.global-unread-counter .fa-bell {
+    color: var(--text-color);
+    opacity: 0.9;
+}
+
+.global-unread-number {
+    color: #ff3b30; /* iOS-style red */
+    font-weight: 800;
+    font-size: 0.9rem;
+}
+
+/* Notification Badge */
+.notification-badge {
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #ff4444;
+    color: white;
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: bold;
+    min-width: 15px;
+    text-align: center;
+    line-height: 1;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    z-index: 10;
+    pointer-events: none; /* Let clicks pass through to the link */
+}
+

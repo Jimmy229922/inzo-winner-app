@@ -156,6 +156,7 @@
 
             // Bind methods
             this.boundHandleEvents = this.handleEvents.bind(this);
+            this.boundUpdateUIFromStore = this.updateUIFromStore.bind(this);
         }
 
         async render() {
@@ -164,23 +165,35 @@
             
             this.setupEventListeners();
             
-            // FIX: Subscription removed to prevent buggy global UI updates.
-            // window.taskStore.subscribe(this.boundUpdateUIFromStore);
+            // Subscribe to store updates
+            if (window.taskStore) {
+                window.taskStore.subscribe(this.boundUpdateUIFromStore);
+            }
 
             await this.fetchAndRenderTasks();
         }
 
         async fetchAndRenderTasks() {
+            // Removed Saturday check to allow tasks on all days
+            /*
             if (this.dayIndex === 6) { // Saturday
                 this.contentWrapper.innerHTML = '<p class="no-results-message">لا توجد مهام مجدولة في أيام العطلات.</p>';
                 return;
             }
+            */
 
             try {
-                const response = await authedFetch('/api/tasks/today');
+                // Pass the local day index to the backend to ensure consistency
+                const response = await authedFetch(`/api/tasks/today?day=${this.dayIndex}`);
                 if (!response.ok) throw new Error('Failed to fetch tasks');
                 
                 const { agents, tasksMap } = await response.json();
+                
+                console.log('[TASKS PAGE DEBUG] Response from /api/tasks/today:');
+                console.log('  - Agents count:', agents?.length || 0);
+                console.log('  - Agents:', agents);
+                console.log('  - Current day index:', this.dayIndex);
+                
                 this.agents = agents || [];
                 this.tasksMap = tasksMap || {};
 
@@ -445,13 +458,22 @@
             overviewEl.querySelector('[data-stat="pending"] h3').textContent = total - completed;
         }
 
+        updateUIFromStore(newState) {
+            console.log('[Tasks Page] Received store update:', newState);
+            this.tasksMap = newState.tasks || {};
+            
+            // Efficiently update only visible cards
+            this.agents.forEach(agent => {
+                this.updateSingleCard(agent._id);
+            });
+        }
+
         destroy() {
             console.log('[Tasks Page] Destroying instance and cleaning up listeners.');
             this.container.removeEventListener('click', this.boundHandleEvents);
             this.container.removeEventListener('change', this.boundHandleEvents);
             clearTimeout(this.searchDebounceTimer);
             
-            // FIX: Subscription removed
             if (window.taskStore && this.boundUpdateUIFromStore) {
                 window.taskStore.unsubscribe(this.boundUpdateUIFromStore);
             }

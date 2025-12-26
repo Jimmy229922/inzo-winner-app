@@ -299,6 +299,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
+
 // == home.js ==
 ﻿async function renderHomePage() {
     // Verify authentication first
@@ -5470,6 +5471,7 @@ function setupCalendarFilters(uiInstance) {
     });
   });
 }
+
 
 
 // == topAgents.js ==
@@ -21131,6 +21133,61 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Failed to attach fallback logout handler', e);
     }
 });
+
+// ==========================
+// Global Unread Suggestions Counter
+// ==========================
+async function loadGlobalUnreadCount() {
+    try {
+        let endpoint = '';
+        if (currentUserProfile.role === 'super_admin') {
+            endpoint = '/api/question-suggestions/unread-count';
+        } else {
+            endpoint = '/api/question-suggestions/employee-unread-count';
+        }
+
+        const response = await window.utils.authedFetch(endpoint);
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            const unreadCount = data.data.unreadCount || 0;
+            displayGlobalUnreadCount(unreadCount);
+        }
+    } catch (error) {
+        console.error('❌ [Global Unread Count] Error loading unread count:', error);
+    }
+}
+
+function displayGlobalUnreadCount(count) {
+    const globalUnreadCountElement = document.getElementById('globalUnreadCount');
+
+    if (globalUnreadCountElement) {
+        if (count > 0) {
+            globalUnreadCountElement.textContent = count;
+            globalUnreadCountElement.style.display = 'inline-block';
+            
+            // Update click handler based on role
+            const badgeLink = globalUnreadCountElement.closest('a');
+            if (badgeLink) {
+                badgeLink.onclick = (e) => {
+                    e.preventDefault();
+                    if (currentUserProfile.role === 'super_admin') {
+                        window.location.href = '/pages/admin-question-suggestions.html';
+                    } else {
+                        window.location.href = '/pages/question-suggestions.html';
+                    }
+                };
+            }
+        } else {
+            globalUnreadCountElement.style.display = 'none';
+        }
+    }
+}
 
 
 })(window);

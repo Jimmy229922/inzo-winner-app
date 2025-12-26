@@ -225,6 +225,8 @@ exports.createAgent = async (req, res) => {
         
         // --- DEBUG: Log Ø§Ù„ØªØµÙ†ÙŠÙ Ù„Ù„ØªØ£ÙƒØ¯ Ù…Ù† Ø¥Ø±Ø³Ø§Ù„Ù‡ ---
         console.log(`[Agent Create] Creating new agent with classification: ${req.body.classification || 'R (default)'}`);
+        console.log('[Agent Create] AUDIT_DAYS received:', req.body.audit_days);
+        console.log('[Agent Create] AUDIT_DAYS is array:', Array.isArray(req.body.audit_days));
         console.log(`[Agent Create] Full request body:`, JSON.stringify(req.body, null, 2));
         
         const agent = new Agent(req.body);
@@ -232,6 +234,8 @@ exports.createAgent = async (req, res) => {
         
         // --- DEBUG: Log Ø§Ù„ØªØµÙ†ÙŠÙ Ø¨Ø¹Ø¯ Ø§Ù„Ø­ÙØ¸ ---
         console.log(`[Agent Create] Agent saved successfully with classification: ${agent.classification}`);
+        console.log('[Agent Create] AUDIT_DAYS saved to DB:', agent.audit_days);
+        console.log('[Agent Create] Complete saved agent:', JSON.stringify(agent, null, 2));
         
         // Log activity
         const userId = req.user?._id;
@@ -256,10 +260,6 @@ exports.createAgent = async (req, res) => {
 
 exports.updateAgent = async (req, res) => {
     try {
-        // --- DEBUG: Log the incoming request body from the frontend ---
-        console.log(`[Agent Update] Received request to update agent ${req.params.id}.`);
-        console.log('[Agent Update] Request Body:', JSON.stringify(req.body, null, 2));
-
         // --- FIX: Add detailed activity logging on agent update ---
         const agentBeforeUpdate = await Agent.findById(req.params.id).lean();
         if (!agentBeforeUpdate) {
@@ -1014,9 +1014,14 @@ exports.sendWinnersDetails = async (req, res) => {
         };
 
         for (const w of winners) {
-            const prizeText = w.prize_type === 'deposit'
-                ? `${w.prize_value || 0}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`
-                : `${w.prize_value || 0}$`;
+            let prizeText = '';
+            if (w.prize_type === 'deposit_prev') {
+                prizeText = `${w.prize_value || 0}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+            } else if (w.prize_type === 'deposit') {
+                prizeText = `${w.prize_value || 0}% بونص إيداع`;
+            } else {
+                prizeText = `${w.prize_value || 0}$ بونص تداولي`;
+            }
 
             const lines = [
                 `الاسم: ${w.name || 'غير معروف'}`,
@@ -1050,7 +1055,9 @@ exports.sendWinnersDetails = async (req, res) => {
                 imageSource = path.join(__dirname, '../../', rel);
             }
 
-            const targetChatId = override_chat_id || agent.telegram_chat_id;
+            // Use override_chat_id if provided, otherwise check for global AGENT_COMPETITIONS_CHAT_ID, otherwise fallback to agent's chat
+            const targetChatId = override_chat_id || process.env.AGENT_COMPETITIONS_CHAT_ID || agent.telegram_chat_id;
+            
             if (!targetChatId) {
                 console.warn('[sendWinnersDetails] No target chat id available');
                 continue; // Skip sending if no chat id
@@ -1066,10 +1073,12 @@ exports.sendWinnersDetails = async (req, res) => {
             agent_id: agentId,
             status: { $in: ['active', 'awaiting_winners'] }
         });
+        /*
         if (!override_chat_id && activeCompetition) { // Only mark completed when sending to agent chat
             activeCompetition.status = 'completed';
             await activeCompetition.save();
         }
+        */
 
         return res.json({ message: 'Winners details sent successfully', target: override_chat_id ? 'company_group' : 'agent_group' });
     } catch (error) {

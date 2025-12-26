@@ -182,7 +182,7 @@ function displayCompetitions(competitions) {
         card.addEventListener('click', function() {
             const id = this.getAttribute('data-id');
             if (id) {
-                window.location.href = `./competition-details-new.html?id=${id}`;
+                window.location.href = `./competition-details.html?id=${id}`;
             }
         });
     });

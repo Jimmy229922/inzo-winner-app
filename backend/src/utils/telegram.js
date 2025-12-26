@@ -17,8 +17,14 @@ async function postToTelegram(bot, text, chatId) {
         const response = await bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
         return response;
     } catch (error) {
-        console.error(`Telegram API Error (sendMessage): ${error.message}`);
-        throw new Error(`Failed to send message to chat ID ${chatId}. Reason: ${error.message}`);
+        // Preserve the original Telegram description/status to bubble up to API responses.
+        const telegramDescription = error?.response?.body?.description || error.message;
+        const statusCode = error?.response?.statusCode || error?.response?.status;
+        const wrappedError = new Error(`Failed to send message to chat ID ${chatId}. Reason: ${telegramDescription}`);
+        wrappedError.telegramDescription = telegramDescription;
+        wrappedError.telegramStatus = statusCode;
+        console.error(`Telegram API Error (sendMessage): ${telegramDescription}`);
+        throw wrappedError;
     }
 }
 
@@ -45,8 +51,13 @@ async function sendPhotoToTelegram(bot, imageUrl, caption, chatId) {
         const response = await bot.sendPhoto(chatId, imageUrl, { caption: caption, parse_mode: 'HTML' });
         return response;
     } catch (error) {
-        console.error(`Telegram API Error (sendPhoto): ${error.message}`);
-        throw new Error(`Failed to send photo to chat ID ${chatId}. Reason: ${error.message}`);
+        const telegramDescription = error?.response?.body?.description || error.message;
+        const statusCode = error?.response?.statusCode || error?.response?.status;
+        const wrappedError = new Error(`Failed to send photo to chat ID ${chatId}. Reason: ${telegramDescription}`);
+        wrappedError.telegramDescription = telegramDescription;
+        wrappedError.telegramStatus = statusCode;
+        console.error(`Telegram API Error (sendPhoto): ${telegramDescription}`);
+        throw wrappedError;
     }
 }
 
@@ -73,8 +84,13 @@ async function sendVideoToTelegram(bot, videoUrl, caption, chatId) {
         const response = await bot.sendVideo(chatId, videoUrl, { caption: caption, parse_mode: 'HTML' });
         return response;
     } catch (error) {
-        console.error(`Telegram API Error (sendVideo): ${error.message}`);
-        throw new Error(`Failed to send video to chat ID ${chatId}. Reason: ${error.message}`);
+        const telegramDescription = error?.response?.body?.description || error.message;
+        const statusCode = error?.response?.statusCode || error?.response?.status;
+        const wrappedError = new Error(`Failed to send video to chat ID ${chatId}. Reason: ${telegramDescription}`);
+        wrappedError.telegramDescription = telegramDescription;
+        wrappedError.telegramStatus = statusCode;
+        console.error(`Telegram API Error (sendVideo): ${telegramDescription}`);
+        throw wrappedError;
     }
 }
 
@@ -100,8 +116,13 @@ async function sendMediaGroupToTelegram(bot, media, chatId) {
         const response = await bot.sendMediaGroup(chatId, media);
         return response;
     } catch (error) {
-        console.error(`Telegram API Error (sendMediaGroup): ${error.message}`);
-        throw new Error(`Failed to send media group to chat ID ${chatId}. Reason: ${error.message}`);
+        const telegramDescription = error?.response?.body?.description || error.message;
+        const statusCode = error?.response?.statusCode || error?.response?.status;
+        const wrappedError = new Error(`Failed to send media group to chat ID ${chatId}. Reason: ${telegramDescription}`);
+        wrappedError.telegramDescription = telegramDescription;
+        wrappedError.telegramStatus = statusCode;
+        console.error(`Telegram API Error (sendMediaGroup): ${telegramDescription}`);
+        throw wrappedError;
     }
 }
 
