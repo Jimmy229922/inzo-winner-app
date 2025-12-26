@@ -2709,6 +2709,7 @@ async function renderCompetitionCreatePage(agentId) {
             }
 
             const savedCompetition = await compResponse.json();
+            const telegramResponse = compResponse;
             console.log('✅ [Create Competition] Competition saved successfully:', {
                 id: savedCompetition.data?._id,
                 trading_winners_count: savedCompetition.data?.trading_winners_count,
