@@ -3057,13 +3057,8 @@
       }
 
       // --- NEW: Clear ID Image Input and Preview ---
-      const idInput = document.getElementById('winner-id-image');
-      const idPreview = document.getElementById('winner-id-image-preview');
-      if (idInput) idInput.value = ''; // Clear file input
-      if (idPreview) {
-          idPreview.src = '';
-          idPreview.style.display = 'none';
-      }
+      // (Cleared at the top of the function)
+
       // ---------------------------------------------
       
       // Helper function to compress image
@@ -3367,6 +3362,7 @@
     }
     
     function showAutoWinnerModal(entry){
+      let isImageUploadingAuto = false;
       // --- NEW: Final check before showing modal ---
       const isAlreadyWinner = state.winners.some(w => 
           (w.account && entry.account && w.account === entry.account) || 
@@ -3545,12 +3541,14 @@
         
         try {
           // Compress the image
+          isImageUploadingAuto = true;
           toast('جاري ضغط الصورة...', 'info');
           compressedFile = await compressImage(file);
           
           if (idPreviewUrlAuto) { try { URL.revokeObjectURL(idPreviewUrlAuto); } catch(e){} }
           idPreviewUrlAuto = URL.createObjectURL(compressedFile);
           if (idPreviewImgAuto) { idPreviewImgAuto.src = idPreviewUrlAuto; idPreviewImgAuto.style.display = 'block'; }
+          isImageUploadingAuto = false;
           toast('تم ضغط الصورة بنجاح', 'success');
         } catch (error) {
           console.error('Failed to compress image:', error);
@@ -3559,6 +3557,7 @@
           idPreviewUrlAuto = URL.createObjectURL(file);
           if (idPreviewImgAuto) { idPreviewImgAuto.src = idPreviewUrlAuto; idPreviewImgAuto.style.display = 'block'; }
           compressedFile = file;
+          isImageUploadingAuto = false;
           toast('تم رفع الصورة الأصلية', 'warning');
         }
       };
