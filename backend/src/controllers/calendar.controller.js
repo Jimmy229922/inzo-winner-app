@@ -17,16 +17,7 @@ exports.getCalendarData = async (req, res) => {
             '_id agent_id name avatar_url classification audit_days'
         ).lean();
         
-        // 2. جلب مهام الأسبوع الحالي فقط
-        // --- إصلاح: تقييد البحث بمهام الأسبوع الحالي فقط لمنع تداخل البيانات القديمة ---
-        const today = new Date();
-        const currentDayOfWeek = today.getDay(); 
-        const startOfWeek = new Date(today);
-        startOfWeek.setDate(today.getDate() - currentDayOfWeek);
-        startOfWeek.setHours(0, 0, 0, 0);
-        
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 7);
+
 
         // 2. جلب جميع المهام المسجلة للوكلاء الذين تم جلبهم للأسبوع الحالي فقط
         // --- إصلاح: إعادة التقييد بتاريخ الأسبوع الحالي ---
