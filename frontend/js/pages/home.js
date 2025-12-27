@@ -150,16 +150,10 @@ async function updateHomePageUI(stats) {
 
         // 2. Update Tasks Progress
         const currentDayIndex = new Date().getDay();
-        console.log('[Home] Debugging Saturday Tasks:', {
-            dayIndex: currentDayIndex,
-            agentsForTodayCount: agentsForToday?.length,
-            agentsForToday: agentsForToday
-        });
 
         // FAILSAFE: Force hide tasks on Saturday (6)
         let effectiveAgentsForToday = agentsForToday;
         if (currentDayIndex === 6) {
-            console.warn('[Home] Saturday detected. Forcing empty task list on frontend.');
             effectiveAgentsForToday = [];
         }
 
