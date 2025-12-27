@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const { logActivity } = require('../utils/logActivity');
 
 exports.login = async (req, res) => {
-    console.log('--- Login Request Received ---');
+    // console.log('--- Login Request Received ---');
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -16,18 +16,18 @@ exports.login = async (req, res) => {
         // console.log(`[AUTH] Login attempt for email: ${email}`);
         const user = await User.findOne({ email }).select('+password');
         if (!user) {
-            console.warn(`[AUTH-FAIL] Login failed for ${email}: User not found.`);
+            // console.warn(`[AUTH-FAIL] Login failed for ${email}: User not found.`);
             return res.status(401).json({ message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' });
         }
 
         if (user.status === 'inactive') {
-            console.warn(`[AUTH-FAIL] Login failed for ${email}: Account is inactive.`);
+            // console.warn(`[AUTH-FAIL] Login failed for ${email}: Account is inactive.`);
             return res.status(403).json({ message: 'تم تعطيل حسابك. يرجى التواصل مع المدير.' });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            console.warn(`[AUTH-FAIL] Login failed for ${email}: Invalid password.`);
+            // console.warn(`[AUTH-FAIL] Login failed for ${email}: Invalid password.`);
             return res.status(401).json({ message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' });
         }
 
@@ -40,7 +40,7 @@ exports.login = async (req, res) => {
         const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '30d' });
 
         user.password = undefined;
-        console.log(`[AUTH-SUCCESS] User ${email} (ID: ${user._id}, Role: ${user.role}) logged in successfully.`);
+        // console.log(`[AUTH-SUCCESS] User ${email} (ID: ${user._id}, Role: ${user.role}) logged in successfully.`);
         
         // Log login activity
         logActivity(

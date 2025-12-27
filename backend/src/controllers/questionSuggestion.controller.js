@@ -512,14 +512,14 @@ exports.getUnreadCount = async (req, res) => {
 exports.getEmployeeUnreadUpdatesCount = async (req, res) => {
     try {
         const userId = req.user._id;
-        console.log('🔍 [Employee Unread] Checking updates for user:', userId);
+        // console.log('🔍 [Employee Unread] Checking updates for user:', userId);
         
         const count = await QuestionSuggestion.countDocuments({
             suggested_by: userId,
             has_new_update: true
         });
         
-        console.log('✅ [Employee Unread] Found count:', count);
+        // console.log('✅ [Employee Unread] Found count:', count);
         res.json({ success: true, data: { unreadCount: count } });
     } catch (error) {
         console.error('Error fetching employee unread updates:', error);
