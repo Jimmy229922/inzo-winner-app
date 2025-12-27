@@ -374,7 +374,7 @@
                 }
 
                 // Map backend winners to frontend state.winners format
-                const mappedWinners = winners.map(w => ({
+                let mappedWinners = winners.map(w => ({
                     id: w.id,
                     name: w.name,
                     account: w.account_number,
@@ -386,6 +386,34 @@
                     selected: true,
                     _id: w.id // Ensure _id is set for DB winners
                 }));
+
+                // --- NEW: Merge with staged winners (local edits) ---
+                const staged = getStagedWinnersForCompetition(compId);
+                if (staged.length > 0) {
+                    // 1. Update existing DB winners with staged changes
+                    mappedWinners = mappedWinners.map(w => {
+                        const stagedW = staged.find(s => s.id === w.id);
+                        if (stagedW) {
+                            // Merge staged properties. Staged takes precedence.
+                            return { ...w, ...stagedW };
+                        }
+                        return w;
+                    });
+
+                    // 2. Add new staged winners that are NOT in DB
+                    const newStagedWinners = staged.filter(s => {
+                        // Check by ID
+                        if (mappedWinners.find(mw => mw.id === s.id)) return false;
+                        
+                        // Check by Name + Account (to prevent duplicates if ID update failed)
+                        if (mappedWinners.find(mw => mw.name === s.name && mw.account === s.account)) return false;
+                        
+                        return true;
+                    });
+                    if (newStagedWinners.length > 0) {
+                        mappedWinners = [...mappedWinners, ...newStagedWinners];
+                    }
+                }
 
                 // --- FIX: Merge with local session winners if they belong to this competition ---
                 // If we have local winners in state (restored from session) and they are NOT in the DB list,
@@ -1200,7 +1228,7 @@
             </label>
             <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.9rem;">
               <input type="checkbox" id="warn-prev-winner">
-              <span>إضافة تنبيه: ‼️ فائز سابق ببونص تداولي، تأكد من نشر المسابقة السابقة قبل الاعتماد</span>
+              <span>إضافة تنبيه: ‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية</span>
             </label>
           `;
           inlineActions.appendChild(wrapper);
@@ -1559,6 +1587,19 @@
     function addStagedWinner(stagedWinner) {
       const staged = getStagedWinners();
       staged.push(stagedWinner);
+      try { localStorage.setItem(STAGED_WINNERS_KEY, JSON.stringify(staged)); } catch {}
+    }
+
+    function saveStagedWinner(winner, competitionId) {
+      const staged = getStagedWinners();
+      const index = staged.findIndex(w => w.id === winner.id);
+      if (index >= 0) {
+        // Update existing
+        staged[index] = { ...staged[index], ...winner, competitionId };
+      } else {
+        // Add new
+        staged.push({ ...winner, competitionId });
+      }
       try { localStorage.setItem(STAGED_WINNERS_KEY, JSON.stringify(staged)); } catch {}
     }
 
@@ -2587,10 +2628,10 @@
                 ${w.agent ? `<div class="wr-winner-card-agent"><i class="fas fa-user-tie"></i> <a href="#profile/${w.agent.id}" style="color:inherit;text-decoration:underline;cursor:pointer;">${w.agent.name} (#${w.agent.agentId})</a></div>` : ''}
                 <div class="wr-winner-warnings">
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
-                    <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ الاجتماع والتحقق أولاً
+                    <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً
                   </label>
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
-                    <input type="checkbox" data-warn="prev" data-id="${w.id}" ${w.includeWarnPrev ? 'checked' : ''}> ‼️ فائز سابق ببونص تداولي
+                    <input type="checkbox" data-warn="prev" data-id="${w.id}" ${w.includeWarnPrev ? 'checked' : ''}> ‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية
                   </label>
                 </div>
     
@@ -2628,10 +2669,10 @@
                 ${w.agent ? `<div class="wr-winner-card-agent"><i class="fas fa-user-tie"></i> <a href="#profile/${w.agent.id}" style="color:inherit;text-decoration:underline;cursor:pointer;">${w.agent.name} (#${w.agent.agentId})</a></div>` : ''}
                 <div class="wr-winner-warnings">
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
-                    <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ الاجتماع والتحقق أولاً
+                    <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً
                   </label>
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
-                    <input type="checkbox" data-warn="prev" data-id="${w.id}" ${w.includeWarnPrev ? 'checked' : ''}> ‼️ فائز سابق ببونص تداولي
+                    <input type="checkbox" data-warn="prev" data-id="${w.id}" ${w.includeWarnPrev ? 'checked' : ''}> ‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية
                   </label>
                 </div>
               </div>
@@ -3044,9 +3085,14 @@
     }
     
     function generateSingleWinnerMessage(w) {
-        const prizeText = w.prizeType === 'deposit' 
-            ? `${w.prizeValue}% بونص ايداع كونه فائز مسبقا ببونص تداولي` 
-            : `${w.prizeValue}$ بونص تداولي`;
+        let prizeText = '';
+        if (w.prizeType === 'deposit_prev') {
+            prizeText = `${w.prizeValue}% بونص ايداع كونه فائز مسبقا ببونص تداولي`;
+        } else if (w.prizeType === 'deposit') {
+            prizeText = `${w.prizeValue}% بونص ايداع`;
+        } else {
+            prizeText = `${w.prizeValue}$ بونص تداولي`;
+        }
     
         let msg = `◃ الفائز: ${w.name}\n`;
         msg += `           الجائزة: ${prizeText}\n`;
@@ -3107,6 +3153,21 @@
       // Populate fields
       winnerName.textContent = `الاسم: ${winner.name}`;
       winnerAccount.textContent = `رقم الحساب: ${winner.account}`;
+
+      // --- NEW: Click to Copy Account Number (Edit Mode) ---
+      winnerAccount.style.cursor = 'pointer';
+      winnerAccount.title = 'اضغط لنسخ رقم الحساب';
+      winnerAccount.onclick = () => {
+          if (winner.account) {
+              navigator.clipboard.writeText(winner.account).then(() => {
+                  toast('تم نسخ رقم الحساب', 'success');
+              }).catch(() => {
+                  toast('فشل نسخ رقم الحساب', 'error');
+              });
+          }
+      };
+      // -----------------------------------------------------
+
       if (emailInput) emailInput.value = winner.email || '';
       
       // --- Sync Prize Preview Logic ---
@@ -3143,10 +3204,29 @@
       // ID Image Preview
       if (idInput) idInput.value = '';
       if (idPreview) {
+           let previewShown = false;
+           
+           // Try pending image first (if valid)
            if (winner.pendingIdImage) {
-               idPreview.src = URL.createObjectURL(winner.pendingIdImage);
+               try {
+                   if (winner.pendingIdImage instanceof Blob || winner.pendingIdImage instanceof File) {
+                       idPreview.src = URL.createObjectURL(winner.pendingIdImage);
+                       idPreview.style.display = 'block';
+                       previewShown = true;
+                   }
+               } catch (e) {
+                   console.warn('Failed to create object URL for pending image', e);
+               }
+           }
+           
+           // Fallback to uploaded image URL
+           if (!previewShown && winner.nationalIdImage) {
+               idPreview.src = winner.nationalIdImage;
                idPreview.style.display = 'block';
-           } else {
+               previewShown = true;
+           }
+           
+           if (!previewShown) {
                idPreview.style.display = 'none';
                idPreview.src = '';
            }
@@ -3234,15 +3314,14 @@
           if (compressedFile) {
               winner.pendingIdImage = compressedFile;
               winner.idImageUploaded = true;
+              winner.localIdImageName = compressedFile.name; // Store filename
           }
 
-          // Update Staged Winner
-          updateStagedWinner(winner.id, state.activeCompetition?.id, {
-              email: winner.email,
-              prizeType: winner.prizeType,
-              prizeValue: winner.prizeValue,
-              idImageUploaded: !!winner.idImageUploaded
-          });
+          // Update Staged Winner (Persist changes locally)
+          saveStagedWinner({
+              ...winner,
+              localIdImageName: winner.localIdImageName // Ensure filename is saved
+          }, state.activeCompetition?.id);
 
           toast('تم تعديل بيانات الفائز', 'success');
           renderWinners();
@@ -3350,6 +3429,20 @@
       const seqPrefix = (entry && (entry.seq || entry.seq === 0)) ? `${entry.seq}- ` : '';
       winnerName.textContent = `الاسم: ${seqPrefix + (entry.name || '—')}`;
       winnerAccount.textContent = `رقم الحساب: ${entry.account || '—'}`;
+      
+      // --- NEW: Click to Copy Account Number ---
+      winnerAccount.style.cursor = 'pointer';
+      winnerAccount.title = 'اضغط لنسخ رقم الحساب';
+      winnerAccount.onclick = () => {
+          if (entry.account) {
+              navigator.clipboard.writeText(entry.account).then(() => {
+                  toast('تم نسخ رقم الحساب', 'success');
+              }).catch(() => {
+                  toast('فشل نسخ رقم الحساب', 'error');
+              });
+          }
+      };
+      // -----------------------------------------
     
     
       // Auto-determine and display prize info
@@ -3656,6 +3749,8 @@
         if (compressedFile) {
           winnerData.pendingIdImage = compressedFile;
           winnerData.idImageUploaded = true; // Mark as having image
+          // Store filename for reference as requested
+          winnerData.localIdImageName = compressedFile.name;
         }
 
         const stagedWinner = {
@@ -3668,6 +3763,7 @@
           includeWarnMeet: winnerData.includeWarnMeet,
           includeWarnPrev: winnerData.includeWarnPrev,
           idImageUploaded: !!winnerData.idImageUploaded,
+          localIdImageName: winnerData.localIdImageName, // Save filename in staged
           agent: winnerData.agent,
           competitionId: state.activeCompetition?.id || null,
           competitionName: state.activeCompetition?.name || null,
@@ -4252,9 +4348,20 @@
         const localWinner = state.winners.find(w => `import_${w.id}` === savedWinner.meta?.original_import_id);
         
         if (localWinner && savedWinner._id) {
+          const oldId = localWinner.id;
           localWinner._id = savedWinner._id;
           // Also update the main id to match _id for consistency
           localWinner.id = savedWinner._id;
+          
+          // --- NEW: Update Staged Winner ID ---
+          // We must update the ID in the staged storage so future updates (like toggles) work
+          const staged = getStagedWinners();
+          const stagedIdx = staged.findIndex(s => s.id === oldId);
+          if (stagedIdx !== -1) {
+              staged[stagedIdx].id = savedWinner._id;
+              try { localStorage.setItem(STAGED_WINNERS_KEY, JSON.stringify(staged)); } catch {}
+          }
+          // ------------------------------------
           
           // رفع الفيديو إن وجد
           if (localWinner.pendingVideoBlob) {
@@ -4276,7 +4383,7 @@
           }
 
           // رفع صورة الهوية إن وجدت (pendingIdImageFile)
-          if (localWinner.pendingIdImageFile) {
+          if (localWinner.pendingIdImageFile && (localWinner.pendingIdImageFile instanceof Blob || localWinner.pendingIdImageFile instanceof File)) {
             try {
               const formData = new FormData();
               formData.append('id_image', localWinner.pendingIdImageFile);
@@ -4299,7 +4406,7 @@
           }
           
           // رفع صورة الهوية إن وجدت
-          if (localWinner.pendingIdImage) {
+          if (localWinner.pendingIdImage && (localWinner.pendingIdImage instanceof Blob || localWinner.pendingIdImage instanceof File)) {
             try {
               const idFormData = new FormData();
               idFormData.append('id_image', localWinner.pendingIdImage);
@@ -4318,6 +4425,9 @@
       }
       
       saveSession();
+      // --- NEW: Re-render winners to update data-id attributes in DOM ---
+      renderWinners();
+      // ------------------------------------------------------------------
       return savedWinners;
     }
 
@@ -4464,8 +4574,10 @@
               .filter(w => w._id)
               .map(w => ({
                 winnerId: w._id,
-                include_warn_meet: !!w.includeWarnMeet,
-                include_warn_prev: !!w.includeWarnPrev
+                // Merge global state with winner state: if global is ON, it applies to all.
+                // If global is OFF, individual winner setting is preserved.
+                include_warn_meet: !!(w.includeWarnMeet || state.includeWarnMeet),
+                include_warn_prev: !!(w.includeWarnPrev || state.includeWarnPrev)
               }));
             const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-details`, {
               method: 'POST',
@@ -4558,7 +4670,7 @@
                 include_warn_meet: !!state.includeWarnMeet,
                 include_warn_prev: !!state.includeWarnPrev,
                 warnings,
-                override_chat_id: '-5011395157'
+                override_chat_id: 'COMPANY_GROUP'
               })
             });
             if (resp.ok) {
@@ -4585,7 +4697,7 @@
             let prizeText = '';
             
             if (w.prizeType === 'deposit_prev') {
-                prizeText = `${w.prizeValue}% بونص إيداع كونه فائز مسبقًا ببونص تداولي`;
+                prizeText = `${w.prizeValue}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
             } else if (w.prizeType === 'deposit') {
                 prizeText = `${w.prizeValue}% بونص إيداع`;
             } else {

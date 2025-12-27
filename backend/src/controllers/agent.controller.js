@@ -986,9 +986,14 @@ exports.sendWinnersReport = async (req, res) => {
                 caption = messageText;
             } else {
                 // Fallback to generating caption on backend
-                const prizeText = w.prize_type === 'deposit' 
-                    ? `${w.prize_value}% بونص ايداع كونه فائز مسبقا ببونص تداولي` 
-                    : `${w.prize_value}$ بونص تداولي`;
+                let prizeText = '';
+                if (w.prize_type === 'deposit_prev') {
+                    prizeText = `${w.prize_value}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+                } else if (w.prize_type === 'deposit') {
+                    prizeText = `${w.prize_value}% بونص إيداع`;
+                } else {
+                    prizeText = `${w.prize_value}$ بونص تداولي`;
+                }
                 
                 caption = `◃ الفائز: ${w.name}\n`;
                 caption += `           الجائزة: ${prizeText}\n\n`;
@@ -1015,9 +1020,14 @@ exports.sendWinnersReport = async (req, res) => {
             chunkWinners.forEach((w, i) => {
                 const globalIndex = startIndex + i;
                 const rank = ordinals[globalIndex] || (globalIndex + 1);
-                const prizeText = w.prize_type === 'deposit' 
-                    ? `${w.prize_value}% بونص ايداع كونه فائز مسبقا ببونص تداولي` 
-                    : `${w.prize_value}$ بونص تداولي`;
+                let prizeText = '';
+                if (w.prize_type === 'deposit_prev') {
+                    prizeText = `${w.prize_value}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+                } else if (w.prize_type === 'deposit') {
+                    prizeText = `${w.prize_value}% بونص إيداع`;
+                } else {
+                    prizeText = `${w.prize_value}$ بونص تداولي`;
+                }
         
                 msg += `◃ الفائز ${rank}: ${w.name}\n`;
                 msg += `           الجائزة: ${prizeText}\n\n`;
@@ -1152,10 +1162,10 @@ exports.sendWinnersDetails = async (req, res) => {
 
             const warningBlocks = [];
             if (useWarnMeet) {
-                warningBlocks.push("\u26a0\ufe0f\u0020\u064a\u0631\u062c\u0649\u0020\u0627\u0644\u0627\u062c\u062a\u0645\u0627\u0639\u0020\u0645\u0639\u0020\u0627\u0644\u0639\u0645\u064a\u0644\u0020\u0648\u0627\u0644\u062a\u062d\u0642\u0642\u0020\u0645\u0646\u0647\u0020\u0623\u0648\u0644\u0627\u064b");
+                warningBlocks.push("⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً");
             }
             if (useWarnPrev) {
-                warningBlocks.push("\u203c\ufe0f\u0020\u064a\u0631\u062c\u0649\u0020\u0627\u0644\u062a\u062d\u0642\u0642\u0020\u0623\u0648\u0644\u064b\u0627\u0020\u0645\u0646\u0020\u0647\u0630\u0627\u0020\u0627\u0644\u0639\u0645\u064a\u0644\u060c\u0020\u062d\u064a\u062b\u0020\u0633\u0628\u0642\u0020\u0623\u0646\u0020\u0641\u0627\u0632\u0020\u0628\u062c\u0627\u0626\u0632\u0629\u0020\u0028\u0628\u0648\u0646\u0635\u0020\u062a\u062f\u0627\u0648\u0644\u064a\u0029\u0020\u062e\u0644\u0627\u0644\u0020\u0627\u0644\u0623\u064a\u0627\u0645\u0020\u0627\u0644\u0645\u0627\u0636\u064a\u0629\u002e\n\u064a\u064f\u0631\u062c\u0649\u0020\u0627\u0644\u062a\u0623\u0643\u062f\u0020\u0645\u0646\u0020\u0623\u0646\u0020\u0627\u0644\u0648\u0643\u064a\u0644\u0020\u0642\u062f\u0020\u0642\u0627\u0645\u0020\u0628\u0646\u0634\u0631\u0020\u0627\u0644\u0645\u0633\u0627\u0628\u0642\u0629\u0020\u0627\u0644\u0633\u0627\u0628\u0642\u0629\u0020\u0627\u0644\u062e\u0627\u0635\u0629\u0020\u0628\u0647\u0630\u0627\u0020\u0627\u0644\u0639\u0645\u064a\u0644\u0020\u0642\u0628\u0644\u0020\u0627\u0639\u062a\u0645\u0627\u062f\u0020\u0627\u0644\u062c\u0627\u0626\u0632\u0629\u0020\u0627\u0644\u062d\u0627\u0644\u064a\u0629");
+                warningBlocks.push("‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية.\nيُرجى التأكد من أن الوكيل قد قام بنشر المسابقة السابقة الخاصة بهذا العميل قبل اعتماد الجائزة الحالية");
             }
             if (warningBlocks.length > 0) {
                 lines.push(warningBlocks.join("\n\n"));
@@ -1169,8 +1179,15 @@ exports.sendWinnersDetails = async (req, res) => {
                 imageSource = path.join(__dirname, '../../', rel);
             }
 
-            // Use override_chat_id if provided, otherwise check for global AGENT_COMPETITIONS_CHAT_ID, otherwise fallback to agent's chat
-            const targetChatId = override_chat_id || process.env.AGENT_COMPETITIONS_CHAT_ID || agent.telegram_chat_id;
+            // Use override_chat_id if provided, otherwise fallback to agent's chat
+            // Special case: if override_chat_id is 'COMPANY_GROUP', use the env var
+            let targetChatId = agent.telegram_chat_id;
+            
+            if (override_chat_id === 'COMPANY_GROUP') {
+                targetChatId = process.env.AGENT_COMPETITIONS_CHAT_ID;
+            } else if (override_chat_id) {
+                targetChatId = override_chat_id;
+            }
             
             if (!targetChatId) {
                 console.warn('[sendWinnersDetails] No target chat id available');
