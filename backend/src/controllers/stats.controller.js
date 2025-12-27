@@ -88,6 +88,7 @@ exports.getHomeStats = async (req, res) => {
         const endOfToday = new Date(today.setHours(23, 59, 59, 999));
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         const dayOfWeekIndex = new Date().getDay();
+        console.log('[Stats] getHomeStats called. Day index:', dayOfWeekIndex);
 
         const [
             total_agents,
@@ -126,6 +127,8 @@ exports.getHomeStats = async (req, res) => {
             Agent.find({}).sort({ rank: 1 }).limit(5).select('name agent_id avatar_url').lean(), // Get top 5 agents (no status filter)
             Competition.find({ createdAt: { $gte: startOfToday, $lt: endOfToday } }).select('createdAt').lean()
         ]);
+
+        console.log('[Stats] agents_for_today count:', agents_for_today.length);
 
         const classificationCounts = agents_by_classification.reduce((acc, item) => {
             acc[item._id] = item.count;

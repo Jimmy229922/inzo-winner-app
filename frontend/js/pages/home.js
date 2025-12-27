@@ -149,7 +149,21 @@ async function updateHomePageUI(stats) {
         `;
 
         // 2. Update Tasks Progress
-        const totalTodayAgents = agentsForToday?.length || 0;
+        const currentDayIndex = new Date().getDay();
+        console.log('[Home] Debugging Saturday Tasks:', {
+            dayIndex: currentDayIndex,
+            agentsForTodayCount: agentsForToday?.length,
+            agentsForToday: agentsForToday
+        });
+
+        // FAILSAFE: Force hide tasks on Saturday (6)
+        let effectiveAgentsForToday = agentsForToday;
+        if (currentDayIndex === 6) {
+            console.warn('[Home] Saturday detected. Forcing empty task list on frontend.');
+            effectiveAgentsForToday = [];
+        }
+
+        const totalTodayAgents = effectiveAgentsForToday?.length || 0;
         const pendingList = document.getElementById('pending-tasks-list');
         if (!pendingList) return; // Exit if the element is not on the page
 
@@ -191,7 +205,7 @@ async function updateHomePageUI(stats) {
                 let completedActions = 0;
 
                 /* logs suppressed: calculating completed actions */
-                agentsForToday.forEach(agent => {
+                effectiveAgentsForToday.forEach(agent => {
                     const task = tasksMap[agent._id] || {};
                     /* logs suppressed: per-agent details */
                     
@@ -203,7 +217,7 @@ async function updateHomePageUI(stats) {
 
                 /* logs suppressed: final calculations */
                 
-                const pendingAgents = agentsForToday.filter(agent => {
+                const pendingAgents = effectiveAgentsForToday.filter(agent => {
                     const task = tasksMap[agent._id];
                     return !task || !task.audited; // Only check audited status
                 });
