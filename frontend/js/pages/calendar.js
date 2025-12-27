@@ -412,7 +412,7 @@ class CalendarUI {
     const status = checkbox.checked;
 
     // ========== DEBUG CONSOLE LOGS ==========
-    console.log("🔄 Toggle Changed!");
+    /* console.log("🔄 Toggle Changed!");
     console.log("📍 Agent ID:", agentId);
     console.log("📅 Day Index:", dayIndex);
     console.log("🏷️ Task Type:", taskType);
@@ -420,7 +420,7 @@ class CalendarUI {
     console.log("🎯 Checkbox element:", checkbox);
     console.log("🔍 Checkbox classes:", checkbox.className);
     console.log("📊 Checkbox checked property:", checkbox.checked);
-    console.log("========================================");
+    console.log("========================================"); */
     // ========================================
 
     const agentItem = checkbox.closest(".calendar-agent-item");
@@ -431,14 +431,14 @@ class CalendarUI {
 
     try {
       // This updates the central store
-      console.log("📤 Sending update to server...");
+      // console.log("📤 Sending update to server...");
       await window.taskStore.updateTaskStatus(
         agentId,
         dayIndex,
         taskType,
         status
       );
-      console.log("✅ Server update successful!");
+      // console.log("✅ Server update successful!");
 
       // FIX: Now, manually and correctly update the UI for this single item.
       updateCalendarUIFromState.call(this, {
@@ -447,7 +447,7 @@ class CalendarUI {
         taskType,
         status,
       });
-      console.log("🎨 UI updated successfully!");
+      // console.log("🎨 UI updated successfully!");
     } catch (error) {
       console.error(
         `[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`,

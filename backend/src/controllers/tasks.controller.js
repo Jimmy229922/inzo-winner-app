@@ -178,7 +178,8 @@ exports.updateTask = async (req, res) => {
                                 deposit_winners_count: agent.deposit_bonus_winners_count || 0,
                                 status: 'sent',
                                 ends_at: endsAtUTC,
-                                type: template.type === 'مميزات' ? 'general' : 'general' // fallback mapping
+                                type: template.type === 'مميزات' ? 'general' : 'general', // fallback mapping
+                                client_request_id: `auto_${agent._id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` // Ensure uniqueness
                             });
                             await compDoc.save();
                             createdCompetition = compDoc;
@@ -207,7 +208,7 @@ exports.updateTask = async (req, res) => {
                     }
                 }
             } catch (createErr) {
-                console.error('[Tasks] Failed to auto-create competition:', createErr);
+                // console.error('[Tasks] Failed to auto-create competition:', createErr);
                 await logActivity(userId, agentId, 'COMPETITION_SENT_FAILED', `خطأ تقني أثناء إنشاء المسابقة: ${createErr.message}`);
             }
         }

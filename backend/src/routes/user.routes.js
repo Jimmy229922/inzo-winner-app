@@ -45,10 +45,10 @@ const canUpdateUser = async (req, res, next) => {
         return next();
     }
 
-    // Admin can edit users with the 'user' role.
+    // Admin can edit users with the 'employee' role.
     if (req.user.role === 'admin') {
         const targetUser = await userController.findUserById(req.params.id); // Assuming a helper function exists in controller
-        if (targetUser && targetUser.role === 'user') {
+        if (targetUser && targetUser.role === 'employee') {
             return next();
         }
     }
@@ -66,11 +66,11 @@ const canDeleteUser = async (req, res, next) => {
         return next();
     }
 
-    // Admin can delete users with the 'user' role.
+    // Admin can delete users with the 'employee' role.
     if (currentUser.role === 'admin') {
         try {
             const targetUser = await userController.findUserById(targetUserId);
-            if (targetUser && targetUser.role === 'user') {
+            if (targetUser && targetUser.role === 'employee') {
                 return next();
             }
         } catch (error) {

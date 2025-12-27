@@ -267,7 +267,7 @@
                                : null;
                 if (agentId && taskType) {
                     // ========== DEBUG CONSOLE LOGS (TASKS PAGE) ==========
-                    console.log('🔄 [TASKS] Toggle Changed!');
+                    /* console.log('🔄 [TASKS] Toggle Changed!');
                     console.log('📍 Agent ID:', agentId);
                     console.log('📅 Day Index:', this.dayIndex);
                     console.log('🏷️ Task Type:', taskType);
@@ -275,17 +275,17 @@
                     console.log('🎯 Checkbox element:', target);
                     console.log('🔍 Checkbox classes:', target.className);
                     console.log('📊 Checkbox checked property:', target.checked);
-                    console.log('====================================================');
+                    console.log('===================================================='); */
                     // =====================================================
 
                     agentCard.classList.add('is-loading');
                     agentCard.querySelectorAll('input').forEach(i => i.disabled = true);
                     try {
-                        console.log('📤 [TASKS] Sending update to server...');
+                        // console.log('📤 [TASKS] Sending update to server...');
                         await window.taskStore.updateTaskStatus(agentId, this.dayIndex, taskType, target.checked);
-                        console.log('✅ [TASKS] Server update successful!');
+                        // console.log('✅ [TASKS] Server update successful!');
                         this.updateSingleCard(agentId); // FIX: Targeted UI update
-                        console.log('🎨 [TASKS] UI updated successfully!');
+                        // console.log('🎨 [TASKS] UI updated successfully!');
                     } catch (error) {
                         console.error('❌ [TASKS] Failed to update task', error);
                         console.error('Error details:', error);

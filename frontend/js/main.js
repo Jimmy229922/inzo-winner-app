@@ -486,6 +486,11 @@ function setupRealtimeListeners() {
                         loadGlobalUnreadCount();
                         break;
 
+                    case 'global_notification':
+                        console.log('🔔 [WebSocket] Received global notification:', message);
+                        showToast(message.message, message.variant || 'info');
+                        break;
+
                     // Add other message types here
                 }
             } catch (error) {

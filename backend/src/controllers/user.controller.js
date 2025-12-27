@@ -100,8 +100,8 @@ const userController = {
                 return res.status(403).json({ message: 'Forbidden: Super Admin accounts cannot be modified by others.' });
             }
             
-            // --- SECURITY FIX: Only super_admin can change permissions, unless an admin is changing a 'user' ---
-            if (permissions && req.user.role !== 'super_admin' && !(req.user.role === 'admin' && userToUpdate.role === 'user')) {
+            // --- SECURITY FIX: Only super_admin can change permissions, unless an admin is changing a 'employee' ---
+            if (permissions && req.user.role !== 'super_admin' && !(req.user.role === 'admin' && userToUpdate.role === 'employee')) {
                 return res.status(403).json({ message: 'Forbidden: You do not have permission to change these user permissions.' });
             }
 
@@ -146,6 +146,11 @@ const userController = {
 
     uploadAvatar: async (req, res) => {
         try {
+            // --- SECURITY: Allow Super Admin to update anyone's avatar, or users to update their own ---
+            if (req.user.role !== 'super_admin' && req.user._id.toString() !== req.params.id) {
+                return res.status(403).json({ message: 'Forbidden: You can only update your own avatar.' });
+            }
+
             if (!req.file) {
                 return res.status(400).json({ message: 'No file uploaded.' });
             }

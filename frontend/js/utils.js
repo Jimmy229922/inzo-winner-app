@@ -166,7 +166,7 @@ window.utils.translateTelegramError = translateTelegramError;
 
 // Lightweight toast notification helper compatible with components.css styles
 if (typeof window.showToast !== 'function') {
-    window.showToast = function (message, type = 'info', duration) {
+    window.showToast = function (message, type = 'info', duration = 4000) {
         try {
             let container = document.getElementById('toast-container');
             if (!container) {
@@ -177,23 +177,48 @@ if (typeof window.showToast !== 'function') {
 
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            toast.textContent = message;
-
-            // Add close button
-            const closeBtn = document.createElement('span');
-            closeBtn.textContent = '×';
-            closeBtn.style.marginRight = '8px';
-            closeBtn.style.cursor = 'pointer';
-            closeBtn.style.fontWeight = 'bold';
-            closeBtn.style.fontSize = '20px';
-            closeBtn.onclick = () => {
-                if (container.contains(toast)) container.removeChild(toast);
+            
+            // Icons mapping
+            const icons = {
+                success: '<i class="fas fa-check-circle"></i>',
+                error: '<i class="fas fa-exclamation-circle"></i>',
+                warning: '<i class="fas fa-exclamation-triangle"></i>',
+                info: '<i class="fas fa-info-circle"></i>'
             };
-            toast.insertBefore(closeBtn, toast.firstChild);
+
+            // Titles mapping
+            const titles = {
+                success: 'نجاح',
+                error: 'خطأ',
+                warning: 'تنبيه',
+                info: 'معلومة'
+            };
+
+            toast.innerHTML = `
+                <div class="toast-icon">${icons[type] || icons.info}</div>
+                <div class="toast-content">
+                    <div class="toast-title">${titles[type] || 'إشعار'}</div>
+                    <div class="toast-message">${message}</div>
+                </div>
+                <div class="toast-close" onclick="this.parentElement.remove()">×</div>
+                <div class="toast-progress">
+                    <div class="toast-progress-bar" style="animation-duration: ${duration}ms"></div>
+                </div>
+            `;
 
             container.appendChild(toast);
+
+            // Auto remove
+            setTimeout(() => {
+                toast.style.animation = 'toastSlideOut 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+                toast.addEventListener('animationend', () => {
+                    if (container.contains(toast)) container.removeChild(toast);
+                });
+            }, duration);
+
         } catch (e) {
             // Fallback if DOM not ready
+            console.error('Toast Error:', e);
             if (type === 'error' || type === 'warning') {
                 alert(message);
             } else {

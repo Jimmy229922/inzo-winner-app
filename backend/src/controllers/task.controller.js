@@ -1,5 +1,6 @@
 const Task = require('../models/Task');
 const Agent = require('../models/agent.model');
+const User = require('../models/User');
 const { logActivity } = require('../utils/logActivity');
 
 /**
@@ -187,11 +188,38 @@ exports.updateTaskStatus = async (req, res) => {
 
         // --- FIX: Log the activity after a successful update ---
         const agent = await Agent.findById(agentId).select('name').lean();
+        const user = await User.findById(userId).select('full_name').lean();
+        const userName = user ? user.full_name : 'مستخدم غير معروف';
+
         if (agent) {
             const actionText = taskType === 'audited' ? 'التدقيق' : 'المسابقة';
             const statusText = status ? 'تم' : 'تم إلغاء';
             const description = `${statusText} تحديد مهمة "${actionText}" للوكيل ${agent.name} ليوم ${dateToUpdate.toLocaleDateString('ar-EG')}.`;
             await logActivity(userId, agentId, 'TASK_UPDATE', description);
+
+            // --- NEW: Broadcast notification to all users ---
+            const wss = req.app.locals.wss;
+            if (wss) {
+                const statusMsg = status ? 'تفعيل' : 'إلغاء تفعيل';
+                const notificationMessage = `قام ${userName} بـ ${statusMsg} ${actionText} للوكيل ${agent.name}`;
+                
+                const msgPayload = JSON.stringify({
+                    type: 'global_notification',
+                    message: notificationMessage,
+                    variant: status ? 'success' : 'warning'
+                });
+                
+                console.log(`[DEBUG] Broadcasting notification to ${wss.clients.size} clients: ${notificationMessage}`);
+
+                wss.clients.forEach((client) => {
+                    if (client.readyState === 1) { // WebSocket.OPEN is 1
+                        client.send(msgPayload);
+                    }
+                });
+            } else {
+                console.error('[DEBUG] WSS not found in req.app.locals');
+            }
+            // ------------------------------------------------
         }
         // --- End of fix ---
 

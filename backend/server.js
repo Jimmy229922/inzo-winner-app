@@ -88,6 +88,9 @@ async function startServer() {
 
     // --- NEW: Initialize WebSocket Server ---
     const wss = new WebSocketServer({ server });
+    
+    // Expose WSS to app locals for broadcasting to all clients
+    app.locals.wss = wss;
 
     wss.on('connection', (ws) => {
         // console.log('[WebSocket] A client connected.');

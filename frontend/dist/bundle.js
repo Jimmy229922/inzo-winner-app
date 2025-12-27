@@ -5090,7 +5090,7 @@ class CalendarUI {
     const status = checkbox.checked;
 
     // ========== DEBUG CONSOLE LOGS ==========
-    console.log("🔄 Toggle Changed!");
+    /* console.log("🔄 Toggle Changed!");
     console.log("📍 Agent ID:", agentId);
     console.log("📅 Day Index:", dayIndex);
     console.log("🏷️ Task Type:", taskType);
@@ -5098,7 +5098,7 @@ class CalendarUI {
     console.log("🎯 Checkbox element:", checkbox);
     console.log("🔍 Checkbox classes:", checkbox.className);
     console.log("📊 Checkbox checked property:", checkbox.checked);
-    console.log("========================================");
+    console.log("========================================"); */
     // ========================================
 
     const agentItem = checkbox.closest(".calendar-agent-item");
@@ -5109,14 +5109,14 @@ class CalendarUI {
 
     try {
       // This updates the central store
-      console.log("📤 Sending update to server...");
+      // console.log("📤 Sending update to server...");
       await window.taskStore.updateTaskStatus(
         agentId,
         dayIndex,
         taskType,
         status
       );
-      console.log("✅ Server update successful!");
+      // console.log("✅ Server update successful!");
 
       // FIX: Now, manually and correctly update the UI for this single item.
       updateCalendarUIFromState.call(this, {
@@ -5125,7 +5125,7 @@ class CalendarUI {
         taskType,
         status,
       });
-      console.log("🎨 UI updated successfully!");
+      // console.log("🎨 UI updated successfully!");
     } catch (error) {
       console.error(
         `[Calendar Error] Failed to update task. AgentID: ${agentId}, Day: ${dayIndex}, Type: ${taskType}. Reason:`,
@@ -9449,7 +9449,7 @@ function renderUserRow(user) {
     // NEW: Add a badge for admins
     const adminBadgeHtml = isTargetSuperAdmin ? '<span class="admin-badge super-admin">مدير عام</span>' : (isTargetAdmin ? '<span class="admin-badge">مسؤول</span>' : null);
     // NEW: Add a badge for employees
-    const employeeBadgeHtml = user.role === 'user' ? '<span class="employee-badge">موظف</span>' : '';
+    const employeeBadgeHtml = user.role === 'employee' ? '<span class="employee-badge">موظف</span>' : '';
 
     // NEW: Add status badge and styles for inactive users
     const statusBadgeHtml = isInactive ? '<span class="status-badge inactive">معطل</span>' : '';
@@ -9483,7 +9483,7 @@ function renderUserRow(user) {
                         return `<span class="role-display super-admin" title="لا يمكن تغيير صلاحية المدير العام">مدير عام</span>`;
                     }
                     return `<select class="role-select" data-user-id="${user._id}" ${roleSelectDisabled ? 'disabled' : ''} title="${roleSelectTitle}">
-                        <option value="user" ${user.role === 'user' ? 'selected' : ''}>موظف</option>
+                        <option value="employee" ${user.role === 'employee' ? 'selected' : ''}>موظف</option>
                         <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>مسؤول</option>
                     </select>`;
                 })()}
@@ -9807,11 +9807,11 @@ function renderCreateUserModal() {
                         <div class="form-group">
                             <label for="new-user-role">الصلاحية</label>
                             <select id="new-user-role">
-                                <option value="user" selected>موظف</option>
+                                <option value="employee" selected>موظف</option>
                                 <option value="admin">مسؤول</option>
                             </select>
                         </div>
-                    ` : '<input type="hidden" id="new-user-role" value="user">'
+                    ` : '<input type="hidden" id="new-user-role" value="employee">'
                     }
                 </div>
                 <!-- Actions Section -->
@@ -9960,6 +9960,8 @@ function renderEditUserModal(user) {
     
     const originalAvatarUrl = user.avatar_url || `https://ui-avatars.com/api/?name=${user.full_name || user.email}&background=8A2BE2&color=fff&size=128`;
     const isCurrentUserSuperAdmin = currentUserProfile?.role === 'super_admin';
+    const isSelf = (currentUserProfile?._id === user._id) || (currentUserProfile?.userId === user._id);
+    const canEditAvatar = isCurrentUserSuperAdmin || isSelf;
 
     modal.innerHTML = `
         <div class="form-modal-header">
@@ -10024,7 +10026,7 @@ function renderEditUserModal(user) {
         e.stopPropagation(); // Prevent event bubbling if needed
         avatarUploadInput.click();
     };
-    if (isCurrentUserSuperAdmin) {
+    if (canEditAvatar) {
         // Allow clicking the entire avatar container to open the file dialog
         avatarPreview.closest('.profile-avatar-edit').addEventListener('click', openFileDialog);
         changeAvatarBtn.addEventListener('click', openFileDialog);
@@ -10057,7 +10059,7 @@ function renderEditUserModal(user) {
 
         try {
             const avatarFile = modal.querySelector('#avatar-upload').files[0];
-            if (avatarFile && isCurrentUserSuperAdmin) {
+            if (avatarFile && canEditAvatar) {
                 const formData = new FormData();
                 formData.append('avatar', avatarFile);
 
@@ -10918,7 +10920,7 @@ async function handlePurgeAllUsers() {
                                : null;
                 if (agentId && taskType) {
                     // ========== DEBUG CONSOLE LOGS (TASKS PAGE) ==========
-                    console.log('🔄 [TASKS] Toggle Changed!');
+                    /* console.log('🔄 [TASKS] Toggle Changed!');
                     console.log('📍 Agent ID:', agentId);
                     console.log('📅 Day Index:', this.dayIndex);
                     console.log('🏷️ Task Type:', taskType);
@@ -10926,17 +10928,17 @@ async function handlePurgeAllUsers() {
                     console.log('🎯 Checkbox element:', target);
                     console.log('🔍 Checkbox classes:', target.className);
                     console.log('📊 Checkbox checked property:', target.checked);
-                    console.log('====================================================');
+                    console.log('===================================================='); */
                     // =====================================================
 
                     agentCard.classList.add('is-loading');
                     agentCard.querySelectorAll('input').forEach(i => i.disabled = true);
                     try {
-                        console.log('📤 [TASKS] Sending update to server...');
+                        // console.log('📤 [TASKS] Sending update to server...');
                         await window.taskStore.updateTaskStatus(agentId, this.dayIndex, taskType, target.checked);
-                        console.log('✅ [TASKS] Server update successful!');
+                        // console.log('✅ [TASKS] Server update successful!');
                         this.updateSingleCard(agentId); // FIX: Targeted UI update
-                        console.log('🎨 [TASKS] UI updated successfully!');
+                        // console.log('🎨 [TASKS] UI updated successfully!');
                     } catch (error) {
                         console.error('❌ [TASKS] Failed to update task', error);
                         console.error('Error details:', error);
@@ -23401,6 +23403,11 @@ function setupRealtimeListeners() {
                     case 'new_suggestion':
                         // console.log('🔔 [WebSocket] Received suggestion update/new suggestion');
                         loadGlobalUnreadCount();
+                        break;
+
+                    case 'global_notification':
+                        console.log('🔔 [WebSocket] Received global notification:', message);
+                        showToast(message.message, message.variant || 'info');
                         break;
 
                     // Add other message types here
