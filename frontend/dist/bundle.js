@@ -17015,7 +17015,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
         // Restore session for this specific competition ONLY if requested
         if (shouldRestoreSession) {
-            restoreSession(true);
+            await restoreSession(true);
         }
     
         // --- NEW: Fetch agent winner history for validation ---
@@ -17557,6 +17557,74 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }
     }
     
+    // ==========================================
+    // IndexedDB Helper for Video Persistence
+    // ==========================================
+    const DB_NAME = 'WinnerRouletteDB';
+    const STORE_NAME = 'videos';
+    let dbInstance = null;
+
+    function getDB() {
+        if (dbInstance) return Promise.resolve(dbInstance);
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, 1);
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME);
+                }
+            };
+            request.onsuccess = (event) => {
+                dbInstance = event.target.result;
+                resolve(dbInstance);
+            };
+            request.onerror = (event) => reject(event.target.error);
+        });
+    }
+
+    async function saveVideoToDB(id, blob) {
+        try {
+            const db = await getDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).put(blob, id);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        } catch (e) {
+            console.warn('IndexedDB save failed', e);
+        }
+    }
+
+    async function getVideoFromDB(id) {
+        try {
+            const db = await getDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const req = tx.objectStore(STORE_NAME).get(id);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        } catch (e) {
+            console.warn('IndexedDB get failed', e);
+            return null;
+        }
+    }
+
+    async function deleteVideoFromDB(id) {
+        try {
+            const db = await getDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).delete(id);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        } catch (e) {
+            console.warn('IndexedDB delete failed', e);
+        }
+    }
+
     // ==========================================
     // Initialize Winner Roulette
     // ==========================================
@@ -18115,7 +18183,28 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       try { localStorage.setItem(LS_KEY, JSON.stringify(session)); } catch {}
     }
     
-    function restoreSession(skipAgent = false) {
+    async function restoreVideosFromDB() {
+      if (!state.winners || state.winners.length === 0) return;
+      let updated = false;
+      for (const winner of state.winners) {
+        if (!winner.pendingVideoBlob && !winner.videoUrl) {
+           try {
+             const blob = await getVideoFromDB(winner.id);
+             if (blob) {
+               winner.pendingVideoBlob = blob;
+               updated = true;
+             }
+           } catch(e) {
+             console.error('Error restoring video for winner:', winner.id, e);
+           }
+        }
+      }
+      if (updated) {
+        renderWinners();
+      }
+    }
+
+    async function restoreSession(skipAgent = false) {
       try {
         const raw = localStorage.getItem(LS_KEY);
         if (!raw) return;
@@ -18123,6 +18212,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         
         state.entries = session.entries || [];
         state.winners = session.winners || [];
+        
+        // Restore videos from IndexedDB immediately after loading winners
+        await restoreVideosFromDB();
+
         state.excludeWinner = !!session.excludeWinner;
         state.filterTerm = session.filterTerm || '';
         
@@ -19389,6 +19482,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // Remove from winners list
       state.winners = state.winners.filter(w => w.id !== id);
       
+      // Delete video from DB
+      deleteVideoFromDB(id).catch(e => console.error('Failed to delete video', e));
+      
       saveSession();
       removeStagedWinner(id, state.activeCompetition?.id || null);
       renderWinners();
@@ -19411,6 +19507,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         `هل تريد استرجاع <strong>${winner.name}</strong> إلى الروليت؟ سيتم إلغاء اختياره كفائز وإعادته للمشاركين.`,
         async () => {
           console.log('[Restore] User confirmed restoration. Processing...');
+          
+          // Delete video from DB
+          deleteVideoFromDB(id).catch(e => console.error('Failed to delete video', e));
+
           // إزالة الفائز من قائمة الفائزين
           const initialWinnersCount = state.winners.length;
           state.winners = state.winners.filter(w => w.id !== id);
@@ -20215,6 +20315,11 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         if (state.pendingVideoBlob) {
           winnerData.pendingVideoBlob = state.pendingVideoBlob;
           winnerData.recordingMimeType = state.recordingMimeType;
+          
+          // --- NEW: Save Video to IndexedDB for Persistence ---
+          saveVideoToDB(winnerData.id, state.pendingVideoBlob).catch(e => console.warn('Failed to persist video', e));
+          // ----------------------------------------------------
+
           state.pendingVideoBlob = null; // Clear from state
         }
         
@@ -20849,6 +20954,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               
               delete localWinner.pendingVideoBlob;
               delete localWinner.recordingMimeType;
+              
+              // --- NEW: Clean up from IndexedDB ---
+              deleteVideoFromDB(oldId).catch(e => console.warn('Failed to delete video from DB', e));
+              // ------------------------------------
             } catch (e) {
               console.warn('Failed to upload video for winner', savedWinner._id, e);
             }
