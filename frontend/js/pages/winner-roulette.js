@@ -1086,20 +1086,25 @@
     }
     
     // ==========================================
-    // IndexedDB Helper for Video Persistence
+    // IndexedDB Helper for Video & Image Persistence
     // ==========================================
     const DB_NAME = 'WinnerRouletteDB';
-    const STORE_NAME = 'videos';
+    const STORE_NAME = 'videos'; // Keep for backward compatibility in variable name if used elsewhere, but we'll use specific constants
+    const VIDEO_STORE = 'videos';
+    const IMAGE_STORE = 'images';
     let dbInstance = null;
 
     function getDB() {
         if (dbInstance) return Promise.resolve(dbInstance);
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 1);
+            const request = indexedDB.open(DB_NAME, 2);
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    db.createObjectStore(STORE_NAME);
+                if (!db.objectStoreNames.contains(VIDEO_STORE)) {
+                    db.createObjectStore(VIDEO_STORE);
+                }
+                if (!db.objectStoreNames.contains(IMAGE_STORE)) {
+                    db.createObjectStore(IMAGE_STORE);
                 }
             };
             request.onsuccess = (event) => {
@@ -1143,13 +1148,56 @@
         try {
             const db = await getDB();
             return new Promise((resolve, reject) => {
-                const tx = db.transaction(STORE_NAME, 'readwrite');
-                tx.objectStore(STORE_NAME).delete(id);
+                const tx = db.transaction(VIDEO_STORE, 'readwrite');
+                tx.objectStore(VIDEO_STORE).delete(id);
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
             });
         } catch (e) {
             console.warn('IndexedDB delete failed', e);
+        }
+    }
+
+    async function saveImageToDB(id, blob) {
+        try {
+            const db = await getDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IMAGE_STORE, 'readwrite');
+                tx.objectStore(IMAGE_STORE).put(blob, id);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        } catch (e) {
+            console.warn('IndexedDB save image failed', e);
+        }
+    }
+
+    async function getImageFromDB(id) {
+        try {
+            const db = await getDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IMAGE_STORE, 'readonly');
+                const req = tx.objectStore(IMAGE_STORE).get(id);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        } catch (e) {
+            console.warn('IndexedDB get image failed', e);
+            return null;
+        }
+    }
+
+    async function deleteImageFromDB(id) {
+        try {
+            const db = await getDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IMAGE_STORE, 'readwrite');
+                tx.objectStore(IMAGE_STORE).delete(id);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        } catch (e) {
+            console.warn('IndexedDB delete image failed', e);
         }
     }
 
@@ -1732,6 +1780,33 @@
       }
     }
 
+    async function restoreImagesFromDB() {
+      if (!state.winners || state.winners.length === 0) return;
+      let updated = false;
+      for (const winner of state.winners) {
+        if (!winner.pendingIdImage && !winner.nationalIdImage) {
+           try {
+             const blob = await getImageFromDB(winner.id);
+             if (blob) {
+               winner.pendingIdImage = blob;
+               // Re-create File object if possible, or just use Blob
+               if (winner.localIdImageName) {
+                   try {
+                       winner.pendingIdImage = new File([blob], winner.localIdImageName, { type: blob.type });
+                   } catch(e) {}
+               }
+               updated = true;
+             }
+           } catch(e) {
+             console.error('Error restoring image for winner:', winner.id, e);
+           }
+        }
+      }
+      if (updated) {
+        renderWinners();
+      }
+    }
+
     async function restoreSession(skipAgent = false) {
       try {
         const raw = localStorage.getItem(LS_KEY);
@@ -1743,6 +1818,7 @@
         
         // Restore videos from IndexedDB immediately after loading winners
         await restoreVideosFromDB();
+        await restoreImagesFromDB();
 
         state.excludeWinner = !!session.excludeWinner;
         state.filterTerm = session.filterTerm || '';
@@ -3856,6 +3932,10 @@
           winnerData.idImageUploaded = true; // Mark as having image
           // Store filename for reference as requested
           winnerData.localIdImageName = compressedFile.name;
+          
+          // --- NEW: Save Image to IndexedDB for Persistence ---
+          saveImageToDB(winnerData.id, compressedFile).catch(e => console.warn('Failed to persist image', e));
+          // ----------------------------------------------------
         }
 
         const stagedWinner = {
@@ -4526,6 +4606,10 @@
               });
               
               delete localWinner.pendingIdImage;
+              
+              // --- NEW: Clean up Image from IndexedDB ---
+              deleteImageFromDB(oldId).catch(e => console.warn('Failed to delete image from DB', e));
+              // ------------------------------------------
             } catch (e) {
               console.warn('Failed to upload ID image for winner', savedWinner._id, e);
             }
