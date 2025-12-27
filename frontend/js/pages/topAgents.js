@@ -187,7 +187,7 @@ async function fetchAndRenderTopAgents(dateRange = 'all', customFrom = null, cus
     container.innerHTML = '<div class="loader-container"><div class="spinner"></div></div>';
 
     try {
-        console.log('='.repeat(80));
+        // console.log('='.repeat(80));
     /* logs suppressed: fetching top agents */
         
         const queryParams = new URLSearchParams();
@@ -215,7 +215,7 @@ async function fetchAndRenderTopAgents(dateRange = 'all', customFrom = null, cus
     const topAgentsData = result.data || result; // استخراج البيانات من property "data" إذا كانت موجودة
         
     /* logs suppressed: extracted topAgents data */
-        console.log('='.repeat(80));
+        // console.log('='.repeat(80));
 
         // The rest of the logic remains the same, but we need to adjust for _id
         processAndDisplayTopAgents(topAgentsData);
@@ -226,7 +226,7 @@ async function fetchAndRenderTopAgents(dateRange = 'all', customFrom = null, cus
 }
 
 function processAndDisplayTopAgents(agents, competitions) {
-    console.log('='.repeat(80));
+    // console.log('='.repeat(80));
     /* logs suppressed: processAndDisplayTopAgents diagnostics */
     
     // Validate that agents is an array
@@ -278,7 +278,7 @@ function processAndDisplayTopAgents(agents, competitions) {
     });
 
     /* logs suppressed: agentStats mapping */
-    console.log('='.repeat(80));
+    // console.log('='.repeat(80));
 
     // Store globally for filtering
     window.currentAgentStats = agentStats;
@@ -287,7 +287,7 @@ function processAndDisplayTopAgents(agents, competitions) {
     applyAndDisplay();
 }
 function applyAndDisplay() {
-    console.log('='.repeat(80));
+    // console.log('='.repeat(80));
     /* logs suppressed: applyAndDisplay called */
     
     const sortKey = document.querySelector('.filter-buttons[data-filter-group="sort"] .active')?.dataset.sort || 'total_views';
@@ -313,7 +313,7 @@ function applyAndDisplay() {
     });
 
     /* logs suppressed: after sort and calling display */
-    console.log('='.repeat(80));
+    // console.log('='.repeat(80));
 
     // 3. Display the final sorted and filtered list
     displayTopAgents(sortedAgents, sortKey);
@@ -321,16 +321,16 @@ function applyAndDisplay() {
 
 
 function displayTopAgents(sortedAgents, sortKey) {
-    console.log('='.repeat(80));
+    // console.log('='.repeat(80));
     /* logs suppressed: displayTopAgents called */
     
     const container = document.getElementById('leaderboard-content-container');
-    console.log('Container found:', !!container);
+    /* console.log('Container found:', !!container);
     const allContainers = document.querySelectorAll('#leaderboard-content-container');
     console.log('Number of containers with this ID:', allContainers.length);
     if (container) {
         console.log('Container current innerHTML length:', container.innerHTML.length);
-    }
+    } */
     const dateRange = document.querySelector('.filter-buttons[data-filter-group="date"] .active')?.dataset.range || 'all';
 
     /* logs suppressed: container found and dateRange */
@@ -407,13 +407,13 @@ function displayTopAgents(sortedAgents, sortKey) {
     );
 
     // Debug logging
-    console.log('Top Agents Debug:');
+    /* console.log('Top Agents Debug:');
     console.log('Total agents:', sortedAgents.length);
     console.log('Top 3:', topThree.map(a => ({name: a.name, rank: a.rank})));
     console.log('Runners up:', runnersUp.length);
     console.log('Exclusive runners up:', exclusiveRunnersUp.length, exclusiveRunnersUp.map(a => ({name: a.name, rank: a.rank})));
     console.log('Regular runners up:', regularRunnersUp.length, regularRunnersUp.map(a => ({name: a.name, rank: a.rank})));
-    console.log('Unfiltered runners up:', runnersUp.filter(agent => !exclusiveRanks.includes(agent.rank) && !regularRanks.includes(agent.rank)).map(a => ({name: a.name, rank: a.rank})));
+    console.log('Unfiltered runners up:', runnersUp.filter(agent => !exclusiveRanks.includes(agent.rank) && !regularRanks.includes(agent.rank)).map(a => ({name: a.name, rank: a.rank}))); */
 
     // --- NEW: Podium data preparation for top 3 overall ---
     const podiumData = {

@@ -3623,6 +3623,12 @@
           setTimeout(()=> idInput?.classList.remove('wr-input-error'), 2000);
           return;
         }
+
+        // Require Video before confirming
+        if (!state.pendingVideoBlob) {
+          toast('يجب تسجيل فيديو الفوز قبل الاعتماد', 'error');
+          return;
+        }
         
         // Create winner object with collected data
         const winnerData = {
@@ -4017,6 +4023,12 @@
           idInput?.classList.add('wr-input-error');
           toast('يجب رفع صورة الهوية قبل الاعتماد','error');
           setTimeout(()=> idInput?.classList.remove('wr-input-error'), 2000);
+          return;
+        }
+
+        // Require Video before confirming (Auto Mode)
+        if (!state.pendingVideoBlob) {
+          toast('يجب تسجيل فيديو الفوز قبل الاعتماد', 'error');
           return;
         }
         
