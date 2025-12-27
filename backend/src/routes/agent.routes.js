@@ -16,6 +16,7 @@ router.delete('/delete-all', agentController.deleteAllAgents);
 
 // Individual agent routes
 router.get('/:id', agentController.getAgentById);
+router.get('/:id/transactions', agentController.getAgentTransactions); // Added
 router.get('/:id/competitions-summary', agentController.getAgentCompetitionsSummary);
 router.put('/:id', agentController.updateAgent);
 router.delete('/:id', agentController.deleteAgent);

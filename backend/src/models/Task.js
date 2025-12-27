@@ -17,7 +17,7 @@ const taskSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 0,
-        max: 5
+        max: 6
     },
     audited: {
         type: Boolean,

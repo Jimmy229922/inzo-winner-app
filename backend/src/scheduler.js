@@ -127,6 +127,18 @@ const startAllSchedulers = (onlineClients, telegramBot) => {
     scheduleWeeklyTaskReset();
     scheduleExpiredCompetitionCheck();
     scheduleAgentBalanceRenewal(); // NEW: Start the balance renewal job
+    
+    // --- STARTUP RECOVERY CHECK ---
+    // Check for missed renewals immediately on server startup.
+    // This handles cases where the server was down during the scheduled 5:00 AM time.
+    console.log('[Scheduler] Running startup recovery check for agent renewals...');
+    renewEligibleAgentBalances(onlineClients)
+        .then(count => {
+            if (count > 0) console.log(`[Scheduler] Startup Recovery: Renewed ${count} agents.`);
+            else console.log('[Scheduler] Startup Recovery: No missed renewals found.');
+        })
+        .catch(err => console.error('[Scheduler] Startup Recovery Error:', err));
+
     // console.log('[Scheduler] All background jobs have been started.');
 };
 

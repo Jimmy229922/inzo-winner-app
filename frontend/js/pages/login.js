@@ -30,11 +30,37 @@ function togglePasswordVisibility() {
     }
 }
 
+// NEW: Caps Lock Warning Logic
+function setupCapsLockWarning() {
+    const passwordInput = document.getElementById('password');
+    const warning = document.getElementById('caps-lock-warning');
+
+    if (!passwordInput || !warning) return;
+
+    const checkCapsLock = (event) => {
+        if (event.getModifierState && event.getModifierState('CapsLock')) {
+            warning.style.display = 'flex';
+        } else {
+            warning.style.display = 'none';
+        }
+    };
+
+    passwordInput.addEventListener('keyup', checkCapsLock);
+    passwordInput.addEventListener('mousedown', checkCapsLock);
+    passwordInput.addEventListener('focus', checkCapsLock);
+    passwordInput.addEventListener('blur', () => {
+        warning.style.display = 'none';
+    });
+}
+
 function setupEventListeners() {
     const loginForm = document.getElementById('login-form');
     const loginBtn = document.getElementById('login-btn');
     const emailInput = document.getElementById('email');
     const rememberMeCheckbox = document.getElementById('remember-me');
+
+    // Initialize Caps Lock Warning
+    setupCapsLockWarning();
 
     // Populate email from localStorage if "Remember Me" was checked
     const savedEmail = localStorage.getItem('rememberedEmail');
@@ -47,6 +73,33 @@ function setupEventListeners() {
     const passwordToggle = document.getElementById('password-toggle');
     if (passwordToggle) {
         passwordToggle.addEventListener('click', togglePasswordVisibility);
+    }
+
+    // Forgot Password Modal Logic
+    const forgotPasswordLink = document.querySelector('.forgot-password');
+    const modal = document.getElementById('forgot-password-modal');
+    const closeModalBtn = document.querySelector('.close-modal');
+    const closeModalBtnFooter = document.querySelector('.close-modal-btn');
+
+    if (forgotPasswordLink && modal) {
+        forgotPasswordLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            modal.style.display = 'flex';
+        });
+
+        const closeModal = () => {
+            modal.style.display = 'none';
+        };
+
+        if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+        if (closeModalBtnFooter) closeModalBtnFooter.addEventListener('click', closeModal);
+
+        // Close on click outside
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
     }
 
     // Form submission

@@ -42,12 +42,13 @@
     order: 2;
     width: 36%;
     min-height: 500px;
-    border-bottom: 4px solid #FFD700; /* Neon accent at bottom */
+    border-bottom: 4px solid #FFD700; /* Gold */
+    background: linear-gradient(180deg, rgba(255, 215, 0, 0.05) 0%, #0f1219 40%);
 }
 
 .leaderboard-card.gold:hover {
-    box-shadow: 0 0 30px rgba(255, 215, 0, 0.15), 0 30px 60px -15px rgba(0,0,0,0.8);
-    border-color: rgba(255, 215, 0, 0.3);
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.2), 0 30px 60px -15px rgba(0,0,0,0.8);
+    border-color: rgba(255, 215, 0, 0.5);
 }
 
 /* Watermark Number */
@@ -59,7 +60,7 @@
     font-size: 12rem;
     font-weight: 900;
     color: transparent;
-    -webkit-text-stroke: 2px rgba(255, 215, 0, 0.05);
+    -webkit-text-stroke: 2px rgba(255, 215, 0, 0.08);
     z-index: 0;
     pointer-events: none;
     font-family: sans-serif;
@@ -70,12 +71,13 @@
     order: 1;
     width: 30%;
     min-height: 440px;
-    border-bottom: 4px solid #00FFFF; /* Cyan Neon */
+    border-bottom: 4px solid #C0C0C0; /* Silver */
+    background: linear-gradient(180deg, rgba(192, 192, 192, 0.05) 0%, #0f1219 40%);
 }
 
 .leaderboard-card.silver:hover {
-    box-shadow: 0 0 30px rgba(0, 255, 255, 0.15), 0 30px 60px -15px rgba(0,0,0,0.8);
-    border-color: rgba(0, 255, 255, 0.3);
+    box-shadow: 0 0 30px rgba(192, 192, 192, 0.2), 0 30px 60px -15px rgba(0,0,0,0.8);
+    border-color: rgba(192, 192, 192, 0.5);
 }
 
 .leaderboard-card.silver::before {
@@ -86,7 +88,7 @@
     font-size: 10rem;
     font-weight: 900;
     color: transparent;
-    -webkit-text-stroke: 2px rgba(0, 255, 255, 0.05);
+    -webkit-text-stroke: 2px rgba(192, 192, 192, 0.08);
     z-index: 0;
     pointer-events: none;
     font-family: sans-serif;
@@ -97,12 +99,13 @@
     order: 3;
     width: 30%;
     min-height: 400px;
-    border-bottom: 4px solid #FF8C00; /* Neon Orange */
+    border-bottom: 4px solid #CD7F32; /* Bronze */
+    background: linear-gradient(180deg, rgba(205, 127, 50, 0.05) 0%, #0f1219 40%);
 }
 
 .leaderboard-card.bronze:hover {
-    box-shadow: 0 0 30px rgba(255, 140, 0, 0.15), 0 30px 60px -15px rgba(0,0,0,0.8);
-    border-color: rgba(255, 140, 0, 0.3);
+    box-shadow: 0 0 30px rgba(205, 127, 50, 0.2), 0 30px 60px -15px rgba(0,0,0,0.8);
+    border-color: rgba(205, 127, 50, 0.5);
 }
 
 .leaderboard-card.bronze::before {
@@ -113,7 +116,7 @@
     font-size: 10rem;
     font-weight: 900;
     color: transparent;
-    -webkit-text-stroke: 2px rgba(255, 140, 0, 0.05);
+    -webkit-text-stroke: 2px rgba(205, 127, 50, 0.08);
     z-index: 0;
     pointer-events: none;
     font-family: sans-serif;
@@ -136,37 +139,20 @@
     position: relative;
 }
 
-.leaderboard-card.gold .leaderboard-avatar { box-shadow: 0 0 20px rgba(255, 215, 0, 0.2); border-color: #FFD700; }
-.leaderboard-card.silver .leaderboard-avatar { box-shadow: 0 0 20px rgba(0, 255, 255, 0.2); border-color: #00FFFF; }
-.leaderboard-card.bronze .leaderboard-avatar { box-shadow: 0 0 20px rgba(255, 140, 0, 0.2); border-color: #FF8C00; }
+.leaderboard-card.gold .leaderboard-avatar { box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); border-color: #FFD700; }
+.leaderboard-card.silver .leaderboard-avatar { box-shadow: 0 0 20px rgba(192, 192, 192, 0.3); border-color: #C0C0C0; }
+.leaderboard-card.bronze .leaderboard-avatar { box-shadow: 0 0 20px rgba(205, 127, 50, 0.3); border-color: #CD7F32; }
 
 .leaderboard-card.top-rank:hover .leaderboard-avatar {
     transform: scale(1.1);
 }
 
-/* Medal Badge - Minimal Neon Dot */
-.leaderboard-card.top-rank .medal-badge {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    width: 40px;
-    height: 40px;
-    border-radius: 12px; /* Squircle */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
-    font-weight: bold;
-    z-index: 5;
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-}
+/* Medal Badge - Minimal Neon Dot - REMOVED OLD STYLE */
+/* New style is defined above in the main block */
 
-.leaderboard-card.gold .medal-badge { color: #FFD700; border-color: #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.2); }
-.leaderboard-card.silver .medal-badge { color: #00FFFF; border-color: #00FFFF; box-shadow: 0 0 10px rgba(0, 255, 255, 0.2); }
-.leaderboard-card.bronze .medal-badge { color: #FF8C00; border-color: #FF8C00; box-shadow: 0 0 10px rgba(255, 140, 0, 0.2); }
+.leaderboard-card.gold .medal-badge { color: #FFD700; border-color: #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.3); }
+.leaderboard-card.silver .medal-badge { color: #C0C0C0; border-color: #C0C0C0; box-shadow: 0 0 10px rgba(192, 192, 192, 0.3); }
+.leaderboard-card.bronze .medal-badge { color: #CD7F32; border-color: #CD7F32; box-shadow: 0 0 10px rgba(205, 127, 50, 0.3); }
 
 /* Agent Name */
 .leaderboard-card.top-rank .leaderboard-agent-name {
@@ -203,81 +189,105 @@
     z-index: 2;
 }
 
-/* Stats Grid - Floating Icons */
+/* Stats Grid - Glass Panel Design */
 .leaderboard-card.top-rank .leaderboard-stats-grid {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    gap: 15px;
-    margin-top: auto;
-    padding-top: 20px;
-    border-top: 1px solid rgba(255,255,255,0.05);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* Force 3 equal columns */
+    gap: 0; /* Remove gap, use dividers */
+    margin: auto auto 0 auto; /* Center horizontally and push to bottom */
+    padding: 8px 0; /* Reduced padding */
+    background: linear-gradient(to bottom, rgba(20, 20, 30, 0.6), rgba(10, 10, 15, 0.8));
+    backdrop-filter: blur(8px);
+    border-radius: 12px; /* Slightly smaller radius */
+    border: 1px solid rgba(255,255,255,0.08);
     z-index: 2;
+    width: 92%; /* Prevent touching edges */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 }
 
 .leaderboard-card.top-rank .stat-item.top-stat-item {
-    flex: 1;
-    background: transparent;
-    padding: 5px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    transition: transform 0.3s;
+    padding: 0 2px; /* Reduced padding */
+    position: relative;
+}
+
+/* Vertical Dividers between stats */
+.leaderboard-card.top-rank .stat-item.top-stat-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 0; /* RTL: Divider on the left of the item */
+    top: 20%;
+    height: 60%;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.2), transparent);
 }
 
 .leaderboard-card.top-rank .stat-item.top-stat-item:hover {
-    transform: translateY(-5px);
+    transform: translateY(-2px);
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
 }
 
 .leaderboard-card.top-rank .stat-value {
-    font-size: 1.3rem;
-    font-weight: 800;
+    font-size: 0.9rem; /* Reduced font size */
+    font-weight: 900;
     color: #fff;
-    margin-bottom: 4px;
-    text-shadow: 0 0 10px rgba(255,255,255,0.1);
+    margin-bottom: 2px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .leaderboard-card.top-rank .stat-label {
-    font-size: 0.65rem;
+    font-size: 0.6rem; /* Reduced font size */
     text-transform: uppercase;
-    color: rgba(255,255,255,0.4);
+    color: rgba(255,255,255,0.6);
     font-weight: 600;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
+    display: flex;
+    flex-direction: column; /* Stack icon and text vertically */
+    align-items: center;
+    gap: 2px;
+    white-space: nowrap;
+    text-align: center;
 }
 
-/* Exclusive/Regular Badge */
-.leaderboard-card.top-rank .exclusive-badge,
-.leaderboard-card.top-rank .regular-badge {
-    width: 26px;
-    height: 26px;
-    font-size: 11px;
-    bottom: 0;
-    right: 0;
-    border: 2px solid #0f1219; /* Match card bg */
-    box-shadow: none;
+/* Icon specific colors and size */
+.leaderboard-card.top-rank .stat-label i {
+    font-size: 0.9rem; /* Reduced icon size */
+    margin-bottom: 2px;
 }
+.leaderboard-card.top-rank .stat-label i.fa-eye { color: #4facfe; }
+.leaderboard-card.top-rank .stat-label i.fa-heart { color: #ff4b1f; }
+.leaderboard-card.top-rank .stat-label i.fa-users { color: #00f260; }
 
-.exclusive-badge { background: #FFD700; color: #000; }
-.regular-badge { background: #333; color: #fff; }
-
-/* Top Agent Banner - Minimal Tag */
-.leaderboard-card.top-rank .top-agent-banner {
+/* Rank Badge - Floating 3D Effect */
+.leaderboard-card.top-rank .medal-badge {
     position: absolute;
-    top: 20px;
-    right: 20px;
-    left: auto;
-    background: rgba(35, 212, 254, 0.1);
-    color: #23D4FE;
-    border: 1px solid rgba(35, 212, 254, 0.3);
-    padding: 4px 12px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(35, 212, 254, 0.1);
+    top: -15px; /* Pop out of the card */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
     z-index: 20;
+    background: #1a1d26;
+    border: 3px solid;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.5);
 }
-.leaderboard-card.top-rank .top-agent-banner::before { display: none; }
+
+/* Adjust Avatar margin since badge is now top-center */
+.leaderboard-card.top-rank .leaderboard-avatar,
+.leaderboard-card.top-rank .leaderboard-avatar-placeholder {
+    margin-top: 25px; /* Make room for the badge */
+}
 
 /* Responsive Design */
 @media (max-width: 768px) {

@@ -28,10 +28,10 @@ exports.getTodayTasks = async (req, res) => {
             }
         }
 
-        // Saturday (6) is a holiday
-        if (dayOfWeekIndex === 6) {
-            return res.status(200).json({ agents: [], tasksMap: {} });
-        }
+        // Saturday (6) is a holiday - REMOVED BLOCK to allow manual updates
+        // if (dayOfWeekIndex === 6) {
+        //     return res.status(200).json({ agents: [], tasksMap: {} });
+        // }
 
         // --- FIX: Calculate the specific date for the requested day index to match updateTask logic ---
         // This ensures that if the client is asking for "Wednesday" (3), we look for tasks on "Wednesday"

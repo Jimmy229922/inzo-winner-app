@@ -1,0 +1,634 @@
+
+/* --- New Profile Page Redesign Styles --- */
+
+/* Header Actions Row */
+.profile-header-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+/* Audit Status in Header */
+.header-audit-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.header-audit-status.audited {
+    background-color: rgba(46, 204, 113, 0.1);
+    border-color: #2ecc71;
+    color: #2ecc71;
+}
+
+.header-audit-status.pending {
+    background-color: rgba(241, 196, 15, 0.1);
+    border-color: #f1c40f;
+    color: #f1c40f;
+}
+
+.header-audit-status .btn-icon-action {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2em;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    color: inherit;
+}
+
+.audit-status-text {
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+/* Action Tab Layout */
+.action-tab-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 768px) {
+    .action-tab-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.action-section {
+    background-color: var(--bg-color);
+    border-radius: 10px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.action-section h2 {
+    font-size: 1.2em;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+}
+
+.action-section h2 i {
+    color: var(--primary-color);
+}
+
+/* Automatic Data Grid */
+.action-info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.action-info-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background-color: var(--card-bg-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.action-info-card i {
+    font-size: 1.5em;
+    color: var(--text-secondary-color);
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-color);
+    border-radius: 50%;
+}
+
+.action-info-card .info {
+    flex-grow: 1;
+}
+
+.action-info-card label {
+    display: block;
+    font-size: 0.85em;
+    color: var(--text-secondary-color);
+    margin-bottom: 5px;
+}
+
+.action-info-card p {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.action-info-card .sub-value {
+    font-size: 0.8em;
+    color: var(--text-secondary-color);
+    font-weight: normal;
+    margin: 0 5px;
+}
+
+/* Audit Days Tags */
+.audit-days-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.day-tag {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+}
+
+.day-tag-none {
+    color: var(--text-secondary-color);
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+/* Quick Actions Buttons */
+.details-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.details-actions button {
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+    font-size: 1em;
+    border-radius: 8px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.details-actions button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.btn-winners {
+    background-color: #9b59b6; /* Purple */
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-telegram-bonus {
+    background-color: #3498db; /* Blue */
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-telegram-winners {
+    background-color: #f1c40f; /* Yellow */
+    color: #2c3e50; /* Dark text for contrast */
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-renewal {
+    background-color: #2ecc71; /* Green */
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Hide the old edit button container */
+.profile-header-actions {
+    display: none;
+}
+
+/* --- New Info Grid Styles --- */
+.profile-info-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.profile-info-header h1 {
+    margin: 0;
+    font-size: 1.8em;
+}
+
+.profile-badges {
+    display: flex;
+    gap: 10px;
+}
+
+.profile-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3 columns fixed */
+    gap: 12px;
+    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.03); /* Subtle background for the whole grid area */
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+    .profile-info-grid {
+        grid-template-columns: 1fr 1fr; /* 2 columns on tablet */
+    }
+}
+
+@media (max-width: 480px) {
+    .profile-info-grid {
+        grid-template-columns: 1fr; /* 1 column on mobile */
+    }
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    background-color: var(--card-bg-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.info-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    border-color: var(--primary-color);
+}
+
+.info-item.full-width {
+    grid-column: 1 / -1;
+    flex-direction: row; /* Horizontal layout for full width items */
+    align-items: center;
+    justify-content: space-between;
+}
+
+@media (max-width: 600px) {
+    .info-item.full-width {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+.info-item .label {
+    font-size: 0.75em;
+    color: var(--text-secondary-color);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-item .value {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Specific styling for badges within the grid */
+.badge-classification {
+    background: linear-gradient(135deg, #34495e, #2c3e50);
+    color: #ecf0f1;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.badge-rank {
+    background: linear-gradient(135deg, #e67e22, #d35400);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.agent-id-text {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+    background: rgba(0,0,0,0.2);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.audit-days-mini {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.audit-days-mini .day-tag {
+    font-size: 0.75em;
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.audit-days-mini .day-tag-none {
+    font-size: 0.8em;
+}
+
+/* Links Row Styling */
+.links-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.telegram-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background-color: #37aee2; /* Telegram Blue */
+    color: white;
+    text-decoration: none;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: background-color 0.2s;
+}
+
+.telegram-link:hover {
+    background-color: #2b88b3;
+    text-decoration: none;
+    color: white;
+}
+
+.disabled-link {
+    color: var(--text-secondary-color);
+    font-size: 0.9em;
+    font-style: italic;
+    padding: 6px 12px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 20px;
+}
+
+.group-details {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.group-details span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.95em;
+    color: var(--text-color);
+    background: rgba(255,255,255,0.05);
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.group-details i {
+    color: var(--primary-color);
+    font-size: 0.9em;
+}
+
+/* New Audit Button Style (Clickable Container) */
+.header-audit-status-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1em;
+}
+
+.header-audit-status-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.header-audit-status-btn.audited {
+    background-color: rgba(46, 204, 113, 0.1);
+    border-color: #2ecc71;
+    color: #2ecc71;
+}
+
+.header-audit-status-btn.pending {
+    background-color: rgba(241, 196, 15, 0.1);
+    border-color: #f1c40f;
+    color: #f1c40f;
+}
+
+.header-audit-status-btn i {
+    font-size: 1.2em;
+}
+
+/* --- Edit Mode Styles --- */
+.days-selector-v2 {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.day-toggle-wrapper {
+    position: relative;
+}
+
+.day-toggle-input {
+    display: none; /* Hide the actual checkbox */
+}
+
+.day-toggle-btn {
+    display: inline-block;
+    padding: 8px 16px;
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    color: var(--text-secondary-color);
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.day-toggle-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--text-color);
+}
+
+/* Checked State */
+.day-toggle-input:checked + .day-toggle-btn {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+/* --- Details Tab Redesign --- */
+.details-container-v2 {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.details-section-v2 {
+    background-color: var(--bg-color);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.details-section-title-v2 {
+    font-size: 1.1em;
+    margin-bottom: 15px;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+}
+
+.details-section-title-v2 i {
+    color: var(--primary-color);
+}
+
+.details-grid-v2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.details-card {
+    background-color: var(--card-bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.details-card.full-width-card {
+    grid-column: 1 / -1;
+}
+
+.details-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    border-color: var(--primary-color);
+}
+
+.details-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.details-label {
+    font-size: 0.8em;
+    color: var(--text-secondary-color);
+    font-weight: 600;
+}
+
+.details-value {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.inline-edit-trigger {
+    cursor: pointer;
+    color: var(--text-secondary-color);
+    font-size: 0.9em;
+    transition: color 0.2s;
+}
+
+.inline-edit-trigger:hover {
+    color: var(--primary-color);
+}
+
+/* --- Edit Form Styling --- */
+.form-layout-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+    .form-layout-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 0.9em;
+    color: var(--text-secondary-color);
+    font-weight: 600;
+}
+
+.form-group input[type="text"],
+.form-group select {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 1em;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+}
+
+.form-group input[type="text"]:focus,
+.form-group select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+}
+
+.form-group input[type="text"]:hover,
+.form-group select:hover {
+    border-color: #4a5568;
+}

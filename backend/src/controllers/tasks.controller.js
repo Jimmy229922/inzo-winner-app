@@ -43,10 +43,10 @@ exports.updateTask = async (req, res) => {
             return res.status(400).json({ message: 'Invalid task type specified.' });
         }
 
-        // Saturday (6) is a holiday - Block updates
-        if (dayIndex === 6) {
-            return res.status(400).json({ message: 'يوم السبت إجازة، لا يمكن تحديث المهام.' });
-        }
+        // Saturday (6) is a holiday - REMOVED BLOCK to allow manual updates
+        // if (dayIndex === 6) {
+        //    return res.status(400).json({ message: 'يوم السبت إجازة، لا يمكن تحديث المهام.' });
+        // }
 
         // Calculate the date for the given dayIndex relative to the current week (assuming Sunday is the start)
         const today = new Date();

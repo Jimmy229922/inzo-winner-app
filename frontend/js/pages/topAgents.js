@@ -1,5 +1,7 @@
 ﻿// topAgents.js - Updated: 2025-11-16 with Clear Filter Button
 let agentStats = [];
+let selectedAgentsForComparison = [];
+let isTopAgentsComparisonMode = false;
 
 // --- NEW: Confetti Animation on Page Load ---
 function triggerConfettiAnimation() {
@@ -27,6 +29,24 @@ function triggerConfettiAnimation() {
     setTimeout(() => confettiContainer.remove(), 7000);
 }
 
+// --- NEW: Animate Value Function ---
+function animateValue(obj, start, end, duration) {
+    if (!obj) return;
+    let startTimestamp = null;
+    const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        const value = Math.floor(progress * (end - start) + start);
+        obj.innerHTML = formatNumber(value);
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        } else {
+            obj.innerHTML = formatNumber(end); // Ensure final value is exact
+        }
+    };
+    window.requestAnimationFrame(step);
+}
+
 async function renderTopAgentsPage() {
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
@@ -34,6 +54,7 @@ async function renderTopAgentsPage() {
             <div class="header-top-row">
                 <h1 class="leaderboard-title"><i class="fas fa-chart-bar"></i> أبرز الوكلاء</h1>
                 <div class="header-actions-group">
+                    <button id="compare-agents-btn" class="btn-secondary"><i class="fas fa-balance-scale"></i> مقارنة</button>
                     <button id="export-top-agents-btn" class="btn-secondary"><i class="fas fa-file-excel"></i> تصدير</button>
                 </div>
             </div>
@@ -87,6 +108,14 @@ async function renderTopAgentsPage() {
             </div>
         </div>
         <div id="leaderboard-content-container">
+        </div>
+        
+        <!-- Comparison Floating Bar -->
+        <div id="comparison-floating-bar" class="comparison-floating-bar">
+            <div class="selected-agents-preview" id="selected-agents-preview"></div>
+            <span id="comparison-count-text">تم اختيار 0 من 3</span>
+            <button id="show-comparison-modal-btn" class="btn-primary">عرض المقارنة</button>
+            <button id="cancel-comparison-btn" class="btn-secondary"><i class="fas fa-times"></i></button>
         </div>
     `;
 
@@ -339,8 +368,19 @@ function displayTopAgents(sortedAgents, sortKey) {
     /* logs suppressed: container not found */
         return;
     }
-    // --- NEW: Clear previous content and add a loading state ---
-    container.innerHTML = '<div class="loader-container"><div class="spinner"></div></div>';
+    // --- NEW: Skeleton Loading State ---
+    container.innerHTML = `
+        <div class="leaderboard-podium">
+            <div class="skeleton-card" style="width: 30%; height: 300px;"></div>
+            <div class="skeleton-card" style="width: 36%; height: 350px;"></div>
+            <div class="skeleton-card" style="width: 30%; height: 300px;"></div>
+        </div>
+        <div class="leaderboard-list-section">
+            <div class="skeleton-card" style="width: 100%; height: 100px; margin-bottom: 10px;"></div>
+            <div class="skeleton-card" style="width: 100%; height: 100px; margin-bottom: 10px;"></div>
+            <div class="skeleton-card" style="width: 100%; height: 100px; margin-bottom: 10px;"></div>
+        </div>
+    `;
 
 
     if (!sortedAgents || sortedAgents.length === 0) {
@@ -443,8 +483,17 @@ function displayTopAgents(sortedAgents, sortKey) {
                 ? `<div class="exclusive-badge" title="وكيل حصري"><i class="fas fa-crown"></i></div>` 
                 : `<div class="regular-badge" title="وكيل اعتيادي"><i class="fas fa-star"></i></div>`;
 
+            // --- NEW: Special Badges Logic ---
+            const isHotStreak = agent.growth_rate > 15;
+            const isNewcomer = agent.growth_rate === 100 && agent.total_views < 5000; // Heuristic for newcomer
+
+            let specialBadgesHtml = '';
+            if (isHotStreak) specialBadgesHtml += `<div class="special-badge badge-hot"><i class="fas fa-fire"></i> Hot Streak</div>`;
+            if (isNewcomer) specialBadgesHtml += `<div class="special-badge badge-new"><i class="fas fa-star"></i> New</div>`;
+
             return `
                 <div class="leaderboard-card ${isTopThree ? `top-rank ${rankClass}` : ''}" data-agent-id="${agent._id}" style="cursor: pointer;">
+                    ${specialBadgesHtml}
                     <div class="leaderboard-rank">
                         ${isTopThree ? `<div class="medal-badge ${rankClass}">${getRankIcon(rank)}</div>` : getRankIcon(rank)}
                     </div>
@@ -474,15 +523,15 @@ function displayTopAgents(sortedAgents, sortKey) {
                              return `
                                 <div class="stat-item top-stat-item">
                                     <span class="stat-label"><i class="fas fa-eye"></i> مشاهدات</span>
-                                    <span class="stat-value">${formatNumber(agent.total_views)}</span>
+                                    <span class="stat-value" data-animate-to="${agent.total_views}">0</span>
                                 </div>
                                 <div class="stat-item top-stat-item">
                                     <span class="stat-label"><i class="fas fa-heart"></i> تفاعلات</span>
-                                    <span class="stat-value">${formatNumber(agent.total_reactions)}</span>
+                                    <span class="stat-value" data-animate-to="${agent.total_reactions}">0</span>
                                 </div>
                                 <div class="stat-item top-stat-item">
                                     <span class="stat-label"><i class="fas fa-users"></i> مشاركات</span>
-                                    <span class="stat-value">${formatNumber(agent.total_participants)}</span>
+                                    <span class="stat-value" data-animate-to="${agent.total_participants}">0</span>
                                 </div>
                             `;
                         }
@@ -490,20 +539,20 @@ function displayTopAgents(sortedAgents, sortKey) {
                         // If sorting by a metric and this agent is not top 3, show only that metric
                         if (isMetricSort && rank > 3) {
                             if (sortKey === 'total_views') {
-                                return `<div class="stat-item"><span class="stat-value">${formatNumber(agent.total_views)}</span><span class="stat-label"><i class="fas fa-eye"></i> مشاهدات</span></div>`;
+                                return `<div class="stat-item"><span class="stat-value" data-animate-to="${agent.total_views}">0</span><span class="stat-label"><i class="fas fa-eye"></i> مشاهدات</span></div>`;
                             }
                             if (sortKey === 'total_reactions') {
-                                return `<div class="stat-item"><span class="stat-value">${formatNumber(agent.total_reactions)}</span><span class="stat-label"><i class="fas fa-heart"></i> تفاعلات</span></div>`;
+                                return `<div class="stat-item"><span class="stat-value" data-animate-to="${agent.total_reactions}">0</span><span class="stat-label"><i class="fas fa-heart"></i> تفاعلات</span></div>`;
                             }
                             if (sortKey === 'total_participants') {
-                                return `<div class="stat-item"><span class="stat-value">${formatNumber(agent.total_participants)}</span><span class="stat-label"><i class="fas fa-users"></i> مشاركات</span></div>`;
+                                return `<div class="stat-item"><span class="stat-value" data-animate-to="${agent.total_participants}">0</span><span class="stat-label"><i class="fas fa-users"></i> مشاركات</span></div>`;
                             }
                         }
                         // Otherwise show all three
                         return `
-                            <div class="stat-item"><span class="stat-value">${formatNumber(agent.total_views)}</span><span class="stat-label"><i class="fas fa-eye"></i> مشاهدات</span></div>
-                            <div class="stat-item"><span class="stat-value">${formatNumber(agent.total_reactions)}</span><span class="stat-label"><i class="fas fa-heart"></i> تفاعلات</span></div>
-                            <div class="stat-item"><span class="stat-value">${formatNumber(agent.total_participants)}</span><span class="stat-label"><i class="fas fa-users"></i> مشاركات</span></div>
+                            <div class="stat-item"><span class="stat-value" data-animate-to="${agent.total_views}">0</span><span class="stat-label"><i class="fas fa-eye"></i> مشاهدات</span></div>
+                            <div class="stat-item"><span class="stat-value" data-animate-to="${agent.total_reactions}">0</span><span class="stat-label"><i class="fas fa-heart"></i> تفاعلات</span></div>
+                            <div class="stat-item"><span class="stat-value" data-animate-to="${agent.total_participants}">0</span><span class="stat-label"><i class="fas fa-users"></i> مشاركات</span></div>
                         `;
                     })()}
                 </div>
@@ -597,16 +646,28 @@ function displayTopAgents(sortedAgents, sortKey) {
             ` : ''}
         `;
 
-    /* logs suppressed: rendered summary */
-        console.log('='.repeat(80));
-    } catch (error) {
-    /* logs suppressed: error rendering HTML */
-        container.innerHTML = '<div class="error-message"><i class="fas fa-exclamation-triangle"></i><p>حدث خطأ في عرض البيانات</p></div>';
-        return;
-    }
+    // --- NEW: Trigger Animations ---
+    const animatedElements = container.querySelectorAll('[data-animate-to]');
+    animatedElements.forEach(el => {
+        const targetValue = parseInt(el.dataset.animateTo, 10);
+        if (!isNaN(targetValue)) {
+            animateValue(el, 0, targetValue, 1500);
+        }
+    });
 
     // --- NEW: Event Delegation for CSP Compliance ---
     container.addEventListener('click', (e) => {
+        // Comparison Selection Logic
+        if (isTopAgentsComparisonMode) {
+            const card = e.target.closest('[data-agent-id]');
+            if (card) {
+                e.stopPropagation();
+                e.preventDefault();
+                toggleAgentSelection(card.dataset.agentId);
+            }
+            return;
+        }
+
         const copyIdTrigger = e.target.closest('[data-agent-id-copy]');
         if (copyIdTrigger) {
             e.stopPropagation();
@@ -618,6 +679,211 @@ function displayTopAgents(sortedAgents, sortKey) {
         const card = e.target.closest('[data-agent-id]');
         if (card) {
             window.location.hash = `#profile/${card.dataset.agentId}`;
+        }
+    });
+
+    // --- NEW: Comparison Button Logic ---
+    const compareBtn = document.getElementById('compare-agents-btn');
+    if (compareBtn) {
+        // Remove old listener if exists (simple way is to clone)
+        const newBtn = compareBtn.cloneNode(true);
+        compareBtn.parentNode.replaceChild(newBtn, compareBtn);
+        
+        newBtn.addEventListener('click', () => {
+            isTopAgentsComparisonMode = !isTopAgentsComparisonMode;
+            const container = document.getElementById('leaderboard-content-container');
+            const floatingBar = document.getElementById('comparison-floating-bar');
+            
+            if (isTopAgentsComparisonMode) {
+                container.classList.add('selection-mode');
+                floatingBar.classList.add('active');
+                newBtn.classList.add('active');
+                showToast('اختر ما يصل إلى 3 وكلاء للمقارنة', 'info');
+            } else {
+                container.classList.remove('selection-mode');
+                floatingBar.classList.remove('active');
+                newBtn.classList.remove('active');
+                selectedAgentsForComparison = [];
+                updateComparisonUI();
+                // Remove selected class from all cards
+                document.querySelectorAll('.leaderboard-card.selected, .leaderboard-card-simple.selected').forEach(el => el.classList.remove('selected'));
+            }
+        });
+    }
+
+    // --- NEW: Comparison Floating Bar Logic ---
+    document.getElementById('cancel-comparison-btn')?.addEventListener('click', () => {
+        isTopAgentsComparisonMode = false;
+        document.getElementById('leaderboard-content-container').classList.remove('selection-mode');
+        document.getElementById('comparison-floating-bar').classList.remove('active');
+        document.getElementById('compare-agents-btn').classList.remove('active');
+        selectedAgentsForComparison = [];
+        updateComparisonUI();
+        document.querySelectorAll('.leaderboard-card.selected, .leaderboard-card-simple.selected').forEach(el => el.classList.remove('selected'));
+    });
+
+    document.getElementById('show-comparison-modal-btn')?.addEventListener('click', showComparisonModal);
+    } catch (error) {
+        console.error('Error rendering top agents:', error);
+        container.innerHTML = '<div class="error-message"><i class="fas fa-exclamation-triangle"></i><p>حدث خطأ في عرض البيانات</p></div>';
+    }
+}
+
+// --- NEW: Comparison Logic Functions ---
+function toggleAgentSelection(agentId) {
+    const index = selectedAgentsForComparison.indexOf(agentId);
+    const card = document.querySelector(`[data-agent-id="${agentId}"]`);
+    
+    if (index > -1) {
+        // Deselect
+        selectedAgentsForComparison.splice(index, 1);
+        if (card) card.classList.remove('selected');
+    } else {
+        // Select
+        if (selectedAgentsForComparison.length >= 3) {
+            showToast('يمكنك مقارنة 3 وكلاء كحد أقصى', 'warning');
+            return;
+        }
+        selectedAgentsForComparison.push(agentId);
+        if (card) card.classList.add('selected');
+    }
+    updateComparisonUI();
+}
+
+function updateComparisonUI() {
+    const previewContainer = document.getElementById('selected-agents-preview');
+    const countText = document.getElementById('comparison-count-text');
+    
+    if (!previewContainer || !countText) return;
+
+    previewContainer.innerHTML = '';
+    countText.textContent = `تم اختيار ${selectedAgentsForComparison.length} من 3`;
+
+    selectedAgentsForComparison.forEach(id => {
+        const agent = window.currentAgentStats.find(a => a._id === id);
+        if (agent) {
+            const img = document.createElement('img');
+            img.src = agent.avatar_url || 'assets/images/default-avatar.png';
+            img.className = 'selected-agent-thumb';
+            previewContainer.appendChild(img);
+        }
+    });
+}
+
+function showComparisonModal() {
+    if (selectedAgentsForComparison.length < 2) {
+        showToast('يرجى اختيار وكيلين على الأقل للمقارنة', 'warning');
+        return;
+    }
+
+    const agents = selectedAgentsForComparison.map(id => window.currentAgentStats.find(a => a._id === id)).filter(Boolean);
+    
+    // Determine winners for each category
+    const maxViews = Math.max(...agents.map(a => a.total_views || 0));
+    const maxReactions = Math.max(...agents.map(a => a.total_reactions || 0));
+    const maxParticipants = Math.max(...agents.map(a => a.total_participants || 0));
+    const maxGrowth = Math.max(...agents.map(a => a.growth_rate || 0));
+
+    const modalContent = `
+        <div class="comparison-modal-content">
+            <div class="comparison-header">
+                <h2><i class="fas fa-balance-scale"></i> مقارنة الوكلاء</h2>
+                <button class="close-modal-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="comparison-table-wrapper">
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>المقياس</th>
+                            ${agents.map(agent => `
+                                <th>
+                                    <div class="comparison-agent-header">
+                                        <div class="agent-avatar-wrapper">
+                                            ${agent.avatar_url 
+                                                ? `<img src="${agent.avatar_url}" alt="${agent.name}">` 
+                                                : `<div class="default-avatar-placeholder"><i class="fas fa-user-astronaut"></i></div>`
+                                            }
+                                            <div class="agent-rank-badge rank-${agent.rank}">${agent.rank || '-'}</div>
+                                        </div>
+                                        <span class="agent-name">${agent.name}</span>
+                                        <span class="classification-badge classification-${(agent.classification || '').toLowerCase()}">${agent.classification || ''}</span>
+                                    </div>
+                                </th>
+                            `).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="metric-label"><i class="fas fa-trophy"></i> المرتبة</td>
+                            ${agents.map(agent => `<td><span class="rank-value">${agent.rank || '-'}</span></td>`).join('')}
+                        </tr>
+                        <tr>
+                            <td class="metric-label"><i class="fas fa-eye"></i> المشاهدات</td>
+                            ${agents.map(agent => {
+                                const isWinner = (agent.total_views || 0) === maxViews;
+                                return `<td class="${isWinner ? 'comparison-winner' : ''}">
+                                    <div class="stat-value-wrapper">
+                                        ${formatNumber(agent.total_views)}
+                                        ${isWinner ? '<i class="fas fa-crown winner-icon"></i>' : ''}
+                                    </div>
+                                </td>`;
+                            }).join('')}
+                        </tr>
+                        <tr>
+                            <td class="metric-label"><i class="fas fa-heart"></i> التفاعلات</td>
+                            ${agents.map(agent => {
+                                const isWinner = (agent.total_reactions || 0) === maxReactions;
+                                return `<td class="${isWinner ? 'comparison-winner' : ''}">
+                                    <div class="stat-value-wrapper">
+                                        ${formatNumber(agent.total_reactions)}
+                                        ${isWinner ? '<i class="fas fa-crown winner-icon"></i>' : ''}
+                                    </div>
+                                </td>`;
+                            }).join('')}
+                        </tr>
+                        <tr>
+                            <td class="metric-label"><i class="fas fa-users"></i> المشاركات</td>
+                            ${agents.map(agent => {
+                                const isWinner = (agent.total_participants || 0) === maxParticipants;
+                                return `<td class="${isWinner ? 'comparison-winner' : ''}">
+                                    <div class="stat-value-wrapper">
+                                        ${formatNumber(agent.total_participants)}
+                                        ${isWinner ? '<i class="fas fa-crown winner-icon"></i>' : ''}
+                                    </div>
+                                </td>`;
+                            }).join('')}
+                        </tr>
+                        <tr>
+                            <td class="metric-label"><i class="fas fa-chart-line"></i> معدل النمو</td>
+                            ${agents.map(agent => {
+                                const isWinner = (agent.growth_rate || 0) === maxGrowth;
+                                return `<td class="${isWinner ? 'comparison-winner' : ''}">
+                                    <div class="stat-value-wrapper">
+                                        ${(agent.growth_rate || 0).toFixed(1)}%
+                                        ${isWinner ? '<i class="fas fa-crown winner-icon"></i>' : ''}
+                                    </div>
+                                </td>`;
+                            }).join('')}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    Swal.fire({
+        html: modalContent,
+        showConfirmButton: false,
+        width: '1000px',
+        background: 'transparent',
+        customClass: {
+            popup: 'no-bg-popup'
+        },
+        didOpen: () => {
+            const closeBtn = document.querySelector('.close-modal-btn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => Swal.close());
+            }
         }
     });
 }

@@ -417,26 +417,27 @@ async function renderAgentProfilePage(agentId, options = {}) {
             const updatedTask = newState.tasks[agentId]?.[todayDayIndex] || { audited: false };
             const isNowAudited = updatedTask.audited;
             
-            const auditStatusContainer = document.getElementById('header-audit-status');
             const auditBtn = document.getElementById('perform-audit-btn');
-            const auditText = document.querySelector('.audit-status-text');
             
-            if (auditStatusContainer && auditBtn && auditText) {
-                // Update container class
+            if (auditBtn) {
+                const auditText = auditBtn.querySelector('.audit-status-text');
+                const iconEl = auditBtn.querySelector('i');
+
+                // Update button class
                 if (isNowAudited) {
-                    auditStatusContainer.classList.add('audited');
-                    auditStatusContainer.classList.remove('pending');
+                    auditBtn.classList.add('audited');
+                    auditBtn.classList.remove('pending');
                 } else {
-                    auditStatusContainer.classList.add('pending');
-                    auditStatusContainer.classList.remove('audited');
+                    auditBtn.classList.add('pending');
+                    auditBtn.classList.remove('audited');
                 }
                 
                 // Update button icon and title
                 auditBtn.title = isNowAudited ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
-                auditBtn.innerHTML = `<i class="fas fa-${isNowAudited ? 'check-circle' : 'clipboard-check'}"></i>`;
+                if (iconEl) iconEl.className = `fas fa-${isNowAudited ? 'check-circle' : 'clipboard-check'}`;
                 
                 // Update text
-                auditText.textContent = isNowAudited ? 'تم التدقيق' : 'التدقيق';
+                if (auditText) auditText.textContent = isNowAudited ? 'تم التدقيق' : 'التدقيق';
             }
         };
 
@@ -470,13 +471,12 @@ async function renderAgentProfilePage(agentId, options = {}) {
     }
 
     // --- NEW: Create the audit button for the header ---
-    // Modified: Always show audit button
-    const auditButtonHtml = `<div id="header-audit-status" class="header-audit-status ${isAuditedToday ? 'audited' : 'pending'}">
-               <button id="perform-audit-btn" class="btn-icon-action" title="${isAuditedToday ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"'}">
-                   <i class="fas fa-${isAuditedToday ? 'check-circle' : 'clipboard-check'}"></i>
-               </button>
-               <span class="audit-status-text">${isAuditedToday ? 'تم التدقيق' : 'التدقيق'}</span>
-           </div>`;
+    // Modified: Always show audit button, clickable container
+    const auditButtonHtml = `
+        <button id="perform-audit-btn" class="header-audit-status-btn ${isAuditedToday ? 'audited' : 'pending'}" title="${isAuditedToday ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"'}">
+            <i class="fas fa-${isAuditedToday ? 'check-circle' : 'clipboard-check'}"></i>
+            <span class="audit-status-text">${isAuditedToday ? 'تم التدقيق' : 'التدقيق'}</span>
+        </button>`;
 
     // Helper for audit days in Action Tab
     // --- تعديل: عرض أيام التدقيق المحددة فقط كعلامات (tags) ---
@@ -493,10 +493,25 @@ async function renderAgentProfilePage(agentId, options = {}) {
     const canEditComps = isSuperAdmin || isAdmin || userPerms.competitions?.manage_comps === 'full';
     const canManualRenew = isSuperAdmin || isAdmin; // Define who can manually renew
 
+    // --- NEW: Calculate Renewal Info ---
+    let renewalInfoHtml = '';
+    if (agent.renewal_period && agent.renewal_period !== 'none') {
+        const nextRenewal = calculateNextRenewalDate(agent);
+        if (nextRenewal) {
+            const now = new Date();
+            const diffTime = nextRenewal - now;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const dateStr = nextRenewal.toLocaleDateString('ar-EG');
+            const timeStr = nextRenewal.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
+            
+            renewalInfoHtml = `يُجدد في ${diffDays} أيام (${dateStr} الساعة ${timeStr})`;
+        }
+    }
+
     appContent.innerHTML = `
         <div class="profile-page-top-bar">
             <button id="back-btn" class="btn-secondary">&larr; عودة</button>
-            <div id="renewal-date-display" class="countdown-timer" style="display: none;"></div>
+            ${renewalInfoHtml ? `<div id="renewal-date-display" class="countdown-timer">${renewalInfoHtml}</div>` : ''}
         </div>
         
         <div class="profile-header-v2">
@@ -504,18 +519,54 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 ${agent.avatar_url ? `<img src="${agent.avatar_url}" alt="Avatar">` : '<i class="fas fa-user-astronaut"></i>'}
             </div>
             <div class="profile-main-info" data-agent-id="${agent._id}">
-                <h1>
-                    ${agent.name} 
-                    ${hasActiveCompetition ? `<span class="status-badge active">مسابقة نشطة</span>${activeCompetitionCountdownHtml}` : ''}
-                    ${hasInactiveCompetition ? '<span class="status-badge inactive">مسابقة غير نشطة</span>' : ''}
-                </h1>
-                <p>رقم الوكالة: <strong class="agent-id-text" title="نسخ الرقم">${agent.agent_id}</strong> | التصنيف: ${agent.classification} | المرتبة: ${agent.rank || 'غير محدد'}</p>
-                <p>روابط التلجرام: ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank">القناة</a>` : 'القناة (غير محدد)'} | ${agent.telegram_group_url ? `<a href="${agent.telegram_group_url}" target="_blank">الجروب</a>` : 'الجروب (غير محدد)'}</p>
-                <p>معرف الدردشة: ${agent.telegram_chat_id ? `<code>${agent.telegram_chat_id}</code>` : 'غير محدد'} | اسم المجموعة: <strong>${agent.telegram_group_name || 'غير محدد'}</strong></p>
-                ${auditButtonHtml}
-            </div>
-            <div class="profile-header-actions">
-                <button id="edit-profile-btn" class="btn-secondary"><i class="fas fa-user-edit"></i> تعديل</button>
+                <div class="profile-info-header">
+                    <h1>${agent.name}</h1>
+                    <div class="profile-badges">
+                        ${hasActiveCompetition ? `<span class="status-badge active">مسابقة نشطة</span>${activeCompetitionCountdownHtml}` : ''}
+                        ${hasInactiveCompetition ? `<span class="status-badge inactive">مسابقة غير نشطة</span>` : ''}
+                    </div>
+                </div>
+                
+                <div class="profile-info-grid">
+                    <div class="info-item">
+                        <span class="label">رقم الوكالة</span>
+                        <span class="value agent-id-text" title="نسخ الرقم">${agent.agent_id}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">التصنيف</span>
+                        <span class="value badge-classification">${agent.classification}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">المرتبة</span>
+                        <span class="value badge-rank">${agent.rank || 'غير محدد'}</span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="label">معرف الدردشة</span>
+                        <span class="value">${agent.telegram_chat_id || 'غير محدد'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">اسم المجموعة</span>
+                        <span class="value">${agent.telegram_group_name || 'غير محدد'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">أيام التدقيق</span>
+                        <div class="value audit-days-mini">${auditDaysHtml}</div>
+                    </div>
+
+                    <div class="info-item full-width">
+                        <span class="label">روابط التلجرام</span>
+                        <div class="value links-row">
+                            ${agent.telegram_channel_url ? `<a href="${agent.telegram_channel_url}" target="_blank" class="telegram-link"><i class="fab fa-telegram-plane"></i> رابط القناة</a>` : '<span class="disabled-link">رابط القناة (غير محدد)</span>'}
+                            ${agent.telegram_group_url ? `<a href="${agent.telegram_group_url}" target="_blank" class="telegram-link"><i class="fab fa-telegram-plane"></i> رابط الجروب</a>` : '<span class="disabled-link">رابط الجروب (غير محدد)</span>'}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="profile-header-actions-row">
+                     ${auditButtonHtml}
+                     <button id="edit-profile-btn" class="btn-secondary"><i class="fas fa-user-edit"></i> تعديل</button>
+                </div>
             </div>
         </div>
 
@@ -623,20 +674,19 @@ async function renderAgentProfilePage(agentId, options = {}) {
         // --- MODIFICATION: Make the button a toggle ---
         auditBtn.addEventListener('click', async () => {
             // --- REFACTOR: Centralize state management for immediate UI feedback ---
-            const statusContainer = document.getElementById('header-audit-status');
-            const wasAudited = statusContainer.classList.contains('audited');
+            const wasAudited = auditBtn.classList.contains('audited');
             const newAuditStatus = !wasAudited;
-            const statusTextEl = statusContainer.querySelector('.audit-status-text');
+            const statusTextEl = auditBtn.querySelector('.audit-status-text');
             const iconEl = auditBtn.querySelector('i');
  
             auditBtn.disabled = true;
-            iconEl.className = 'fas fa-spinner fa-spin';
+            if (iconEl) iconEl.className = 'fas fa-spinner fa-spin';
  
             // 1. Optimistically update the UI
-            statusContainer.classList.toggle('pending', !newAuditStatus);
-            statusContainer.classList.toggle('audited', newAuditStatus);
-            iconEl.className = `fas fa-${newAuditStatus ? 'check-circle' : 'clipboard-check'}`;
-            statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق';
+            auditBtn.classList.toggle('pending', !newAuditStatus);
+            auditBtn.classList.toggle('audited', newAuditStatus);
+            if (iconEl) iconEl.className = `fas fa-${newAuditStatus ? 'check-circle' : 'clipboard-check'}`;
+            if (statusTextEl) statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق';
             auditBtn.title = newAuditStatus ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
  
             // 2. Call the new backend endpoint to toggle is_auditing_enabled
@@ -668,10 +718,10 @@ async function renderAgentProfilePage(agentId, options = {}) {
                 console.error('[Audit Toggle Error]:', error);
                 showToast(error.message || 'فشل تحديث حالة التدقيق.', 'error');
                 // Revert UI on error
-                statusContainer.classList.toggle('pending', wasAudited);
-                statusContainer.classList.toggle('audited', !wasAudited);
-                iconEl.className = `fas fa-${wasAudited ? 'check-circle' : 'clipboard-check'}`;
-                statusTextEl.textContent = wasAudited ? 'تم التدقيق' : 'التدقيق';
+                auditBtn.classList.toggle('pending', wasAudited);
+                auditBtn.classList.toggle('audited', !wasAudited);
+                if (iconEl) iconEl.className = `fas fa-${wasAudited ? 'check-circle' : 'clipboard-check'}`;
+                if (statusTextEl) statusTextEl.textContent = wasAudited ? 'تم التدقيق' : 'التدقيق';
                 auditBtn.title = wasAudited ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
             } finally {
                 auditBtn.disabled = false; // Re-enable the button
@@ -684,18 +734,17 @@ async function renderAgentProfilePage(agentId, options = {}) {
         const data = event.detail;
         // Check if the update is for the currently displayed agent
         if (data.agentId === agent._id) {
-            const statusContainer = document.getElementById('header-audit-status');
             const auditBtn = document.getElementById('perform-audit-btn');
             
-            if (statusContainer && auditBtn) {
+            if (auditBtn) {
                 const newAuditStatus = data.isAuditingEnabled;
                 const iconEl = auditBtn.querySelector('i');
-                const statusTextEl = statusContainer.querySelector('.audit-status-text');
+                const statusTextEl = auditBtn.querySelector('.audit-status-text');
 
-                statusContainer.classList.toggle('pending', !newAuditStatus);
-                statusContainer.classList.toggle('audited', newAuditStatus);
-                iconEl.className = `fas fa-${newAuditStatus ? 'check-circle' : 'clipboard-check'}`;
-                statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق';
+                auditBtn.classList.toggle('pending', !newAuditStatus);
+                auditBtn.classList.toggle('audited', newAuditStatus);
+                if (iconEl) iconEl.className = `fas fa-${newAuditStatus ? 'check-circle' : 'clipboard-check'}`;
+                if (statusTextEl) statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق';
                 auditBtn.title = newAuditStatus ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
                 
                 // Update local agent object to keep state consistent
@@ -1054,6 +1103,7 @@ ${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}
                 </div>`;
         } else {
             renderDetailsView(agent);
+            // Removed renderBalanceHistoryChart from here as it is now in Analytics tab
         }
     }
 
@@ -1324,13 +1374,13 @@ function renderEditProfileHeader(agent) {
     }
 
     const headerContainer = document.querySelector('.profile-main-info');
-    const actionsContainer = document.querySelector('.profile-header-actions');
+    // CHANGED: Select the new actions row
+    const actionsContainer = document.querySelector('.profile-header-actions-row');
+    
     if (!headerContainer || !actionsContainer) return;
 
-    const originalHeaderHtml = headerContainer.innerHTML;
-    const originalActionsHtml = actionsContainer.innerHTML;
-
     // --- تعديل: إضافة محدد أيام التدقيق ---
+    const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
     const auditDaysEditorHtml = `
         <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px;"> 
             <label style="margin-bottom: 10px;">أيام التدقيق</label>
@@ -1362,27 +1412,22 @@ function renderEditProfileHeader(agent) {
             <div class="form-group" style="grid-column: 1 / -1;"><label>رابط الجروب</label><input type="text" id="header-edit-group" value="${agent.telegram_group_url || ''}"></div>
             ${auditDaysEditorHtml}
         </div>
-    `;
-
-    actionsContainer.innerHTML = `
-        <button id="header-save-btn" class="btn-primary"><i class="fas fa-check"></i> حفظ</button>
-        <button id="header-cancel-btn" class="btn-secondary"><i class="fas fa-times"></i> إلغاء</button>
+        <div class="profile-header-actions-row" style="justify-content: flex-end; margin-top: 20px;">
+            <button id="header-save-btn" class="btn-primary"><i class="fas fa-check"></i> حفظ</button>
+            <button id="header-cancel-btn" class="btn-secondary"><i class="fas fa-times"></i> إلغاء</button>
+        </div>
     `;
 
     const saveBtn = document.getElementById('header-save-btn');
     const cancelBtn = document.getElementById('header-cancel-btn');
 
     cancelBtn.addEventListener('click', () => {
-        // Restore original content without a full page reload
-        headerContainer.innerHTML = originalHeaderHtml;
-        actionsContainer.innerHTML = originalActionsHtml;
-        // Re-attach the edit button listener
-        document.getElementById('edit-profile-btn').addEventListener('click', () => renderEditProfileHeader(agent));
+        // Re-render the page to restore original state and listeners
+        renderAgentProfilePage(agent._id);
     });
 
     saveBtn.addEventListener('click', async () => {
         console.log('🚀 [SAVE BUTTON] Clicked! Starting save process...');
-        console.log('🚀 [SAVE BUTTON] Agent object:', agent);
         
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -1393,23 +1438,10 @@ function renderEditProfileHeader(agent) {
         const newClassification = document.getElementById('header-edit-classification').value;
         const oldClassification = agent.classification;
 
-        console.log('📊 [DEBUG] ===== تفاصيل التصنيف =====');
-        console.log('📊 [DEBUG] Old Classification:', oldClassification, '(Type:', typeof oldClassification, ')');
-        console.log('📊 [DEBUG] New Classification:', newClassification, '(Type:', typeof newClassification, ')');
-        console.log('📊 [DEBUG] Are they different?', newClassification !== oldClassification);
-        console.log('📊 [DEBUG] Strict comparison:', newClassification, '!==', oldClassification, '=', (newClassification !== oldClassification));
-        console.log('📊 [DEBUG] showClassificationChangeModal exists?', typeof showClassificationChangeModal);
-        console.log('📊 [DEBUG] showClassificationChangeModal function:', showClassificationChangeModal);
-
         // Check if classification changed
         if (newClassification !== oldClassification) {
-            console.log('✅ [DEBUG] Classification HAS CHANGED! Showing modal...');
-            console.log('✅ [DEBUG] Calling showClassificationChangeModal NOW...');
-            console.log('✅ [DEBUG] Modal should appear in 3... 2... 1...');
-            
             // Show classification change modal
             showClassificationChangeModal(agent, newClassification, async (reason, action) => {
-                console.log('[Header Edit Classification Change] Modal confirmed with reason:', reason, 'action:', action);
                 
                 // --- تحديث: تحديث competitions_per_week تلقائياً بناءً على التصنيف الجديد ---
                 let competitionsPerWeek = agent.competitions_per_week || 1; // القيمة الافتراضية
@@ -1433,6 +1465,7 @@ function renderEditProfileHeader(agent) {
                 try {
                     const response = await authedFetch(`/api/agents/${agent._id}`, {
                         method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updatedData)
                     });
 
@@ -1467,16 +1500,13 @@ function renderEditProfileHeader(agent) {
                 }
             }, () => {
                 // On cancel, re-enable save button
-                console.log('❌ [MODAL] User cancelled classification change');
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = '<i class="fas fa-check"></i> حفظ';
             });
             
-            console.log('⏸️ [DEBUG] Returning early - waiting for modal interaction');
             return; // IMPORTANT: Stop here and wait for modal
         }
 
-        console.log('ℹ️ [DEBUG] Classification NOT changed - proceeding with normal save');
         // Normal save flow (no classification change)
         const updatedData = {
             name: document.getElementById('header-edit-name').value,
@@ -1491,6 +1521,7 @@ function renderEditProfileHeader(agent) {
         try {
             const response = await authedFetch(`/api/agents/${agent._id}`, {
                 method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updatedData)
             });
 
@@ -1914,8 +1945,6 @@ function renderDetailsView(agent) {
             iconHtml = `<span class="inline-edit-trigger" title="قابل للتعديل"><i class="fas fa-pen"></i></span>`;
         }
 
-
-
         if (numericFields.includes(fieldName) || fieldName === 'competitions_per_week') {
             displayValue = (value === null || value === undefined) ? 0 : value;
             if (fieldName === 'prize_per_winner' && typeof displayValue === 'number') displayValue = parseFloat(displayValue).toFixed(2);
@@ -1930,42 +1959,65 @@ function renderDetailsView(agent) {
         } else {
             displayValue = value || 'غير محدد';
         }
+        
+        // --- NEW: Add special class for audit_days to span full width ---
+        const extraClass = fieldName === 'audit_days' ? 'full-width-card' : '';
+        
         return `
-            <div class="details-group" data-field="${fieldName}">
-                ${iconHtml}
-                <label>${label}</label> 
-                <p>${displayValue}</p>
+            <div class="details-card ${extraClass}" data-field="${fieldName}">
+                <div class="details-card-header">
+                    <span class="details-label">${label}</span>
+                    ${iconHtml}
+                </div>
+                <div class="details-value">${displayValue}</div>
             </div>
         `;
     };
 
     const htmlContent = `
-        <div class="details-grid">
-            <h3 class="details-section-title">الإعدادات الأساسية</h3>
-            ${createFieldHTML('المرتبة', agent.rank, 'rank')}
-            ${createFieldHTML('التصنيف', agent.classification, 'classification')}
-            ${createFieldHTML('بونص المسابقات (تداولي)', agent.competition_bonus, 'competition_bonus')}
-            ${createFieldHTML('مرات بونص الإيداع', agent.deposit_bonus_count, 'deposit_bonus_count')}
-            ${createFieldHTML('نسبة بونص الإيداع', agent.deposit_bonus_percentage, 'deposit_bonus_percentage')}
+        <div class="details-container-v2">
+            <div class="details-section-v2">
+                <h3 class="details-section-title-v2"><i class="fas fa-sliders-h"></i> الإعدادات الأساسية</h3>
+                <div class="details-grid-v2">
+                    ${createFieldHTML('المرتبة', agent.rank, 'rank')}
+                    ${createFieldHTML('التصنيف', agent.classification, 'classification')}
+                    ${createFieldHTML('بونص المسابقات (تداولي)', agent.competition_bonus, 'competition_bonus')}
+                    ${createFieldHTML('مرات بونص الإيداع', agent.deposit_bonus_count, 'deposit_bonus_count')}
+                    ${createFieldHTML('نسبة بونص الإيداع', agent.deposit_bonus_percentage, 'deposit_bonus_percentage')}
+                </div>
+            </div>
             
-            <h3 class="details-section-title">الأرصدة</h3>
-            ${createFieldHTML('رصيد مستهلك', agent.consumed_balance, 'consumed_balance')}
-            ${createFieldHTML('رصيد متبقي', Math.max(0, agent.remaining_balance || 0), 'remaining_balance')}
-            ${createFieldHTML('بونص إيداع مستخدم', agent.used_deposit_bonus, 'used_deposit_bonus')}
-            ${createFieldHTML('بونص إيداع متبقي', Math.max(0, agent.remaining_deposit_bonus || 0), 'remaining_deposit_bonus')}
+            <div class="details-section-v2">
+                <h3 class="details-section-title-v2"><i class="fas fa-wallet"></i> الأرصدة</h3>
+                <div class="details-grid-v2">
+                    ${createFieldHTML('رصيد مستهلك', agent.consumed_balance, 'consumed_balance')}
+                    ${createFieldHTML('رصيد متبقي', Math.max(0, agent.remaining_balance || 0), 'remaining_balance')}
+                    ${createFieldHTML('بونص إيداع مستخدم', agent.used_deposit_bonus, 'used_deposit_bonus')}
+                    ${createFieldHTML('بونص إيداع متبقي', Math.max(0, agent.remaining_deposit_bonus || 0), 'remaining_deposit_bonus')}
+                </div>
+            </div>
 
-            <h3 class="details-section-title">إعدادات المسابقة الواحدة</h3>
-            ${createFieldHTML('رصيد المسابقة الواحدة', agent.single_competition_balance, 'single_competition_balance')}
-            ${createFieldHTML('عدد الفائزين', agent.winners_count, 'winners_count')}
-            ${createFieldHTML('جائزة كل فائز', agent.prize_per_winner, 'prize_per_winner')}
-            ${createFieldHTML('عدد فائزين بونص ايداع', agent.deposit_bonus_winners_count, 'deposit_bonus_winners_count')}
+            <div class="details-section-v2">
+                <h3 class="details-section-title-v2"><i class="fas fa-trophy"></i> إعدادات المسابقة الواحدة</h3>
+                <div class="details-grid-v2">
+                    ${createFieldHTML('رصيد المسابقة الواحدة', agent.single_competition_balance, 'single_competition_balance')}
+                    ${createFieldHTML('عدد الفائزين', agent.winners_count, 'winners_count')}
+                    ${createFieldHTML('جائزة كل فائز', agent.prize_per_winner, 'prize_per_winner')}
+                    ${createFieldHTML('عدد فائزين بونص ايداع', agent.deposit_bonus_winners_count, 'deposit_bonus_winners_count')}
+                </div>
+            </div>
             
-            <h3 class="details-section-title">التجديد والمدة</h3>
-            ${createFieldHTML('يجدد كل', agent.renewal_period, 'renewal_period')}
-            ${createFieldHTML('مدة المسابقة', agent.competition_duration, 'competition_duration')}
-            ${createFieldHTML('أيام التدقيق', agent.audit_days, 'audit_days')}
-            ${createFieldHTML('تاريخ آخر مسابقة', agent.last_competition_date, 'last_competition_date')}
-            ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week')}        </div>
+            <div class="details-section-v2">
+                <h3 class="details-section-title-v2"><i class="fas fa-clock"></i> التجديد والمدة</h3>
+                <div class="details-grid-v2">
+                    ${createFieldHTML('يجدد كل', agent.renewal_period, 'renewal_period')}
+                    ${createFieldHTML('مدة المسابقة', agent.competition_duration, 'competition_duration')}
+                    ${createFieldHTML('أيام التدقيق', agent.audit_days, 'audit_days')}
+                    ${createFieldHTML('تاريخ آخر مسابقة', agent.last_competition_date, 'last_competition_date')}
+                    ${createFieldHTML('عدد المسابقات كل أسبوع', agent.competitions_per_week, 'competitions_per_week')}
+                </div>
+            </div>
+        </div>
         ${isSuperAdmin ? `
             <div class="details-actions" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
                 <button id="trigger-renewal-test-btn" class="btn-danger"><i class="fas fa-history"></i> تجربة التجديد (3 ثواني)</button>
@@ -2432,19 +2484,97 @@ function calculateNextRenewalDate(agent) {
 
     switch (agent.renewal_period) {
         case 'weekly':
-            nextRenewalDate.setDate(nextRenewalDate.getDate() + 6);
+            nextRenewalDate.setDate(nextRenewalDate.getDate() + 7);
             break;
         case 'biweekly':
-            nextRenewalDate.setDate(nextRenewalDate.getDate() + 13);
+            nextRenewalDate.setDate(nextRenewalDate.getDate() + 14);
             break;
         case 'monthly':
             nextRenewalDate.setMonth(nextRenewalDate.getMonth() + 1);
-            nextRenewalDate.setDate(nextRenewalDate.getDate() - 1);
             break;
         default:
             return null;
     }
+    // Ensure it is set to 5:00 AM
+    nextRenewalDate.setHours(5, 0, 0, 0);
     return nextRenewalDate;
+}
+
+// --- NEW: Detailed Countdown Modal ---
+function showDetailedCountdownModal(targetDate) {
+    const modalId = 'countdown-modal-' + Date.now();
+    
+    const modalContent = `
+        <div style="text-align:center; padding: 20px;">
+            <h3 style="color:#fff; margin-bottom: 20px; font-family:'Cairo', sans-serif;">الوقت المتبقي للتجديد</h3>
+            <div id="${modalId}-timer" style="display:flex; justify-content:center; gap:15px; direction:ltr;">
+                <!-- Timer parts will go here -->
+            </div>
+            <p style="margin-top:20px; color:#94a3b8; font-size:0.9em;">سيتم التجديد تلقائياً عند انتهاء الوقت</p>
+        </div>
+    `;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'custom-modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(5px);';
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:#1e293b; border:1px solid #334155; border-radius:16px; padding:20px; width:90%; max-width:500px; box-shadow:0 20px 50px rgba(0,0,0,0.5); position:relative;';
+    
+    modal.innerHTML = `
+        <button id="${modalId}-close" style="position:absolute; top:15px; right:15px; background:none; border:none; color:#64748b; font-size:18px; cursor:pointer;"><i class="fas fa-times"></i></button>
+        ${modalContent}
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    const createTimerUnit = (value, label) => `
+        <div style="display:flex; flex-direction:column; align-items:center;">
+            <div style="background:#0f172a; color:#3b82f6; font-size:28px; font-weight:bold; width:70px; height:70px; border-radius:12px; display:flex; align-items:center; justify-content:center; border:1px solid #1e40af; box-shadow:0 0 15px rgba(59,130,246,0.2); margin-bottom:8px; font-family:monospace;">
+                ${value.toString().padStart(2, '0')}
+            </div>
+            <span style="color:#94a3b8; font-size:12px;">${label}</span>
+        </div>
+    `;
+
+    const updateModalTimer = () => {
+        const now = new Date();
+        const diff = targetDate - now;
+        
+        if (diff <= 0) {
+            cleanup();
+            return;
+        }
+        
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        const timerContainer = document.getElementById(`${modalId}-timer`);
+        if (timerContainer) {
+            timerContainer.innerHTML = `
+                ${createTimerUnit(days, 'أيام')}
+                ${createTimerUnit(hours, 'ساعات')}
+                ${createTimerUnit(minutes, 'دقائق')}
+                ${createTimerUnit(seconds, 'ثواني')}
+            `;
+        }
+    };
+    
+    updateModalTimer();
+    const intervalId = setInterval(updateModalTimer, 1000);
+    
+    const cleanup = () => {
+        clearInterval(intervalId);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    };
+    
+    document.getElementById(`${modalId}-close`).onclick = cleanup;
+    overlay.onclick = (e) => {
+        if (e.target === overlay) cleanup();
+    };
 }
 
 function updateManualRenewButtonState(agent) {
@@ -2535,20 +2665,34 @@ function displayNextRenewalDate(agent) {
             return;
         }
 
-        if (diff < 1800000) { // Less than 30 minutes
-            const minutes = Math.floor((diff / 1000 / 60) % 60).toString().padStart(2, '0');
+        if (diff < 86400000) { // Less than 24 hours
+            const hours = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
+            const minutes = Math.floor((diff / (1000 * 60)) % 60).toString().padStart(2, '0');
             const seconds = Math.floor((diff / 1000) % 60).toString().padStart(2, '0');
-            displayElement.innerHTML = `<i class="fas fa-hourglass-half fa-spin"></i> <span>التجديد خلال: ${minutes}:${seconds}</span>`;
+            
+            const absoluteDateString = nextRenewalDate.toLocaleDateString('ar-EG', {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric'
+            });
+            const fullDateTimeString = `${absoluteDateString} الساعة 5:00 ص`;
+            
+            // Show countdown above the standard text
+            displayElement.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;line-height:1.2;">
+                    <div style="font-size:1.2em;font-weight:bold;color:#fbbf24;margin-bottom:2px;">
+                        <i class="fas fa-hourglass-half fa-spin"></i> ${hours}:${minutes}:${seconds}
+                    </div>
+                    <div style="font-size:0.85em;opacity:0.9;">
+                        <i class="fas fa-calendar-alt"></i> يُجدد خلال يوم (${fullDateTimeString})
+                    </div>
+                </div>
+            `;
             displayElement.classList.add('imminent');
         } else {
-            // More than 1 minute, show relative time
+            // More than 24 hours, show relative time
             const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            let relativeTime = '';
-            if (days > 1) relativeTime = `في ${days} أيام`;
-            else if (days === 1) relativeTime = `خلال يوم`;
-            else if (hours > 0) relativeTime = `في ${hours} ساعة`;
-            else relativeTime = `في ${Math.ceil(diff / 60000)} دقيقة`;
+            let relativeTime = `في ${days} أيام`;
 
             const absoluteDateString = nextRenewalDate.toLocaleDateString('ar-EG', {
                 year: 'numeric',
@@ -2557,8 +2701,18 @@ function displayNextRenewalDate(agent) {
             });
             const fullDateTimeString = `${absoluteDateString} الساعة 5:00 ص`;
 
-            displayElement.innerHTML = `<i class="fas fa-calendar-alt"></i> <span>يُجدد ${relativeTime} (${fullDateTimeString})</span>`;
+            displayElement.innerHTML = `<span class="renewal-details-trigger" style="cursor:pointer;margin-left:8px;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:rgba(255,255,255,0.1);border-radius:50%;transition:all 0.2s;" title="عرض العداد التفصيلي" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'"><i class="fas fa-clock"></i></span> <span>يُجدد ${relativeTime} (${fullDateTimeString})</span>`;
             displayElement.classList.remove('imminent', 'due');
+            
+            // Ensure click listener is attached (idempotent)
+            if (!displayElement.hasAttribute('data-click-attached')) {
+                displayElement.addEventListener('click', (e) => {
+                    if (e.target.closest('.renewal-details-trigger')) {
+                        showDetailedCountdownModal(nextRenewalDate);
+                    }
+                });
+                displayElement.setAttribute('data-click-attached', 'true');
+            }
         }
     };
 
@@ -2774,7 +2928,28 @@ async function renderAgentAnalytics(agent, container, dateRange = 'all') {
             </div>
         </div>` : '';
 
-    container.innerHTML = analyticsHeaderHtml + kpisHtml + chartHtml + tableHtml;
+    // --- NEW: Balance History Chart Container ---
+    const balanceChartHtml = `
+        <div class="chart-container dark-chart-container" style="background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);border:1px solid #2a2d3a;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden;">
+            <div class="chart-header" style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div style="width:40px;height:40px;background:linear-gradient(135deg, #10b981 0%, #059669 100%);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-wallet" style="color:#fff;font-size:18px;"></i>
+                </div>
+                <div>
+                    <h4 style="margin:0;color:#fff;font-size:18px;font-weight:600;">سجل استهلاك الرصيد</h4>
+                    <p style="margin:4px 0 0;color:#a1a1aa;font-size:13px;">تتبع استهلاك الرصيد عبر الوقت</p>
+                </div>
+            </div>
+            <div class="chart-glow" style="position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(45deg, rgba(16,185,129,0.05) 0%, transparent 70%);pointer-events:none;"></div>
+            <div id="balanceHistoryChartContainer" style="position:relative;z-index:2;background:#0f172a;border-radius:8px;padding:16px;border:1px solid #334155;height:300px;">
+                <canvas id="balanceHistoryChart"></canvas>
+            </div>
+        </div>`;
+
+    container.innerHTML = analyticsHeaderHtml + kpisHtml + chartHtml + balanceChartHtml + tableHtml;
+
+    // --- NEW: Render Balance History Chart ---
+    renderBalanceHistoryChart(agent._id, document.getElementById('balanceHistoryChartContainer'));
 
     // Add event listeners for range buttons
     container.querySelectorAll('.dark-range-btn').forEach(btn => {
@@ -3032,4 +3207,122 @@ function renderAgentAnalyticsChart(competitions, dateRange, agent) {
             interaction: { mode: 'index', intersect: false }
         }
     });
+}
+
+// --- NEW: Render Balance History Chart ---
+async function renderBalanceHistoryChart(agentId, container) {
+    // If container is passed as an element (from analytics tab), use it directly.
+    // If passed as a parent container (from details tab), create the section.
+    let chartCanvas;
+    let chartContainerDiv;
+
+    if (container.id === 'balanceHistoryChartContainer') {
+        // Called from Analytics Tab
+        chartCanvas = container.querySelector('canvas');
+        chartContainerDiv = container;
+    } else {
+        // Called from Details Tab (Legacy/Fallback)
+        // Create container for the chart
+        const chartSection = document.createElement('div');
+        chartSection.className = 'action-section';
+        chartSection.style.marginTop = '20px';
+        chartSection.innerHTML = `
+            <h2><i class="fas fa-chart-line"></i> سجل استهلاك الرصيد</h2>
+            <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
+                <canvas id="balanceHistoryChartDetails"></canvas>
+            </div>
+        `;
+        container.appendChild(chartSection);
+        chartCanvas = chartSection.querySelector('canvas');
+        chartContainerDiv = chartSection.querySelector('.chart-container');
+    }
+
+    try {
+        const response = await authedFetch(`/api/agents/${agentId}/transactions?limit=12`);
+        if (!response.ok) throw new Error('Failed to fetch transactions');
+        
+        const result = await response.json();
+        const transactions = result.data || [];
+
+        if (transactions.length === 0) {
+            chartContainerDiv.innerHTML = '<p class="no-data-message" style="color:#94a3b8;text-align:center;padding:20px;">لا توجد بيانات كافية لعرض الرسم البياني.</p>';
+            return;
+        }
+
+        // Process data for chart
+        // We want to show the "amount restored" (consumption) over time
+        // Sort by date ascending for the chart
+        const sortedTx = transactions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        
+        const labels = sortedTx.map(tx => new Date(tx.createdAt).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' }));
+        const dataPoints = sortedTx.map(tx => tx.amount); // Amount restored = consumption
+
+        new Chart(chartCanvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'الرصيد المستهلك ($)',
+                    data: dataPoints,
+                    backgroundColor: 'rgba(16, 185, 129, 0.6)', // Green to match wallet theme
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barThickness: 20
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        },
+                        ticks: {
+                            color: '#94a3b8',
+                            font: { family: 'Cairo' }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#94a3b8',
+                            font: { family: 'Cairo' }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#e2e8f0',
+                            font: {
+                                family: 'Cairo'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleColor: '#f1f5f9',
+                        bodyColor: '#e2e8f0',
+                        borderColor: '#334155',
+                        borderWidth: 1,
+                        padding: 10,
+                        callbacks: {
+                            label: function(context) {
+                                return `تم استهلاك: $${context.raw}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error rendering balance chart:', error);
+        chartContainerDiv.innerHTML = '<p class="error-message" style="color:#ef4444;text-align:center;">فشل تحميل الرسم البياني.</p>';
+    }
 }

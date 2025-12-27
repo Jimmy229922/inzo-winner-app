@@ -1,4 +1,5 @@
 ﻿const Agent = require('../models/agent.model');
+const Transaction = require('../models/Transaction'); // Added
 const path = require('path'); // Added
 const Competition = require('../models/Competition');
 const Task = require('../models/Task');
@@ -46,6 +47,23 @@ const calculateNextRenewalDate = (agent) => {
         }
     }
     return nextRenewalDate;
+};
+
+exports.getAgentTransactions = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { limit = 12 } = req.query; // Default to last 12 transactions (approx 3 months if weekly)
+
+        const transactions = await Transaction.find({ agent_id: id })
+            .sort({ createdAt: -1 })
+            .limit(parseInt(limit))
+            .lean();
+
+        res.json({ data: transactions });
+    } catch (error) {
+        console.error('Error fetching agent transactions:', error);
+        res.status(500).json({ message: 'Failed to fetch transactions.', error: error.message });
+    }
 };
 
 exports.getAllAgents = async (req, res) => { // NOSONAR
@@ -417,24 +435,73 @@ exports.renewEligibleAgentBalances = async (onlineClients) => {
     now.setHours(0, 0, 0, 0); // Normalize to the start of the day
 
     for (const agent of agentsToRenew) {
+        // --- RACE CONDITION PROTECTION ---
+        // Check if already renewed today
+        if (agent.last_renewal_date) {
+            const lastRenewal = new Date(agent.last_renewal_date);
+            lastRenewal.setHours(0, 0, 0, 0);
+            if (lastRenewal.getTime() === now.getTime()) {
+                // Already renewed today, skip
+                continue;
+            }
+        }
+
         const nextRenewalDate = calculateNextRenewalDate(agent);
         if (!nextRenewalDate) continue; // Skip if no valid renewal date
 
         nextRenewalDate.setHours(0, 0, 0, 0); // Normalize to the start of the day
 
         if (now >= nextRenewalDate) {
-            // New "roll-over" renewal logic
-            const newRemainingBalance = (agent.remaining_balance || 0) + (agent.consumed_balance || 0);
-            agent.remaining_balance = newRemainingBalance;
-            agent.consumed_balance = 0;
+            // --- ATOMIC UPDATE & RACE CONDITION PROTECTION ---
+            // We use findOneAndUpdate with a filter on 'last_renewal_date'.
+            // If another process renewed this agent milliseconds ago, 'last_renewal_date' would have changed,
+            // and this update will fail (return null), preventing double renewal.
+            // We also use an aggregation pipeline in the update to atomically calculate the new balance.
+            
+            const originalAgentState = await Agent.findOneAndUpdate(
+                { 
+                    _id: agent._id, 
+                    last_renewal_date: agent.last_renewal_date // Optimistic Locking
+                },
+                [
+                    {
+                        $set: {
+                            remaining_balance: { $add: [{ $ifNull: ["$remaining_balance", 0] }, { $ifNull: ["$consumed_balance", 0] }] },
+                            consumed_balance: 0,
+                            remaining_deposit_bonus: { $add: [{ $ifNull: ["$remaining_deposit_bonus", 0] }, { $ifNull: ["$used_deposit_bonus", 0] }] },
+                            used_deposit_bonus: 0,
+                            last_renewal_date: now
+                        }
+                    }
+                ],
+                { new: false } // Return the document BEFORE the update to calculate what was restored
+            );
 
-            const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) + (agent.used_deposit_bonus || 0);
-            agent.remaining_deposit_bonus = newRemainingDepositBonus;
-            agent.used_deposit_bonus = 0;
+            // If originalAgentState is null, it means the agent was modified by another process (concurrent renewal).
+            if (!originalAgentState) {
+                console.log(`[Auto Renewal] Skipped agent ${agent.name} (Race condition detected - already renewed).`);
+                continue;
+            }
 
-            agent.last_renewal_date = now;
+            // Calculate amounts from the state BEFORE update
+            const amountRestored = originalAgentState.consumed_balance || 0;
+            const balanceBefore = originalAgentState.remaining_balance || 0;
+            const newRemainingBalance = balanceBefore + amountRestored;
 
-            await agent.save();
+            // --- TRANSACTION LEDGER ---
+            try {
+                await Transaction.create({
+                    agent_id: agent._id,
+                    type: 'auto_renewal',
+                    amount: amountRestored,
+                    previous_balance: balanceBefore,
+                    new_balance: newRemainingBalance,
+                    details: `Auto-renewal: Restored ${amountRestored} to balance.`,
+                    performed_by: null // System
+                });
+            } catch (txError) {
+                console.error(`[Auto Renewal] Failed to create transaction record for agent ${agent.name}:`, txError);
+            }
 
             // --- NEW: Broadcast renewal notification via WebSocket ---
             if (onlineClients && onlineClients.size > 0) {
@@ -454,7 +521,7 @@ exports.renewEligibleAgentBalances = async (onlineClients) => {
 
             // --- FIX: Log automatic renewal ---
             // We pass null for user_id as this is a system action.
-            await logActivity(null, agent._id, 'AUTO_RENEWAL', `ØªÙ… ØªØ¬Ø¯ÙŠØ¯ Ø§Ù„Ø±ØµÙŠØ¯ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ Ù„Ù„ÙˆÙƒÙŠÙ„ ${agent.name}.`);
+            await logActivity(null, agent._id, 'AUTO_RENEWAL', `تم تجديد الرصيد تلقائياً للوكيل ${agent.name}.`);
 
             renewedCount++;
         }
@@ -603,11 +670,26 @@ exports.renewSingleAgentBalance = async (req, res) => {
             return res.status(404).json({ message: 'Agent not found.' });
         }
 
+        // --- RACE CONDITION PROTECTION ---
+        if (agent.last_renewal_date) {
+            const lastRenewal = new Date(agent.last_renewal_date);
+            const now = new Date();
+            lastRenewal.setHours(0, 0, 0, 0);
+            now.setHours(0, 0, 0, 0);
+            
+            if (lastRenewal.getTime() === now.getTime()) {
+                return res.status(400).json({ message: 'Agent balance has already been renewed today.' });
+            }
+        }
+
         // --- FIX: Sanitize old/invalid enum values before saving, similar to bulk renew ---
         if (agent.competition_duration && !['24h', '48h'].includes(agent.competition_duration)) {
             console.log(`[Manual Renew] Sanitizing invalid competition_duration: '${agent.competition_duration}' for agent ${agent.name}`);
             agent.competition_duration = null; // Set to null or a valid default to pass validation
         }
+
+        const balanceBefore = agent.remaining_balance || 0;
+        const amountRestored = agent.consumed_balance || 0;
 
         // New "roll-over" renewal logic
         const newRemainingBalance = (agent.remaining_balance || 0) + (agent.consumed_balance || 0);
@@ -622,8 +704,23 @@ exports.renewSingleAgentBalance = async (req, res) => {
 
         await agent.save();
 
-        // --- FIX: Log this manual action ---
+        // --- TRANSACTION LEDGER ---
         const userId = req.user?._id;
+        try {
+            await Transaction.create({
+                agent_id: agent._id,
+                type: 'manual_renewal',
+                amount: amountRestored,
+                previous_balance: balanceBefore,
+                new_balance: newRemainingBalance,
+                details: `Manual renewal: Restored ${amountRestored} to balance.`,
+                performed_by: userId || null
+            });
+        } catch (txError) {
+            console.error(`[Manual Renewal] Failed to create transaction record for agent ${agent.name}:`, txError);
+        }
+
+        // --- FIX: Log this manual action ---
         if (userId) {
             await logActivity(userId, agent._id, 'MANUAL_RENEWAL', `ØªÙ… ØªØ¬Ø¯ÙŠØ¯ Ø§Ù„Ø±ØµÙŠØ¯ ÙŠØ¯ÙˆÙŠØ§Ù‹ Ù„Ù„ÙˆÙƒÙŠÙ„ ${agent.name}.`);
         }
