@@ -464,16 +464,10 @@ async function updateHomePageUI(stats) {
 
         // 2. Update Tasks Progress
         const currentDayIndex = new Date().getDay();
-        console.log('[Home] Debugging Saturday Tasks:', {
-            dayIndex: currentDayIndex,
-            agentsForTodayCount: agentsForToday?.length,
-            agentsForToday: agentsForToday
-        });
 
         // FAILSAFE: Force hide tasks on Saturday (6)
         let effectiveAgentsForToday = agentsForToday;
         if (currentDayIndex === 6) {
-            console.warn('[Home] Saturday detected. Forcing empty task list on frontend.');
             effectiveAgentsForToday = [];
         }
 
@@ -650,10 +644,12 @@ async function updateHomePageUI(stats) {
             const progressPercentEl = document.getElementById('progress-percentage');
             const pendingCountEl = document.getElementById('pending-count');
             const progressLabelEl = document.getElementById('progress-label');
+            const progressBarEl = document.getElementById('tasks-progress-bar'); // Added this line
             
             if (progressPercentEl) progressPercentEl.textContent = 0;
             if (pendingCountEl) pendingCountEl.textContent = 0;
             if (progressLabelEl) progressLabelEl.textContent = '0 / 0';
+            if (progressBarEl) progressBarEl.style.width = '0%'; // Added this line
             
             /* logs suppressed: set counters to 0 */
         }
