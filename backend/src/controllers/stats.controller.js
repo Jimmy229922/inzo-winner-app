@@ -107,8 +107,9 @@ exports.getHomeStats = async (req, res) => {
             Agent.aggregate([
                 { $group: { _id: '$classification', count: { $sum: 1 } } } // Count all agents by classification
             ]),
-            Agent.find({ audit_days: { $in: [dayOfWeekIndex] } }).select('name agent_id classification avatar_url').lean(),
-            Agent.aggregate([
+            // Force empty list on Saturday (6) to prevent tasks from appearing
+            (dayOfWeekIndex === 6) ? [] : Agent.find({ audit_days: { $in: [dayOfWeekIndex] } }).select('name agent_id classification avatar_url').lean(),
+            (dayOfWeekIndex === 6) ? [] : Agent.aggregate([
                 { $match: { audit_days: { $in: [dayOfWeekIndex] } } },
                 {
                     $lookup: {
