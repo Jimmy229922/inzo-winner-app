@@ -336,10 +336,12 @@ async function updateHomePageUI(stats) {
             const progressPercentEl = document.getElementById('progress-percentage');
             const pendingCountEl = document.getElementById('pending-count');
             const progressLabelEl = document.getElementById('progress-label');
+            const progressBarEl = document.getElementById('tasks-progress-bar'); // Added this line
             
             if (progressPercentEl) progressPercentEl.textContent = 0;
             if (pendingCountEl) pendingCountEl.textContent = 0;
             if (progressLabelEl) progressLabelEl.textContent = '0 / 0';
+            if (progressBarEl) progressBarEl.style.width = '0%'; // Added this line
             
             /* logs suppressed: set counters to 0 */
         }
