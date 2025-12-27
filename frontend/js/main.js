@@ -318,7 +318,7 @@ function setActiveNav(activeElement) {
 
 async function logAgentActivity(userId, agentId, actionType, description, metadata = {}) {
     // This function will be reimplemented later using our own backend.
-    console.log(`[FRONTEND LOG] ➡️ محاولة تسجيل نشاط: ${actionType} (Agent: ${agentId || 'N/A'})`);
+    // console.log(`[FRONTEND LOG] ➡️ محاولة تسجيل نشاط: ${actionType} (Agent: ${agentId || 'N/A'})`);
     try {
         const payload = {
             user_id: userId || currentUserProfile?._id, // Default to current user if not provided
@@ -337,7 +337,7 @@ async function logAgentActivity(userId, agentId, actionType, description, metada
             body: JSON.stringify(payload)
         });
         if (!response.ok) throw new Error(`Server responded with status ${response.status}`);
-        console.log(`[FRONTEND LOG] ✅ تم إرسال النشاط بنجاح إلى الخادم.`);
+        // console.log(`[FRONTEND LOG] ✅ تم إرسال النشاط بنجاح إلى الخادم.`);
     } catch (error) {
         console.error(`[FRONTEND LOG] ❌ فشل إرسال النشاط إلى الخادم:`, error);
     }
@@ -436,7 +436,7 @@ function setupRealtimeListeners() {
         try { window._realtimeWs = ws; } catch (e) { /* ignore in non-browser env */ }
 
         ws.onopen = () => {
-            console.log('[WebSocket] متصل الآن ✓');
+            // console.log('[WebSocket] متصل الآن ✓');
             reconnectAttempts = 0; // Reset counter on successful connection
             const token = localStorage.getItem('authToken');
             if (token) {
@@ -476,13 +476,13 @@ function setupRealtimeListeners() {
                             }
                             // Dispatch a global event that the user list can listen to
                             window.dispatchEvent(new CustomEvent('presence-update'));
-                            console.log('[WebSocket] تحديث الحالة المباشرة:', Array.from(window.onlineUsers.keys()));
+                            // console.log('[WebSocket] تحديث الحالة المباشرة:', Array.from(window.onlineUsers.keys()));
                         }
                         break;
                     
                     case 'suggestion_update':
                     case 'new_suggestion':
-                        console.log('🔔 [WebSocket] Received suggestion update/new suggestion');
+                        // console.log('🔔 [WebSocket] Received suggestion update/new suggestion');
                         loadGlobalUnreadCount();
                         break;
 
@@ -1075,7 +1075,7 @@ async function renderWinnerRoulettePage() {
     // Check if winner-roulette init is available (from bundled JS)
     setTimeout(() => {
         if (typeof window.winnerRouletteInit === 'function') {
-            console.log('[winner-roulette] Initializing from bundled code');
+            // console.log('[winner-roulette] Initializing from bundled code');
             window.winnerRouletteInit();
             winnerRouletteFallbackInitialized = true;
         } else {
@@ -1085,6 +1085,7 @@ async function renderWinnerRoulettePage() {
     }, 100);
 
     // Log screen size for debugging
+    /*
     console.log('Winner Roulette Page Loaded - Screen Size:', {
         innerWidth: window.innerWidth,
         innerHeight: window.innerHeight,
@@ -1092,6 +1093,7 @@ async function renderWinnerRoulettePage() {
         outerHeight: window.outerHeight,
         appContent: window.appContent ? window.appContent.offsetWidth + 'x' + window.appContent.offsetHeight : 'not found'
     });
+    */
 }
 
 function getWinnerRouletteInlineHTML(minimal = false, errMsg = '') {

@@ -240,9 +240,6 @@ function renderAddAgentForm() {
         const competitionsPerWeek = parseInt(document.getElementById('agent-competitions-per-week').value, 10);
         let competitionDuration = '48h'; // Default
 
-        // --- DEBUG: Log the value read from the form ---
-        console.log(`[Add Agent Debug 1] Value for competitionsPerWeek from form: ${competitionsPerWeek}`);
-
         if (competitionsPerWeek === 2) {
             competitionDuration = '24h';
         } else if (competitionsPerWeek === 3) {
@@ -273,9 +270,6 @@ function renderAddAgentForm() {
             prize_per_winner: 30, // --- NEW: Default prize per winner to $30 ---
         };
 
-        // --- DEBUG: Log the created agent data object ---
-        console.log('[Add Agent Debug 2] newAgentData object created:', newAgentData);
-
         // --- الاقتراح د: تأكيد قبل الحفظ ---
         const summaryHtml = `
             <div class="confirmation-summary-grid">
@@ -292,9 +286,6 @@ function renderAddAgentForm() {
              </div>
             <p>هل أنت متأكد من أن البيانات صحيحة؟</p>
         `;
-
-        // --- DEBUG: Log before showing confirmation modal ---
-        console.log('[Add Agent Debug 3] Data before showing confirmation modal:', newAgentData);
 
         showConfirmationModal(
             summaryHtml,
@@ -313,9 +304,6 @@ async function saveAgent(newAgentData) {
     const saveBtn = document.getElementById('save-agent-btn');
     saveBtn.disabled = true;
     saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
-
-    // --- DEBUG: Log the data received by the saveAgent function ---
-    console.log('[Add Agent Debug 4] Data received by saveAgent function:', newAgentData);
 
     // --- STEP 3: MIGRATION TO CUSTOM BACKEND ---
     try {
@@ -340,9 +328,6 @@ async function saveAgent(newAgentData) {
             newAgentData.deposit_bonus_count = null;
             newAgentData.remaining_deposit_bonus = null;
         }
-
-        // --- DEBUG: Log the final payload before sending to the server ---
-        console.log('[Add Agent Debug 5] Final payload being sent to server:', newAgentData);
 
         // Send data to our new backend API
         const response = await authedFetch('/api/agents', {

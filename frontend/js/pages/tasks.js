@@ -34,7 +34,7 @@
             <div class="task-card-body">
                 <div class="task-stat">
                     <label>الرصيد التداولي:</label>
-                    <span>${agent.remaining_balance || 0}</span>
+                    <span>${Math.max(0, agent.remaining_balance || 0)}</span>
                 </div>
                 <div class="task-stat">
                     <label>بونص الإيداع:</label>
@@ -174,13 +174,11 @@
         }
 
         async fetchAndRenderTasks() {
-            // Removed Saturday check to allow tasks on all days
-            /*
-            if (this.dayIndex === 6) { // Saturday
-                this.contentWrapper.innerHTML = '<p class="no-results-message">لا توجد مهام مجدولة في أيام العطلات.</p>';
+            // Saturday (6) is a holiday
+            if (this.dayIndex === 6) { 
+                this.contentWrapper.innerHTML = '<div class="no-results-message"><i class="fas fa-coffee" style="font-size: 48px; margin-bottom: 15px; color: #64748b;"></i><br>يوم السبت إجازة رسمية<br><span style="font-size: 0.9em; color: #94a3b8;">لا توجد مهام مجدولة لهذا اليوم</span></div>';
                 return;
             }
-            */
 
             try {
                 // Pass the local day index to the backend to ensure consistency

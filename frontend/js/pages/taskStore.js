@@ -85,7 +85,7 @@ const taskStore = {
       // Notify UI subscribers (do not persist locally; server is authoritative)
       this._notify();
     } catch (error) {
-      console.error("Error updating task status:", error);
+      // console.error("Error updating task status:", error);
       // Re-throw the error to be caught by the calling UI component
       throw error;
     }

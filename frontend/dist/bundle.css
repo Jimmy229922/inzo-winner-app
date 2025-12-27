@@ -12730,7 +12730,7 @@ html[dir=rtl] .wr-item-label { direction:rtl; }
 .wr-winners-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
 .wr-winners-header h3 { margin:0; font-size:1.1rem; font-weight:700; color:var(--wr-text); display:flex; align-items:center; gap:10px; }
 .wr-winners-actions { display:flex; gap:10px; }
-.wr-winners-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+.wr-winners-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
 .wr-winner-card { background:var(--wr-surface-alt); border:1px solid #d97706; border-radius:14px; padding:16px 18px; position:relative; box-shadow:0 0 0 2px rgba(251,191,36,.25); transition:.25s; }
 .wr-winner-card:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(251,191,36,.4); }
 .wr-winner-card-badge { position:absolute; top:12px; left:12px; background:linear-gradient(135deg,#fbbf24,#d97706); color:#1f1f1f; font-size:.7rem; font-weight:700; padding:4px 10px; border-radius:8px; }

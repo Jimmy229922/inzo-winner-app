@@ -302,7 +302,7 @@ exports.updateAgent = async (req, res) => {
         }
 
         // --- NEW DEBUG: Log the saved data to see what was actually persisted ---
-        console.log('[Agent Update] Data after saving to database:', JSON.stringify(updatedAgent, null, 2));
+        // console.log('[Agent Update] Data after saving to database:', JSON.stringify(updatedAgent, null, 2));
 
         res.json({ data: updatedAgent });
     } catch (error) {

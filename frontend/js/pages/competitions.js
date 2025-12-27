@@ -547,8 +547,8 @@ async function renderCompetitionCreatePage(agentId) {
                 <h3><i class="fas fa-user-circle"></i> بيانات الوكيل</h3>
                 <div class="agent-info-grid">
                     <div class="action-info-card"><i class="fas fa-star"></i><div class="info"><label>المرتبة</label><p>${agent.rank || 'غير محدد'}</p></div></div>                    <div class="action-info-card"><i class="fas fa-tag"></i><div class="info"><label>التصنيف</label><p>${agent.classification}</p></div></div>
-                    <div class="action-info-card" id="balance-card"><i class="fas fa-wallet"></i><div class="info"><label>الرصيد المتبقي</label><p id="agent-remaining-balance">${agent.remaining_balance || 0}</p></div></div>
-                    <div class="action-info-card" id="bonus-card"><i class="fas fa-gift"></i><div class="info"><label>بونص إيداع متبقي</label><p id="agent-remaining-deposit-bonus">${agent.remaining_deposit_bonus || 0} مرات</p></div></div>
+                    <div class="action-info-card" id="balance-card"><i class="fas fa-wallet"></i><div class="info"><label>الرصيد المتبقي</label><p id="agent-remaining-balance">${Math.max(0, agent.remaining_balance || 0)}</p></div></div>
+                    <div class="action-info-card" id="bonus-card"><i class="fas fa-gift"></i><div class="info"><label>بونص إيداع متبقي</label><p id="agent-remaining-deposit-bonus">${Math.max(0, agent.remaining_deposit_bonus || 0)} مرات</p></div></div>
                     <div class="action-info-card"><i class="fas fa-percent"></i><div class="info"><label>نسبة بونص الإيداع</label><p>${agent.deposit_bonus_percentage || 0}%</p></div></div>
                 </div>
             </div>
@@ -780,8 +780,10 @@ async function renderCompetitionCreatePage(agentId) {
         const balanceEl = document.getElementById('agent-remaining-balance');
         const bonusEl = document.getElementById('agent-remaining-deposit-bonus');
         const validationContainer = document.getElementById('validation-messages');
-        balanceEl.textContent = `${newRemainingBalance.toFixed(2)}`;
-        bonusEl.textContent = `${newRemainingDepositBonus} مرات`;
+        
+        // Ensure we never display negative values
+        balanceEl.textContent = `${Math.max(0, newRemainingBalance).toFixed(2)}`;
+        bonusEl.textContent = `${Math.max(0, newRemainingDepositBonus)} مرات`;
 
         let validationMessages = '';
         if (newRemainingBalance < 0) {
@@ -920,7 +922,7 @@ async function renderCompetitionCreatePage(agentId) {
 
 
 
-            console.log(`The image URL being sent is: ${finalImageUrl}`);
+            // console.log(`The image URL being sent is: ${finalImageUrl}`);
 
             sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
 
@@ -948,13 +950,13 @@ async function renderCompetitionCreatePage(agentId) {
                 deposit_bonus_percentage: agent.deposit_bonus_percentage || 0 // Ensure this is sent
             };
 
-            console.log('🎯 [Create Competition] Payload being sent to backend:', {
+            /* console.log('🎯 [Create Competition] Payload being sent to backend:', {
                 trading_winners_count: competitionPayload.trading_winners_count,
                 deposit_winners_count: competitionPayload.deposit_winners_count,
                 required_winners: competitionPayload.required_winners,
                 total_cost: competitionPayload.total_cost,
                 prize_per_winner: competitionPayload.prize_per_winner
-            });
+            }); */
 
             const compResponse = await authedFetch('/api/competitions', {
                 method: 'POST',
@@ -971,12 +973,12 @@ async function renderCompetitionCreatePage(agentId) {
 
             const savedCompetition = await compResponse.json();
             const telegramResponse = compResponse;
-            console.log('✅ [Create Competition] Competition saved successfully:', {
+            /* console.log('✅ [Create Competition] Competition saved successfully:', {
                 id: savedCompetition.data?._id,
                 trading_winners_count: savedCompetition.data?.trading_winners_count,
                 deposit_winners_count: savedCompetition.data?.deposit_winners_count,
                 required_winners: savedCompetition.data?.required_winners
-            });
+            }); */
 
             if (!telegramResponse.ok) {
                 const result = await telegramResponse.json();
@@ -987,7 +989,12 @@ async function renderCompetitionCreatePage(agentId) {
                 showToast('تم حفظ المسابقة وإرسالها بنجاح.', 'success');
                 // --- NEW: Automatically toggle the competition icon on success ---
                 const todayDayIndex = new Date().getDay();
-                window.taskStore.updateTaskStatus(agent._id, todayDayIndex, 'competition_sent', true);
+                try {
+                    await window.taskStore.updateTaskStatus(agent._id, todayDayIndex, 'competition_sent', true);
+                } catch (e) {
+                    // Ignore Saturday errors or other task update issues, as the competition itself was successful
+                    // console.warn('Could not update task status (likely Saturday or network issue):', e.message);
+                }
             }
             // --- End of FIX ---
 
@@ -2060,7 +2067,7 @@ function displayCompetitionDetails(competition) {
                 <h3>بيانات الوكيل</h3>
                 <p><strong>الاسم:</strong> ${agent.name}</p>
                 <p><strong>التصنيف:</strong> ${agent.classification || 'غير محدد'}</p>
-                <p><strong>الرصيد المتبقي:</strong> $${agent.remaining_balance || 0}</p>
+                <p><strong>الرصيد المتبقي:</strong> $${Math.max(0, agent.remaining_balance || 0)}</p>
             </div>
         `;
     }

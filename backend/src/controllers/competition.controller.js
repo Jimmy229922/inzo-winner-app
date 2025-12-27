@@ -393,9 +393,7 @@ exports.createCompetition = async (req, res) => {
         }
 
         // 5. Deduct Balance (Only reached if Telegram send succeeded)
-        agent.remaining_balance = (agent.remaining_balance || 0) - totalCost;
-        agent.remaining_deposit_bonus = (agent.remaining_deposit_bonus || 0) - depositWinners;
-        await agent.save();
+        // MOVED TO STEP 6 to consolidate updates
 
         // 6. Save Competition
         const competitionData = req.body;

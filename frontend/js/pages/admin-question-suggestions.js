@@ -1770,6 +1770,6 @@ try {
     const role = cachedProfile ? (JSON.parse(cachedProfile).role) : null;
     const isAdmin = role === 'admin' || role === 'super_admin';
     if (isDev || isAdmin) {
-        console.log('[AdminSuggest] Global functions exposed');
+        // console.log('[AdminSuggest] Global functions exposed');
     }
 } catch (_) { /* noop */ }

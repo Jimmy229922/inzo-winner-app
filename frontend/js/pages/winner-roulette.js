@@ -119,6 +119,7 @@
     };
     
     const LS_KEY = 'winnerRouletteSession.v1';
+    const STAGED_WINNERS_KEY = 'winnerRouletteStagedWinners.v1';
     // Persist session across reloads
     
     function cleanName(name) {
@@ -188,7 +189,7 @@
       
       // Clear active competition before loading new one
       state.activeCompetition = null;
-      restoreSession(); // Clear UI while loading
+      // restoreSession(true); // Clear UI while loading - REMOVED to prevent loading stale entries
 
       // Show loading state
       competitionInfo.innerHTML = '<div class="wr-agent-info-empty"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
@@ -231,25 +232,25 @@
 
       try {
         const authedFetch = window.authedFetch || fetch;
-        console.log(`Fetching competitions for agent: ${agentId}`);
+        // console.log(`Fetching competitions for agent: ${agentId}`);
         // Ensure agentId is passed correctly as query param (backend expects 'agentId', not 'agent_id')
         const response = await authedFetch(`/api/competitions?agentId=${agentId}&sort=-createdAt&limit=100`);
         
         if (response.ok) {
             const data = await response.json();
-            console.log('Competitions data:', data);
+            // console.log('Competitions data:', data);
             // Support both formats (data.competitions or data.data)
             const competitions = data.competitions || data.data || [];
             
             // --- DEBUG LOGS ---
-            console.log(`[DEBUG] Found ${competitions.length} competitions for agent ${agentId}`);
-            console.log('[DEBUG] All competition statuses:', competitions.map(c => c.status));
+            // console.log(`[DEBUG] Found ${competitions.length} competitions for agent ${agentId}`);
+            // console.log('[DEBUG] All competition statuses:', competitions.map(c => c.status));
             // ------------------
 
             const select = document.getElementById('agent-competitions-select');
             
             if (competitions.length === 0) {
-                console.log('[DEBUG] No competitions found, showing empty message.');
+                // console.log('[DEBUG] No competitions found, showing empty message.');
                 select.innerHTML = '<option value="">لا توجد مسابقات لهذا الوكيل</option>';
                 return;
             }
@@ -257,7 +258,7 @@
             const activeCompetitions = competitions.filter(c => ['active', 'awaiting_winners', 'sent'].includes(c.status));
             // const endedCompetitions = competitions.filter(c => ['completed', 'archived'].includes(c.status)); // Hidden as per request
 
-            console.log(`[DEBUG] Active count: ${activeCompetitions.length}`);
+            // console.log(`[DEBUG] Active count: ${activeCompetitions.length}`);
             // console.log(`[DEBUG] Ended count: ${endedCompetitions.length}`);
 
             // Determine default selection (Latest Active only)
@@ -318,7 +319,7 @@
 
             // Auto-load default competition if none is active
             if (defaultCompId && !state.activeCompetition) {
-                console.log(`[DEBUG] Auto-loading default competition: ${defaultCompId}`);
+                // console.log(`[DEBUG] Auto-loading default competition: ${defaultCompId}`);
                 await loadCompetitionById(defaultCompId);
             } else if (!defaultCompId) {
                  const competitionInfo = document.getElementById('agent-competition-info');
@@ -443,6 +444,9 @@
 
                 if (currentSessionCompId !== compId) {
                      state.entries = [];
+                     // Clear input field to avoid showing previous participants
+                     const ta = document.getElementById('participants-input');
+                     if (ta) ta.value = '';
                 }
 
                 // Render without restoring session (since we just loaded it)
@@ -480,7 +484,7 @@
         const currentWinners = competition.current_winners_count || 0;
         
         // Store competition info in state for reference (include prize data)
-        console.log('Active competition loaded:', competition);
+        // console.log('Active competition loaded:', competition);
         state.activeCompetition = {
           id: competition._id || competition.id,
           tradingWinnersRequired: tradingWinners,
@@ -534,7 +538,7 @@
                         }
                     });
                 }
-                console.log('Loaded agent winner history:', state.agentHistory.length);
+                // console.log('Loaded agent winner history:', state.agentHistory.length);
             }
         } catch (e) {
             console.warn('Failed to load agent history:', e);
@@ -1140,7 +1144,7 @@
         agentSelect.value = option.value;
         // محاكاة حدث change لتحديد الوكيل
         agentSelect.dispatchEvent(new Event('change'));
-        console.log(`تم تحديد الوكيل تلقائياً: ${option.textContent}`);
+        // console.log(`تم تحديد الوكيل تلقائياً: ${option.textContent}`);
       } else {
         console.warn(`لم يتم العثور على وكيل بالمعرف: ${agentId}`);
       }
@@ -1537,6 +1541,54 @@
         return null;
     }
 
+    function getStagedWinners() {
+      try {
+        const raw = localStorage.getItem(STAGED_WINNERS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function getStagedWinnersForCompetition(competitionId) {
+      if (!competitionId) return [];
+      return getStagedWinners().filter(w => w.competitionId === competitionId);
+    }
+
+    function addStagedWinner(stagedWinner) {
+      const staged = getStagedWinners();
+      staged.push(stagedWinner);
+      try { localStorage.setItem(STAGED_WINNERS_KEY, JSON.stringify(staged)); } catch {}
+    }
+
+    function updateStagedWinner(winnerId, competitionId, patch) {
+      const staged = getStagedWinners();
+      const next = staged.map(w => {
+        if (w.id !== winnerId) return w;
+        if (competitionId && w.competitionId !== competitionId) return w;
+        return { ...w, ...patch };
+      });
+      try { localStorage.setItem(STAGED_WINNERS_KEY, JSON.stringify(next)); } catch {}
+    }
+
+    function removeStagedWinner(winnerId, competitionId) {
+      const staged = getStagedWinners();
+      const next = staged.filter(w => {
+        if (w.id !== winnerId) return true;
+        if (competitionId && w.competitionId !== competitionId) return true;
+        return false;
+      });
+      try { localStorage.setItem(STAGED_WINNERS_KEY, JSON.stringify(next)); } catch {}
+    }
+
+    function clearStagedWinnersForCompetition(competitionId) {
+      if (!competitionId) return;
+      const staged = getStagedWinners();
+      const next = staged.filter(w => w.competitionId !== competitionId);
+      try { localStorage.setItem(STAGED_WINNERS_KEY, JSON.stringify(next)); } catch {}
+    }
+
     function saveSession() {
       // Persist entries and winners as requested
       const session = {
@@ -1544,9 +1596,10 @@
         winners: state.winners,
         selectedAgent: state.selectedAgent,
         excludeWinner: state.excludeWinner,
-        filterTerm: state.filterTerm
+        filterTerm: state.filterTerm,
+        activeCompetitionId: state.activeCompetition ? state.activeCompetition.id : null
       };
-      try { localStorage.setItem(key, JSON.stringify(session)); } catch {}
+      try { localStorage.setItem(LS_KEY, JSON.stringify(session)); } catch {}
     }
     
     function restoreSession(skipAgent = false) {
@@ -1709,6 +1762,7 @@
                 
                 if (resp.ok) {
                     toast('تم حفظ الإحصائيات بنجاح', 'success');
+                    clearStagedWinnersForCompetition(state.activeCompetition.id);
                     cleanup();
                     // Refresh agent info and engagement stats immediately
                     if (state.selectedAgent) {
@@ -1884,10 +1938,16 @@
           
           // BUT, we also want to strictly filter out anyone who is ALREADY in state.winners
           // regardless of the 'selected' flag on the entry itself, to be safe.
-          const isAlreadyWinner = state.winners.some(w => 
-              (w.account && e.account && w.account === e.account) || 
-              (w.name === e.name)
-          );
+          const isAlreadyWinner = state.winners.some(w => {
+              // Strict check:
+              // 1. If both have accounts, they MUST match.
+              // 2. If accounts don't match (and both exist), they are different people (even if names match).
+              if (w.account && e.account) {
+                  return w.account === e.account;
+              }
+              // If one or both lack account, fallback to name
+              return w.name === e.name;
+          });
           
           if (isAlreadyWinner) return false; // Always exclude confirmed winners from spinning again
           
@@ -1918,10 +1978,12 @@
       // --- NEW: Check if this winner has already been selected in the current session ---
       // This prevents re-selecting the same winner if they are still on the wheel (e.g. excludeWinner=false)
       // or if they were manually added back but somehow still flagged.
-      const alreadyWon = state.winners.find(w => 
-          (w.account && chosenWinner.account && w.account === chosenWinner.account) || 
-          (w.name === chosenWinner.name)
-      );
+      const alreadyWon = state.winners.find(w => {
+          if (w.account && chosenWinner.account) {
+              return w.account === chosenWinner.account;
+          }
+          return w.name === chosenWinner.name;
+      });
 
       if (alreadyWon) {
           toast(`تنبيه: هذا المتسابق (${chosenWinner.name}) فاز بالفعل في هذه المسابقة!`, 'warning');
@@ -2056,7 +2118,7 @@
         state.mediaRecorder.onstop = () => {
           const blobType = state.recordingMimeType || 'video/webm';
           const blob = new Blob(state.recordedChunks, { type: blobType });
-          console.log(`🎥 [Recording] Finished. Blob size: ${blob.size}, Type: ${blobType}`);
+          // console.log(`🎥 [Recording] Finished. Blob size: ${blob.size}, Type: ${blobType}`);
           if (callback) callback(blob);
         };
         state.mediaRecorder.stop();
@@ -2108,9 +2170,9 @@
     }
     
     function showVideoPreview(blob, winner) {
-      console.log('🎥 [Video Preview] Starting showVideoPreview');
+      /* console.log('🎥 [Video Preview] Starting showVideoPreview');
       console.log('🎥 [Video Preview] Blob:', blob);
-      console.log('🎥 [Video Preview] Winner:', winner);
+      console.log('🎥 [Video Preview] Winner:', winner); */
       
       if (!blob) {
         console.warn('🎥 [Video Preview] No blob provided, falling back to normal flow');
@@ -2177,7 +2239,7 @@
     
       // Load metadata and prepare video
       video.onloadedmetadata = () => {
-        console.log('🎥 [Preview] Metadata loaded, duration:', video.duration);
+        // console.log('🎥 [Preview] Metadata loaded, duration:', video.duration);
       };
       video.onerror = (e) => {
           console.error('🎥 [Preview] Video error:', video.error);
@@ -2217,41 +2279,41 @@
       
       saveBtn.addEventListener('click', async () => {
         // حفظ الفيديو ثم فتح نافذة بيانات الفائز بشكل موثوق
-        console.log('🎬 [Save Video Continue] Button clicked');
+        /* console.log('🎬 [Save Video Continue] Button clicked');
         console.log('🎬 [Save Video Continue] Winner:', winner);
         console.log('🎬 [Save Video Continue] Auto mode:', state.autoMode);
-        console.log('🎬 [Save Video Continue] Blob:', blob);
+        console.log('🎬 [Save Video Continue] Blob:', blob); */
         
         try {
           state.pendingVideoBlob = blob;
-          console.log('🎬 [Save Video Continue] Pending video blob stored');
+          // console.log('🎬 [Save Video Continue] Pending video blob stored');
           
           // تأكد من وجود هيكل المودال قبل الفتح
           try { 
-            console.log('🎬 [Save Video Continue] Ensuring winner modal structure...');
+            // console.log('🎬 [Save Video Continue] Ensuring winner modal structure...');
             ensureWinnerModalStructure(); 
-            console.log('🎬 [Save Video Continue] Winner modal structure ensured');
+            // console.log('🎬 [Save Video Continue] Winner modal structure ensured');
           } catch(e) {
             console.error('🎬 [Save Video Continue] Failed to ensure modal structure:', e);
           }
           
-          console.log('🎬 [Save Video Continue] Calling cleanup...');
+          // console.log('🎬 [Save Video Continue] Calling cleanup...');
           cleanup();
-          console.log('🎬 [Save Video Continue] Cleanup done');
+          // console.log('🎬 [Save Video Continue] Cleanup done');
           
           // افتح المودال بعد إزالة طبقة المعاينة لضمان الطبقات/z-index صحيحة
-          console.log('🎬 [Save Video Continue] Setting timeout to open modal...');
+          // console.log('🎬 [Save Video Continue] Setting timeout to open modal...');
           setTimeout(() => {
             try {
-              console.log('🎬 [Save Video Continue] Timeout callback executing...');
+              // console.log('🎬 [Save Video Continue] Timeout callback executing...');
               if (state.autoMode) {
-                console.log('🎬 [Save Video Continue] Opening AUTO winner modal');
+                // console.log('🎬 [Save Video Continue] Opening AUTO winner modal');
                 showAutoWinnerModal(winner);
               } else {
-                console.log('🎬 [Save Video Continue] Opening MANUAL winner modal');
+                // console.log('🎬 [Save Video Continue] Opening MANUAL winner modal');
                 showWinnerModal(winner);
               }
-              console.log('🎬 [Save Video Continue] Modal opened successfully');
+              // console.log('🎬 [Save Video Continue] Modal opened successfully');
             } catch (e) {
               console.error('🎬 [Save Video Continue] Failed to open winner modal after video save:', e);
               // كحل أخير، أعد إنشاء المودال وافتحه مرة أخرى
@@ -2426,6 +2488,14 @@
       const bottomContainer = document.getElementById('winners-list-bottom');
       
       if (!bottomContainer) return;
+
+      const activeCompetitionId = state.activeCompetition?.id || null;
+      if (state.winners.length === 0 && activeCompetitionId) {
+        const stagedForCompetition = getStagedWinnersForCompetition(activeCompetitionId);
+        if (stagedForCompetition.length > 0) {
+          state.winners = stagedForCompetition.map(w => ({ ...w }));
+        }
+      }
       
       // Separate winners by prize type
       const depositWinners = state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev');
@@ -2510,7 +2580,7 @@
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
               <div class="wr-winner-card-body">
-                <div class="wr-winner-card-name">الاسم: ${w.name}</div>
+                <div class="wr-winner-card-name" style="color: #000000; font-weight: bold; font-size: 1.1rem;">الاسم: ${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
                 <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> ${prizeDisplay}</div>
@@ -2528,7 +2598,8 @@
               <div class="wr-winner-card-actions">
                 <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — ${w.prizeValue}%" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-return="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
+                <button class="wr-icon-btn" data-edit="${w.id}" title="تعديل" style="background: #3b82f6; color: white;"><i class="fas fa-edit"></i></button>
+                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
                 <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="background: #ef4444; color: white;"><i class="fas fa-trash"></i></button>
               </div>
             </div>`;
@@ -2549,7 +2620,7 @@
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
               <div class="wr-winner-card-body">
-                <div class="wr-winner-card-name">الاسم: ${w.name}</div>
+                <div class="wr-winner-card-name" style="color: #000000; font-weight: bold; font-size: 1.1rem;">الاسم: ${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
     
@@ -2567,7 +2638,8 @@
               <div class="wr-winner-card-actions">
                 <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
                 <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — $${w.prizeValue}" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-return="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
+                <button class="wr-icon-btn" data-edit="${w.id}" title="تعديل" style="background: #3b82f6; color: white;"><i class="fas fa-edit"></i></button>
+                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
                 <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="background: #ef4444; color: white;"><i class="fas fa-trash"></i></button>
               </div>
             </div>`;
@@ -2580,7 +2652,7 @@
           <div id="approval-section" style="width:100%; margin-top: 20px; border-top: 1px solid #334155; padding-top: 20px;">
               <h4 class="wr-prize-section-title">إعتماد نهائي</h4>
               <div style="display: flex; gap: 10px;">
-                  <button id="approve-winners-btn" class="wr-btn wr-btn-success" ${state.winners.length === 0 ? 'disabled' : ''}>
+                  <button id="approve-winners-btn" class="wr-btn wr-btn-success" style="display: ${state.winners.length > 0 ? 'inline-flex' : 'none'}">
                       <i class="fas fa-check-double"></i> اعتماد الفائزين (${state.winners.length})
                   </button>
                   <button id="approve-no-winners-btn" class="wr-btn wr-btn-danger">
@@ -2598,14 +2670,16 @@
         // Bind events for new buttons
         const approveBtn = document.getElementById('approve-winners-btn');
         approveBtn?.addEventListener('click', async () => {
+            console.log('[Approve Winners] Button clicked. Winners count:', state.winners.length);
             if (!state.activeCompetition || !state.activeCompetition.id) {
-                console.error('Active competition state:', state.activeCompetition);
+                console.error('[Approve Winners] Active competition state missing:', state.activeCompetition);
                 toast('لا توجد مسابقة نشطة لاعتمادها (معرف مفقود).', 'error');
                 return;
             }
             
             // Direct approval without confirmation modal
             try {
+                console.log('[Approve Winners] Sending approval request for competition:', state.activeCompetition.id);
                 const authedFetch = window.authedFetch || fetch;
                 const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
                     method: 'POST',
@@ -2616,8 +2690,21 @@
                 });
                 
                 if (resp.ok) {
+                    console.log('[Approve Winners] Approval successful.');
                     toast('تم اعتماد المسابقة بنجاح', 'success');
-                    // Clear winners and entries after successful approval
+                    clearStagedWinnersForCompetition(state.activeCompetition.id);
+                    
+                    // Redirect to agent competitions page
+                    if (state.selectedAgent && state.selectedAgent.id) {
+                        console.log('[Approve Winners] Redirecting to agent profile/competitions:', state.selectedAgent.id);
+                        // Using the standard profile route which usually shows competitions
+                        window.location.hash = `#profile/${state.selectedAgent.id}`;
+                    } else {
+                        console.warn('[Approve Winners] No selected agent found for redirect. Reloading page.');
+                        setTimeout(() => window.location.reload(), 1500);
+                    }
+
+                    // Clear local state
                     state.winners = [];
                     state.entries = [];
                     state.activeCompetition = null;
@@ -2625,28 +2712,37 @@
                     renderParticipants();
                     renderWinners();
                     updateCounts();
-                    // Optionally reload or redirect
-                    setTimeout(() => window.location.reload(), 1500);
                 } else {
                     const err = await resp.json();
+                    console.error('[Approve Winners] Approval failed:', err);
                     toast(`فشل الاعتماد: ${err.message} ${err.error || ''}`, 'error');
                 }
             } catch (e) {
-                console.error(e);
+                console.error('[Approve Winners] Exception during approval:', e);
                 toast('حدث خطأ أثناء الاعتماد', 'error');
             }
         });
 
         const approveNoWinnersBtn = document.getElementById('approve-no-winners-btn');
         approveNoWinnersBtn?.addEventListener('click', async () => {
+            console.log('[Approve No Winners] Button clicked.');
+            
+            // Check if there are winners
+            if (state.winners.length > 0) {
+                console.warn('[Approve No Winners] Blocked: There are existing winners.');
+                toast('لا يمكن اعتماد المسابقة بدون فائزين لوجود فائزين في القائمة. يرجى حذفهم أولاً.', 'error');
+                return;
+            }
+
             if (!state.activeCompetition || !state.activeCompetition.id) {
-                console.error('Active competition state:', state.activeCompetition);
+                console.error('[Approve No Winners] Active competition state missing:', state.activeCompetition);
                 toast('لا توجد مسابقة نشطة لاعتمادها (معرف مفقود).', 'error');
                 return;
             }
             
             // Direct approval without confirmation modal
             try {
+                console.log('[Approve No Winners] Sending approval request (no winners) for competition:', state.activeCompetition.id);
                 const authedFetch = window.authedFetch || fetch;
                 const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
                     method: 'POST',
@@ -2657,7 +2753,9 @@
                 });
                 
                 if (resp.ok) {
+                    console.log('[Approve No Winners] Approval successful.');
                     toast('تم إغلاق المسابقة بنجاح', 'success');
+                    clearStagedWinnersForCompetition(state.activeCompetition.id);
                     state.winners = [];
                     state.entries = [];
                     state.activeCompetition = null;
@@ -2668,10 +2766,11 @@
                     setTimeout(() => window.location.reload(), 1500);
                 } else {
                     const err = await resp.json();
+                    console.error('[Approve No Winners] Approval failed:', err);
                     toast(`فشل الإغلاق: ${err.message} ${err.error || ''}`, 'error');
                 }
             } catch (e) {
-                console.error(e);
+                console.error('[Approve No Winners] Exception during approval:', e);
                 toast('حدث خطأ أثناء الإغلاق', 'error');
             }
         });
@@ -2690,11 +2789,14 @@
         bottomContainer.querySelectorAll('[data-copy]').forEach(btn => {
             btn.addEventListener('click', handleCopyClick);
         });
+        bottomContainer.querySelectorAll('[data-edit]').forEach(btn => {
+            btn.addEventListener('click', handleEditClick);
+        });
         bottomContainer.querySelectorAll('input[data-warn]').forEach(input => {
             input.addEventListener('change', handleWinnerWarningToggle);
         });
-        bottomContainer.querySelectorAll('[data-return]').forEach(btn => {
-            btn.addEventListener('click', handleReturnClick);
+        bottomContainer.querySelectorAll('[data-restore]').forEach(btn => {
+            btn.addEventListener('click', handleRestoreClick);
         });
         bottomContainer.querySelectorAll('[data-send]').forEach(btn => {
             btn.addEventListener('click', handleSendClick);
@@ -2761,6 +2863,7 @@
       updateCounts(); 
       drawWheel(); 
       saveSession();
+      removeStagedWinner(id, state.activeCompetition?.id || null);
       toast('تم استرجاع الفائز للروليت', 'info');
     }
 
@@ -2774,6 +2877,7 @@
       state.winners = state.winners.filter(w => w.id !== id);
       
       saveSession();
+      removeStagedWinner(id, state.activeCompetition?.id || null);
       renderWinners();
       updateCounts();
       toast('تم حذف الفائز', 'success');
@@ -2788,18 +2892,25 @@
         return;
       }
       
+      console.log('[Restore] Request to restore winner:', winner);
+
       showConfirmModal(
         `هل تريد استرجاع <strong>${winner.name}</strong> إلى الروليت؟ سيتم إلغاء اختياره كفائز وإعادته للمشاركين.`,
         async () => {
+          console.log('[Restore] User confirmed restoration. Processing...');
           // إزالة الفائز من قائمة الفائزين
+          const initialWinnersCount = state.winners.length;
           state.winners = state.winners.filter(w => w.id !== id);
+          console.log(`[Restore] Winners count: ${initialWinnersCount} -> ${state.winners.length}`);
           
           // إعادة ضبط حالة جميع المشاركين لضمان أن الجميع متاح للروليت ما عدا الفائزين الحاليين
           const currentWinnerIds = new Set(state.winners.map(w => w.id));
           
           // التحقق من وجود الفائز المسترجع في القائمة، وإضافته إذا لم يكن موجوداً
-          const restoredEntryExists = state.entries.some(e => e.id === id);
+          // Check by ID OR by Name+Account to avoid duplicates
+          const restoredEntryExists = state.entries.some(e => e.id === id || (e.name === winner.name && e.account === winner.account));
           if (!restoredEntryExists) {
+            console.log('[Restore] Adding winner back to entries list');
             state.entries.push({
               id: winner.id,
               name: winner.name,
@@ -2808,13 +2919,19 @@
               selected: false,
               seq: state.entries.length + 1
             });
+          } else {
+             console.log('[Restore] Winner already exists in entries list');
           }
 
           // تحديث حالة الاختيار لجميع المشاركين
+          let updatedCount = 0;
           state.entries.forEach(entry => {
             // المشارك يعتبر "مختاراً" (مستبعداً من الروليت) فقط إذا كان في قائمة الفائزين الحالية
+            const wasSelected = entry.selected;
             entry.selected = currentWinnerIds.has(entry.id);
+            if (wasSelected !== entry.selected) updatedCount++;
           });
+          console.log(`[Restore] Updated selection status for ${updatedCount} entries`);
           
           // حذف الفائز من قاعدة البيانات إذا كان محفوظاً
           if (winner._id && state.selectedAgent && state.selectedAgent.id) {
@@ -2847,12 +2964,22 @@
              state.noWinnersApproved = false;
           }
           
+          // IMPORTANT: Remove from staged storage BEFORE rendering, otherwise renderWinners might re-populate it!
+          removeStagedWinner(id, state.activeCompetition?.id || null);
+
           // تحديث الواجهة
+          console.log(`[Restore] Re-rendering UI. Entries: ${state.entries.length}, Winners: ${state.winners.length}`);
           renderParticipants();
           renderWinners();
           updateCounts();
           drawWheel();
           saveSession();
+
+          // تحديث حقل الإدخال ليعكس القائمة الحالية (بما في ذلك الفائز المسترجع)
+          const ta = document.getElementById('participants-input');
+          if (ta) {
+              ta.value = state.entries.map(e => e.account ? `${e.name} — ${e.account}` : e.name).join('\n');
+          }
           
           toast(`تم استرجاع ${winner.name} إلى الروليت بنجاح`, 'success');
         }
@@ -2867,6 +2994,10 @@
       if (warnType === 'meet') winner.includeWarnMeet = !!ev.currentTarget.checked;
       if (warnType === 'prev') winner.includeWarnPrev = !!ev.currentTarget.checked;
       saveSession();
+      updateStagedWinner(id, state.activeCompetition?.id || null, {
+        includeWarnMeet: winner.includeWarnMeet,
+        includeWarnPrev: winner.includeWarnPrev
+      });
     }
     
     function handleSendClick(ev) {
@@ -2918,8 +3049,16 @@
             : `${w.prizeValue}$`;
     
         let msg = `◃ الفائز: ${w.name}\n`;
-        msg += `           الجائزة: ${prizeText}\n\n`;
-        msg += `********************************************************\n`;
+        msg += `           الجائزة: ${prizeText}\n`;
+
+        if (w.includeWarnMeet) {
+            msg += `\n⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً\n`;
+        }
+        if (w.includeWarnPrev) {
+            msg += `\n‼️ فائز سابق ببونص تداولي، تأكد من نشر المسابقة السابقة قبل الاعتماد\n`;
+        }
+
+        msg += `\n********************************************************\n`;
         msg += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
         msg += `https://t.me/Ibinzo`;
         return msg;
@@ -2943,15 +3082,202 @@
       ctx.fillText(line, x, yy);
     }
     
+    function handleEditClick(ev) {
+      const id = ev.currentTarget.getAttribute('data-edit');
+      const winner = state.winners.find(w => w.id === id);
+      if (winner) {
+        showEditWinnerModal(winner);
+      }
+    }
+
+    function showEditWinnerModal(winner) {
+      const modal = document.getElementById('winner-modal');
+      const winnerName = document.getElementById('celebration-winner-name');
+      const winnerAccount = document.getElementById('celebration-winner-account');
+      const emailInput = document.getElementById('winner-email');
+      const prizeTypeInput = document.getElementById('winner-prize-type');
+      const autoDisplay = document.getElementById('winner-prize-auto-display');
+      const confirmBtn = document.getElementById('confirm-winner');
+      const skipBtn = document.getElementById('skip-winner');
+      const idInput = document.getElementById('winner-id-image');
+      const idPreview = document.getElementById('winner-id-image-preview');
+
+      if (!modal) return;
+
+      // Populate fields
+      winnerName.textContent = `الاسم: ${winner.name}`;
+      winnerAccount.textContent = `رقم الحساب: ${winner.account}`;
+      if (emailInput) emailInput.value = winner.email || '';
+      
+      // --- Sync Prize Preview Logic ---
+      const syncPrizePreview = () => {
+          const selectedType = prizeTypeInput?.value || 'trading';
+          if (selectedType === 'deposit' || selectedType === 'deposit_prev') {
+              const depositPct = state.activeCompetition?.depositBonusPercentage || 0;
+              if (autoDisplay) {
+                  autoDisplay.textContent = `${depositPct}% (بونص إيداع)`;
+                  autoDisplay.style.borderColor = '#10b981';
+                  autoDisplay.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                  autoDisplay.style.color = '#10b981';
+              }
+          } else {
+              const tradingValue = state.activeCompetition?.prizePerWinner || 0;
+              if (autoDisplay) {
+                  autoDisplay.textContent = `${tradingValue}$ (بونص تداولي)`;
+                  autoDisplay.style.borderColor = '#3b82f6';
+                  autoDisplay.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                  autoDisplay.style.color = '#3b82f6';
+              }
+          }
+      };
+
+      // Prize Type
+      if (prizeTypeInput) {
+          prizeTypeInput.value = winner.prizeType || 'trading';
+          prizeTypeInput.addEventListener('change', syncPrizePreview);
+      }
+      
+      // Initial sync
+      syncPrizePreview();
+
+      // ID Image Preview
+      if (idInput) idInput.value = '';
+      if (idPreview) {
+           if (winner.pendingIdImage) {
+               idPreview.src = URL.createObjectURL(winner.pendingIdImage);
+               idPreview.style.display = 'block';
+           } else {
+               idPreview.style.display = 'none';
+               idPreview.src = '';
+           }
+      }
+
+      // Helper to compress image (duplicated for safety)
+      const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
+          return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                  const img = new Image();
+                  img.onload = () => {
+                      const canvas = document.createElement('canvas');
+                      let width = img.width;
+                      let height = img.height;
+                      if (width > maxWidth) {
+                          height = (height * maxWidth) / width;
+                          width = maxWidth;
+                      }
+                      canvas.width = width;
+                      canvas.height = height;
+                      const ctx = canvas.getContext('2d');
+                      ctx.drawImage(img, 0, 0, width, height);
+                      canvas.toBlob((blob) => {
+                          if (blob) resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                          else reject(new Error('Failed to compress'));
+                      }, 'image/jpeg', quality);
+                  };
+                  img.onerror = reject;
+                  img.src = e.target.result;
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+          });
+      };
+
+      let compressedFile = null;
+      let isImageUploading = false;
+
+      const updateIdPreview = async () => {
+           if (!idInput || !idInput.files || idInput.files.length === 0) return;
+           const file = idInput.files[0];
+           try {
+               isImageUploading = true;
+               toast('جاري ضغط الصورة...', 'info');
+               compressedFile = await compressImage(file);
+               idPreview.src = URL.createObjectURL(compressedFile);
+               idPreview.style.display = 'block';
+               isImageUploading = false;
+               toast('تم ضغط الصورة بنجاح', 'success');
+           } catch (e) {
+               console.error(e);
+               isImageUploading = false;
+           }
+      };
+      
+      const onIdImageChange = () => updateIdPreview();
+      if (idInput) idInput.addEventListener('change', onIdImageChange);
+
+      modal.style.display = 'flex';
+
+      const onConfirm = async () => {
+          if (isImageUploading) {
+              toast('يرجى الانتظار...', 'warning');
+              return;
+          }
+
+          const email = emailInput?.value?.trim();
+          if (!email) {
+              toast('البريد الإلكتروني مطلوب', 'error');
+              return;
+          }
+
+          // Update winner object
+          winner.email = email;
+          winner.prizeType = prizeTypeInput?.value || winner.prizeType;
+          
+          // Recalculate prize value based on type
+           if (winner.prizeType === 'deposit' || winner.prizeType === 'deposit_prev') {
+               winner.prizeValue = state.activeCompetition?.depositBonusPercentage || 0;
+           } else {
+               winner.prizeValue = state.activeCompetition?.prizePerWinner || 0;
+           }
+
+          if (compressedFile) {
+              winner.pendingIdImage = compressedFile;
+              winner.idImageUploaded = true;
+          }
+
+          // Update Staged Winner
+          updateStagedWinner(winner.id, state.activeCompetition?.id, {
+              email: winner.email,
+              prizeType: winner.prizeType,
+              prizeValue: winner.prizeValue,
+              idImageUploaded: !!winner.idImageUploaded
+          });
+
+          toast('تم تعديل بيانات الفائز', 'success');
+          renderWinners();
+          saveSession();
+          cleanup();
+          modal.style.display = 'none';
+      };
+
+      const onSkip = () => {
+          cleanup();
+          modal.style.display = 'none';
+      };
+
+      function cleanup() {
+          confirmBtn?.removeEventListener('click', onConfirm);
+          skipBtn?.removeEventListener('click', onSkip);
+          idInput?.removeEventListener('change', onIdImageChange);
+          prizeTypeInput?.removeEventListener('change', syncPrizePreview);
+      }
+
+      confirmBtn?.addEventListener('click', onConfirm);
+      skipBtn?.addEventListener('click', onSkip);
+    }
+
     function showWinnerModal(entry){
-      console.log('🎉 [showWinnerModal] Called with entry:', entry);
-      console.log('🎉 [showWinnerModal] Entry name:', entry?.name);
+      /* console.log('🎉 [showWinnerModal] Called with entry:', entry);
+      console.log('🎉 [showWinnerModal] Entry name:', entry?.name); */
 
       // --- NEW: Final check before showing modal ---
-      const isAlreadyWinner = state.winners.some(w => 
-          (w.account && entry.account && w.account === entry.account) || 
-          (w.name === entry.name)
-      );
+      const isAlreadyWinner = state.winners.some(w => {
+          if (w.account && entry.account) {
+              return w.account === entry.account;
+          }
+          return w.name === entry.name;
+      });
       
       if (isAlreadyWinner) {
           toast(`عذراً، المتسابق ${entry.name} موجود بالفعل في قائمة الفائزين!`, 'error');
@@ -2980,11 +3306,11 @@
       let compressedFile = null;
       let isImageUploading = false;
       
-      console.log('🔍 [showWinnerModal] Elements check:');
+      /* console.log('🔍 [showWinnerModal] Elements check:');
       console.log('  - modal:', modal ? 'FOUND' : 'MISSING');
       console.log('  - winnerName:', winnerName ? 'FOUND' : 'MISSING');
       console.log('  - emailInput:', emailInput ? 'FOUND' : 'MISSING');
-      console.log('  - confirmBtn:', confirmBtn ? 'FOUND' : 'MISSING');
+      console.log('  - confirmBtn:', confirmBtn ? 'FOUND' : 'MISSING'); */
       
       // Fallback if modal elements are missing: commit winner automatically to avoid crashes
       if (!modal || !winnerName || !winnerAccount || !confirmBtn) {
@@ -3037,9 +3363,9 @@
       const syncPrizePreview = () => {
           const selectedType = prizeTypeInput?.value || autoPrize.prizeType;
           // Console insight for selection while modal blur is active
-          console.log('[PrizeTypeSelection] User selected:', selectedType, 'for account:', entry.account);
+          // console.log('[PrizeTypeSelection] User selected:', selectedType, 'for account:', entry.account);
           if (selectedType === 'deposit_prev') {
-            console.log('[PrizeTypeSelection] deposit_prev chosen: treating as manual deposit bonus display.');
+            // console.log('[PrizeTypeSelection] deposit_prev chosen: treating as manual deposit bonus display.');
           }
           
           if (selectedType === 'deposit' || selectedType === 'deposit_prev') {
@@ -3050,7 +3376,7 @@
                   autoDisplay.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
                   autoDisplay.style.color = '#10b981';
               }
-              console.log('[PrizeTypePreview] Displaying deposit bonus %:', depositPct);
+              // console.log('[PrizeTypePreview] Displaying deposit bonus %:', depositPct);
           } else {
               const tradingValue = state.activeCompetition?.prizePerWinner || 0;
               if (autoDisplay) {
@@ -3059,7 +3385,7 @@
                   autoDisplay.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
                   autoDisplay.style.color = '#3b82f6';
               }
-              console.log('[PrizeTypePreview] Displaying trading bonus $:', tradingValue);
+              // console.log('[PrizeTypePreview] Displaying trading bonus $:', tradingValue);
           }
       };
       
@@ -3107,7 +3433,7 @@
               // Convert canvas to blob
               canvas.toBlob((blob) => {
                 if (blob) {
-                  console.log(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
+                  // console.log(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
                   resolve(new File([blob], file.name, { type: 'image/jpeg' }));
                 } else {
                   reject(new Error('Failed to compress image'));
@@ -3226,7 +3552,7 @@
       
       modal.style.display = 'flex';
       
-      console.log('📺 [showWinnerModal] Modal displayed');
+      /* console.log('📺 [showWinnerModal] Modal displayed');
       console.log('🔍 [showWinnerModal] Final modal check:');
       const contentBox = modal.querySelector('.wr-celebration-content');
       if (contentBox) {
@@ -3236,7 +3562,7 @@
         console.log('  - Content box scrollbarGutter:', contentBox.style.scrollbarGutter || 'NOT SET');
       } else {
         console.error('❌ [showWinnerModal] Content box NOT FOUND!');
-      }
+      } */
       
       // launchConfetti() removed - no animations
       
@@ -3255,7 +3581,7 @@
         const nationalIdImageInput = document.getElementById('winner-id-image');
         const autoDisplay = document.getElementById('winner-prize-auto-display');
         let selectedPrizeType = prizeTypeInput?.value || autoPrize.prizeType;
-        console.log('[PrizeTypeConfirm] Selected type:', selectedPrizeType);
+        // console.log('[PrizeTypeConfirm] Selected type:', selectedPrizeType);
         
         // REMOVED: Mapping deposit_prev to deposit. Now we keep it as is.
         // if (selectedPrizeType === 'deposit_prev') { ... }
@@ -3265,7 +3591,7 @@
         const selectedPrizeValue = (selectedPrizeType === 'deposit' || selectedPrizeType === 'deposit_prev')
             ? (state.activeCompetition?.depositBonusPercentage ?? 0)
             : (state.activeCompetition?.prizePerWinner ?? 0);
-        console.log('[PrizeValueConfirm] Final prize:', { type: selectedPrizeType, value: selectedPrizeValue });
+        // console.log('[PrizeValueConfirm] Final prize:', { type: selectedPrizeType, value: selectedPrizeValue });
         
         // Email is REQUIRED: validate existence and format
         const emailErrorEl = document.getElementById('winner-email-error');
@@ -3313,7 +3639,6 @@
           } : null,
           timestamp: new Date().toISOString()
         };
-        
         // --- الحفظ المحلي فقط (لن يتم الحفظ في قاعدة البيانات حتى الضغط على "اعتماد الفائزين") ---
         // حفظ الفيديو والصورة مؤقتاً في الكائن المحلي
         if (state.pendingVideoBlob) {
@@ -3326,6 +3651,24 @@
           winnerData.pendingIdImage = compressedFile;
           winnerData.idImageUploaded = true; // Mark as having image
         }
+
+        const stagedWinner = {
+          id: winnerData.id,
+          name: winnerData.name,
+          account: winnerData.account,
+          email: winnerData.email,
+          prizeType: winnerData.prizeType,
+          prizeValue: winnerData.prizeValue,
+          includeWarnMeet: winnerData.includeWarnMeet,
+          includeWarnPrev: winnerData.includeWarnPrev,
+          idImageUploaded: !!winnerData.idImageUploaded,
+          agent: winnerData.agent,
+          competitionId: state.activeCompetition?.id || null,
+          competitionName: state.activeCompetition?.name || null,
+          timestamp: winnerData.timestamp
+        };
+        addStagedWinner(stagedWinner);
+
         
         toast('تم إضافة الفائز محلياً. اضغط "اعتماد الفائزين" للحفظ النهائي', 'success');
         // ------------------------------------
@@ -3384,10 +3727,12 @@
     function showAutoWinnerModal(entry){
       let isImageUploadingAuto = false;
       // --- NEW: Final check before showing modal ---
-      const isAlreadyWinner = state.winners.some(w => 
-          (w.account && entry.account && w.account === entry.account) || 
-          (w.name === entry.name)
-      );
+      const isAlreadyWinner = state.winners.some(w => {
+          if (w.account && entry.account) {
+              return w.account === entry.account;
+          }
+          return w.name === entry.name;
+      });
       
       if (isAlreadyWinner) {
           toast(`عذراً، المتسابق ${entry.name} موجود بالفعل في قائمة الفائزين!`, 'error');
@@ -3507,7 +3852,7 @@
               // Convert canvas to blob
               canvas.toBlob((blob) => {
                 if (blob) {
-                  console.log(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
+                  // console.log(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
                   resolve(new File([blob], file.name, { type: 'image/jpeg' }));
                 } else {
                   reject(new Error('Failed to compress image'));
@@ -3965,7 +4310,7 @@
     }
 
     async function sendWinnersReport() {
-      console.log('[sendWinnersReport] Button clicked');
+      // console.log('[sendWinnersReport] Button clicked');
       if (!state.selectedAgent) {
         console.warn('[sendWinnersReport] No agent selected');
         toast('يرجى اختيار وكيل أولاً', 'warning');
@@ -3979,18 +4324,18 @@
       
       // التحقق من وجود فائزين غير محفوظين في قاعدة البيانات، مع الحفظ التلقائي قبل الإرسال
       let unsavedWinners = state.winners.filter(w => !w._id);
-      console.log('[sendWinnersReport] clicked:', {
+      /* console.log('[sendWinnersReport] clicked:', {
         total: state.winners.length,
         unsaved: unsavedWinners.length,
         agentId: state.selectedAgent && state.selectedAgent.id
-      });
+      }); */
 
       if (unsavedWinners.length > 0) {
         try {
-          console.log('[sendWinnersReport] auto-saving unsaved winners before send...', unsavedWinners);
+          // console.log('[sendWinnersReport] auto-saving unsaved winners before send...', unsavedWinners);
           toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
           await saveAllWinnersToDatabase();
-          console.log('[sendWinnersReport] auto-save completed successfully');
+          // console.log('[sendWinnersReport] auto-save completed successfully');
         } catch (error) {
           console.error('[sendWinnersReport] auto-save failed:', error);
           toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
@@ -4000,7 +4345,7 @@
 
       // Filter winners that have _id (saved to DB) بعد الحفظ التلقائي
       const validWinners = state.winners.filter(w => w._id);
-      console.log('[sendWinnersReport] Valid winners count:', validWinners.length);
+      // console.log('[sendWinnersReport] Valid winners count:', validWinners.length);
       
       if (validWinners.length === 0) {
           console.error('[sendWinnersReport] No valid winners with DB IDs');
@@ -4016,7 +4361,7 @@
           showConfirmModal(
           `سيتم إرسال جميع الفائزين (${validWinners.length}) إلى الوكيل. هل أنت متأكد من المتابعة؟`,
           async () => {
-              console.log('[sendWinnersReport] User confirmed send');
+              // console.log('[sendWinnersReport] User confirmed send');
               try {
                   const authedFetch = window.authedFetch || fetch;
                   const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-report`, {
@@ -4028,11 +4373,11 @@
                       })
                   });
                   
-                  console.log('[sendWinnersReport] Response status:', resp.status);
+                  // console.log('[sendWinnersReport] Response status:', resp.status);
 
                     if (resp.ok) {
                       const result = await resp.json();
-                      console.log('[sendWinnersReport] Success response:', result);
+                      // console.log('[sendWinnersReport] Success response:', result);
                       toast('تم إرسال التقرير بنجاح', 'success');
                       // Mark report as sent to allow completion status
                       state.reportSent = true;
@@ -4073,17 +4418,17 @@
       
       // التحقق من وجود فائزين غير محفوظين
       const unsavedWinners = state.winners.filter(w => !w._id);
-      console.log('[sendWinnersDetails] clicked: current winners:', {
+      /* console.log('[sendWinnersDetails] clicked: current winners:', {
         total: state.winners.length,
         unsaved: unsavedWinners.length,
         agentId: state.selectedAgent && state.selectedAgent.id
-      });
+      }); */
       if (unsavedWinners.length > 0) {
         try {
-            console.log('[sendWinnersDetails] auto-saving unsaved winners before send...', unsavedWinners);
+            // console.log('[sendWinnersDetails] auto-saving unsaved winners before send...', unsavedWinners);
             toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
             await saveAllWinnersToDatabase();
-            console.log('[sendWinnersDetails] auto-save completed successfully');
+            // console.log('[sendWinnersDetails] auto-save completed successfully');
         } catch (error) {
             console.error('[sendWinnersDetails] auto-save failed:', error);
             toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
@@ -4092,7 +4437,7 @@
       }
       
       const validWinners = state.winners.filter(w => w._id);
-      console.log('[sendWinnersDetails] valid winners after save:', validWinners.map(w => w._id));
+      // console.log('[sendWinnersDetails] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
         return;
@@ -4148,17 +4493,17 @@
       
       // التحقق من وجود فائزين غير محفوظين
       const unsavedWinners = state.winners.filter(w => !w._id);
-      console.log('[sendWinnersWithIDsToAgent] clicked: current winners:', {
+      /* console.log('[sendWinnersWithIDsToAgent] clicked: current winners:', {
         total: state.winners.length,
         unsaved: unsavedWinners.length,
         agentId: state.selectedAgent && state.selectedAgent.id
-      });
+      }); */
       if (unsavedWinners.length > 0) {
         try {
-            console.log('[sendWinnersWithIDsToAgent] auto-saving unsaved winners before send...', unsavedWinners);
+            // console.log('[sendWinnersWithIDsToAgent] auto-saving unsaved winners before send...', unsavedWinners);
             toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
             await saveAllWinnersToDatabase();
-            console.log('[sendWinnersWithIDsToAgent] auto-save completed successfully');
+            // console.log('[sendWinnersWithIDsToAgent] auto-save completed successfully');
         } catch (error) {
             console.error('[sendWinnersWithIDsToAgent] auto-save failed:', error);
             toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
@@ -4167,7 +4512,7 @@
       }
       
       const validWinners = state.winners.filter(w => w._id);
-      console.log('[sendWinnersWithIDsToAgent] valid winners after save:', validWinners.map(w => w._id));
+      // console.log('[sendWinnersWithIDsToAgent] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
         return;
@@ -4175,7 +4520,7 @@
 
       // Precheck: ensure each winner has ID image uploaded
       const missingIdImages = validWinners.filter(w => !w.idImageUploaded);
-      console.log('[sendWinnersWithIDsToAgent] winners missing ID image:', missingIdImages.map(w => w._id));
+      // console.log('[sendWinnersWithIDsToAgent] winners missing ID image:', missingIdImages.map(w => w._id));
       if (missingIdImages.length > 0) {
         toast(`يوجد ${missingIdImages.length} فائز بدون صورة هوية مرفوعة. يرجى رفع الصورة من نافذة اعتماد الفائز قبل الإرسال.`, 'warning');
         return;

@@ -543,14 +543,14 @@ async function renderAgentProfilePage(agentId, options = {}) {
                             <i class="fas fa-wallet"></i>
                             <div class="info">
                                 <label>الرصيد المتبقي</label>
-                                <p>$${agent.remaining_balance || 0}</p>
+                                <p>$${Math.max(0, agent.remaining_balance || 0)}</p>
                             </div>
                         </div>
                         <div class="action-info-card">
                             <i class="fas fa-gift"></i>
                             <div class="info">
                                 <label>بونص الإيداع</label>
-                                <p>${agent.remaining_deposit_bonus || 0} <span class="sub-value">مرات بنسبة</span> ${agent.deposit_bonus_percentage || 0}%</p>
+                                <p>${Math.max(0, agent.remaining_deposit_bonus || 0)} <span class="sub-value">مرات بنسبة</span> ${agent.deposit_bonus_percentage || 0}%</p>
                             </div>
                         </div>
                     </div>
@@ -1875,9 +1875,9 @@ function renderDetailsView(agent) {
             
             <h3 class="details-section-title">الأرصدة</h3>
             ${createFieldHTML('رصيد مستهلك', agent.consumed_balance, 'consumed_balance')}
-            ${createFieldHTML('رصيد متبقي', agent.remaining_balance, 'remaining_balance')}
+            ${createFieldHTML('رصيد متبقي', Math.max(0, agent.remaining_balance || 0), 'remaining_balance')}
             ${createFieldHTML('بونص إيداع مستخدم', agent.used_deposit_bonus, 'used_deposit_bonus')}
-            ${createFieldHTML('بونص إيداع متبقي', agent.remaining_deposit_bonus, 'remaining_deposit_bonus')}
+            ${createFieldHTML('بونص إيداع متبقي', Math.max(0, agent.remaining_deposit_bonus || 0), 'remaining_deposit_bonus')}
 
             <h3 class="details-section-title">إعدادات المسابقة الواحدة</h3>
             ${createFieldHTML('رصيد المسابقة الواحدة', agent.single_competition_balance, 'single_competition_balance')}
@@ -1947,10 +1947,12 @@ function renderDetailsView(agent) {
                     console.error('Renewal test error:', error);
                     showToast(`خطأ: ${error.message}`, 'error');
                 } finally {
-                    testRenewalBtn.disabled = false;
-                    testRenewalBtn.innerHTML = '<i class="fas fa-sync-alt"></i> اختبار التجديد اليدوي';
+                    if (testRenewalBtn) {
+                        testRenewalBtn.disabled = false;
+                        testRenewalBtn.innerHTML = '<i class="fas fa-history"></i> تجربة التجديد (3 ثواني)';
+                    }
                 }
-            }, 5000);
+            }, 3000);
         });
     }
 }
