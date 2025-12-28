@@ -679,6 +679,81 @@ async function renderAgentProfilePage(agentId, options = {}) {
         });
     }
 
+    // --- NEW: Listen for real-time auditing updates ---
+    const handleAuditingUpdate = (event) => {
+        const data = event.detail;
+        // Check if the update is for the currently displayed agent
+        if (data.agentId === agent._id) {
+            const statusContainer = document.getElementById('header-audit-status');
+            const auditBtn = document.getElementById('perform-audit-btn');
+            
+            if (statusContainer && auditBtn) {
+                const newAuditStatus = data.isAuditingEnabled;
+                const iconEl = auditBtn.querySelector('i');
+                const statusTextEl = statusContainer.querySelector('.audit-status-text');
+
+                statusContainer.classList.toggle('pending', !newAuditStatus);
+                statusContainer.classList.toggle('audited', newAuditStatus);
+                iconEl.className = `fas fa-${newAuditStatus ? 'check-circle' : 'clipboard-check'}`;
+                statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق';
+                auditBtn.title = newAuditStatus ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
+                
+                // Update local agent object to keep state consistent
+                agent.is_auditing_enabled = newAuditStatus;
+            }
+        }
+    };
+    
+    // --- NEW: Listen for real-time competition updates ---
+    const handleCompetitionUpdate = (event) => {
+        const data = event.detail;
+        if (data.agentId === agent._id) {
+            // Refresh the profile page to show the new competition status
+            // Ideally we would just update the DOM, but reloading the profile function is safer to ensure all state (timers, badges) is correct.
+            console.log('[Profile] Received competition update, refreshing view...');
+            
+            // Update the header badge immediately for better UX
+            const headerTitle = document.querySelector('.profile-main-info h1');
+            if (headerTitle) {
+                if (data.type === 'created') {
+                    // Remove existing badges
+                    const existingBadges = headerTitle.querySelectorAll('.status-badge');
+                    existingBadges.forEach(b => b.remove());
+                    
+                    // Add active badge
+                    const badge = document.createElement('span');
+                    badge.className = 'status-badge active';
+                    badge.textContent = 'مسابقة نشطة';
+                    headerTitle.appendChild(badge);
+                } else if (data.type === 'completed') {
+                     // Remove existing badges
+                    const existingBadges = headerTitle.querySelectorAll('.status-badge');
+                    existingBadges.forEach(b => b.remove());
+                    
+                    // Add inactive badge
+                    const badge = document.createElement('span');
+                    badge.className = 'status-badge inactive';
+                    badge.textContent = 'مسابقة غير نشطة';
+                    headerTitle.appendChild(badge);
+                }
+            }
+
+            // Reload the full profile after a short delay to allow backend to settle
+            setTimeout(() => {
+                renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });
+            }, 1000);
+        }
+    };
+
+    window.addEventListener('agent-auditing-update', handleAuditingUpdate);
+    window.addEventListener('competition-update', handleCompetitionUpdate);
+    
+    // Add to cleanup list so it gets removed when navigating away
+    if (window.profilePageEventListeners) {
+        window.profilePageEventListeners.push({ element: window, type: 'agent-auditing-update', handler: handleAuditingUpdate });
+        window.profilePageEventListeners.push({ element: window, type: 'competition-update', handler: handleCompetitionUpdate });
+    }
+
     // --- Manual Renewal Button Logic ---
     const manualRenewBtn = document.getElementById('manual-renew-btn');
     if (manualRenewBtn) {

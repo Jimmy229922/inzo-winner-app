@@ -7,7 +7,7 @@ const CompetitionTemplate = require('../models/CompetitionTemplate'); // NEW: Im
 const Winner = require('../models/Winner');
 const QuestionSuggestion = require('../models/QuestionSuggestion');
 const { logActivity } = require('../utils/logActivity');
-const { broadcastNotification } = require('../utils/notification');
+const { broadcastNotification, broadcastEvent } = require('../utils/notification');
 
 /**
  * Creates a hash from the string for duplicate detection.
@@ -446,6 +446,16 @@ exports.createCompetition = async (req, res) => {
                 `تم إنشاء مسابقة جديدة بواسطة ${agent.name}`,
                 'success'
             );
+
+            // --- NEW: Broadcast Event for Real-time UI Update ---
+            broadcastEvent('COMPETITION_CREATED', {
+                agentId: agent._id,
+                agentName: agent.name,
+                competitionId: competition._id,
+                competitionName: competition.name,
+                endsAt: competition.ends_at,
+                createdBy: req.user ? req.user.full_name : 'System'
+            });
         }
 
         console.log(`[Competition] Competition created and saved successfully. ID: ${competition._id}`);
@@ -651,6 +661,14 @@ exports.completeCompetition = async (req, res) => {
         if (userId) {
             await logActivity(userId, competition.agent_id, 'COMPETITION_COMPLETED', logDescription);
         }
+
+        // --- NEW: Broadcast Event for Real-time UI Update ---
+        broadcastEvent('COMPETITION_COMPLETED', {
+            agentId: competition.agent_id,
+            competitionId: competition._id,
+            competitionName: competition.name,
+            completedBy: req.user ? req.user.full_name : 'System'
+        });
 
         res.json({ message: 'Competition completed successfully.', competition });
     } catch (error) {

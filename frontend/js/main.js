@@ -514,6 +514,28 @@ function setupRealtimeListeners() {
                         showToast(message.message, message.variant || 'info');
                         break;
 
+                    case 'AUDITING_TOGGLED':
+                        console.log('🔔 [WebSocket] Auditing toggled:', message.data);
+                        // 1. Show toast
+                        const statusText = message.data.isAuditingEnabled ? 'تفعيل' : 'إلغاء تفعيل';
+                        showToast(`قام ${message.data.updatedBy} بـ ${statusText} التدقيق للوكيل ${message.data.agentName}`, 'info');
+                        
+                        // 2. Dispatch a custom event so specific pages can update their UI
+                        window.dispatchEvent(new CustomEvent('agent-auditing-update', { detail: message.data }));
+                        break;
+
+                    case 'COMPETITION_CREATED':
+                        console.log('🔔 [WebSocket] Competition created:', message.data);
+                        showToast(`تم إنشاء مسابقة جديدة للوكيل ${message.data.agentName} بواسطة ${message.data.createdBy}`, 'success');
+                        window.dispatchEvent(new CustomEvent('competition-update', { detail: { type: 'created', ...message.data } }));
+                        break;
+
+                    case 'COMPETITION_COMPLETED':
+                        console.log('🔔 [WebSocket] Competition completed:', message.data);
+                        showToast(`تم إنهاء مسابقة الوكيل ${message.data.competitionName || ''} بواسطة ${message.data.completedBy}`, 'info');
+                        window.dispatchEvent(new CustomEvent('competition-update', { detail: { type: 'completed', ...message.data } }));
+                        break;
+
                     // Add other message types here
                 }
             } catch (error) {

@@ -13,6 +13,7 @@ async function getSuperAdmin() {
 }
 
 module.exports = async (req, res, next) => {
+    /*
     // --- DEVELOPMENT ONLY: Bypass authentication for ease of development ---
     if (process.env.NODE_ENV === 'development') {
         const admin = await getSuperAdmin();
@@ -28,6 +29,7 @@ module.exports = async (req, res, next) => {
         };
         return next();
     }
+    */
 
     // --- PRODUCTION: Real JWT Authentication ---
     const authHeader = req.header('Authorization');

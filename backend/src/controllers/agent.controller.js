@@ -9,6 +9,7 @@ const Winner = require('../models/Winner'); // Added
 const { logActivity } = require('../utils/logActivity');
 const { translateField, formatValue } = require('../utils/fieldTranslations');
 const { postToTelegram, sendPhotoToTelegram, sendMediaGroupToTelegram } = require('../utils/telegram');
+const { broadcastEvent } = require('../utils/notification');
 
 // Helper function to introduce a delay
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -794,19 +795,28 @@ exports.toggleAuditing = async (req, res) => {
 
         // Log the activity
         const userId = req.user?._id;
-        const userName = req.user?.name || 'Ù…Ø³ØªØ®Ø¯Ù…';
+        const userName = req.user?.full_name || 'مستخدم';
         if (userId) {
-            const statusText = is_auditing_enabled ? 'ØªÙØ¹ÙŠÙ„' : 'Ø¥Ù„ØºØ§Ø¡ ØªÙØ¹ÙŠÙ„';
+            const statusText = is_auditing_enabled ? 'تفعيل' : 'إلغاء تفعيل';
             await logActivity(
                 userId,
                 agent._id,
                 'AUDITING_TOGGLED',
-                `ØªÙ… ${statusText} Ø§Ù„ØªØ¯Ù‚ÙŠÙ‚ Ù„Ù„ÙˆÙƒÙŠÙ„ ${agent.name}`,
+                `تم ${statusText} التدقيق للوكيل ${agent.name}`,
                 { old_status: oldStatus, new_status: is_auditing_enabled }
             );
         }
 
-        console.log(`âœ“ [AUDITING TOGGLE] Agent: ${agent.name}, Status: ${oldStatus} â†’ ${is_auditing_enabled}`);
+        console.log(`✓ [AUDITING TOGGLE] Agent: ${agent.name}, Status: ${oldStatus} → ${is_auditing_enabled}`);
+
+        // Broadcast the event to all connected clients
+        broadcastEvent('AUDITING_TOGGLED', {
+            agentId: agent._id,
+            agentName: agent.name,
+            isAuditingEnabled: is_auditing_enabled,
+            updatedBy: req.user ? req.user.full_name : 'System',
+            timestamp: new Date()
+        });
 
         res.json({
             message: `ØªÙ… ${is_auditing_enabled ? 'ØªÙØ¹ÙŠÙ„' : 'Ø¥Ù„ØºØ§Ø¡ ØªÙØ¹ÙŠÙ„'} Ø§Ù„ØªØ¯Ù‚ÙŠÙ‚ Ø¨Ù†Ø¬Ø§Ø­`,

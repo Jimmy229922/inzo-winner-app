@@ -996,35 +996,38 @@ async function renderProfileSettingsPage() {
                     <div class="form-group">
                         <label for="profile-new-password">كلمة المرور الجديدة</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-new-password" placeholder="متاح للسوبر أدمن فقط" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
+                            <input type="password" id="profile-new-password" placeholder="${isSuperAdmin ? '' : 'متاح للسوبر أدمن فقط'}" ${isSuperAdmin ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                         </div>
                         <div class="password-strength-meter"><div class="strength-bar"></div></div>
                         <div class="password-actions">
-                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>إنشاء كلمة مرور قوية</button>
+                            ${isSuperAdmin ? '<button type="button" id="generate-password-btn" class="btn-secondary btn-small">إنشاء كلمة مرور قوية</button>' : ''}
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="profile-confirm-password">تأكيد كلمة المرور الجديدة</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-confirm-password" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
+                            <input type="password" id="profile-confirm-password" ${isSuperAdmin ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                             <div id="password-match-error" class="validation-error-inline" style="display: none;">كلمتا المرور غير متطابقتين.</div>
                         </div>
                     </div>
-                    ${currentUserProfile.role !== 'super_admin' ? '<div class="alert alert-warning">تغيير كلمة المرور مسموح للسوبر أدمن فقط.</div>' : ''}
+                    ${!isSuperAdmin ? '<div class="alert alert-warning">تغيير كلمة المرور مسموح للسوبر أدمن فقط.</div>' : ''}
                 </div>
 
+                ${isSuperAdmin || currentUserProfile.role === 'admin' ? `
                 <div class="form-actions">
                     <button type="submit" id="save-profile-settings-btn" class="btn-primary">
                         <i class="fas fa-save"></i> حفظ التغييرات
                     </button>
                 </div>
+                ` : ''}
             </form>
         </div>
     `;
 
     const form = document.getElementById('profile-settings-form');
+    // Only query saveBtn if it exists
     const saveBtn = form.querySelector('#save-profile-settings-btn');
     const newPasswordInput = form.querySelector('#profile-new-password');
     const confirmPasswordInput = form.querySelector('#profile-confirm-password');
@@ -1032,43 +1035,45 @@ async function renderProfileSettingsPage() {
     const validationMsgEl = form.querySelector('#current-password-validation-msg');
 
     // --- NEW: Real-time current password validation on blur (super_admin only) ---
-    currentPasswordInput.addEventListener('blur', async () => {
-        if (currentUserProfile.role !== 'super_admin') return;
-        const password = currentPasswordInput.value;
-
-        // Clear previous message if input is empty
-        if (!password) {
-            validationMsgEl.innerHTML = '';
-            validationMsgEl.className = 'validation-status-inline';
-            return;
-        }
-
-        // Show a loading indicator
-        validationMsgEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>جاري التحقق...</span>';
-        validationMsgEl.className = 'validation-status-inline checking';
-
-        try {
-            const response = await authedFetch('/api/auth/verify-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password })
-            });
-
-            if (!response.ok) {
-                const result = await response.json().catch(() => ({}));
-                validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>' + (result.message || 'كلمة المرور الحالية غير صحيحة.') + '</span>';
-                validationMsgEl.className = 'validation-status-inline error';
+    if (currentPasswordInput) {
+        currentPasswordInput.addEventListener('blur', async () => {
+            if (!isSuperAdmin) return;
+            const password = currentPasswordInput.value;
+    
+            // Clear previous message if input is empty
+            if (!password) {
+                validationMsgEl.innerHTML = '';
+                validationMsgEl.className = 'validation-status-inline';
                 return;
             }
 
-            validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
-            validationMsgEl.className = 'validation-status-inline success';
-        } catch (e) {
-            validationMsgEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>حدث خطأ أثناء التحقق.</span>';
-            validationMsgEl.className = 'validation-status-inline error';
-        }
-    });
+            // Show a loading indicator
+            validationMsgEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>جاري التحقق...</span>';
+            validationMsgEl.className = 'validation-status-inline checking';
 
+            try {
+                const response = await authedFetch('/api/auth/verify-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+
+                if (!response.ok) {
+                    const result = await response.json().catch(() => ({}));
+                    validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>' + (result.message || 'كلمة المرور الحالية غير صحيحة.') + '</span>';
+                    validationMsgEl.className = 'validation-status-inline error';
+                    return;
+                }
+
+                validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
+                validationMsgEl.className = 'validation-status-inline success';
+            } catch (e) {
+                validationMsgEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>حدث خطأ أثناء التحقق.</span>';
+                validationMsgEl.className = 'validation-status-inline error';
+            }
+        });
+    }
+ 
     // --- Avatar Logic ---
     const avatarUploadInput = document.getElementById('avatar-upload');
     const avatarPreview = document.getElementById('avatar-preview');
@@ -1142,10 +1147,10 @@ async function renderProfileSettingsPage() {
     const validatePasswordMatch = () => {
         if (newPasswordInput.value && confirmPasswordInput.value && newPasswordInput.value !== confirmPasswordInput.value) {
             passwordMatchError.style.display = 'block';
-            saveBtn.disabled = true;
+            if (saveBtn) saveBtn.disabled = true;
         } else {
             passwordMatchError.style.display = 'none';
-            saveBtn.disabled = false;
+            if (saveBtn) saveBtn.disabled = false;
         }
     };
     newPasswordInput.addEventListener('input', validatePasswordMatch);
@@ -1161,6 +1166,7 @@ async function renderProfileSettingsPage() {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!saveBtn) return; // Should not happen if button is hidden, but defensive
 
         // --- Submission Logic ---
         saveBtn.disabled = true;
@@ -1310,7 +1316,7 @@ async function handlePurgeAllUsers() {
         try {
             const response = await fetch('/api/users/purge-all', {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer }{localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
             });
             const data = await response.json();
             if (response.ok) {

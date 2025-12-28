@@ -7055,6 +7055,81 @@ async function renderAgentProfilePage(agentId, options = {}) {
         });
     }
 
+    // --- NEW: Listen for real-time auditing updates ---
+    const handleAuditingUpdate = (event) => {
+        const data = event.detail;
+        // Check if the update is for the currently displayed agent
+        if (data.agentId === agent._id) {
+            const statusContainer = document.getElementById('header-audit-status');
+            const auditBtn = document.getElementById('perform-audit-btn');
+            
+            if (statusContainer && auditBtn) {
+                const newAuditStatus = data.isAuditingEnabled;
+                const iconEl = auditBtn.querySelector('i');
+                const statusTextEl = statusContainer.querySelector('.audit-status-text');
+
+                statusContainer.classList.toggle('pending', !newAuditStatus);
+                statusContainer.classList.toggle('audited', newAuditStatus);
+                iconEl.className = `fas fa-${newAuditStatus ? 'check-circle' : 'clipboard-check'}`;
+                statusTextEl.textContent = newAuditStatus ? 'تم التدقيق' : 'التدقيق';
+                auditBtn.title = newAuditStatus ? 'إلغاء التدقيق' : 'تمييز كـ "تم التدقيق"';
+                
+                // Update local agent object to keep state consistent
+                agent.is_auditing_enabled = newAuditStatus;
+            }
+        }
+    };
+    
+    // --- NEW: Listen for real-time competition updates ---
+    const handleCompetitionUpdate = (event) => {
+        const data = event.detail;
+        if (data.agentId === agent._id) {
+            // Refresh the profile page to show the new competition status
+            // Ideally we would just update the DOM, but reloading the profile function is safer to ensure all state (timers, badges) is correct.
+            console.log('[Profile] Received competition update, refreshing view...');
+            
+            // Update the header badge immediately for better UX
+            const headerTitle = document.querySelector('.profile-main-info h1');
+            if (headerTitle) {
+                if (data.type === 'created') {
+                    // Remove existing badges
+                    const existingBadges = headerTitle.querySelectorAll('.status-badge');
+                    existingBadges.forEach(b => b.remove());
+                    
+                    // Add active badge
+                    const badge = document.createElement('span');
+                    badge.className = 'status-badge active';
+                    badge.textContent = 'مسابقة نشطة';
+                    headerTitle.appendChild(badge);
+                } else if (data.type === 'completed') {
+                     // Remove existing badges
+                    const existingBadges = headerTitle.querySelectorAll('.status-badge');
+                    existingBadges.forEach(b => b.remove());
+                    
+                    // Add inactive badge
+                    const badge = document.createElement('span');
+                    badge.className = 'status-badge inactive';
+                    badge.textContent = 'مسابقة غير نشطة';
+                    headerTitle.appendChild(badge);
+                }
+            }
+
+            // Reload the full profile after a short delay to allow backend to settle
+            setTimeout(() => {
+                renderAgentProfilePage(agent._id, { activeTab: 'agent-competitions' });
+            }, 1000);
+        }
+    };
+
+    window.addEventListener('agent-auditing-update', handleAuditingUpdate);
+    window.addEventListener('competition-update', handleCompetitionUpdate);
+    
+    // Add to cleanup list so it gets removed when navigating away
+    if (window.profilePageEventListeners) {
+        window.profilePageEventListeners.push({ element: window, type: 'agent-auditing-update', handler: handleAuditingUpdate });
+        window.profilePageEventListeners.push({ element: window, type: 'competition-update', handler: handleCompetitionUpdate });
+    }
+
     // --- Manual Renewal Button Logic ---
     const manualRenewBtn = document.getElementById('manual-renew-btn');
     if (manualRenewBtn) {
@@ -10335,35 +10410,38 @@ async function renderProfileSettingsPage() {
                     <div class="form-group">
                         <label for="profile-new-password">كلمة المرور الجديدة</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-new-password" placeholder="متاح للسوبر أدمن فقط" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
+                            <input type="password" id="profile-new-password" placeholder="${isSuperAdmin ? '' : 'متاح للسوبر أدمن فقط'}" ${isSuperAdmin ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                         </div>
                         <div class="password-strength-meter"><div class="strength-bar"></div></div>
                         <div class="password-actions">
-                            <button type="button" id="generate-password-btn" class="btn-secondary btn-small" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>إنشاء كلمة مرور قوية</button>
+                            ${isSuperAdmin ? '<button type="button" id="generate-password-btn" class="btn-secondary btn-small">إنشاء كلمة مرور قوية</button>' : ''}
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="profile-confirm-password">تأكيد كلمة المرور الجديدة</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="profile-confirm-password" ${currentUserProfile.role === 'super_admin' ? '' : 'disabled'}>
+                            <input type="password" id="profile-confirm-password" ${isSuperAdmin ? '' : 'disabled'}>
                             <button type="button" class="password-toggle-btn" title="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
                             <div id="password-match-error" class="validation-error-inline" style="display: none;">كلمتا المرور غير متطابقتين.</div>
                         </div>
                     </div>
-                    ${currentUserProfile.role !== 'super_admin' ? '<div class="alert alert-warning">تغيير كلمة المرور مسموح للسوبر أدمن فقط.</div>' : ''}
+                    ${!isSuperAdmin ? '<div class="alert alert-warning">تغيير كلمة المرور مسموح للسوبر أدمن فقط.</div>' : ''}
                 </div>
 
+                ${isSuperAdmin || currentUserProfile.role === 'admin' ? `
                 <div class="form-actions">
                     <button type="submit" id="save-profile-settings-btn" class="btn-primary">
                         <i class="fas fa-save"></i> حفظ التغييرات
                     </button>
                 </div>
+                ` : ''}
             </form>
         </div>
     `;
 
     const form = document.getElementById('profile-settings-form');
+    // Only query saveBtn if it exists
     const saveBtn = form.querySelector('#save-profile-settings-btn');
     const newPasswordInput = form.querySelector('#profile-new-password');
     const confirmPasswordInput = form.querySelector('#profile-confirm-password');
@@ -10371,43 +10449,45 @@ async function renderProfileSettingsPage() {
     const validationMsgEl = form.querySelector('#current-password-validation-msg');
 
     // --- NEW: Real-time current password validation on blur (super_admin only) ---
-    currentPasswordInput.addEventListener('blur', async () => {
-        if (currentUserProfile.role !== 'super_admin') return;
-        const password = currentPasswordInput.value;
-
-        // Clear previous message if input is empty
-        if (!password) {
-            validationMsgEl.innerHTML = '';
-            validationMsgEl.className = 'validation-status-inline';
-            return;
-        }
-
-        // Show a loading indicator
-        validationMsgEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>جاري التحقق...</span>';
-        validationMsgEl.className = 'validation-status-inline checking';
-
-        try {
-            const response = await authedFetch('/api/auth/verify-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password })
-            });
-
-            if (!response.ok) {
-                const result = await response.json().catch(() => ({}));
-                validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>' + (result.message || 'كلمة المرور الحالية غير صحيحة.') + '</span>';
-                validationMsgEl.className = 'validation-status-inline error';
+    if (currentPasswordInput) {
+        currentPasswordInput.addEventListener('blur', async () => {
+            if (!isSuperAdmin) return;
+            const password = currentPasswordInput.value;
+    
+            // Clear previous message if input is empty
+            if (!password) {
+                validationMsgEl.innerHTML = '';
+                validationMsgEl.className = 'validation-status-inline';
                 return;
             }
 
-            validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
-            validationMsgEl.className = 'validation-status-inline success';
-        } catch (e) {
-            validationMsgEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>حدث خطأ أثناء التحقق.</span>';
-            validationMsgEl.className = 'validation-status-inline error';
-        }
-    });
+            // Show a loading indicator
+            validationMsgEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>جاري التحقق...</span>';
+            validationMsgEl.className = 'validation-status-inline checking';
 
+            try {
+                const response = await authedFetch('/api/auth/verify-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+
+                if (!response.ok) {
+                    const result = await response.json().catch(() => ({}));
+                    validationMsgEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>' + (result.message || 'كلمة المرور الحالية غير صحيحة.') + '</span>';
+                    validationMsgEl.className = 'validation-status-inline error';
+                    return;
+                }
+
+                validationMsgEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>كلمة المرور صحيحة.</span>';
+                validationMsgEl.className = 'validation-status-inline success';
+            } catch (e) {
+                validationMsgEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>حدث خطأ أثناء التحقق.</span>';
+                validationMsgEl.className = 'validation-status-inline error';
+            }
+        });
+    }
+ 
     // --- Avatar Logic ---
     const avatarUploadInput = document.getElementById('avatar-upload');
     const avatarPreview = document.getElementById('avatar-preview');
@@ -10481,10 +10561,10 @@ async function renderProfileSettingsPage() {
     const validatePasswordMatch = () => {
         if (newPasswordInput.value && confirmPasswordInput.value && newPasswordInput.value !== confirmPasswordInput.value) {
             passwordMatchError.style.display = 'block';
-            saveBtn.disabled = true;
+            if (saveBtn) saveBtn.disabled = true;
         } else {
             passwordMatchError.style.display = 'none';
-            saveBtn.disabled = false;
+            if (saveBtn) saveBtn.disabled = false;
         }
     };
     newPasswordInput.addEventListener('input', validatePasswordMatch);
@@ -10500,6 +10580,7 @@ async function renderProfileSettingsPage() {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!saveBtn) return; // Should not happen if button is hidden, but defensive
 
         // --- Submission Logic ---
         saveBtn.disabled = true;
@@ -10649,7 +10730,7 @@ async function handlePurgeAllUsers() {
         try {
             const response = await fetch('/api/users/purge-all', {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer }{localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
             });
             const data = await response.json();
             if (response.ok) {
@@ -23452,6 +23533,28 @@ function setupRealtimeListeners() {
                     case 'global_notification':
                         console.log('🔔 [WebSocket] Received global notification:', message);
                         showToast(message.message, message.variant || 'info');
+                        break;
+
+                    case 'AUDITING_TOGGLED':
+                        console.log('🔔 [WebSocket] Auditing toggled:', message.data);
+                        // 1. Show toast
+                        const statusText = message.data.isAuditingEnabled ? 'تفعيل' : 'إلغاء تفعيل';
+                        showToast(`قام ${message.data.updatedBy} بـ ${statusText} التدقيق للوكيل ${message.data.agentName}`, 'info');
+                        
+                        // 2. Dispatch a custom event so specific pages can update their UI
+                        window.dispatchEvent(new CustomEvent('agent-auditing-update', { detail: message.data }));
+                        break;
+
+                    case 'COMPETITION_CREATED':
+                        console.log('🔔 [WebSocket] Competition created:', message.data);
+                        showToast(`تم إنشاء مسابقة جديدة للوكيل ${message.data.agentName} بواسطة ${message.data.createdBy}`, 'success');
+                        window.dispatchEvent(new CustomEvent('competition-update', { detail: { type: 'created', ...message.data } }));
+                        break;
+
+                    case 'COMPETITION_COMPLETED':
+                        console.log('🔔 [WebSocket] Competition completed:', message.data);
+                        showToast(`تم إنهاء مسابقة الوكيل ${message.data.competitionName || ''} بواسطة ${message.data.completedBy}`, 'info');
+                        window.dispatchEvent(new CustomEvent('competition-update', { detail: { type: 'completed', ...message.data } }));
                         break;
 
                     // Add other message types here

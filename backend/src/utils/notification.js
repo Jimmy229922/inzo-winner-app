@@ -38,4 +38,35 @@ const broadcastNotification = (app, message, level = 'info', targetUserId = null
     }
 };
 
-module.exports = { broadcastNotification };
+/**
+ * Broadcasts a custom event to connected WebSocket clients.
+ * 
+ * @param {string} eventType - The type of the event (e.g., 'AUDITING_TOGGLED').
+ * @param {Object} data - The data payload to send.
+ * @param {string|null} targetUserId - Optional. If provided, sends only to this user. Otherwise, broadcasts to all.
+ */
+const broadcastEvent = (eventType, data, targetUserId = null) => {
+    try {
+        const payload = JSON.stringify({
+            type: eventType,
+            data: data
+        });
+
+        if (targetUserId) {
+            const client = onlineClients.get(targetUserId.toString());
+            if (client && client.readyState === 1) {
+                client.send(payload);
+            }
+        } else {
+            onlineClients.forEach((client) => {
+                if (client.readyState === 1) {
+                    client.send(payload);
+                }
+            });
+        }
+    } catch (error) {
+        console.error('[Broadcast Event Error]:', error);
+    }
+};
+
+module.exports = { broadcastNotification, broadcastEvent };
