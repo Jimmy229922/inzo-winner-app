@@ -3,6 +3,7 @@
 // Module to manage a roulette wheel for selecting winners
 
 (function() {
+  // Debug marker to verify the latest roulette JS is actually loaded (helps detect browser caching)
 'use strict';
 
 // Ensure the modern winner modal with email field exists (handles legacy cached HTML without the input)
@@ -64,8 +65,8 @@
               <label class="wr-label" style="display: block; margin-bottom: 0.5rem; color: #ddd;">
                   <i class="fas fa-dollar-sign"></i> قيمة الجائزة
               </label>
-              <div id="winner-prize-auto-display" style="display:block; padding: 12px; border-radius: 8px; border: 1px solid #10b981; background: rgba(16, 185, 129, 0.1); color: #10b981; font-weight: bold; text-align: center;">
-                  --
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="text" id="winner-prize-value" class="wr-form-input" dir="rtl" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #10b981; background: rgba(16, 185, 129, 0.1); color: #10b981; font-weight: bold; text-align: center;" placeholder="0" readonly />
               </div>
           </div>
   
@@ -143,11 +144,72 @@
       if (!select) return;
       try {
         const authedFetch = window.authedFetch || fetch;
-        const response = await authedFetch('/api/agents?limit=1000');
+        // Fetch ALL competitions to filter agents who have active competitions
+        const response = await authedFetch('/api/competitions?limit=2000&sort=-createdAt');
         const result = await response.json();
-        const agents = result.data || [];
+        const competitions = result.data || result.competitions || [];
         
-        agents.forEach(agent => {
+        // Filter for active competitions
+        const activeComps = competitions.filter(c => ['active', 'awaiting_winners', 'sent'].includes(c.status));
+        
+        // Extract unique agents
+        const agentMap = new Map();
+        activeComps.forEach(comp => {
+            // comp.agents is the populated agent object (mapped from agent_id in backend)
+            const agent = comp.agents;
+            if (agent && agent._id && !agentMap.has(agent._id)) {
+                agentMap.set(agent._id, {
+                    _id: agent._id,
+                    name: agent.name,
+                    agent_id: agent.agent_id || '?' // agent_id might not be in the populated object if not selected
+                });
+            }
+        });
+        
+        // If we need the agent.agent_id (the numeric ID), we might need to ensure the backend returns it.
+        // The backend controller says: .populate('agent_id', 'name avatar_url classification')
+        // It does NOT populate 'agent_id' (the numeric field).
+        // Wait, the backend model likely has 'agent_id' as the numeric ID.
+        // Let's check the backend controller again.
+        // .populate('agent_id', 'name avatar_url classification')
+        // It seems 'agent_id' (numeric) is NOT selected.
+        // This is a problem if I need it for the option text `${agent.name} (#${agent.agent_id})`.
+        // However, I can just use the name if the ID is missing, or try to fetch agents separately if needed.
+        // Or I can rely on the fact that maybe the user doesn't strictly need the ID number if they just want to select the agent.
+        // But the existing code uses `option.dataset.agentId = agent.agent_id;`.
+        // And `updateAgentStatus` uses it.
+        
+        // Let's check if I can get the agent_id.
+        // If I can't, I might need to fetch all agents AND all competitions, then intersect.
+        // Fetching all agents is cheap (limit=1000).
+        // Fetching all competitions is cheapish.
+        
+        // ALTERNATIVE STRATEGY:
+        // 1. Fetch all agents (to get full details including numeric ID).
+        // 2. Fetch all active competitions (to know which agents to show).
+        // 3. Filter the agents list based on the competitions.
+        
+        const agentsResponse = await authedFetch('/api/agents?limit=1000');
+        const agentsResult = await agentsResponse.json();
+        const allAgents = agentsResult.data || [];
+        
+        // Filter agents who appear in activeComps
+        // activeComps have `agent_id` (which is the ObjectId, or the populated object).
+        // In the formatted response, `agents` is the populated object. `agents._id` is the ObjectId.
+        
+        const activeAgentIds = new Set();
+        activeComps.forEach(c => {
+            if (c.agents && c.agents._id) {
+                activeAgentIds.add(String(c.agents._id));
+            } else if (c.agent_id) {
+                 // Fallback if not populated as expected
+                 activeAgentIds.add(String(c.agent_id));
+            }
+        });
+        
+        const filteredAgents = allAgents.filter(a => activeAgentIds.has(String(a._id)));
+        
+        filteredAgents.forEach(agent => {
           const option = document.createElement('option');
           option.value = agent._id;
           option.textContent = `${agent.name} (#${agent.agent_id})`;
@@ -155,8 +217,7 @@
           select.appendChild(option);
         });
         
-        // Don't restore selected agent - always start with default "-- اختر الوكيل --"
-        // User must select agent explicitly each time
+        // Agent restoration is handled by restoreSession()
       } catch(e) {
         console.warn('Failed to load agents:', e);
       }
@@ -436,7 +497,7 @@
                     // Better approach: Check if the restored session's activeCompetitionId matches this compId.
                     // We need to access the raw session data or store activeCompetitionId in state during restore.
                     
-                    const key = getSessionKey();
+                    const key = LS_KEY;
                     let sessionCompId = null;
                     try {
                         const raw = localStorage.getItem(key);
@@ -451,12 +512,14 @@
                     } catch(e) {}
 
                     if (sessionCompId === compId && state.winners.length > 0) {
-                        console.log('[loadCompetitionById] Keeping local winners from session for this competition.');
                         // Keep state.winners as is (restored from session)
                     } else {
                         state.winners = [];
                     }
                 }
+
+                  await restoreVideosFromDB();
+                  await restoreImagesFromDB();
                 
                 // state.entries = []; // Clear entries as we are loading a specific state -> REMOVED to allow restoring entries from session if needed
                 // Actually, if we switch competitions, we probably want to clear entries unless they are generic.
@@ -465,12 +528,23 @@
                 // Re-declare sessionCompId here because it's block-scoped above
                 let currentSessionCompId = null;
                 try {
-                    const key = getSessionKey();
+                  const key = LS_KEY;
                     const raw = localStorage.getItem(key);
                     if (raw) currentSessionCompId = JSON.parse(raw).activeCompetitionId;
                 } catch(e) {}
 
                 if (currentSessionCompId !== compId) {
+                     // If competition changed, we might want to clear entries.
+                     // BUT user requested to keep entries even on reload.
+                     // If it's a reload, currentSessionCompId might match compId.
+                     // If it's a manual switch, they might differ.
+                     // The user said: "keep participants list even if I reload page".
+                     // So if I reload, compId matches sessionCompId, so we don't clear.
+                     // If I switch agent/competition manually, we probably SHOULD clear to avoid confusion?
+                     // Or maybe they want to carry over participants?
+                     // The previous request was "don't save entries". Now it is "save entries".
+                     // Let's assume if competition ID changes, we clear. If it's same (reload), we keep.
+                     
                      state.entries = [];
                      // Clear input field to avoid showing previous participants
                      const ta = document.getElementById('participants-input');
@@ -531,7 +605,6 @@
         
         // If competition ID changed, ensure we start fresh (though restoreSession handles it, we can be explicit)
         if (previousCompetitionId && previousCompetitionId !== competition._id) {
-             console.log('[winner-roulette] Competition changed from', previousCompetitionId, 'to', competition._id, '- forcing clean slate');
              // Only clear if we are going to restore session or if we didn't load anything
              if (shouldRestoreSession) {
                  state.winners = [];
@@ -1157,18 +1230,28 @@
             console.warn('IndexedDB delete failed', e);
         }
     }
-
+ 
     async function saveImageToDB(id, blob) {
         try {
+            console.log(`[IndexedDB] Saving image for ID: ${id}, Blob size: ${blob.size}, Type: ${blob.type}`);
             const db = await getDB();
             return new Promise((resolve, reject) => {
                 const tx = db.transaction(IMAGE_STORE, 'readwrite');
-                tx.objectStore(IMAGE_STORE).put(blob, id);
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
+                const req = tx.objectStore(IMAGE_STORE).put(blob, id);
+                tx.oncomplete = () => {
+                    console.log(`[IndexedDB] Image saved successfully for ID: ${id}`);
+                    resolve();
+                };
+                tx.onerror = () => {
+                    console.error(`[IndexedDB] Transaction error saving image for ID: ${id}`, tx.error);
+                    reject(tx.error);
+                };
+                req.onerror = () => {
+                    console.error(`[IndexedDB] Request error saving image for ID: ${id}`, req.error);
+                };
             });
         } catch (e) {
-            console.warn('IndexedDB save image failed', e);
+            console.error('[IndexedDB] saveImageToDB Exception:', e);
         }
     }
 
@@ -1204,7 +1287,7 @@
     // ==========================================
     // Initialize Winner Roulette
     // ==========================================
-    function init() {
+    async function init() {
       // [init] Winner Roulette initialization started
       
       try { document.body.classList.add('dark-mode'); } catch(e) {}
@@ -1221,10 +1304,10 @@
       const agentIdFromUrl = urlParams.get('agent_id');
       
       // Clear selected agent on page load - always start fresh
-      state.selectedAgent = null;
+      // state.selectedAgent = null; // REMOVED to allow session restore
       state.activeCompetition = null;
       
-      loadAgents();
+      await loadAgents();
       bindUI();
       startPulseAnimation(); // بدء التأثير المتحرك للخلفية
       
@@ -1235,8 +1318,8 @@
         }, 500); // انتظار تحميل الوكلاء
       }
       
-      restoreSession(true); // لا نستعيد الوكيل بعد الآن
-      state.selectedAgent = null; // تأكيد التفريغ بعد الاسترجاع
+      await restoreSession(); // Restore everything including agent
+      // state.selectedAgent = null; // REMOVED
       updateSpinControls?.();
       drawWheel();
 
@@ -1356,16 +1439,49 @@
       warnPrevEl?.addEventListener('change', (e) => { state.includeWarnPrev = !!e.target.checked; });
       if(confettiCanvas){confettiCanvas.width=window.innerWidth;confettiCanvas.height=window.innerHeight;}
     
+      // Removed old event listener to avoid conflicts with inline onclick
+
+    
       agentSelect?.addEventListener('change', async (e) => {
         const agentId = e.target.value;
+        const prevAgentId = state.selectedAgent?.id || null;
         if (!agentId) {
           state.selectedAgent = null;
+          // Switching away from an agent: clear participants so they don't bleed into the next selection
+          state.entries = [];
+          state.filterTerm = '';
+          // Clear UI elements tied to participants
+          const ta = document.getElementById('participants-input');
+          if (ta) ta.value = '';
+          const searchInput = document.getElementById('participants-search');
+          if (searchInput) searchInput.value = '';
+          try { renderParticipants(); } catch {}
+          try { updateCounts(); } catch {}
+          try { drawWheel(); } catch {}
+          saveSession();
           updateAgentStatus('', '');
           hideAgentInfoBox();
           updateSpinControls?.();
           updateBatchCount?.();
           return;
         }
+
+        // If the user switched to a different agent, wipe participants (and winners UI) to prevent inheritance
+        if (prevAgentId && prevAgentId !== agentId) {
+          state.entries = [];
+          state.filterTerm = '';
+          state.winners = [];
+          const ta = document.getElementById('participants-input');
+          if (ta) ta.value = '';
+          const searchInput = document.getElementById('participants-search');
+          if (searchInput) searchInput.value = '';
+          try { renderParticipants(); } catch {}
+          try { renderWinners(); } catch {}
+          try { updateCounts(); } catch {}
+          try { drawWheel(); } catch {}
+          saveSession();
+        }
+
         const option = e.target.selectedOptions[0];
         const agentIdNum = option.dataset.agentId;
         const agentName = option.textContent.split(' (#')[0]; // Extract name only
@@ -1381,86 +1497,188 @@
       });
     
       const participantsInput = document.getElementById('participants-input');
+      const addParticipantsBtn = document.getElementById('add-participants-btn');
+      
+      // Remove old input listener if exists (by not adding it)
+      // Add click listener for the new button
+      // addParticipantsBtn?.addEventListener('click', () => { ... }); // REMOVED
+
+      // Restore INPUT listener with robust parsing and "consumption" logic
       participantsInput?.addEventListener('input', (e) => {
-        // Auto-parse and add participants when typing (line by line)
-        const raw = e.target.value;
+        const raw = participantsInput.value;
+        if (!raw) return; // Allow empty (clearing)
+
         const lines = raw.split('\n');
-        
-        // Re-parse all entries from scratch to ensure accuracy
-        const parsedEntries = [];
+        let addedCount = 0;
+        let duplicateCount = 0;
+        const remainingLines = [];
         
         for (let i = 0; i < lines.length; i++) {
           let line = lines[i].trim();
-          // Ignore fully empty or non-text lines (e.g., only dashes/punctuation)
-          const contentOnly = line.replace(/[-–—_|.,;:~*+=#\s]+/g, '');
-          if (!line || contentOnly.length === 0) {
-            continue;
+          
+          // If line is empty, we might want to keep it if it's the last line (user typing)
+          // But if it's in the middle, it's just an empty line.
+          if (!line) {
+             if (i < lines.length - 1) {
+                 // Empty line in middle -> consume (ignore)
+                 continue;
+             } else {
+                 // Empty line at end -> keep (user might be typing)
+                 // But wait, if we keep it, the textarea will have a newline at end.
+                 // That's fine.
+                 // remainingLines.push(lines[i]); // Actually, split('\n') gives empty string for trailing newline
+                 // If we push it, we preserve the newline.
+                 // But if we don't push it, we lose the newline.
+                 // Let's see. If raw ends with \n, lines has empty string at end.
+                 // If we don't push it, value becomes "prevLine". Newline lost.
+                 // So we must push it if we want to preserve typing flow.
+                 remainingLines.push(lines[i]); 
+                 continue;
+             }
           }
-    
-          // Remove sequential numbers from the beginning (like "1- ", "2- ", etc.)
-          const cleanedLine = line.replace(/^\d+\s*[-–—]\s*/, '');
+
+          // Remove invisible chars (BOM, zero-width spaces, etc)
+          line = line.replace(/[\u200B-\u200D\uFEFF]/g, '');
           
-          // Parse this single line
-          const parts = cleanedLine.split(/[—\-–]/).map(p => p.trim());
+          // Remove "1- ", "1. ", "1 " prefix, including various dash types
+          const cleanedLine = line.replace(/^\d+[\.\-\)\s—–]+\s*/, '');
           
-          if (parts.length >= 2) {
-            const name = parts[0];
-            const account = parts[1].replace(/[^\d]/g, '');
-    
-            if (name && account) {
-              // Check if this entry already exists (by name and account)
-              const exists = parsedEntries.find(e => e.name === name && e.account === account);
+          if (!cleanedLine) {
+             // Should not happen if line.trim() was not empty, unless it was ONLY numbers and dashes?
+             // If it was "1-", cleaned is empty.
+             if (i === lines.length - 1) remainingLines.push(lines[i]);
+             continue;
+          }
+
+          let name = '';
+          let account = '';
+          let isStrongMatch = false;
+
+          // Robust parsing strategy
+          // 1. Try to find a separator (any kind of dash) followed by digits at the end
+          const separatorMatch = cleanedLine.match(/^(.*?)[\s\t]*[—\-–―‒−]+[\s\t]*(\d+)[\s\t]*$/);
+          
+          if (separatorMatch) {
+            name = separatorMatch[1].trim();
+            account = separatorMatch[2].trim();
+            isStrongMatch = true;
+          } else {
+            // 2. Try to find just digits at the end separated by space
+            const spaceMatch = cleanedLine.match(/^(.*?)[\s\t]+(\d+)$/);
+            if (spaceMatch) {
+                name = spaceMatch[1].trim();
+                account = spaceMatch[2].trim();
+                isStrongMatch = true;
+            } else {
+                // 3. Fallback: Split by any dash, take last part if it has digits
+                const parts = cleanedLine.split(/[—\-–―‒−]/);
+                if (parts.length > 1) {
+                    const lastPart = parts[parts.length - 1].trim();
+                    const digits = lastPart.replace(/[^\d]/g, '');
+                    if (digits.length > 0) {
+                        account = digits;
+                        name = parts.slice(0, parts.length - 1).join(' ').trim();
+                        isStrongMatch = true;
+                    } else {
+                        name = cleanedLine;
+                    }
+                } else {
+                    name = cleanedLine;
+                }
+            }
+          }
+
+          // Final safety check
+          if (!name && cleanedLine) {
+             name = cleanedLine;
+          }
+
+          // DECISION: Should we consume this line?
+          // If it's NOT the last line -> Consume (it's a pasted block or previous line)
+          // If it IS the last line -> Only consume if it is a "Strong Match" (Name + Account)
+          // This allows typing "Name" without it being eaten immediately.
+          // But if user pastes "Name - 123", it is strong match, so it gets eaten.
+          
+          let shouldConsume = false;
+          if (i < lines.length - 1) {
+              shouldConsume = true;
+          } else {
+              // Last line
+              if (isStrongMatch) {
+                  shouldConsume = true;
+              } else {
+                  // Weak match (Name only)
+                  // Don't consume yet, user might be typing account
+                  shouldConsume = false;
+              }
+          }
+
+          if (!shouldConsume) {
+              remainingLines.push(lines[i]);
+              continue;
+          }
+
+          let newEntry = null;
+          let isDuplicate = false;
+
+          if (name) {
+              // Check duplicates
+              const exists = state.entries.find(e => e.name === name && e.account === account);
               if (!exists) {
-                const newEntry = {
+                newEntry = {
                   id: `entry_${Date.now()}_${i}_${Math.random()}`,
                   name: name,
                   account: account,
-                  label: `${name} — ${account}`,
+                  label: account ? `${name} — ${account}` : name,
                   selected: false
                 };
-                parsedEntries.push(newEntry);
+              } else {
+                isDuplicate = true;
               }
-            }
-          } else if (parts.length === 1) {
-            const name = parts[0];
-            
-            if (name) {
-              // Check if this entry already exists (by name only)
-              const exists = parsedEntries.find(e => e.name === name && !e.account);
-              if (!exists) {
-                const newEntry = {
-                  id: `entry_${Date.now()}_${i}_${Math.random()}`,
-                  name: name,
-                  account: '',
-                  label: name,
-                  selected: false
-                };
-                parsedEntries.push(newEntry);
-              }
-            }
+          }
+          
+          if (newEntry) {
+            state.entries.push(newEntry);
+            addedCount++;
+          } else if (isDuplicate) {
+            duplicateCount++;
+          } else {
+             // Failed to parse name? Keep line.
+             remainingLines.push(lines[i]);
           }
         }
     
-        // Update state with parsed entries, preserving selected status
-        const oldSelected = state.entries.filter(e => e.selected);
+        // Update input with only remaining lines
+        // We need to be careful not to disrupt cursor if we are just typing and nothing was consumed
+        // But if something WAS consumed, we must update.
+        // If nothing consumed, remainingLines should equal lines (roughly).
         
-        parsedEntries.forEach(newEntry => {
-          const wasSelected = oldSelected.find(e => e.name === newEntry.name && e.account === newEntry.account);
-          if (wasSelected) {
-            newEntry.selected = true;
-            newEntry.id = wasSelected.id; // Preserve original ID
-          }
-        });
-        
-        state.entries = parsedEntries;
-        // مسح قائمة الفائزين عند تغيير المشاركين
-        state.winners = [];
-        
-        renderParticipants();
-        renderWinners();
-        drawWheel();
-        saveSession();
+        if (addedCount > 0 || duplicateCount > 0) {
+            const newText = remainingLines.join('\n');
+            if (participantsInput.value !== newText) {
+                participantsInput.value = newText;
+            }
+            
+            renderParticipants();
+            renderWinners();
+            drawWheel();
+            saveSession();
+            
+            // Only toast if we added a significant amount (paste), not just 1 (typing)
+            // Or maybe just don't toast for auto-add to avoid annoyance
+            if (addedCount > 1) {
+                toast(`تم إضافة ${addedCount} مشارك بنجاح` + (duplicateCount > 0 ? ` (و ${duplicateCount} مكرر)` : ''), 'success');
+            } else if (duplicateCount > 0 && addedCount === 0) {
+                 // If we just typed a duplicate and it disappeared, maybe show a small info?
+                 // toast(`هذا المشارك موجود بالفعل`, 'info');
+            }
+        }
       });
+
+      /* 
+      // OLD INPUT LISTENER REMOVED
+      participantsInput?.addEventListener('input', (e) => { ... });
+      */
     
       applyBtn?.addEventListener('click', () => {
         // This button is now hidden, but we keep the logic just in case
@@ -1599,20 +1817,22 @@
       
       window.addEventListener('resize', () => { drawWheel(); if(confettiCanvas){confettiCanvas.width=window.innerWidth;confettiCanvas.height=window.innerHeight;} });
       searchInput?.addEventListener('input', ()=> { state.filterTerm = searchInput.value.trim(); renderParticipants(); updateCounts(); });
-      /* Reset button removed per request
+      // Reset button modified to clear PARTICIPANTS per request
       resetWinnersBtn?.addEventListener('click', ()=> { 
         showConfirmModal(
-          'سيتم مسح جميع الفائزين بشكل دائم من القائمة. هل أنت متأكد من المتابعة؟',
+          'سيتم مسح جميع المشاركين من القائمة. هل أنت متأكد؟',
           () => {
-            state.winners = [];
-            renderWinners();
+            state.entries = [];
+            const ta = document.getElementById('participants-input');
+            if (ta) ta.value = '';
+            renderParticipants();
+            drawWheel();
             updateCounts();
             saveSession();
-            toast('تم مسح الفائزين بنجاح', 'success');
+            toast('تم مسح المشاركين بنجاح', 'success');
           }
         );
       });
-      */
       
       // Refresh participants button - adds winner to roulette after confirmation
       refreshParticipantsBtn?.addEventListener('click', () => {
@@ -1763,7 +1983,9 @@
       if (!state.winners || state.winners.length === 0) return;
       let updated = false;
       for (const winner of state.winners) {
-        if (!winner.pendingVideoBlob && !winner.videoUrl) {
+        // Check if we have a valid Blob (JSON.parse turns Blobs into {})
+        const hasValidVideo = winner.pendingVideoBlob instanceof Blob;
+        if (!hasValidVideo && !winner.videoUrl) {
            try {
              const blob = await getVideoFromDB(winner.id);
              if (blob) {
@@ -1784,7 +2006,9 @@
       if (!state.winners || state.winners.length === 0) return;
       let updated = false;
       for (const winner of state.winners) {
-        if (!winner.pendingIdImage && !winner.nationalIdImage) {
+        // Check if we have a valid Blob/File (JSON.parse turns them into {})
+        const hasValidImage = winner.pendingIdImage instanceof Blob || winner.pendingIdImage instanceof File;
+        if (!hasValidImage && !winner.nationalIdImage) {
            try {
              const blob = await getImageFromDB(winner.id);
              if (blob) {
@@ -1798,7 +2022,7 @@
                updated = true;
              }
            } catch(e) {
-             console.error('Error restoring image for winner:', winner.id, e);
+             console.error(`[restoreImagesFromDB] Error restoring image for winner ID: ${winner.id}`, e);
            }
         }
       }
@@ -1814,7 +2038,22 @@
         const session = JSON.parse(raw);
         
         state.entries = session.entries || [];
-        state.winners = session.winners || [];
+        
+        // Smart merge for winners to preserve Blobs if already loaded
+        const newWinners = session.winners || [];
+        state.winners = newWinners.map(nw => {
+            const existing = state.winners.find(ew => ew.id === nw.id);
+            // If we already have a valid Blob in memory, keep it!
+            if (existing && (existing.pendingIdImage instanceof Blob || existing.pendingIdImage instanceof File)) {
+                nw.pendingIdImage = existing.pendingIdImage;
+                nw.idImageUploaded = true;
+            }
+            // Same for video
+            if (existing && (existing.pendingVideoBlob instanceof Blob)) {
+                nw.pendingVideoBlob = existing.pendingVideoBlob;
+            }
+            return nw;
+        });
         
         // Restore videos from IndexedDB immediately after loading winners
         await restoreVideosFromDB();
@@ -2652,9 +2891,34 @@
       return { prizeType, prizeValue, prizeUnit };
     }
     
+    // Global function for removing participants (fixes event delegation issues)
+    window.removeParticipant = function(id, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      console.log('[CLICK] Removing participant via global function:', id);
+      state.entries = state.entries.filter(x => String(x.id) !== String(id));
+      
+      // Update textarea - DISABLED to allow clearing input without clearing list
+      /*
+      const ta = document.getElementById('participants-input');
+      if (ta) {
+        ta.value = state.entries.map(e => `${e.name} — ${e.account}`).join('\n');
+      }
+      */
+      
+      renderParticipants();
+      renderWinners();
+      updateCounts();
+      drawWheel();
+      saveSession();
+    };
+
     function renderParticipants() {
       const container = document.getElementById('participants-list');
       if (!container) return;
+      
       // Ensure each entry has a stable sequence number based on current order
       try {
         for (let i = 0; i < state.entries.length; i++) {
@@ -2667,7 +2931,9 @@
       }
       const term = (state.filterTerm||'').toLowerCase();
       const list = state.entries.filter(e => !term || e.name.toLowerCase().includes(term) || e.account.includes(term));
-      container.innerHTML = list.map((e,i) => `
+      
+      container.innerHTML = list.map((e,i) => {
+        const html = `
         <div class="wr-item ${e.selected?'wr-item-selected':''}" data-id="${e.id}" title="${e.label}">
           <div class="wr-item-body">
             <div class="wr-item-label"><span class="wr-badge-num">${e.seq || (i+1)}</span> ${e.name}</div>
@@ -2675,23 +2941,43 @@
           </div>
           <div class="wr-item-actions">
             ${e.selected ? '<span class="wr-tag wr-tag-winner">فائز</span>' : ''}
-            <button class="wr-icon-btn" data-action="remove" title="إزالة"><i class="fas fa-times"></i></button>
+            <button class="wr-icon-btn js-remove-btn" data-id="${e.id}" title="إزالة" style="background: #ef4444; color: white; cursor: pointer; z-index: 100; position: relative;"><i class="fas fa-times" style="pointer-events: none;"></i></button>
           </div>
         </div>
-      `).join('');
-    
-      container.querySelectorAll('[data-action="remove"]').forEach(btn => {
+      `;
+        return html;
+      }).join('');
+      
+      // Attach event listeners directly to buttons (most robust method)
+      const buttons = container.querySelectorAll('.js-remove-btn');
+      
+      buttons.forEach(btn => {
         btn.addEventListener('click', (ev) => {
-          const el = ev.currentTarget.closest('.participant-item');
-          const id = el?.dataset.id;
-          if (!id) return;
-          state.entries = state.entries.filter(x => x.id !== id);
-          state.winners = state.winners.filter(x => x.id !== id);
+          ev.preventDefault();
+          ev.stopPropagation();
+          const id = btn.dataset.id;
+          
+          // Call the removal logic directly
+          state.entries = state.entries.filter(x => String(x.id) !== String(id));
+          
+          // Update textarea - DISABLED
+          /*
+          const ta = document.getElementById('participants-input');
+          if (ta) {
+            ta.value = state.entries.map(e => `${e.name} — ${e.account}`).join('\n');
+          }
+          */
+          
           renderParticipants();
           renderWinners();
+          updateCounts();
           drawWheel();
+          saveSession();
+          console.log('[CLICK] Removed successfully');
         });
       });
+      
+      console.log('[renderParticipants] HTML set, buttons count:', buttons.length);
     }
     
     function renderWinners() {
@@ -2719,12 +3005,33 @@
     
       // Add "Send All" button at the top of the bottom container if there are winners
       // Only show these buttons if the competition is NOT approved yet
-      if (state.winners.length > 0 && !state.reportSent && !state.noWinnersApproved) {
+      // UPDATED: Always show buttons if not approved, regardless of winner count (user request)
+      if (!state.noWinnersApproved) {
+          // Check if all winners have ID images
+          const allHaveIds = state.winners.length > 0 && state.winners.every(w => 
+              (w.pendingIdImage && (w.pendingIdImage instanceof Blob || w.pendingIdImage instanceof File)) || 
+              w.nationalIdImage
+          );
+          
+          const hasWinners = state.winners.length > 0;
+
+          const sendIdsBtnStyle = allHaveIds 
+              ? "background: #22c55e; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.35);" 
+              : "background: #9ca3af; cursor: not-allowed; opacity: 0.7;";
+          
+          const sendIdsBtnTitle = !hasWinners 
+              ? "لا يوجد فائزين للإرسال"
+              : (!allHaveIds ? "يجب رفع هويات جميع الفائزين أولاً" : "إرسال الهوية والكليشة");
+
+          const sendAllBtnStyle = hasWinners
+              ? "background: #0ea5e9; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35); cursor: pointer;"
+              : "background: #9ca3af; cursor: not-allowed; opacity: 0.7;";
+
           html += `
           <div style="width:100%; margin-bottom: 20px;">
-            <button id="send-all-winners-btn" class="wr-btn" style="
+            <button id="send-all-winners-btn" ${!hasWinners ? 'disabled' : ''} class="wr-btn" style="
               width: 100%;
-              background: #0ea5e9;
+              ${sendAllBtnStyle}
               color: #fff;
               border: none;
               padding: 12px 16px;
@@ -2735,18 +3042,16 @@
               justify-content: center;
               gap: 10px;
               border-radius: 999px;
-              cursor: pointer;
               transition: transform 0.2s ease, box-shadow 0.2s ease;
-              box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
-            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(14, 165, 233, 0.45)'" 
-               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(14, 165, 233, 0.35)'">
+            " onmouseover="${hasWinners ? "this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(14, 165, 233, 0.45)'" : ''}" 
+               onmouseout="${hasWinners ? "this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(14, 165, 233, 0.35)'" : ''}">
               <i class="fas fa-paper-plane" style="font-size: 1em;"></i> 
               <span>إرسال الكل للوكيل (${state.winners.length})</span>
             </button>
             <div style="height: 15px;"></div>
-            <button id="send-winners-ids-btn" style="
+            <button id="send-winners-ids-btn" ${!allHaveIds ? 'disabled' : ''} title="${sendIdsBtnTitle}" style="
               width: 100%;
-              background: #22c55e;
+              ${sendIdsBtnStyle}
               color: #fff;
               border: none;
               padding: 12px 16px;
@@ -2757,11 +3062,10 @@
               justify-content: center;
               gap: 10px;
               border-radius: 999px;
-              cursor: pointer;
+              cursor: ${allHaveIds ? 'pointer' : 'not-allowed'};
               transition: transform 0.2s ease, box-shadow 0.2s ease;
-              box-shadow: 0 4px 12px rgba(34, 197, 94, 0.35);
-            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(34, 197, 94, 0.45)'" 
-               onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(34, 197, 94, 0.35)'">
+            " onmouseover="${allHaveIds ? "this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(34, 197, 94, 0.45)'" : ''}" 
+               onmouseout="${allHaveIds ? "this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(34, 197, 94, 0.35)'" : ''}">
               <i class="fas fa-id-card" style="font-size: 1em;"></i> 
               <span>إرسال الهوية والكليشة لجروب Agent competitions (${state.winners.length})</span>
             </button>
@@ -2786,6 +3090,31 @@
               prizeDisplay = `${w.prizeValue || 0}% بونص إيداع`;
           }
 
+          // --- NEW: ID Image Thumbnail ---
+          let idImageHtml = '';
+          // console.log(`[RenderWinners] Processing winner ${w.id}. pendingIdImage:`, w.pendingIdImage);
+          if (w.pendingIdImage) {
+              try {
+                  // Ensure we have a valid Blob or File before creating URL
+                  const blob = (w.pendingIdImage instanceof Blob || w.pendingIdImage instanceof File) 
+                      ? w.pendingIdImage 
+                      : new Blob([w.pendingIdImage]); // Fallback if it's an ArrayBuffer or similar
+                  
+                  const blobUrl = URL.createObjectURL(blob);
+                  // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
+                  idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
+                      <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
+                      <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+                  </div>`;
+              } catch(e) { console.warn('Failed to create object URL', e); }
+          } else if (w.nationalIdImage) {
+              idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
+                  <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
+                  <img src="${w.nationalIdImage}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+              </div>`;
+          }
+          // -------------------------------
+
           html += `
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
@@ -2795,6 +3124,7 @@
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
                 <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> ${prizeDisplay}</div>
                 ${w.agent ? `<div class="wr-winner-card-agent"><i class="fas fa-user-tie"></i> <a href="#profile/${w.agent.id}" style="color:inherit;text-decoration:underline;cursor:pointer;">${w.agent.name} (#${w.agent.agentId})</a></div>` : ''}
+                ${idImageHtml}
                 <div class="wr-winner-warnings">
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً
@@ -2826,6 +3156,31 @@
     
     
         tradingWinners.forEach((w, i) => {
+          // --- NEW: ID Image Thumbnail (Trading) ---
+          let idImageHtml = '';
+          // console.log(`[RenderWinners] Processing winner ${w.id}. pendingIdImage:`, w.pendingIdImage);
+          if (w.pendingIdImage) {
+              try {
+                  // Ensure we have a valid Blob or File before creating URL
+                  const blob = (w.pendingIdImage instanceof Blob || w.pendingIdImage instanceof File) 
+                      ? w.pendingIdImage 
+                      : new Blob([w.pendingIdImage]); // Fallback if it's an ArrayBuffer or similar
+
+                  const blobUrl = URL.createObjectURL(blob);
+                  // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
+                  idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
+                      <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
+                      <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+                  </div>`;
+              } catch(e) { console.warn('Failed to create object URL', e); }
+          } else if (w.nationalIdImage) {
+              idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
+                  <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
+                  <img src="${w.nationalIdImage}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+              </div>`;
+          }
+          // ---------------------------------------
+
           html += `
             <div class="wr-winner-card" data-id="${w.id}">
               <div class="wr-winner-card-badge">#${i+1}</div>
@@ -2836,6 +3191,7 @@
     
                 <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> $${w.prizeValue || 0} بونص تداولي</div>
                 ${w.agent ? `<div class="wr-winner-card-agent"><i class="fas fa-user-tie"></i> <a href="#profile/${w.agent.id}" style="color:inherit;text-decoration:underline;cursor:pointer;">${w.agent.name} (#${w.agent.agentId})</a></div>` : ''}
+                ${idImageHtml}
                 <div class="wr-winner-warnings">
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً
@@ -2886,6 +3242,60 @@
                 toast('لا توجد مسابقة نشطة لاعتمادها (معرف مفقود).', 'error');
                 return;
             }
+
+          if (!state.selectedAgent || !state.selectedAgent.id) {
+            console.error('[Approve Winners] Selected agent missing:', state.selectedAgent);
+            toast('لا يوجد وكيل محدد.', 'error');
+            return;
+          }
+
+          // Ensure everything is saved before completing
+          try {
+            toast('جاري حفظ الفائزين قبل الاعتماد...', 'info');
+            await saveAllWinnersToDatabase();
+            console.log('[Approve Winners] saveAllWinnersToDatabase completed');
+          } catch (e) {
+            console.error('[Approve Winners] Failed to save winners before approval:', e);
+            toast('فشل حفظ الفائزين قبل الاعتماد. يرجى المحاولة مرة أخرى.', 'error');
+            return;
+          }
+
+          // Verify on backend that each winner has video + national ID image
+          try {
+            toast('جاري التحقق من حفظ الفيديو وصورة الهوية...', 'info');
+            const authedFetch = window.authedFetch || fetch;
+            const verifyResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}`);
+            if (!verifyResp.ok) {
+              console.error('[Approve Winners] Verify fetch failed:', verifyResp.status);
+              toast('فشل التحقق من بيانات الفائزين من قاعدة البيانات.', 'error');
+              return;
+            }
+
+            const verifyData = await verifyResp.json();
+            const dbCompetition = (verifyData.competitions && verifyData.competitions[0]) ? verifyData.competitions[0] : null;
+            const dbWinners = (dbCompetition && dbCompetition.winners) ? dbCompetition.winners : [];
+
+            const missing = dbWinners.filter(w => !w.video_url || !w.national_id_image);
+            console.log('[Approve Winners] verify result', {
+              dbWinnersCount: dbWinners.length,
+              missingCount: missing.length,
+              missingIds: missing.map(m => m.id)
+            });
+
+            if (dbWinners.length === 0) {
+              toast('لا يوجد فائزين محفوظين في قاعدة البيانات لهذه المسابقة.', 'error');
+              return;
+            }
+
+            if (missing.length > 0) {
+              toast(`يوجد ${missing.length} فائز بدون فيديو أو صورة هوية محفوظة. يرجى إعادة المحاولة.`, 'error');
+              return;
+            }
+          } catch (e) {
+            console.error('[Approve Winners] Verify exception:', e);
+            toast('حدث خطأ أثناء التحقق من حفظ البيانات.', 'error');
+            return;
+          }
             
             // Direct approval without confirmation modal
             try {
@@ -3318,7 +3728,7 @@
       const winnerAccount = document.getElementById('celebration-winner-account');
       const emailInput = document.getElementById('winner-email');
       const prizeTypeInput = document.getElementById('winner-prize-type');
-      const autoDisplay = document.getElementById('winner-prize-auto-display');
+      const prizeValueInput = document.getElementById('winner-prize-value');
       const confirmBtn = document.getElementById('confirm-winner');
       const skipBtn = document.getElementById('skip-winner');
       const idInput = document.getElementById('winner-id-image');
@@ -3349,21 +3759,24 @@
       // --- Sync Prize Preview Logic ---
       const syncPrizePreview = () => {
           const selectedType = prizeTypeInput?.value || 'trading';
+          
           if (selectedType === 'deposit' || selectedType === 'deposit_prev') {
               const depositPct = state.activeCompetition?.depositBonusPercentage || 0;
-              if (autoDisplay) {
-                  autoDisplay.textContent = `${depositPct}% (بونص إيداع)`;
-                  autoDisplay.style.borderColor = '#10b981';
-                  autoDisplay.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
-                  autoDisplay.style.color = '#10b981';
+              const text = selectedType === 'deposit_prev' ? 'بونص إيداع (فائز سابق)' : 'بونص إيداع';
+              if (prizeValueInput) {
+                  prizeValueInput.value = `${depositPct}% ${text}`;
+                  prizeValueInput.style.borderColor = '#10b981';
+                  prizeValueInput.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                  prizeValueInput.style.color = '#10b981';
               }
           } else {
               const tradingValue = state.activeCompetition?.prizePerWinner || 0;
-              if (autoDisplay) {
-                  autoDisplay.textContent = `${tradingValue}$ (بونص تداولي)`;
-                  autoDisplay.style.borderColor = '#3b82f6';
-                  autoDisplay.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
-                  autoDisplay.style.color = '#3b82f6';
+              const text = 'بونص تداولي';
+              if (prizeValueInput) {
+                  prizeValueInput.value = `${tradingValue}$ ${text}`;
+                  prizeValueInput.style.borderColor = '#3b82f6';
+                  prizeValueInput.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                  prizeValueInput.style.color = '#3b82f6';
               }
           }
       };
@@ -3374,8 +3787,20 @@
           prizeTypeInput.addEventListener('change', syncPrizePreview);
       }
       
-      // Initial sync
+      // Initial sync (sets default value based on type)
       syncPrizePreview();
+      
+      // Override with existing value if present (so we don't lose custom values on open)
+      if (prizeValueInput && winner.prizeValue !== undefined) {
+          const selectedType = prizeTypeInput?.value || 'trading';
+          if (selectedType === 'deposit' || selectedType === 'deposit_prev') {
+             const text = selectedType === 'deposit_prev' ? 'بونص إيداع (فائز سابق)' : 'بونص إيداع';
+             prizeValueInput.value = `${winner.prizeValue}% ${text}`;
+          } else {
+             const text = 'بونص تداولي';
+             prizeValueInput.value = `${winner.prizeValue}$ ${text}`;
+          }
+      }
 
       // ID Image Preview
       if (idInput) idInput.value = '';
@@ -3475,23 +3900,80 @@
               toast('البريد الإلكتروني مطلوب', 'error');
               return;
           }
+          
+          // --- NEW: Email Format Validation ---
+          if (!/.+@.+\..+/.test(email)) {
+              toast('البريد الإلكتروني غير صالح', 'error');
+              return;
+          }
+          
+          // --- NEW: ID Image Validation ---
+          // Must have either a new file, an existing pending blob, or an existing URL
+          const hasNewFile = !!compressedFile;
+          const hasExistingPending = !!(winner.pendingIdImage && (winner.pendingIdImage instanceof Blob || winner.pendingIdImage instanceof File));
+          const hasExistingUrl = !!winner.nationalIdImage;
+          
+          if (!hasNewFile && !hasExistingPending && !hasExistingUrl) {
+              toast('يجب رفع صورة الهوية', 'error');
+              return;
+          }
+          // ------------------------------------
 
           // Update winner object
           winner.email = email;
           winner.prizeType = prizeTypeInput?.value || winner.prizeType;
           
-          // Recalculate prize value based on type
-           if (winner.prizeType === 'deposit' || winner.prizeType === 'deposit_prev') {
-               winner.prizeValue = state.activeCompetition?.depositBonusPercentage || 0;
-           } else {
-               winner.prizeValue = state.activeCompetition?.prizePerWinner || 0;
-           }
+          // Read value from input
+          if (prizeValueInput) {
+              const match = prizeValueInput.value.match(/(\d+(\.\d+)?)/);
+              winner.prizeValue = match ? parseFloat(match[0]) : 0;
+          } else {
+               // Fallback logic
+               if (winner.prizeType === 'deposit' || winner.prizeType === 'deposit_prev') {
+                   winner.prizeValue = state.activeCompetition?.depositBonusPercentage || 0;
+               } else {
+                   winner.prizeValue = state.activeCompetition?.prizePerWinner || 0;
+               }
+          }
 
           if (compressedFile) {
+              // console.log(`[DEBUG_ID_IMAGE] Edit winner confirmed. ID: ${winner.id}. Saving NEW image to DB...`);
               winner.pendingIdImage = compressedFile;
               winner.idImageUploaded = true;
               winner.localIdImageName = compressedFile.name; // Store filename
+              
+              // --- NEW: Persist updated image to IndexedDB ---
+              saveImageToDB(winner.id, compressedFile)
+                // .then(() => console.log(`[DEBUG_ID_IMAGE] Updated image saved successfully for ${winner.id}`))
+                .catch(e => console.error(`Failed to update image in DB for ${winner.id}`, e));
+          } else {
+              // console.log(`[DEBUG_ID_IMAGE] Edit winner confirmed. ID: ${winner.id}. No new image uploaded.`);
           }
+
+          // --- NEW: Update Winner in DB if exists ---
+          if (winner._id) {
+              try {
+                  const authedFetch = window.authedFetch || fetch;
+                  const updateResp = await authedFetch(`/api/winners/${winner._id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                          email: winner.email,
+                          prize_type: winner.prizeType,
+                          prize_value: winner.prizeValue
+                      })
+                  });
+                  
+                  if (!updateResp.ok) {
+                      console.error('Failed to update winner in DB', await updateResp.text());
+                      toast('تم التعديل محلياً ولكن فشل التحديث في قاعدة البيانات', 'warning');
+                  }
+              } catch (e) {
+                  console.error('Error updating winner in DB:', e);
+                  toast('خطأ في الاتصال بقاعدة البيانات', 'error');
+              }
+          }
+          // ------------------------------------------
 
           // Update Staged Winner (Persist changes locally)
           saveStagedWinner({
@@ -3627,34 +4109,28 @@
       // --- NEW: Update Input Fields + live preview ---
       const prizeTypeInput = document.getElementById('winner-prize-type');
       const prizeValueInput = document.getElementById('winner-prize-value');
-      const autoDisplay = document.getElementById('winner-prize-auto-display');
       
       const syncPrizePreview = () => {
           const selectedType = prizeTypeInput?.value || autoPrize.prizeType;
-          // Console insight for selection while modal blur is active
-          // console.log('[PrizeTypeSelection] User selected:', selectedType, 'for account:', entry.account);
-          if (selectedType === 'deposit_prev') {
-            // console.log('[PrizeTypeSelection] deposit_prev chosen: treating as manual deposit bonus display.');
-          }
           
           if (selectedType === 'deposit' || selectedType === 'deposit_prev') {
               const depositPct = state.activeCompetition?.depositBonusPercentage || 0;
-              if (autoDisplay) {
-                  autoDisplay.textContent = `${depositPct}% (بونص إيداع)`;
-                  autoDisplay.style.borderColor = '#10b981';
-                  autoDisplay.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
-                  autoDisplay.style.color = '#10b981';
+              const text = selectedType === 'deposit_prev' ? 'بونص إيداع (فائز سابق)' : 'بونص إيداع';
+              if (prizeValueInput) {
+                  prizeValueInput.value = `${depositPct}% ${text}`;
+                  prizeValueInput.style.borderColor = '#10b981';
+                  prizeValueInput.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                  prizeValueInput.style.color = '#10b981';
               }
-              // console.log('[PrizeTypePreview] Displaying deposit bonus %:', depositPct);
           } else {
               const tradingValue = state.activeCompetition?.prizePerWinner || 0;
-              if (autoDisplay) {
-                  autoDisplay.textContent = `${tradingValue}$ (بونص تداولي)`;
-                  autoDisplay.style.borderColor = '#3b82f6';
-                  autoDisplay.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
-                  autoDisplay.style.color = '#3b82f6';
+              const text = 'بونص تداولي';
+              if (prizeValueInput) {
+                  prizeValueInput.value = `${tradingValue}$ ${text}`;
+                  prizeValueInput.style.borderColor = '#3b82f6';
+                  prizeValueInput.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                  prizeValueInput.style.color = '#3b82f6';
               }
-              // console.log('[PrizeTypePreview] Displaying trading bonus $:', tradingValue);
           }
       };
       
@@ -3848,19 +4324,19 @@
       const onConfirm = async () => {
         const email = emailInput?.value?.trim() || '';
         const nationalIdImageInput = document.getElementById('winner-id-image');
-        const autoDisplay = document.getElementById('winner-prize-auto-display');
+        const prizeValueInput = document.getElementById('winner-prize-value');
         let selectedPrizeType = prizeTypeInput?.value || autoPrize.prizeType;
-        // console.log('[PrizeTypeConfirm] Selected type:', selectedPrizeType);
         
-        // REMOVED: Mapping deposit_prev to deposit. Now we keep it as is.
-        // if (selectedPrizeType === 'deposit_prev') { ... }
-        
-        // Get prize value from active competition based on type
-        // Treat deposit_prev same as deposit for value calculation
-        const selectedPrizeValue = (selectedPrizeType === 'deposit' || selectedPrizeType === 'deposit_prev')
-            ? (state.activeCompetition?.depositBonusPercentage ?? 0)
-            : (state.activeCompetition?.prizePerWinner ?? 0);
-        // console.log('[PrizeValueConfirm] Final prize:', { type: selectedPrizeType, value: selectedPrizeValue });
+        // Get prize value from input if available, else fallback
+        let selectedPrizeValue = 0;
+        if (prizeValueInput) {
+            const match = prizeValueInput.value.match(/(\d+(\.\d+)?)/);
+            selectedPrizeValue = match ? parseFloat(match[0]) : 0;
+        } else {
+            selectedPrizeValue = (selectedPrizeType === 'deposit' || selectedPrizeType === 'deposit_prev')
+                ? (state.activeCompetition?.depositBonusPercentage ?? 0)
+                : (state.activeCompetition?.prizePerWinner ?? 0);
+        }
         
         // Email is REQUIRED: validate existence and format
         const emailErrorEl = document.getElementById('winner-email-error');
@@ -3898,6 +4374,13 @@
           toast('يجب تسجيل فيديو الفوز قبل الاعتماد', 'error');
           return;
         }
+
+        console.log('[Winner Confirm] validation passed', {
+          entryId: entry?.id,
+          hasVideoBlob: !!state.pendingVideoBlob,
+          videoMime: state.recordingMimeType || null,
+          hasIdFile: !!(nationalIdImageInput?.files?.length > 0)
+        });
         
         // Create winner object with collected data
         const winnerData = {
@@ -3928,14 +4411,24 @@
         }
         
         if (compressedFile) {
+          console.log('[Winner Confirm] ID image ready', {
+            winnerId: winnerData.id,
+            name: compressedFile.name,
+            size: compressedFile.size,
+            type: compressedFile.type
+          });
           winnerData.pendingIdImage = compressedFile;
           winnerData.idImageUploaded = true; // Mark as having image
           // Store filename for reference as requested
           winnerData.localIdImageName = compressedFile.name;
           
           // --- NEW: Save Image to IndexedDB for Persistence ---
-          saveImageToDB(winnerData.id, compressedFile).catch(e => console.warn('Failed to persist image', e));
+          saveImageToDB(winnerData.id, compressedFile)
+            .then(() => console.log('[Winner Confirm] Image saved to IndexedDB', { winnerId: winnerData.id }))
+            .catch(e => console.error(`Failed to persist image for ${winnerData.id}`, e));
           // ----------------------------------------------------
+        } else {
+            // console.warn(`[DEBUG_ID_IMAGE] No compressedFile found for new winner ${winnerData.id}`);
         }
 
         const stagedWinner = {
@@ -3957,7 +4450,7 @@
         addStagedWinner(stagedWinner);
 
         
-        toast('تم إضافة الفائز محلياً. اضغط "اعتماد الفائزين" للحفظ النهائي', 'success');
+        toast('جاري حفظ الفائز في قاعدة البيانات...', 'info');
         // ------------------------------------
     
         const idx = state.entries.findIndex(e => e.id === entry.id);
@@ -3977,6 +4470,18 @@
         
         renderParticipants(); renderWinners(); updateCounts(); drawWheel(); onClose();
         saveSession();
+
+        // NEW: Save immediately to backend (manual "prepare winner")
+        try {
+          console.log('[Winner Confirm] saving immediately to backend...');
+          await saveAllWinnersToDatabase();
+          console.log('[Winner Confirm] saved to backend successfully');
+          toast('تم حفظ الفائز (الفيديو + الهوية) بنجاح', 'success');
+        } catch (e) {
+          console.error('[Winner Confirm] save to backend failed', e);
+          toast('فشل حفظ الفائز في قاعدة البيانات. يرجى المحاولة مرة أخرى.', 'error');
+        }
+
         updateBatchCount?.();
         
         // تحديث إحصائيات المسابقة في القسم العلوي
@@ -4284,6 +4789,16 @@
         const nationalIdImageInput = document.getElementById('winner-id-image');
         
         const emailErrorEl = document.getElementById('winner-email-error');
+        
+        // --- NEW: Email Required Validation ---
+        if (!email) {
+          emailInput?.classList.add('wr-input-error');
+          toast('يجب إدخال البريد الإلكتروني','error');
+          setTimeout(()=> emailInput?.classList.remove('wr-input-error'), 2000);
+          return;
+        }
+        // --------------------------------------
+
         if (email && !/.+@.+\..+/.test(email)) {
           if (emailErrorEl) emailErrorEl.style.display = 'block';
           emailInput?.classList.add('wr-input-error');
@@ -4313,12 +4828,18 @@
           return;
         }
         
+        // Get values from inputs if available
+        const selectedPrizeType = prizeTypeInput?.value || autoPrize.prizeType;
+        const selectedPrizeValue = (selectedPrizeType === 'deposit' || selectedPrizeType === 'deposit_prev')
+            ? (state.activeCompetition?.depositBonusPercentage ?? 0)
+            : (state.activeCompetition?.prizePerWinner ?? 0);
+
         // Create winner object with collected data
         const winnerData = {
           ...entry,
           email: email,
-          prizeType: autoPrize.prizeType,
-          prizeValue: autoPrize.prizeValue,
+          prizeType: selectedPrizeType,
+          prizeValue: selectedPrizeValue,
           agent: state.selectedAgent ? {
             id: state.selectedAgent.id,
             name: state.selectedAgent.name,
@@ -4482,49 +5003,87 @@
       }
       
       const authedFetch = window.authedFetch || fetch;
+
+      // Winners that are already saved (have _id) but still have pending local media
+      // (e.g. previous upload failed, or refresh happened mid-upload).
+      const savedWinnersNeedingUpload = state.winners.filter(w => {
+        const hasDbId = !!w._id || (typeof w.id === 'string' && w.id.length === 24);
+        if (!hasDbId) return false;
+        const hasPendingVideo = w.pendingVideoBlob instanceof Blob;
+        const hasPendingIdImage = (w.pendingIdImage instanceof Blob || w.pendingIdImage instanceof File);
+        const hasPendingIdImageFile = (w.pendingIdImageFile instanceof Blob || w.pendingIdImageFile instanceof File);
+        return hasPendingVideo || hasPendingIdImage || hasPendingIdImageFile;
+      });
       
       // Filter only unsaved winners (those without a valid MongoDB _id)
       // Assuming MongoDB _id is 24 hex characters. Local IDs are usually shorter or different format.
       // Also check if w._id exists (which we set after saving)
       const unsavedWinners = state.winners.filter(w => !w._id && (!w.id || w.id.length !== 24));
       
-      if (unsavedWinners.length === 0) {
-          console.log('[saveAllWinnersToDatabase] All winners are already saved.');
-          return;
+      if (unsavedWinners.length === 0 && savedWinnersNeedingUpload.length === 0) {
+        console.log('[saveAllWinnersToDatabase] All winners are already saved (and no pending uploads).');
+        return;
       }
 
-      // تحضير بيانات الفائزين الجدد فقط
-      const winnersPayload = unsavedWinners.map(winner => ({
-        id: `import_${winner.id}`,
-        name: winner.name,
-        account_number: winner.account || '',
-        email: winner.email || '',
-        national_id: winner.nationalId || '',
-        prize_type: winner.prizeType || '',
-        prize_value: Number(winner.prizeValue) || 0,
-        selected_at: winner.timestamp,
-        meta: {
+      let savedWinners = [];
+
+      if (unsavedWinners.length > 0) {
+        // تحضير بيانات الفائزين الجدد فقط
+        const winnersPayload = unsavedWinners.map(winner => ({
+          id: `import_${winner.id}`,
+          name: winner.name,
+          account_number: winner.account || '',
           email: winner.email || '',
           national_id: winner.nationalId || '',
           prize_type: winner.prizeType || '',
           prize_value: Number(winner.prizeValue) || 0,
-          original_import_id: `import_${winner.id}`
+          selected_at: winner.timestamp,
+          meta: {
+            email: winner.email || '',
+            national_id: winner.nationalId || '',
+            prize_type: winner.prizeType || '',
+            prize_value: Number(winner.prizeValue) || 0,
+            original_import_id: `import_${winner.id}`
+          }
+        }));
+        
+        // حفظ الفائزين الجدد
+        const resp = await authedFetch(`/api/agents/${encodeURIComponent(state.selectedAgent.id)}/winners/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ winners: winnersPayload })
+        });
+        
+        if (!resp.ok) {
+          throw new Error('فشل حفظ الفائزين في قاعدة البيانات');
         }
-      }));
-      
-      // حفظ الفائزين الجدد
-      const resp = await authedFetch(`/api/agents/${encodeURIComponent(state.selectedAgent.id)}/winners/import`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ winners: winnersPayload })
-      });
-      
-      if (!resp.ok) {
-        throw new Error('فشل حفظ الفائزين في قاعدة البيانات');
+        
+        const data = await resp.json();
+        savedWinners = data.winners || [];
       }
-      
-      const data = await resp.json();
-      const savedWinners = data.winners || [];
+
+      // If we change a winner.id from a local id to a Mongo _id, any locally persisted media
+      // (IndexedDB) may still be stored under the old key. Copy it so refresh/restore still works.
+      const migrateIndexedDbMediaKey = async (oldId, newId) => {
+        if (!oldId || !newId || oldId === newId) return;
+        try {
+          const existingVideo = await getVideoFromDB(oldId);
+          if (existingVideo) {
+            await saveVideoToDB(newId, existingVideo);
+          }
+        } catch (e) {
+          console.warn('[saveAllWinnersToDatabase] Failed to migrate video in IndexedDB', { oldId, newId }, e);
+        }
+
+        try {
+          const existingImage = await getImageFromDB(oldId);
+          if (existingImage) {
+            await saveImageToDB(newId, existingImage);
+          }
+        } catch (e) {
+          console.warn('[saveAllWinnersToDatabase] Failed to migrate image in IndexedDB', { oldId, newId }, e);
+        }
+      };
       
       // تحديث معرفات الفائزين المحلية
       for (let i = 0; i < savedWinners.length; i++) {
@@ -4537,6 +5096,9 @@
           localWinner._id = savedWinner._id;
           // Also update the main id to match _id for consistency
           localWinner.id = savedWinner._id;
+
+          // Copy any locally persisted media to the new key so it can be restored after refresh
+          await migrateIndexedDbMediaKey(oldId, savedWinner._id);
           
           // --- NEW: Update Staged Winner ID ---
           // We must update the ID in the staged storage so future updates (like toggles) work
@@ -4555,17 +5117,20 @@
               const extension = (localWinner.recordingMimeType && localWinner.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
               formData.append('video', localWinner.pendingVideoBlob, `winner_${savedWinner._id}.${extension}`);
               
-              await authedFetch(`/api/winners/${savedWinner._id}/video`, {
+              const videoResp = await authedFetch(`/api/winners/${savedWinner._id}/video`, {
                 method: 'POST',
                 body: formData
               });
-              
-              delete localWinner.pendingVideoBlob;
-              delete localWinner.recordingMimeType;
-              
-              // --- NEW: Clean up from IndexedDB ---
-              deleteVideoFromDB(oldId).catch(e => console.warn('Failed to delete video from DB', e));
-              // ------------------------------------
+
+              if (videoResp.ok) {
+                delete localWinner.pendingVideoBlob;
+                delete localWinner.recordingMimeType;
+
+                // Clean up from IndexedDB only after successful upload
+                deleteVideoFromDB(oldId).catch(e => console.warn('Failed to delete video from DB', e));
+              } else {
+                console.warn('Failed to upload video for winner (will keep local copy)', savedWinner._id, videoResp.status);
+              }
             } catch (e) {
               console.warn('Failed to upload video for winner', savedWinner._id, e);
             }
@@ -4584,11 +5149,14 @@
               
               if (uploadResp.ok) {
                   const uploadResult = await uploadResp.json();
-                  localWinner.national_id_image = uploadResult.imageUrl;
+                  localWinner.nationalIdImage = uploadResult.national_id_image;
                   localWinner.idImageUploaded = true; // Mark as uploaded
+
+                  delete localWinner.pendingIdImageFile;
+                  // NOTE: pendingIdImageFile is not stored in IndexedDB by default, so no DB cleanup here
+              } else {
+                  console.warn('Failed to upload ID image for winner (will keep local copy)', savedWinner._id, uploadResp.status);
               }
-              
-              delete localWinner.pendingIdImageFile;
             } catch (e) {
               console.warn('Failed to upload ID image for winner', savedWinner._id, e);
             }
@@ -4600,19 +5168,96 @@
               const idFormData = new FormData();
               idFormData.append('id_image', localWinner.pendingIdImage);
               
-              await authedFetch(`/api/winners/${savedWinner._id}/id-image`, {
+              const idUploadResp = await authedFetch(`/api/winners/${savedWinner._id}/id-image`, {
                 method: 'POST',
                 body: idFormData
               });
-              
-              delete localWinner.pendingIdImage;
-              
-              // --- NEW: Clean up Image from IndexedDB ---
-              deleteImageFromDB(oldId).catch(e => console.warn('Failed to delete image from DB', e));
-              // ------------------------------------------
+
+              if (idUploadResp.ok) {
+                try {
+                  const idUploadResult = await idUploadResp.json();
+                  localWinner.nationalIdImage = idUploadResult.national_id_image;
+                  localWinner.idImageUploaded = true;
+                } catch (e) {}
+
+                // Clear local + IndexedDB only after successful upload
+                delete localWinner.pendingIdImage;
+                deleteImageFromDB(oldId).catch(e => console.warn('Failed to delete image from DB', e));
+              } else {
+                console.warn('Failed to upload ID image for winner (will keep local copy)', savedWinner._id, idUploadResp.status);
+              }
             } catch (e) {
               console.warn('Failed to upload ID image for winner', savedWinner._id, e);
             }
+          }
+        }
+      }
+
+      // Retry uploads for winners that already exist in DB but still have pending local media
+      for (const w of savedWinnersNeedingUpload) {
+        const winnerDbId = w._id || w.id;
+        if (!winnerDbId) continue;
+        const keyId = w.id || winnerDbId;
+
+        // Video
+        if (w.pendingVideoBlob instanceof Blob) {
+          try {
+            const formData = new FormData();
+            const extension = (w.recordingMimeType && w.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
+            formData.append('video', w.pendingVideoBlob, `winner_${winnerDbId}.${extension}`);
+            const videoResp = await authedFetch(`/api/winners/${winnerDbId}/video`, { method: 'POST', body: formData });
+            if (videoResp.ok) {
+              delete w.pendingVideoBlob;
+              delete w.recordingMimeType;
+              deleteVideoFromDB(keyId).catch(e => console.warn('Failed to delete video from DB', e));
+            } else {
+              console.warn('Failed to upload video for winner (will keep local copy)', winnerDbId, videoResp.status);
+            }
+          } catch (e) {
+            console.warn('Failed to upload video for winner', winnerDbId, e);
+          }
+        }
+
+        // ID image (pendingIdImageFile)
+        if (w.pendingIdImageFile && (w.pendingIdImageFile instanceof Blob || w.pendingIdImageFile instanceof File)) {
+          try {
+            const formData = new FormData();
+            formData.append('id_image', w.pendingIdImageFile);
+            const uploadResp = await authedFetch(`/api/winners/${winnerDbId}/id-image`, { method: 'POST', body: formData });
+            if (uploadResp.ok) {
+              try {
+                const uploadResult = await uploadResp.json();
+                w.nationalIdImage = uploadResult.national_id_image;
+                w.idImageUploaded = true;
+              } catch (e) {}
+              delete w.pendingIdImageFile;
+            } else {
+              console.warn('Failed to upload ID image for winner (will keep local copy)', winnerDbId, uploadResp.status);
+            }
+          } catch (e) {
+            console.warn('Failed to upload ID image for winner', winnerDbId, e);
+          }
+        }
+
+        // ID image (pendingIdImage stored in IndexedDB)
+        if (w.pendingIdImage && (w.pendingIdImage instanceof Blob || w.pendingIdImage instanceof File)) {
+          try {
+            const idFormData = new FormData();
+            idFormData.append('id_image', w.pendingIdImage);
+            const idUploadResp = await authedFetch(`/api/winners/${winnerDbId}/id-image`, { method: 'POST', body: idFormData });
+            if (idUploadResp.ok) {
+              try {
+                const idUploadResult = await idUploadResp.json();
+                w.nationalIdImage = idUploadResult.national_id_image;
+                w.idImageUploaded = true;
+              } catch (e) {}
+              delete w.pendingIdImage;
+              deleteImageFromDB(keyId).catch(e => console.warn('Failed to delete image from DB', e));
+            } else {
+              console.warn('Failed to upload ID image for winner (will keep local copy)', winnerDbId, idUploadResp.status);
+            }
+          } catch (e) {
+            console.warn('Failed to upload ID image for winner', winnerDbId, e);
           }
         }
       }
@@ -4677,6 +5322,17 @@
           `سيتم إرسال جميع الفائزين (${validWinners.length}) إلى الوكيل. هل أنت متأكد من المتابعة؟`,
           async () => {
               // console.log('[sendWinnersReport] User confirmed send');
+              const sendingOverlay = document.createElement('div');
+              sendingOverlay.className = 'wr-confirm-overlay';
+              sendingOverlay.innerHTML = `
+                <div class="wr-confirm-modal" style="text-align: center;">
+                  <div class="wr-confirm-icon" style="color: #10b981;"><i class="fas fa-spinner fa-spin"></i></div>
+                  <h3 class="wr-confirm-title">جاري الإرسال...</h3>
+                  <p class="wr-confirm-message">يرجى الانتظار حتى يكتمل الإرسال بنجاح.</p>
+                </div>
+              `;
+              document.body.appendChild(sendingOverlay);
+
               try {
                   const authedFetch = window.authedFetch || fetch;
                   const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-report`, {
@@ -4714,11 +5370,13 @@
                       toast(`فشل الإرسال: ${err.message}`, 'error');
                   }
               } catch (e) {
-                  console.error('[sendWinnersReport] Exception:', e);
+                  console.error(e);
                   toast('حدث خطأ أثناء الإرسال', 'error');
+              } finally {
+                  sendingOverlay.remove();
               }
           }
-          );
+        );
     }
     
     async function sendWinnersDetails() {
@@ -4846,6 +5504,16 @@
       showConfirmModal(
         `سيتم إرسال بيانات الفائزين (${validWinners.length}) مع صور الهوية والكليشة إلى جروب الشركة (Agent competitions). هل أنت متأكد؟`,
         async () => {
+          const sendingOverlay = document.createElement('div');
+          sendingOverlay.className = 'wr-confirm-overlay';
+          sendingOverlay.innerHTML = `
+            <div class="wr-confirm-modal" style="text-align: center;">
+              <div class="wr-confirm-icon" style="color: #10b981;"><i class="fas fa-spinner fa-spin"></i></div>
+              <h3 class="wr-confirm-title">جاري الإرسال...</h3>
+              <p class="wr-confirm-message">يرجى الانتظار حتى يكتمل الإرسال بنجاح.</p>
+            </div>
+          `;
+          document.body.appendChild(sendingOverlay);
           try {
             const authedFetch = window.authedFetch || fetch;
             const warnings = state.winners
@@ -4876,6 +5544,8 @@
           } catch (e) {
             console.error(e);
             toast('حدث خطأ أثناء الإرسال', 'error');
+          } finally {
+            sendingOverlay.remove();
           }
         }
       );

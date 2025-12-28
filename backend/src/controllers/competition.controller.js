@@ -209,7 +209,7 @@ exports.getCompetitionById = async (req, res) => {
 };
 
 exports.createCompetition = async (req, res) => {
-    console.log(`[BACKEND] Received POST /api/competitions at ${new Date().toISOString()}`);
+    // console.log(`[BACKEND] Received POST /api/competitions at ${new Date().toISOString()}`);
     try {
         const { agent_id, template_id, image_url, description } = req.body;
 
@@ -236,12 +236,12 @@ exports.createCompetition = async (req, res) => {
         // 3. Duplicate Checks
         // Normalize idempotency key if provided by client
         const clientRequestId = req.body.client_request_id || req.body.clientRequestId;
-        console.log(`[BACKEND] Using client_request_id: ${clientRequestId}`);
+        // console.log(`[BACKEND] Using client_request_id: ${clientRequestId}`);
 
         if (clientRequestId && agent_id) {
             req.body.client_request_id = clientRequestId;
             const existingByKey = await Competition.findOne({ agent_id, client_request_id: clientRequestId });
-            console.log(`[BACKEND] Idempotency check (existingByKey): ${existingByKey ? existingByKey._id : 'null'}`);
+            // console.log(`[BACKEND] Idempotency check (existingByKey): ${existingByKey ? existingByKey._id : 'null'}`);
             if (existingByKey) {
                 return res.status(409).json({
                     data: existingByKey,
@@ -330,7 +330,7 @@ exports.createCompetition = async (req, res) => {
             try {
                 const caption = description || '';
                 
-                console.log(`[Competition] Attempting to send competition to Telegram group: ${agent.telegram_group_name} (ID: ${agent.telegram_chat_id})`);
+                // console.log(`[Competition] Attempting to send competition to Telegram group: ${agent.telegram_group_name} (ID: ${agent.telegram_chat_id})`);
 
                 // --- NEW: Register this message in the shared cache to prevent double-sending by telegram.controller.js ---
                 if (req.app.locals.recentMessages) {
@@ -338,7 +338,7 @@ exports.createCompetition = async (req, res) => {
                     const dedupKey = `${agent.telegram_chat_id}-${msgHash}`;
                     // Set TTL to 10 seconds
                     req.app.locals.recentMessages.set(dedupKey, Date.now() + 10000);
-                    console.log(`[Competition] Registered deduplication key: ${dedupKey}`);
+                    // console.log(`[Competition] Registered deduplication key: ${dedupKey}`);
                 }
 
                 if (caption.length <= 1024) {
@@ -375,7 +375,7 @@ exports.createCompetition = async (req, res) => {
                     }
                 }
 
-                console.log(`[Competition] Successfully sent competition to Telegram group: ${agent.telegram_group_name}`);
+                // console.log(`[Competition] Successfully sent competition to Telegram group: ${agent.telegram_group_name}`);
 
             } catch (sendErr) {
                 console.error(`[Competition] Failed to send competition to Telegram group: ${agent.telegram_group_name}. Error: ${sendErr.message}`);
@@ -419,9 +419,9 @@ exports.createCompetition = async (req, res) => {
         }
 
         const competition = new Competition(competitionData);
-        console.log(`[BACKEND] Attempting to save new competition with client_request_id: ${competition.client_request_id}`);
+        // console.log(`[BACKEND] Attempting to save new competition with client_request_id: ${competition.client_request_id}`);
         await competition.save();
-        console.log(`[BACKEND] Successfully saved new competition with ID: ${competition._id}`);
+        // console.log(`[BACKEND] Successfully saved new competition with ID: ${competition._id}`);
 
         // --- NEW: Update Agent Balance and Deposit Bonus ---
         // This logic was moved from the frontend to ensure reliability and security.
@@ -438,7 +438,7 @@ exports.createCompetition = async (req, res) => {
             agent.used_deposit_bonus = (agent.used_deposit_bonus || 0) + depositWinners;
 
             await agent.save();
-            console.log(`[BACKEND] Updated agent balance for agent: ${agent._id}. Cost: ${cost}, Deposit Winners: ${depositWinners}`);
+            // console.log(`[BACKEND] Updated agent balance for agent: ${agent._id}. Cost: ${cost}, Deposit Winners: ${depositWinners}`);
 
             // --- NEW: Broadcast Notification ---
             broadcastNotification(
@@ -458,7 +458,7 @@ exports.createCompetition = async (req, res) => {
             });
         }
 
-        console.log(`[Competition] Competition created and saved successfully. ID: ${competition._id}`);
+        // console.log(`[Competition] Competition created and saved successfully. ID: ${competition._id}`);
 
         // Save competition questions as suggestions
         if (competition.questions && competition.questions.length > 0) {

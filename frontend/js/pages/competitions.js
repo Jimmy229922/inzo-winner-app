@@ -1005,7 +1005,6 @@ async function renderCompetitionCreatePage(agentId) {
             // --- FIX: Force a full page reload to show updated balance ---
             // Using .hash only changes the URL fragment without reloading, which can show stale cached data.
             // Using .assign() reloads the page, ensuring the latest agent data (with deducted balance) is fetched from the server.
-            showToast('اكتملت العملية. جاري الانتقال لصفحة الوكيل...', 'info');
             form.dataset.sending = 'false';
             delete form.dataset.requestId;
             window.location.assign(`/#profile/${agent._id}`);

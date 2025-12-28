@@ -2,6 +2,62 @@
 let agentWinnersData = null;
 let allWinners = [];
 
+// Inject Modal Styles
+function injectModalStyles() {
+    if (document.getElementById('wr-modal-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'wr-modal-styles';
+    style.textContent = `
+        .wr-confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:10001; backdrop-filter:blur(4px); }
+        .wr-confirm-modal { background:var(--card-bg, #111827); border:1px solid var(--border-color, #374151); border-radius:20px; padding:28px 26px; width:min(90%,440px); text-align:center; box-shadow:0 10px 40px rgba(0,0,0,.6); animation:wrModalSlideIn .3s ease-out; }
+        .wr-confirm-icon { width:70px; height:70px; margin:0 auto 18px; border-radius:50%; background:linear-gradient(135deg,#f59e0b,#d97706); display:flex; align-items:center; justify-content:center; font-size:1.8rem; color:#1f1f1f; box-shadow:0 6px 16px rgba(245,158,11,.4); }
+        .wr-confirm-title { margin:0 0 12px; font-size:1.15rem; font-weight:700; color:var(--text-color, #fff); }
+        .wr-confirm-message { margin:0 0 24px; font-size:.9rem; line-height:1.6; color:var(--text-secondary, #ccc); }
+        .wr-confirm-actions { display:flex; gap:12px; justify-content:center; }
+        .wr-btn { border:none; border-radius:10px; padding:10px 24px; font-size:.9rem; font-weight:600; cursor:pointer; transition:.2s; }
+        .wr-btn-secondary { background:transparent; border:1px solid var(--border-color, #374151); color:var(--text-secondary, #ccc); }
+        .wr-btn-secondary:hover { background:rgba(255,255,255,.05); color:var(--text-color, #fff); }
+        .wr-btn-danger { background:linear-gradient(135deg,#ef4444,#b91c1c); color:#fff; box-shadow:0 4px 12px rgba(239,68,68,.3); }
+        .wr-btn-danger:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(239,68,68,.4); }
+        @keyframes wrModalSlideIn { from{transform:translateY(-20px);opacity:0;} to{transform:translateY(0);opacity:1;} }
+    `;
+    document.head.appendChild(style);
+}
+
+function showConfirmModal(message, onConfirm) {
+    injectModalStyles();
+    const overlay = document.createElement('div');
+    overlay.className = 'wr-confirm-overlay';
+    overlay.innerHTML = `
+    <div class="wr-confirm-modal">
+        <div class="wr-confirm-icon"><i class="fas fa-exclamation-triangle"></i></div>
+        <h3 class="wr-confirm-title">تأكيد العملية</h3>
+        <p class="wr-confirm-message">${message}</p>
+        <div class="wr-confirm-actions">
+        <button class="wr-btn wr-btn-secondary" id="wr-confirm-cancel">إلغاء</button>
+        <button class="wr-btn wr-btn-danger" id="wr-confirm-ok">تأكيد</button>
+        </div>
+    </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    const cancelBtn = overlay.querySelector('#wr-confirm-cancel');
+    const okBtn = overlay.querySelector('#wr-confirm-ok');
+    
+    const cleanup = () => overlay.remove();
+    
+    cancelBtn?.addEventListener('click', cleanup);
+    okBtn?.addEventListener('click', () => {
+    if (onConfirm) onConfirm();
+    cleanup();
+    });
+    
+    // Close on overlay click
+    overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) cleanup();
+    });
+}
+
 // --- تهيئة الصفحة ---
 async function initializeWinnersPage() {
     try {
@@ -608,39 +664,108 @@ async function sendWinnersDetailsToAgent() {
         }
 
         // رسالة تأكيد للمستخدم
-        const confirmMessage = `سيتم إرسال بيانات الفائزين (${validWinners.length}) مع صور الهوية والكليشة إلى مجموعة الوكيل على تلجرام.\n\nهل أنت متأكد؟`;
+        const confirmMessage = `سيتم إرسال بيانات الفائزين (${validWinners.length}) مع صور الهوية والكليشة إلى مجموعة الوكيل على تلجرام. هل أنت متأكد؟`;
         
-        if (!confirm(confirmMessage)) {
-            return;
-        }
+        showConfirmModal(confirmMessage, async () => {
+            try {
+                // استخراج معرفات الفائزين
+                const winnerIds = validWinners.map(w => w._id || w.id);
 
-        // استخراج معرفات الفائزين
-        const winnerIds = validWinners.map(w => w._id || w.id);
+                console.log('[agent-winners] Sending winners details...', { agentId, winnerIds });
+                notify('جاري إرسال البيانات...', 'info');
 
-        console.log('[agent-winners] Sending winners details...', { agentId, winnerIds });
+                // إرسال الطلب إلى الـ API
+                const response = await authedFetch(`/api/agents/${encodeURIComponent(agentId)}/send-winners-details`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ winnerIds })
+                });
 
-        // إرسال الطلب إلى الـ API
-        const response = await authedFetch(`/api/agents/${encodeURIComponent(agentId)}/send-winners-details`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ winnerIds })
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    notify(`فشل الإرسال: ${errorData.message || 'خطأ غير معروف'}`, 'error');
+                    return;
+                }
+
+                const result = await response.json();
+                notify('تم إرسال بيانات الفائزين مع صور الهوية بنجاح إلى مجموعة الوكيل', 'success');
+                console.log('[agent-winners] Winners details sent successfully', result);
+
+            } catch (error) {
+                console.error('[agent-winners] Error sending winners details:', error);
+                notify('حدث خطأ أثناء إرسال بيانات الفائزين: ' + error.message, 'error');
+            }
         });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            notify(`فشل الإرسال: ${errorData.message || 'خطأ غير معروف'}`, 'error');
-            return;
-        }
-
-        const result = await response.json();
-        notify('تم إرسال بيانات الفائزين مع صور الهوية بنجاح إلى مجموعة الوكيل', 'success');
-        console.log('[agent-winners] Winners details sent successfully', result);
 
     } catch (error) {
         console.error('[agent-winners] Error sending winners details:', error);
         notify('حدث خطأ أثناء إرسال بيانات الفائزين: ' + error.message, 'error');
+    }
+}
+
+// Helper to show full screen loading
+function showLoadingOverlay(message = 'جاري المعالجة...') {
+    let overlay = document.getElementById('global-loading-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'global-loading-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-family: 'Cairo', sans-serif;
+        `;
+        
+        const spinner = document.createElement('div');
+        spinner.className = 'loading-spinner-large';
+        spinner.style.cssText = `
+            width: 60px;
+            height: 60px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 20px;
+        `;
+        
+        // Add animation style if not present
+        if (!document.getElementById('spin-animation-style')) {
+            const style = document.createElement('style');
+            style.id = 'spin-animation-style';
+            style.innerHTML = `@keyframes spin { to { transform: rotate(360deg); } }`;
+            document.head.appendChild(style);
+        }
+        
+        const text = document.createElement('div');
+        text.id = 'global-loading-text';
+        text.style.fontSize = '1.5rem';
+        text.textContent = message;
+        
+        overlay.appendChild(spinner);
+        overlay.appendChild(text);
+        document.body.appendChild(overlay);
+    } else {
+        const text = document.getElementById('global-loading-text');
+        if (text) text.textContent = message;
+        overlay.style.display = 'flex';
+    }
+}
+
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('global-loading-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
     }
 }
 

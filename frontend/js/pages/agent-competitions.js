@@ -532,10 +532,6 @@ function renderCompetitionsTable() {
         const createBtn = document.getElementById('create-first-competition-btn');
         if (createBtn) {
             createBtn.addEventListener('click', () => {
-                if (!agentData?.agent?.is_auditing_enabled) {
-                    notify('عذراً، لا يمكن إنشاء مسابقة قبل إتمام عملية التدقيق لهذا الوكيل.', 'error');
-                    return;
-                }
                 window.location.hash = `competitions/new?agentId=${agentData?.agent?._id || ''}`;
             });
         }

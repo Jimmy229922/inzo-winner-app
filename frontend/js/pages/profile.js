@@ -1930,9 +1930,9 @@ function renderDetailsView(agent) {
     const createFieldHTML = (label, value, fieldName, isEditable = true) => {
         const numericFields = ['competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'deposit_bonus_winners_count'];
         // --- NEW: Define which fields are financial ---
-        const financialFields = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period', 'deposit_bonus_winners_count'];
+        const financialFields = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period', 'deposit_bonus_winners_count', 'last_competition_date', 'competition_duration', 'competitions_per_week'];
         const isFinancial = financialFields.includes(fieldName);
-
+ 
         let displayValue;
         let iconHtml = '';
 
@@ -1964,7 +1964,7 @@ function renderDetailsView(agent) {
         const extraClass = fieldName === 'audit_days' ? 'full-width-card' : '';
         
         return `
-            <div class="details-card ${extraClass}" data-field="${fieldName}">
+            <div class="details-card details-group ${extraClass}" data-field="${fieldName}">
                 <div class="details-card-header">
                     <span class="details-label">${label}</span>
                     ${iconHtml}
@@ -2086,7 +2086,9 @@ function renderDetailsView(agent) {
 
 function enableInlineEdit(groupElement, fieldName, agent) {
     const currentValue = agent[fieldName];
-    const label = groupElement.querySelector('label').textContent;
+    // Fix: Support both label tag and .details-label class to prevent null error
+    const labelEl = groupElement.querySelector('label') || groupElement.querySelector('.details-label');
+    const label = labelEl ? labelEl.textContent : '';
     let editorHtml = '';
 
     switch (fieldName) {

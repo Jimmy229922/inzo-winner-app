@@ -243,18 +243,18 @@ exports.createAgent = async (req, res) => {
         req.body.status = req.body.status || 'Active';
         
         // --- DEBUG: Log Ø§Ù„ØªØµÙ†ÙŠÙ Ù„Ù„ØªØ£ÙƒØ¯ Ù…Ù† Ø¥Ø±Ø³Ø§Ù„Ù‡ ---
-        console.log(`[Agent Create] Creating new agent with classification: ${req.body.classification || 'R (default)'}`);
-        console.log('[Agent Create] AUDIT_DAYS received:', req.body.audit_days);
-        console.log('[Agent Create] AUDIT_DAYS is array:', Array.isArray(req.body.audit_days));
-        console.log(`[Agent Create] Full request body:`, JSON.stringify(req.body, null, 2));
+        // console.log(`[Agent Create] Creating new agent with classification: ${req.body.classification || 'R (default)'}`);
+        // console.log('[Agent Create] AUDIT_DAYS received:', req.body.audit_days);
+        // console.log('[Agent Create] AUDIT_DAYS is array:', Array.isArray(req.body.audit_days));
+        // console.log(`[Agent Create] Full request body:`, JSON.stringify(req.body, null, 2));
         
         const agent = new Agent(req.body);
         await agent.save();
         
         // --- DEBUG: Log Ø§Ù„ØªØµÙ†ÙŠÙ Ø¨Ø¹Ø¯ Ø§Ù„Ø­ÙØ¸ ---
-        console.log(`[Agent Create] Agent saved successfully with classification: ${agent.classification}`);
-        console.log('[Agent Create] AUDIT_DAYS saved to DB:', agent.audit_days);
-        console.log('[Agent Create] Complete saved agent:', JSON.stringify(agent, null, 2));
+        // console.log(`[Agent Create] Agent saved successfully with classification: ${agent.classification}`);
+        // console.log('[Agent Create] AUDIT_DAYS saved to DB:', agent.audit_days);
+        // console.log('[Agent Create] Complete saved agent:', JSON.stringify(agent, null, 2));
         
         // Log activity
         const userId = req.user?._id;
@@ -1215,6 +1215,54 @@ exports.sendWinnersDetails = async (req, res) => {
     } catch (error) {
         console.error('Error sending winners details:', error);
         return res.status(500).json({ message: 'Failed to send winners details: ' + error.message });
+    }
+};
+
+exports.getAgentWinners = async (req, res) => {
+    try {
+        const { id } = req.params; // agentId
+        const { competition_id } = req.query;
+
+        let query = { agent_id: id };
+        if (competition_id) {
+            query.competition_id = competition_id;
+        }
+
+        const winners = await Winner.find(query).sort({ selected_at: -1 });
+
+        // Group by competition to match frontend expectation
+        const competitionsMap = {};
+        winners.forEach(w => {
+            const compId = w.competition_id.toString();
+            if (!competitionsMap[compId]) {
+                competitionsMap[compId] = {
+                    competition_id: compId,
+                    winners: []
+                };
+            }
+            
+            competitionsMap[compId].winners.push({
+                id: w._id,
+                name: w.name,
+                account_number: w.account_number,
+                email: w.email,
+                prize_type: w.prize_type,
+                prize_value: w.prize_value,
+                video_url: w.video_url,
+                national_id_image: w.national_id_image,
+                selected_at: w.selected_at
+            });
+        });
+
+        const competitions = Object.values(competitionsMap);
+
+        res.json({
+            competitions: competitions
+        });
+
+    } catch (error) {
+        console.error('Error fetching agent winners:', error);
+        res.status(500).json({ message: 'Error fetching winners', error: error.message });
     }
 };
 

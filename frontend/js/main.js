@@ -1181,7 +1181,7 @@ function baseRouletteMarkup() {
                           <span>الفائزون: <strong id=\"winners-count\">0</strong></span>
                         </div>
                         <button id=\"refresh-participants\" class=\"wr-btn wr-btn-primary wr-btn-small\"><i class=\"fas fa-sync-alt\"></i> تحديث</button>
-                        <button id=\"reset-winners\" class=\"wr-btn wr-btn-secondary wr-btn-small\"><i class=\"fas fa-trash\"></i> مسح الفائزين</button>
+                        <button id=\"reset-winners\" class=\"wr-btn wr-btn-secondary wr-btn-small\"><i class=\"fas fa-trash\"></i> مسح المشاركين</button>
                     </div>
                     <div id=\"participants-list\" class=\"wr-scroll-box\"></div>
                 </div>

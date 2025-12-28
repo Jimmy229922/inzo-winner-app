@@ -92,7 +92,7 @@ exports.importWinnersForAgent = async (req, res) => {
             });
         }
 
-        console.log(`[importWinnersForAgent] Using active competition ${activeCompetition._id} (${activeCompetition.name})`);
+        // console.log(`[importWinnersForAgent] Using active competition ${activeCompetition._id} (${activeCompetition.name})`);
         const mongoose = require('mongoose');
         const competitionId = activeCompetition._id;
 
