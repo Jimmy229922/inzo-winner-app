@@ -7,6 +7,7 @@ const CompetitionTemplate = require('../models/CompetitionTemplate'); // NEW: Im
 const Winner = require('../models/Winner');
 const QuestionSuggestion = require('../models/QuestionSuggestion');
 const { logActivity } = require('../utils/logActivity');
+const { broadcastNotification } = require('../utils/notification');
 
 /**
  * Creates a hash from the string for duplicate detection.
@@ -438,6 +439,13 @@ exports.createCompetition = async (req, res) => {
 
             await agent.save();
             console.log(`[BACKEND] Updated agent balance for agent: ${agent._id}. Cost: ${cost}, Deposit Winners: ${depositWinners}`);
+
+            // --- NEW: Broadcast Notification ---
+            broadcastNotification(
+                req.app,
+                `تم إنشاء مسابقة جديدة بواسطة ${agent.name}`,
+                'success'
+            );
         }
 
         console.log(`[Competition] Competition created and saved successfully. ID: ${competition._id}`);

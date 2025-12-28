@@ -103,9 +103,30 @@ async function bundle() {
         
             const toast = document.createElement('div');
             toast.className = 'toast ' + type;
-            const iconClass = type === 'success' ? 'fa-check-circle' : 
-                            (type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle');
-            toast.innerHTML = '<i class="fas ' + iconClass + '"></i> ' + message;
+            
+            const icons = {
+                success: '<i class="fas fa-check-circle"></i>',
+                error: '<i class="fas fa-exclamation-circle"></i>',
+                warning: '<i class="fas fa-exclamation-triangle"></i>',
+                info: '<i class="fas fa-info-circle"></i>',
+                cancelled: '<i class="fas fa-ban"></i>'
+            };
+
+            const titles = {
+                success: 'نجاح',
+                error: 'خطأ',
+                warning: 'تنبيه',
+                info: 'معلومة',
+                cancelled: 'إلغاء'
+            };
+
+            toast.innerHTML = 
+                '<div class="toast-icon">' + (icons[type] || icons.info) + '</div>' +
+                '<div class="toast-content">' +
+                    '<div class="toast-title">' + (titles[type] || 'إشعار') + '</div>' +
+                    '<div class="toast-message">' + message + '</div>' +
+                '</div>' +
+                '<div class="toast-close" onclick="this.parentElement.remove()">&times;</div>';
             
             container.appendChild(toast);
         

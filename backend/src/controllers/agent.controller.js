@@ -873,15 +873,22 @@ exports.sendWinnersReport = async (req, res) => {
             }
             
             // Generate caption for single winner
-            const prizeText = w.prize_type === 'deposit' 
-                ? `${w.prize_value}% بونص ايداع كونه فائز مسبقا ببونص تداولي` 
-                : `${w.prize_value}$`;
-            
-            let caption = `◃ الفائز: ${w.name}\n`;
-            caption += `           الجائزة: ${prizeText}\n\n`;
-            caption += `********************************************************\n`;
-            caption += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
-            caption += `https://t.me/Ibinzo`;
+            let caption;
+            if (messageText && messageText.trim().length > 0) {
+                // Use the message provided by the frontend (which includes warnings)
+                caption = messageText;
+            } else {
+                // Fallback to generating caption on backend
+                const prizeText = w.prize_type === 'deposit' 
+                    ? `${w.prize_value}% بونص ايداع كونه فائز مسبقا ببونص تداولي` 
+                    : `${w.prize_value}$ بونص تداولي`;
+                
+                caption = `◃ الفائز: ${w.name}\n`;
+                caption += `           الجائزة: ${prizeText}\n\n`;
+                caption += `********************************************************\n`;
+                caption += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
+                caption += `https://t.me/Ibinzo`;
+            }
 
             await bot.sendVideo(agent.telegram_chat_id, mediaSource, { 
                 caption: caption,
@@ -903,7 +910,7 @@ exports.sendWinnersReport = async (req, res) => {
                 const rank = ordinals[globalIndex] || (globalIndex + 1);
                 const prizeText = w.prize_type === 'deposit' 
                     ? `${w.prize_value}% بونص ايداع كونه فائز مسبقا ببونص تداولي` 
-                    : `${w.prize_value}$`;
+                    : `${w.prize_value}$ بونص تداولي`;
         
                 msg += `◃ الفائز ${rank}: ${w.name}\n`;
                 msg += `           الجائزة: ${prizeText}\n\n`;

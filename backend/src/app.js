@@ -22,7 +22,19 @@ const runMigrations = require('./migration-runner'); // FIX: Correct path for mi
 const winnerRoutes = require('./routes/winner.routes');
 const questionSuggestionRoutes = require('./routes/questionSuggestion.routes'); // نظام اقتراح الأسئلة
 
+const { broadcastNotification } = require('./utils/notification');
+
 const app = express();
+
+// --- TEST ROUTE: Trigger Notification Manually ---
+app.get('/api/test-notification', (req, res) => {
+    try {
+        broadcastNotification(app, 'هذا إشعار تجريبي من السيرفر', 'info');
+        res.json({ message: 'Notification sent', onlineClients: app.locals.onlineClients ? app.locals.onlineClients.size : 0 });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 // --- NEW: Shared cache for deduplication between controllers ---
 app.locals.recentMessages = new Map();

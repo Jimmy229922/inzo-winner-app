@@ -130,6 +130,9 @@
 .toast.warning { border-right-color: #f59e0b; }
 .toast.warning .toast-icon { color: #f59e0b; }
 
+.toast.cancelled { border-right-color: #ff5722; }
+.toast.cancelled .toast-icon { color: #ff5722; }
+
 /* Progress Bar */
 .toast-progress {
     position: absolute;

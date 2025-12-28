@@ -20,9 +20,8 @@ const { startAllSchedulers, setTelegramBot } = require('./src/scheduler'); // Im
 const User = require('./src/models/User');
 const bcrypt = require('bcryptjs');
 
-// --- NEW: Map to store online users ---
-// Key: userId (string), Value: WebSocket client instance
-const onlineClients = new Map();
+// --- NEW: Import shared onlineClients map ---
+const onlineClients = require('./src/utils/clients');
 
 const port = process.env.PORT || 30001;
 
@@ -79,10 +78,6 @@ async function startServer() {
     await connectDB();
     await createSuperAdmin();
 
-    // --- REFACTOR: Pass onlineClients map to the scheduler ---
-    // This allows the scheduler to broadcast messages to clients.
-    app.locals.onlineClients = onlineClients;
-
     // --- REFACTOR: Create an HTTP server from the Express app ---
     const server = http.createServer(app);
 
@@ -93,7 +88,7 @@ async function startServer() {
     app.locals.wss = wss;
 
     wss.on('connection', (ws) => {
-        // console.log('[WebSocket] A client connected.');
+        // console.log('[WebSocket] A new client connected.');
 
         // Part of the heartbeat mechanism
         ws.isAlive = true;
@@ -103,7 +98,9 @@ async function startServer() {
 
         ws.on('message', (message) => {
             try {
-                const data = JSON.parse(message);
+                const messageStr = message.toString();
+                // console.log(`[WebSocket] Received message: ${messageStr}`);
+                const data = JSON.parse(messageStr);
                 if (data.type === 'auth' && data.token) {
                     const decoded = jwt.verify(data.token, process.env.JWT_SECRET);
                     const userId = decoded.userId;

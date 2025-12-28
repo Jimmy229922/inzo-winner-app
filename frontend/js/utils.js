@@ -183,7 +183,8 @@ if (typeof window.showToast !== 'function') {
                 success: '<i class="fas fa-check-circle"></i>',
                 error: '<i class="fas fa-exclamation-circle"></i>',
                 warning: '<i class="fas fa-exclamation-triangle"></i>',
-                info: '<i class="fas fa-info-circle"></i>'
+                info: '<i class="fas fa-info-circle"></i>',
+                cancelled: '<i class="fas fa-ban"></i>'
             };
 
             // Titles mapping
@@ -191,7 +192,8 @@ if (typeof window.showToast !== 'function') {
                 success: 'نجاح',
                 error: 'خطأ',
                 warning: 'تنبيه',
-                info: 'معلومة'
+                info: 'معلومة',
+                cancelled: 'إلغاء'
             };
 
             toast.innerHTML = `

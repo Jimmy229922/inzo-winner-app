@@ -416,14 +416,18 @@ async function initializeApp() {
  * NEW: Sets up a listener for real-time messages from the server (e.g., via WebSocket).
  */
 function setupRealtimeListeners() {
-    const protocol = window.location.protocol === 'https' ? 'wss' : 'ws';
+    console.log('[WebSocket] Initializing Realtime Listeners...');
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${window.location.host}`;
+    console.log(`[WebSocket] Target URL: ${wsUrl}`);
+
     let ws;
     let reconnectAttempts = 0;
     let maxReconnectAttempts = 5;
     let reconnectTimeout;
 
     function connect() {
+        console.log('[WebSocket] Attempting to connect...');
         // Check if token exists before connecting
         const token = localStorage.getItem('authToken');
         if (!token) {
@@ -431,16 +435,25 @@ function setupRealtimeListeners() {
             return;
         }
 
-        ws = new WebSocket(wsUrl);
+        try {
+            ws = new WebSocket(wsUrl);
+        } catch (err) {
+            console.error('[WebSocket] Failed to create WebSocket instance:', err);
+            return;
+        }
+
         // Expose the active WebSocket so other modules (e.g., logout) can close it immediately
         try { window._realtimeWs = ws; } catch (e) { /* ignore in non-browser env */ }
 
         ws.onopen = () => {
-            // console.log('[WebSocket] متصل الآن ✓');
+            console.log('[WebSocket] Connection established successfully ✓');
             reconnectAttempts = 0; // Reset counter on successful connection
             const token = localStorage.getItem('authToken');
             if (token) {
+                console.log('[WebSocket] Sending auth token...');
                 ws.send(JSON.stringify({ type: 'auth', token }));
+            } else {
+                console.warn('[WebSocket] No auth token found in localStorage');
             }
         };
 
@@ -484,6 +497,16 @@ function setupRealtimeListeners() {
                     case 'new_suggestion':
                         // console.log('🔔 [WebSocket] Received suggestion update/new suggestion');
                         loadGlobalUnreadCount();
+                        break;
+
+                    case 'notification':
+                        console.log('🔔 [WebSocket] Received notification:', message);
+                        if (typeof showToast === 'function') {
+                            showToast(message.message, message.level || 'info');
+                        } else {
+                            console.error('[WebSocket] showToast function is not defined!');
+                            alert(message.message); // Fallback
+                        }
                         break;
 
                     case 'global_notification':

@@ -3046,7 +3046,7 @@
     function generateSingleWinnerMessage(w) {
         const prizeText = w.prizeType === 'deposit' 
             ? `${w.prizeValue}% بونص ايداع كونه فائز مسبقا ببونص تداولي` 
-            : `${w.prizeValue}$`;
+            : `${w.prizeValue}$ بونص تداولي`;
     
         let msg = `◃ الفائز: ${w.name}\n`;
         msg += `           الجائزة: ${prizeText}\n`;
