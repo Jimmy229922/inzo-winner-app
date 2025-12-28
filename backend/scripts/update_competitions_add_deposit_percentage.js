@@ -2,7 +2,22 @@
  * Script to update existing test competitions with deposit_bonus_percentage field
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+const path = require('path');
+const fs = require('fs');
+
+// Try to load .env from multiple locations
+const envPaths = [
+    path.join(__dirname, '../.env'),      // backend/.env
+    path.join(__dirname, '../../.env')    // root/.env
+];
+
+for (const envPath of envPaths) {
+    if (fs.existsSync(envPath)) {
+        require('dotenv').config({ path: envPath });
+        break;
+    }
+}
+
 const mongoose = require('mongoose');
 const Competition = require('../src/models/Competition');
 const CompetitionTemplate = require('../src/models/CompetitionTemplate');
@@ -10,7 +25,7 @@ const CompetitionTemplate = require('../src/models/CompetitionTemplate');
 async function updateCompetitions() {
     try {
         // Connect to MongoDB
-        const dbUri = process.env.MONGO_URI || 'mongodb://localhost:27017/inzo_winner';
+        const dbUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/inzo-db';
         await mongoose.connect(dbUri);
         console.log('✓ Connected to MongoDB');
 

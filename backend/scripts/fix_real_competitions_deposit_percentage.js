@@ -3,7 +3,23 @@
  * based on the agent's current deposit_bonus_percentage
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+const path = require('path');
+const fs = require('fs');
+
+// Try to load .env from multiple locations
+const envPaths = [
+    path.join(__dirname, '../.env'),      // backend/.env
+    path.join(__dirname, '../../.env')    // root/.env
+];
+
+for (const envPath of envPaths) {
+    if (fs.existsSync(envPath)) {
+        require('dotenv').config({ path: envPath });
+        // console.log(`Loaded env from ${envPath}`);
+        break;
+    }
+}
+
 const mongoose = require('mongoose');
 const Competition = require('../src/models/Competition');
 const Agent = require('../src/models/agent.model');
@@ -11,7 +27,11 @@ const Agent = require('../src/models/agent.model');
 async function updateRealCompetitions() {
     try {
         // Connect to MongoDB
-        const dbUri = process.env.MONGO_URI || 'mongodb://localhost:27017/inzo_winner';
+        // Use MONGODB_URI (standard in this project) or MONGO_URI, with correct fallback DB name
+        const dbUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/inzo-db';
+        
+        console.log(`[INFO] Connecting to MongoDB...`); // Don't log full URI to hide creds
+        
         await mongoose.connect(dbUri);
         console.log('✓ Connected to MongoDB');
 
