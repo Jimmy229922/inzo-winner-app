@@ -19780,50 +19780,54 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             return;
           }
             
-            // Direct approval without confirmation modal
-            try {
-                console.log('[Approve Winners] Sending approval request for competition:', state.activeCompetition.id);
-                const authedFetch = window.authedFetch || fetch;
-                const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        winners: state.winners.map(w => w._id).filter(Boolean)
-                    })
-                });
-                
-                if (resp.ok) {
-                    console.log('[Approve Winners] Approval successful.');
-                    toast('تم اعتماد المسابقة بنجاح', 'success');
-                    clearStagedWinnersForCompetition(state.activeCompetition.id);
-                    
-                    // Redirect to agent competitions page
-                    if (state.selectedAgent && state.selectedAgent.id) {
-                        console.log('[Approve Winners] Redirecting to agent profile/competitions:', state.selectedAgent.id);
-                        // Using the standard profile route which usually shows competitions
-                        window.location.hash = `#profile/${state.selectedAgent.id}`;
-                    } else {
-                        console.warn('[Approve Winners] No selected agent found for redirect. Reloading page.');
-                        setTimeout(() => window.location.reload(), 1500);
-                    }
+            showConfirmModal(
+                `هل أنت متأكد من اعتماد الفائزين (${state.winners.length}) وإغلاق المسابقة؟<br><small style="color:#ef4444">لن تتمكن من تعديل الفائزين بعد هذه الخطوة.</small>`,
+                async () => {
+                    try {
+                        console.log('[Approve Winners] Sending approval request for competition:', state.activeCompetition.id);
+                        const authedFetch = window.authedFetch || fetch;
+                        const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                winners: state.winners.map(w => w._id).filter(Boolean)
+                            })
+                        });
+                        
+                        if (resp.ok) {
+                            console.log('[Approve Winners] Approval successful.');
+                            toast('تم اعتماد المسابقة بنجاح', 'success');
+                            clearStagedWinnersForCompetition(state.activeCompetition.id);
+                            
+                            // Redirect to agent competitions page
+                            if (state.selectedAgent && state.selectedAgent.id) {
+                                console.log('[Approve Winners] Redirecting to agent profile/competitions:', state.selectedAgent.id);
+                                // Using the standard profile route which usually shows competitions
+                                window.location.hash = `#profile/${state.selectedAgent.id}`;
+                            } else {
+                                console.warn('[Approve Winners] No selected agent found for redirect. Reloading page.');
+                                setTimeout(() => window.location.reload(), 1500);
+                            }
 
-                    // Clear local state
-                    state.winners = [];
-                    state.entries = [];
-                    state.activeCompetition = null;
-                    saveSession();
-                    renderParticipants();
-                    renderWinners();
-                    updateCounts();
-                } else {
-                    const err = await resp.json();
-                    console.error('[Approve Winners] Approval failed:', err);
-                    toast(`فشل الاعتماد: ${err.message} ${err.error || ''}`, 'error');
+                            // Clear local state
+                            state.winners = [];
+                            state.entries = [];
+                            state.activeCompetition = null;
+                            saveSession();
+                            renderParticipants();
+                            renderWinners();
+                            updateCounts();
+                        } else {
+                            const err = await resp.json();
+                            console.error('[Approve Winners] Approval failed:', err);
+                            toast(`فشل الاعتماد: ${err.message} ${err.error || ''}`, 'error');
+                        }
+                    } catch (e) {
+                        console.error('[Approve Winners] Exception during approval:', e);
+                        toast('حدث خطأ أثناء الاعتماد', 'error');
+                    }
                 }
-            } catch (e) {
-                console.error('[Approve Winners] Exception during approval:', e);
-                toast('حدث خطأ أثناء الاعتماد', 'error');
-            }
+            );
         });
 
         const approveNoWinnersBtn = document.getElementById('approve-no-winners-btn');
@@ -19843,39 +19847,43 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 return;
             }
             
-            // Direct approval without confirmation modal
-            try {
-                console.log('[Approve No Winners] Sending approval request (no winners) for competition:', state.activeCompetition.id);
-                const authedFetch = window.authedFetch || fetch;
-                const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        noWinners: true
-                    })
-                });
-                
-                if (resp.ok) {
-                    console.log('[Approve No Winners] Approval successful.');
-                    toast('تم إغلاق المسابقة بنجاح', 'success');
-                    clearStagedWinnersForCompetition(state.activeCompetition.id);
-                    state.winners = [];
-                    state.entries = [];
-                    state.activeCompetition = null;
-                    saveSession();
-                    renderParticipants();
-                    renderWinners();
-                    updateCounts();
-                    setTimeout(() => window.location.reload(), 1500);
-                } else {
-                    const err = await resp.json();
-                    console.error('[Approve No Winners] Approval failed:', err);
-                    toast(`فشل الإغلاق: ${err.message} ${err.error || ''}`, 'error');
+            showConfirmModal(
+                `هل أنت متأكد من إغلاق المسابقة <strong>بدون فائزين</strong>؟<br><small style="color:#ef4444">سيتم إنهاء المسابقة ولن تتمكن من إضافة فائزين لاحقاً.</small>`,
+                async () => {
+                    try {
+                        console.log('[Approve No Winners] Sending approval request (no winners) for competition:', state.activeCompetition.id);
+                        const authedFetch = window.authedFetch || fetch;
+                        const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                noWinners: true
+                            })
+                        });
+                        
+                        if (resp.ok) {
+                            console.log('[Approve No Winners] Approval successful.');
+                            toast('تم إغلاق المسابقة بنجاح', 'success');
+                            clearStagedWinnersForCompetition(state.activeCompetition.id);
+                            state.winners = [];
+                            state.entries = [];
+                            state.activeCompetition = null;
+                            saveSession();
+                            renderParticipants();
+                            renderWinners();
+                            updateCounts();
+                            setTimeout(() => window.location.reload(), 1500);
+                        } else {
+                            const err = await resp.json();
+                            console.error('[Approve No Winners] Approval failed:', err);
+                            toast(`فشل الإغلاق: ${err.message} ${err.error || ''}`, 'error');
+                        }
+                    } catch (e) {
+                        console.error('[Approve No Winners] Exception during approval:', e);
+                        toast('حدث خطأ أثناء الإغلاق', 'error');
+                    }
                 }
-            } catch (e) {
-                console.error('[Approve No Winners] Exception during approval:', e);
-                toast('حدث خطأ أثناء الإغلاق', 'error');
-            }
+            );
         });
 
         // Bind events
@@ -19970,12 +19978,34 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       toast('تم استرجاع الفائز للروليت', 'info');
     }
 
-    function handleDeleteClick(ev) {
+    async function handleDeleteClick(ev) {
       const id = ev.currentTarget.getAttribute('data-delete');
       if (!id) return;
       
+      const winner = state.winners.find(w => w.id === id);
+      if (!winner) return;
+
       if (!confirm('هل أنت متأكد من حذف هذا الفائز؟')) return;
       
+      // Call backend delete if winner is saved
+      if (winner._id && state.selectedAgent && state.selectedAgent.id) {
+          try {
+              const authedFetch = window.authedFetch || fetch;
+              const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners/${winner._id}`, {
+                  method: 'DELETE'
+              });
+              if (!resp.ok) {
+                  const err = await resp.json();
+                  toast(`فشل حذف الفائز من قاعدة البيانات: ${err.message}`, 'error');
+                  return; // Stop if backend delete fails
+              }
+          } catch (e) {
+              console.error('Failed to delete winner from DB', e);
+              toast('حدث خطأ أثناء حذف الفائز من قاعدة البيانات', 'error');
+              return;
+          }
+      }
+
       // Remove from winners list
       state.winners = state.winners.filter(w => w.id !== id);
       
@@ -21534,7 +21564,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         const resp = await authedFetch(`/api/agents/${encodeURIComponent(state.selectedAgent.id)}/winners/import`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ winners: winnersPayload })
+          body: JSON.stringify({ 
+            winners: winnersPayload,
+            competition_id: state.activeCompetition ? state.activeCompetition.id : null
+          })
         });
         
         if (!resp.ok) {
@@ -21818,12 +21851,21 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
               try {
                   const authedFetch = window.authedFetch || fetch;
+                  
+                  // Prepare warnings map
+                  const warnings = validWinners.map(w => ({
+                      winnerId: w._id,
+                      include_warn_meet: !!w.includeWarnMeet,
+                      include_warn_prev: !!w.includeWarnPrev
+                  }));
+
                   const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-report`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                           winnerIds: validWinners.map(w => w._id),
-                          messageText
+                          messageText,
+                          warnings // Send warnings to backend
                       })
                   });
                   
@@ -22051,8 +22093,16 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             }
     
             msg += `◃ الفائز ${rank}: ${w.name}\n`;
-            msg += `           الجائزة: ${prizeText}\n\n`;
-            msg += `********************************************************\n`;
+            msg += `           الجائزة: ${prizeText}\n`;
+
+            if (w.includeWarnMeet) {
+                msg += `⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً\n`;
+            }
+            if (w.includeWarnPrev) {
+                msg += `‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية\n`;
+            }
+
+            msg += `\n********************************************************\n`;
         });
         
         msg += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;

@@ -940,7 +940,7 @@ exports.toggleAuditing = async (req, res) => {
 exports.sendWinnersReport = async (req, res) => {
     try {
         const { agentId } = req.params;
-        const { winnerIds, messageText } = req.body;
+        const { winnerIds, messageText, warnings } = req.body;
         const bot = req.app.locals.telegramBot;
 
         if (!bot) {
@@ -949,6 +949,19 @@ exports.sendWinnersReport = async (req, res) => {
 
         if (!agentId || !winnerIds || !Array.isArray(winnerIds) || winnerIds.length === 0) {
             return res.status(400).json({ message: 'Invalid request data' });
+        }
+
+        // Map warnings for easy lookup
+        const warnMap = new Map();
+        if (Array.isArray(warnings)) {
+            warnings.forEach(w => {
+                if (w.winnerId) {
+                    warnMap.set(String(w.winnerId), {
+                        meet: !!w.include_warn_meet,
+                        prev: !!w.include_warn_prev
+                    });
+                }
+            });
         }
 
         const agent = await Agent.findById(agentId);
@@ -1030,8 +1043,18 @@ exports.sendWinnersReport = async (req, res) => {
                 }
         
                 msg += `◃ الفائز ${rank}: ${w.name}\n`;
-                msg += `           الجائزة: ${prizeText}\n\n`;
-                msg += `********************************************************\n`;
+                msg += `           الجائزة: ${prizeText}\n`;
+
+                // Add warnings
+                const wPrefs = warnMap.get(String(w._id)) || {};
+                if (wPrefs.meet) {
+                    msg += `⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً\n`;
+                }
+                if (wPrefs.prev) {
+                    msg += `‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية\n`;
+                }
+
+                msg += `\n********************************************************\n`;
             });
             
             msg += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;

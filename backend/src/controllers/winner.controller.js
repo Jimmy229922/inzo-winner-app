@@ -1,6 +1,8 @@
 const Winner = require('../models/Winner');
 const Agent = require('../models/agent.model');
 const Competition = require('../models/Competition');
+const fs = require('fs').promises;
+const path = require('path');
 
 // GET /api/agents/:agentId/winners
 exports.getWinnersByAgent = async (req, res) => {
@@ -76,14 +78,35 @@ exports.importWinnersForAgent = async (req, res) => {
 
         // Find the agent's active competition - all winners must be associated with a real competition
         let activeCompetition = null;
-        try {
+        
+        // FIX: Allow specifying competition_id explicitly to avoid mismatch with frontend
+        if (payload.competition_id) {
             activeCompetition = await Competition.findOne({
-                agent_id: agentId,
-                status: { $in: ['sent', 'active', 'awaiting_winners'] },
-                is_active: true
-            }).sort({ created_at: -1 }).lean();
-        } catch (e) {
-            console.warn('[importWinnersForAgent] Failed to fetch active competition:', e);
+                _id: payload.competition_id,
+                agent_id: agentId
+            }).lean();
+
+            if (!activeCompetition) {
+                return res.status(404).json({ message: 'Specified competition not found for this agent.' });
+            }
+            
+            // Ensure it is in a valid state for importing
+            if (!['sent', 'active', 'awaiting_winners'].includes(activeCompetition.status)) {
+                return res.status(400).json({ 
+                    message: `Cannot import winners to a competition with status '${activeCompetition.status}'. Competition must be active.` 
+                });
+            }
+        } else {
+            // Fallback to auto-discovery (latest active)
+            try {
+                activeCompetition = await Competition.findOne({
+                    agent_id: agentId,
+                    status: { $in: ['sent', 'active', 'awaiting_winners'] },
+                    is_active: true
+                }).sort({ created_at: -1 }).lean();
+            } catch (e) {
+                console.warn('[importWinnersForAgent] Failed to fetch active competition:', e);
+            }
         }
 
         if (!activeCompetition || !activeCompetition._id) {
@@ -168,6 +191,25 @@ exports.deleteWinner = async (req, res) => {
         }
 
         const compId = winner.competition_id;
+
+        // --- NEW: Delete associated files (video/image) ---
+        if (winner.video_url) {
+            try {
+                const videoPath = path.join(__dirname, '../../', winner.video_url.replace(/^\//, ''));
+                await fs.unlink(videoPath).catch(err => {
+                    if (err.code !== 'ENOENT') console.warn('Failed to delete video file:', err.message);
+                });
+            } catch (e) { /* ignore */ }
+        }
+        if (winner.national_id_image) {
+            try {
+                const imagePath = path.join(__dirname, '../../', winner.national_id_image.replace(/^\//, ''));
+                await fs.unlink(imagePath).catch(err => {
+                    if (err.code !== 'ENOENT') console.warn('Failed to delete ID image file:', err.message);
+                });
+            } catch (e) { /* ignore */ }
+        }
+        // --------------------------------------------------
 
         await Winner.findByIdAndDelete(winnerId);
 
