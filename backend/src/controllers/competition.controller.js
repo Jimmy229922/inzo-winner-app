@@ -646,10 +646,15 @@ exports.completeCompetition = async (req, res) => {
             return res.status(400).json({ message: 'Competition is already completed.' });
         }
 
-        competition.status = 'completed';
-        competition.is_active = false; // Ensure it's no longer active
+        // Use updateOne to avoid validation errors on legacy documents that might be missing new required fields
+        await Competition.updateOne(
+            { _id: id }, 
+            { $set: { status: 'completed', is_active: false } }
+        );
         
-        await competition.save();
+        // Update local object for logging/response (optional but good for consistency)
+        competition.status = 'completed';
+        competition.is_active = false;
 
         let logDescription = `تم اعتماد المسابقة "${competition.name}" وإغلاقها.`;
         if (noWinners) {
