@@ -242,7 +242,7 @@ async function getCompetitionsByDay(dateFilter) {
  */
 async function getAgentClassification() {
     const results = await Agent.aggregate([
-        { $match: { status: 'active' } },
+        // { $match: { status: 'active' } }, // Removed: Agent model does not have a status field
         { $group: { _id: '$classification', count: { $sum: 1 } } },
         { $sort: { _id: 1 } }
     ]);
@@ -723,6 +723,8 @@ exports.getTopAgents = async (req, res) => {
             matchStage.classification = classification;
         }
 
+        const exclusiveRanks = ['CENTER', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND', 'وكيل حصري بدون مرتبة'];
+
         const topAgents = await Agent.aggregate([
             { $match: matchStage },
             {
@@ -735,6 +737,23 @@ exports.getTopAgents = async (req, res) => {
             },
             {
                 $addFields: {
+                    // Derive exclusivity in a consistent way for legacy data
+                    is_exclusive: {
+                        $or: [
+                            {
+                                $in: [
+                                    { $toUpper: { $ifNull: ['$classification', ''] } },
+                                    ['EXCLUSIVE', 'E']
+                                ]
+                            },
+                            {
+                                $in: [
+                                    { $toUpper: { $ifNull: ['$rank', ''] } },
+                                    exclusiveRanks
+                                ]
+                            }
+                        ]
+                    },
                     competition_count: { $size: '$competitions' },
                     total_views: { $sum: '$competitions.views_count' },
                     total_reactions: { $sum: '$competitions.reactions_count' },
@@ -778,6 +797,17 @@ exports.getTopAgents = async (req, res) => {
             },
             {
                 $addFields: {
+                    agency_type: {
+                        $cond: {
+                            if: '$is_exclusive',
+                            then: 'وكالة حصرية',
+                            else: 'وكالة عادية'
+                        }
+                    }
+                }
+            },
+            {
+                $addFields: {
                     compliance_rate: {
                         $cond: [
                             { $gt: ['$compliance_stats.total', 0] },
@@ -810,6 +840,8 @@ exports.getTopAgents = async (req, res) => {
                     classification: 1,
                     rank: 1,
                     avatar_url: 1,
+                    is_exclusive: 1,
+                    agency_type: 1,
                     competition_count: 1,
                     total_views: 1,
                     total_reactions: 1,

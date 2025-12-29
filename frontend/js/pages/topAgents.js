@@ -3,6 +3,46 @@ let agentStats = [];
 let selectedAgentsForComparison = [];
 let isTopAgentsComparisonMode = false;
 
+// --- Debugging: enable detailed logs for this page ---
+// Enable by running in DevTools console:
+//   window.__setTopAgentsDebug(true)
+// Or set localStorage key:
+//   localStorage.setItem('debugTopAgents', '1')
+// Or add query param:
+//   ?debugTopAgents=1
+let _topAgentsDebugOverride = null;
+const readTopAgentsDebugFlag = () => {
+    try {
+        const fromStorage = typeof localStorage !== 'undefined' && localStorage.getItem('debugTopAgents') === '1';
+        const fromQuery = typeof window !== 'undefined' && new URLSearchParams(window.location.search || '').get('debugTopAgents') === '1';
+        const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        // Default ON in local dev so issues are visible without extra steps.
+        return !!(fromStorage || fromQuery || isLocalhost);
+    } catch (_) {
+        return false;
+    }
+};
+
+const topAgentsDebug = {
+    get enabled() { return _topAgentsDebugOverride !== null ? !!_topAgentsDebugOverride : readTopAgentsDebugFlag(); },
+    log: (...args) => { if (topAgentsDebug.enabled) console.log(...args); },
+    warn: (...args) => { if (topAgentsDebug.enabled) console.warn(...args); },
+    error: (...args) => { if (topAgentsDebug.enabled) console.error(...args); },
+    groupCollapsed: (label) => { if (topAgentsDebug.enabled) console.groupCollapsed(label); },
+    groupEnd: () => { if (topAgentsDebug.enabled) console.groupEnd(); },
+    table: (data) => { if (topAgentsDebug.enabled && typeof console.table === 'function') console.table(data); },
+};
+
+window.__setTopAgentsDebug = (enabled) => {
+    try {
+        _topAgentsDebugOverride = !!enabled;
+        localStorage.setItem('debugTopAgents', enabled ? '1' : '0');
+        console.log(`[TopAgents][debug] ${enabled ? 'enabled' : 'disabled'} (no reload needed; navigate or re-open #top-agents)`);
+    } catch (e) {
+        console.warn('[TopAgents][debug] failed to write localStorage', e);
+    }
+};
+
 // --- NEW: Confetti Animation on Page Load ---
 function triggerConfettiAnimation() {
     const container = document.getElementById('app-content');
@@ -48,6 +88,29 @@ function animateValue(obj, start, end, duration) {
 }
 
 async function renderTopAgentsPage() {
+    if (topAgentsDebug.enabled) {
+        console.log('[TopAgents][debug] renderTopAgentsPage()', {
+            hash: window.location.hash,
+            search: window.location.search,
+            debugTopAgents: (typeof localStorage !== 'undefined') ? localStorage.getItem('debugTopAgents') : null,
+        });
+
+        // Cross-check: how many agents exist in the system vs how many the leaderboard endpoint returns.
+        // This helps detect "missing agents" being a backend-data issue vs frontend filtering.
+        try {
+            const agentsRes = await authedFetch('/api/agents?limit=1&select=_id');
+            if (agentsRes.ok) {
+                const agentsJson = await agentsRes.json();
+                const totalAgentsCount = agentsJson?.count;
+                console.log('[TopAgents][debug] /api/agents count:', totalAgentsCount);
+            } else {
+                console.warn('[TopAgents][debug] /api/agents count request failed:', agentsRes.status);
+            }
+        } catch (e) {
+            console.warn('[TopAgents][debug] /api/agents count request error:', e?.message || e);
+        }
+    }
+
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
         <div class="page-header column-header">
@@ -220,6 +283,20 @@ async function fetchAndRenderTopAgents(dateRange = 'all', customFrom = null, cus
     /* logs suppressed: fetching top agents */
         
         const queryParams = new URLSearchParams();
+
+        // Fetch a sufficiently large leaderboard so agents don't "disappear" due to a small default limit.
+        // Keep it reasonable for production (large legacy datasets) while allowing override for debugging.
+        let limit = 100;
+        try {
+            const sp = new URLSearchParams(window.location.search || '');
+            const q = parseInt(sp.get('topAgentsLimit') || '', 10);
+            const s = parseInt((typeof localStorage !== 'undefined' ? localStorage.getItem('topAgentsLimit') : '') || '', 10);
+            const override = Number.isFinite(q) ? q : (Number.isFinite(s) ? s : NaN);
+            if (Number.isFinite(override) && override > 0 && override <= 5000) {
+                limit = override;
+            }
+        } catch (_) { /* ignore */ }
+        queryParams.set('limit', String(limit));
         
         if (dateRange === 'custom' && customFrom && customTo) {
             queryParams.set('from', customFrom);
@@ -227,8 +304,11 @@ async function fetchAndRenderTopAgents(dateRange = 'all', customFrom = null, cus
         } else {
             queryParams.set('dateRange', dateRange);
         }
-        
-        const response = await authedFetch(`/api/stats/top-agents?${queryParams.toString()}`);
+
+        const url = `/api/stats/top-agents?${queryParams.toString()}`;
+        topAgentsDebug.log('[TopAgents][debug] Fetching top agents:', url);
+
+        const response = await authedFetch(url);
 
     /* logs suppressed: response status and ok */
 
@@ -242,6 +322,27 @@ async function fetchAndRenderTopAgents(dateRange = 'all', customFrom = null, cus
     /* logs suppressed: API result details */
         
     const topAgentsData = result.data || result; // استخراج البيانات من property "data" إذا كانت موجودة
+
+    if (topAgentsDebug.enabled) {
+        const count = Array.isArray(topAgentsData) ? topAgentsData.length : null;
+        topAgentsDebug.log('[TopAgents][debug] /top-agents received:', { isArray: Array.isArray(topAgentsData), count });
+        if (Array.isArray(topAgentsData) && topAgentsData.length > 0) {
+            topAgentsDebug.table(
+                topAgentsData.slice(0, 15).map(a => ({
+                    _id: a?._id,
+                    agent_id: a?.agent_id,
+                    name: a?.name,
+                    rank: a?.rank,
+                    classification: a?.classification,
+                    is_exclusive: a?.is_exclusive,
+                    competition_count: a?.competition_count,
+                    total_views: a?.total_views,
+                    total_reactions: a?.total_reactions,
+                    total_participants: a?.total_participants,
+                }))
+            );
+        }
+    }
         
     /* logs suppressed: extracted topAgents data */
         // console.log('='.repeat(80));
@@ -323,6 +424,16 @@ function applyAndDisplay() {
     const classification = document.querySelector('.filter-buttons[data-filter-group="classification"] .active')?.dataset.filter || 'all';
     let sortedAgents = [...(window.currentAgentStats || [])];
 
+    topAgentsDebug.groupCollapsed(`[TopAgents] applyAndDisplay | sort=${sortKey} | classification=${classification} | total=${sortedAgents.length}`);
+    if (topAgentsDebug.enabled) {
+        const classCounts = sortedAgents.reduce((acc, a) => {
+            const key = (a?.classification ?? 'N/A');
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+        }, {});
+        topAgentsDebug.log('Classification counts (before filter):', classCounts);
+    }
+
     /* logs suppressed: applyAndDisplay inputs */
 
     // 1. Filter by classification
@@ -330,6 +441,8 @@ function applyAndDisplay() {
         sortedAgents = sortedAgents.filter(agent => agent.classification === classification);
     /* logs suppressed: after classification filter */
     }
+
+    topAgentsDebug.log('After classification filter count:', sortedAgents.length);
 
     // 2. Sort the filtered list
     const classificationOrder = { 'R': 1, 'A': 2, 'B': 3, 'C': 4 };
@@ -341,11 +454,30 @@ function applyAndDisplay() {
         return orderA - orderB;
     });
 
+    if (topAgentsDebug.enabled) {
+        topAgentsDebug.table(
+            sortedAgents.slice(0, 10).map((a, idx) => ({
+                idx: idx + 1,
+                _id: a?._id,
+                name: a?.name,
+                rank: a?.rank,
+                classification: a?.classification,
+                is_exclusive: a?.is_exclusive,
+                total_views: a?.total_views,
+                total_reactions: a?.total_reactions,
+                total_participants: a?.total_participants,
+                growth_rate: a?.growth_rate,
+            }))
+        );
+    }
+
     /* logs suppressed: after sort and calling display */
     // console.log('='.repeat(80));
 
     // 3. Display the final sorted and filtered list
     displayTopAgents(sortedAgents, sortKey);
+
+    topAgentsDebug.groupEnd();
 }
 
 
@@ -361,6 +493,9 @@ function displayTopAgents(sortedAgents, sortKey) {
         console.log('Container current innerHTML length:', container.innerHTML.length);
     } */
     const dateRange = document.querySelector('.filter-buttons[data-filter-group="date"] .active')?.dataset.range || 'all';
+
+    topAgentsDebug.groupCollapsed(`[TopAgents] displayTopAgents | sort=${sortKey} | dateRange=${dateRange} | count=${sortedAgents?.length || 0}`);
+    topAgentsDebug.log('Container exists:', !!container);
 
     /* logs suppressed: container found and dateRange */
 
@@ -390,7 +525,7 @@ function displayTopAgents(sortedAgents, sortKey) {
     }
     
     /* logs suppressed: continuing display logic */
-    console.log('='.repeat(80));
+    topAgentsDebug.log('='.repeat(80));
 
     const getStatLabel = (key) => {
         switch (key) {
@@ -421,15 +556,44 @@ function displayTopAgents(sortedAgents, sortKey) {
     const runnersUp = sortedAgents.slice(3);
     const exclusiveRanks = ['CENTER', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND', 'وكيل حصري بدون مرتبة'];
     const regularRanks = ['BEGINNING', 'GROWTH', 'PRO', 'ELITE'];
+
+    const normalizeRank = (rank) => {
+        if (rank === null || rank === undefined) return '';
+        const trimmed = String(rank).trim();
+        // Only uppercase latin-based ranks; keep Arabic as-is
+        return /[A-Za-z]/.test(trimmed) ? trimmed.toUpperCase() : trimmed;
+    };
+
+    const exclusiveRankSet = new Set(exclusiveRanks.map(normalizeRank));
+    const regularRankSet = new Set(regularRanks.map(normalizeRank));
+
+    const isExclusiveByLegacySignals = (agent) => {
+        const rankKey = normalizeRank(agent?.rank);
+        const classKey = String(agent?.classification || '').trim().toUpperCase();
+        if (classKey === 'EXCLUSIVE' || classKey === 'E') return true;
+        if (exclusiveRankSet.has(rankKey)) return true;
+        // Heuristic for legacy Arabic/strings
+        const raw = String(agent?.rank || '').trim();
+        if (raw.includes('حصري') || raw.toLowerCase().includes('exclusive')) return true;
+        return false;
+    };
+
+    const isExclusiveAgent = (agent) => {
+        // Prefer backend-computed flag when available
+        if (typeof agent?.is_exclusive === 'boolean') return agent.is_exclusive;
+        return isExclusiveByLegacySignals(agent);
+    };
     
     const orderAgentsByRank = (agents, rankOrder) => {
         const orderMap = rankOrder.reduce((acc, rank, idx) => {
-            acc[rank] = idx;
+            acc[normalizeRank(rank)] = idx;
             return acc;
         }, {});
         return agents.slice().sort((a, b) => {
-            const aOrder = orderMap.hasOwnProperty(a.rank) ? orderMap[a.rank] : Number.MAX_SAFE_INTEGER;
-            const bOrder = orderMap.hasOwnProperty(b.rank) ? orderMap[b.rank] : Number.MAX_SAFE_INTEGER;
+            const aRank = normalizeRank(a.rank);
+            const bRank = normalizeRank(b.rank);
+            const aOrder = orderMap.hasOwnProperty(aRank) ? orderMap[aRank] : Number.MAX_SAFE_INTEGER;
+            const bOrder = orderMap.hasOwnProperty(bRank) ? orderMap[bRank] : Number.MAX_SAFE_INTEGER;
             if (aOrder !== bOrder) return aOrder - bOrder;
             const metricDiff = (b[sortKey] || 0) - (a[sortKey] || 0);
             if (metricDiff !== 0) return metricDiff;
@@ -438,13 +602,76 @@ function displayTopAgents(sortedAgents, sortKey) {
     };
 
     const exclusiveRunnersUp = orderAgentsByRank(
-        runnersUp.filter(agent => exclusiveRanks.includes(agent.rank)),
+        runnersUp.filter(agent => isExclusiveAgent(agent)),
         exclusiveRanks
     );
-    const regularRunnersUp = orderAgentsByRank(
-        runnersUp.filter(agent => regularRanks.includes(agent.rank)),
+
+    const baseRegularRunnersUp = orderAgentsByRank(
+        runnersUp.filter(agent => !isExclusiveAgent(agent) && regularRankSet.has(normalizeRank(agent.rank))),
         regularRanks
     );
+
+    // IMPORTANT: Any agent not matching either list used to be dropped entirely.
+    // To avoid "missing" agents, we bucket unknown/missing ranks by exclusivity (backend flag if present).
+    const unknownExclusiveRunnersUp = orderAgentsByRank(
+        runnersUp.filter(agent => {
+            const rankKey = normalizeRank(agent.rank);
+            return !exclusiveRankSet.has(rankKey) && !regularRankSet.has(rankKey) && isExclusiveAgent(agent);
+        }),
+        []
+    );
+    const unknownRegularRunnersUp = orderAgentsByRank(
+        runnersUp.filter(agent => {
+            const rankKey = normalizeRank(agent.rank);
+            return !exclusiveRankSet.has(rankKey) && !regularRankSet.has(rankKey) && !isExclusiveAgent(agent);
+        }),
+        []
+    );
+
+    const regularRunnersUp = baseRegularRunnersUp.concat(unknownRegularRunnersUp);
+    const finalExclusiveRunnersUp = exclusiveRunnersUp.concat(unknownExclusiveRunnersUp);
+
+    if (topAgentsDebug.enabled) {
+        topAgentsDebug.log('Top 3 count:', topThree.length);
+        topAgentsDebug.table(topThree.map((a, idx) => ({
+            idx: idx + 1,
+            _id: a?._id,
+            name: a?.name,
+            rank: a?.rank,
+            classification: a?.classification,
+            is_exclusive: a?.is_exclusive,
+            total_views: a?.total_views,
+            total_reactions: a?.total_reactions,
+            total_participants: a?.total_participants,
+        })));
+
+        topAgentsDebug.log('Runners up count:', runnersUp.length);
+        topAgentsDebug.log('Exclusive runners up count:', finalExclusiveRunnersUp.length);
+        topAgentsDebug.log('Regular runners up count:', baseRegularRunnersUp.length);
+        topAgentsDebug.log('Unknown-rank exclusive count:', unknownExclusiveRunnersUp.length);
+        topAgentsDebug.log('Unknown-rank regular count:', unknownRegularRunnersUp.length);
+
+        const showUnknown = (label, list) => {
+            if (!list || list.length === 0) return;
+            topAgentsDebug.warn(label);
+            topAgentsDebug.table(
+                list.slice(0, 50).map(a => ({
+                    _id: a?._id,
+                    name: a?.name,
+                    rank: a?.rank,
+                    rankKey: normalizeRank(a?.rank),
+                    classification: a?.classification,
+                    is_exclusive: a?.is_exclusive,
+                    total_views: a?.total_views,
+                    total_reactions: a?.total_reactions,
+                    total_participants: a?.total_participants,
+                }))
+            );
+        };
+
+        showUnknown('Unknown/missing-rank agents bucketed as EXCLUSIVE:', unknownExclusiveRunnersUp);
+        showUnknown('Unknown/missing-rank agents bucketed as REGULAR:', unknownRegularRunnersUp);
+    }
 
     // Debug logging
     /* console.log('Top Agents Debug:');
@@ -478,10 +705,11 @@ function displayTopAgents(sortedAgents, sortKey) {
                 : `<div class="leaderboard-avatar-placeholder"><i class="fas fa-user"></i></div>`;
 
             // Determine if agent is exclusive
-            const isExclusive = exclusiveRanks.includes(agent.rank);
+            const isExclusive = isExclusiveAgent(agent);
+            const exclusiveTitle = agent.agency_type || (isExclusive ? "وكيل حصري" : "وكيل اعتيادي");
             const exclusiveBadge = isExclusive 
-                ? `<div class="exclusive-badge" title="وكيل حصري"><i class="fas fa-crown"></i></div>` 
-                : `<div class="regular-badge" title="وكيل اعتيادي"><i class="fas fa-star"></i></div>`;
+                ? `<div class="exclusive-badge" title="${exclusiveTitle}"><i class="fas fa-crown"></i></div>` 
+                : `<div class="regular-badge" title="${exclusiveTitle}"><i class="fas fa-star"></i></div>`;
 
             // --- NEW: Special Badges Logic ---
             const isHotStreak = agent.growth_rate > 15;
@@ -572,10 +800,11 @@ function displayTopAgents(sortedAgents, sortKey) {
                 : `<div class="leaderboard-avatar-placeholder-simple"><i class="fas fa-user"></i></div>`;
 
             // Determine if agent is exclusive
-            const isExclusive = exclusiveRanks.includes(agent.rank);
+            const isExclusive = isExclusiveAgent(agent);
+            const exclusiveTitle = agent.agency_type || (isExclusive ? "وكيل حصري" : "وكيل اعتيادي");
             const exclusiveIcon = isExclusive 
-                ? `<i class="fas fa-crown" style="color: #f1c40f; margin-left: 5px;" title="وكيل حصري"></i>` 
-                : `<i class="fas fa-star" style="color: #95a5a6; margin-left: 5px;" title="وكيل اعتيادي"></i>`;
+                ? `<i class="fas fa-crown" style="color: #f1c40f; margin-left: 5px;" title="${exclusiveTitle}"></i>` 
+                : `<i class="fas fa-star" style="color: #95a5a6; margin-left: 5px;" title="${exclusiveTitle}"></i>`;
 
             return `
                 <div class="leaderboard-card-simple" data-agent-id="${agent._id}" style="cursor: pointer;">
@@ -627,7 +856,7 @@ function displayTopAgents(sortedAgents, sortKey) {
                     <div class="leaderboard-list-section">
                         <h2 class="leaderboard-section-title"><i class="fas fa-crown"></i> الوكلاء الحصريين</h2>
                         <div class="leaderboard-simple-list">
-                            ${exclusiveRunnersUp.length > 0 ? exclusiveRunnersUp.map((agent, index) => {
+                            ${finalExclusiveRunnersUp.length > 0 ? finalExclusiveRunnersUp.map((agent, index) => {
                                 const actualRank = sortedAgents.findIndex(a => a._id === agent._id) + 1;
                                 return renderSimpleCard(agent, actualRank, sortKey);
                             }).join('') : '<p class="no-results-message">لا يوجد وكلاء حصريين لعرضهم.</p>'}
@@ -645,6 +874,12 @@ function displayTopAgents(sortedAgents, sortKey) {
                 </div>
             ` : ''}
         `;
+
+    if (topAgentsDebug.enabled) {
+        const podiumCards = container.querySelectorAll('.leaderboard-podium [data-agent-id]').length;
+        const simpleCards = container.querySelectorAll('.leaderboard-card-simple[data-agent-id]').length;
+        topAgentsDebug.log('Rendered cards:', { podiumCards, simpleCards });
+    }
 
     // --- NEW: Trigger Animations ---
     const animatedElements = container.querySelectorAll('[data-animate-to]');
@@ -710,6 +945,8 @@ function displayTopAgents(sortedAgents, sortKey) {
             }
         });
     }
+
+    topAgentsDebug.groupEnd();
 
     // --- NEW: Comparison Floating Bar Logic ---
     document.getElementById('cancel-comparison-btn')?.addEventListener('click', () => {

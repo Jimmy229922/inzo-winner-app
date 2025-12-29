@@ -5566,6 +5566,46 @@ let agentStats = [];
 let selectedAgentsForComparison = [];
 let isTopAgentsComparisonMode = false;
 
+// --- Debugging: enable detailed logs for this page ---
+// Enable by running in DevTools console:
+//   window.__setTopAgentsDebug(true)
+// Or set localStorage key:
+//   localStorage.setItem('debugTopAgents', '1')
+// Or add query param:
+//   ?debugTopAgents=1
+let _topAgentsDebugOverride = null;
+const readTopAgentsDebugFlag = () => {
+    try {
+        const fromStorage = typeof localStorage !== 'undefined' && localStorage.getItem('debugTopAgents') === '1';
+        const fromQuery = typeof window !== 'undefined' && new URLSearchParams(window.location.search || '').get('debugTopAgents') === '1';
+        const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        // Default ON in local dev so issues are visible without extra steps.
+        return !!(fromStorage || fromQuery || isLocalhost);
+    } catch (_) {
+        return false;
+    }
+};
+
+const topAgentsDebug = {
+    get enabled() { return _topAgentsDebugOverride !== null ? !!_topAgentsDebugOverride : readTopAgentsDebugFlag(); },
+    log: (...args) => { if (topAgentsDebug.enabled) console.log(...args); },
+    warn: (...args) => { if (topAgentsDebug.enabled) console.warn(...args); },
+    error: (...args) => { if (topAgentsDebug.enabled) console.error(...args); },
+    groupCollapsed: (label) => { if (topAgentsDebug.enabled) console.groupCollapsed(label); },
+    groupEnd: () => { if (topAgentsDebug.enabled) console.groupEnd(); },
+    table: (data) => { if (topAgentsDebug.enabled && typeof console.table === 'function') console.table(data); },
+};
+
+window.__setTopAgentsDebug = (enabled) => {
+    try {
+        _topAgentsDebugOverride = !!enabled;
+        localStorage.setItem('debugTopAgents', enabled ? '1' : '0');
+        console.log(`[TopAgents][debug] ${enabled ? 'enabled' : 'disabled'} (no reload needed; navigate or re-open #top-agents)`);
+    } catch (e) {
+        console.warn('[TopAgents][debug] failed to write localStorage', e);
+    }
+};
+
 // --- NEW: Confetti Animation on Page Load ---
 function triggerConfettiAnimation() {
     const container = document.getElementById('app-content');
@@ -5611,6 +5651,29 @@ function animateValue(obj, start, end, duration) {
 }
 
 async function renderTopAgentsPage() {
+    if (topAgentsDebug.enabled) {
+        console.log('[TopAgents][debug] renderTopAgentsPage()', {
+            hash: window.location.hash,
+            search: window.location.search,
+            debugTopAgents: (typeof localStorage !== 'undefined') ? localStorage.getItem('debugTopAgents') : null,
+        });
+
+        // Cross-check: how many agents exist in the system vs how many the leaderboard endpoint returns.
+        // This helps detect "missing agents" being a backend-data issue vs frontend filtering.
+        try {
+            const agentsRes = await authedFetch('/api/agents?limit=1&select=_id');
+            if (agentsRes.ok) {
+                const agentsJson = await agentsRes.json();
+                const totalAgentsCount = agentsJson?.count;
+                console.log('[TopAgents][debug] /api/agents count:', totalAgentsCount);
+            } else {
+                console.warn('[TopAgents][debug] /api/agents count request failed:', agentsRes.status);
+            }
+        } catch (e) {
+            console.warn('[TopAgents][debug] /api/agents count request error:', e?.message || e);
+        }
+    }
+
     const appContent = document.getElementById('app-content');
     appContent.innerHTML = `
         <div class="page-header column-header">
@@ -5783,6 +5846,20 @@ async function fetchAndRenderTopAgents(dateRange = 'all', customFrom = null, cus
     /* logs suppressed: fetching top agents */
         
         const queryParams = new URLSearchParams();
+
+        // Fetch a sufficiently large leaderboard so agents don't "disappear" due to a small default limit.
+        // Keep it reasonable for production (large legacy datasets) while allowing override for debugging.
+        let limit = 100;
+        try {
+            const sp = new URLSearchParams(window.location.search || '');
+            const q = parseInt(sp.get('topAgentsLimit') || '', 10);
+            const s = parseInt((typeof localStorage !== 'undefined' ? localStorage.getItem('topAgentsLimit') : '') || '', 10);
+            const override = Number.isFinite(q) ? q : (Number.isFinite(s) ? s : NaN);
+            if (Number.isFinite(override) && override > 0 && override <= 5000) {
+                limit = override;
+            }
+        } catch (_) { /* ignore */ }
+        queryParams.set('limit', String(limit));
         
         if (dateRange === 'custom' && customFrom && customTo) {
             queryParams.set('from', customFrom);
@@ -5790,8 +5867,11 @@ async function fetchAndRenderTopAgents(dateRange = 'all', customFrom = null, cus
         } else {
             queryParams.set('dateRange', dateRange);
         }
-        
-        const response = await authedFetch(`/api/stats/top-agents?${queryParams.toString()}`);
+
+        const url = `/api/stats/top-agents?${queryParams.toString()}`;
+        topAgentsDebug.log('[TopAgents][debug] Fetching top agents:', url);
+
+        const response = await authedFetch(url);
 
     /* logs suppressed: response status and ok */
 
@@ -5805,6 +5885,27 @@ async function fetchAndRenderTopAgents(dateRange = 'all', customFrom = null, cus
     /* logs suppressed: API result details */
         
     const topAgentsData = result.data || result; // استخراج البيانات من property "data" إذا كانت موجودة
+
+    if (topAgentsDebug.enabled) {
+        const count = Array.isArray(topAgentsData) ? topAgentsData.length : null;
+        topAgentsDebug.log('[TopAgents][debug] /top-agents received:', { isArray: Array.isArray(topAgentsData), count });
+        if (Array.isArray(topAgentsData) && topAgentsData.length > 0) {
+            topAgentsDebug.table(
+                topAgentsData.slice(0, 15).map(a => ({
+                    _id: a?._id,
+                    agent_id: a?.agent_id,
+                    name: a?.name,
+                    rank: a?.rank,
+                    classification: a?.classification,
+                    is_exclusive: a?.is_exclusive,
+                    competition_count: a?.competition_count,
+                    total_views: a?.total_views,
+                    total_reactions: a?.total_reactions,
+                    total_participants: a?.total_participants,
+                }))
+            );
+        }
+    }
         
     /* logs suppressed: extracted topAgents data */
         // console.log('='.repeat(80));
@@ -5886,6 +5987,16 @@ function applyAndDisplay() {
     const classification = document.querySelector('.filter-buttons[data-filter-group="classification"] .active')?.dataset.filter || 'all';
     let sortedAgents = [...(window.currentAgentStats || [])];
 
+    topAgentsDebug.groupCollapsed(`[TopAgents] applyAndDisplay | sort=${sortKey} | classification=${classification} | total=${sortedAgents.length}`);
+    if (topAgentsDebug.enabled) {
+        const classCounts = sortedAgents.reduce((acc, a) => {
+            const key = (a?.classification ?? 'N/A');
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+        }, {});
+        topAgentsDebug.log('Classification counts (before filter):', classCounts);
+    }
+
     /* logs suppressed: applyAndDisplay inputs */
 
     // 1. Filter by classification
@@ -5893,6 +6004,8 @@ function applyAndDisplay() {
         sortedAgents = sortedAgents.filter(agent => agent.classification === classification);
     /* logs suppressed: after classification filter */
     }
+
+    topAgentsDebug.log('After classification filter count:', sortedAgents.length);
 
     // 2. Sort the filtered list
     const classificationOrder = { 'R': 1, 'A': 2, 'B': 3, 'C': 4 };
@@ -5904,11 +6017,30 @@ function applyAndDisplay() {
         return orderA - orderB;
     });
 
+    if (topAgentsDebug.enabled) {
+        topAgentsDebug.table(
+            sortedAgents.slice(0, 10).map((a, idx) => ({
+                idx: idx + 1,
+                _id: a?._id,
+                name: a?.name,
+                rank: a?.rank,
+                classification: a?.classification,
+                is_exclusive: a?.is_exclusive,
+                total_views: a?.total_views,
+                total_reactions: a?.total_reactions,
+                total_participants: a?.total_participants,
+                growth_rate: a?.growth_rate,
+            }))
+        );
+    }
+
     /* logs suppressed: after sort and calling display */
     // console.log('='.repeat(80));
 
     // 3. Display the final sorted and filtered list
     displayTopAgents(sortedAgents, sortKey);
+
+    topAgentsDebug.groupEnd();
 }
 
 
@@ -5924,6 +6056,9 @@ function displayTopAgents(sortedAgents, sortKey) {
         console.log('Container current innerHTML length:', container.innerHTML.length);
     } */
     const dateRange = document.querySelector('.filter-buttons[data-filter-group="date"] .active')?.dataset.range || 'all';
+
+    topAgentsDebug.groupCollapsed(`[TopAgents] displayTopAgents | sort=${sortKey} | dateRange=${dateRange} | count=${sortedAgents?.length || 0}`);
+    topAgentsDebug.log('Container exists:', !!container);
 
     /* logs suppressed: container found and dateRange */
 
@@ -5953,7 +6088,7 @@ function displayTopAgents(sortedAgents, sortKey) {
     }
     
     /* logs suppressed: continuing display logic */
-    console.log('='.repeat(80));
+    topAgentsDebug.log('='.repeat(80));
 
     const getStatLabel = (key) => {
         switch (key) {
@@ -5984,15 +6119,44 @@ function displayTopAgents(sortedAgents, sortKey) {
     const runnersUp = sortedAgents.slice(3);
     const exclusiveRanks = ['CENTER', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND', 'وكيل حصري بدون مرتبة'];
     const regularRanks = ['BEGINNING', 'GROWTH', 'PRO', 'ELITE'];
+
+    const normalizeRank = (rank) => {
+        if (rank === null || rank === undefined) return '';
+        const trimmed = String(rank).trim();
+        // Only uppercase latin-based ranks; keep Arabic as-is
+        return /[A-Za-z]/.test(trimmed) ? trimmed.toUpperCase() : trimmed;
+    };
+
+    const exclusiveRankSet = new Set(exclusiveRanks.map(normalizeRank));
+    const regularRankSet = new Set(regularRanks.map(normalizeRank));
+
+    const isExclusiveByLegacySignals = (agent) => {
+        const rankKey = normalizeRank(agent?.rank);
+        const classKey = String(agent?.classification || '').trim().toUpperCase();
+        if (classKey === 'EXCLUSIVE' || classKey === 'E') return true;
+        if (exclusiveRankSet.has(rankKey)) return true;
+        // Heuristic for legacy Arabic/strings
+        const raw = String(agent?.rank || '').trim();
+        if (raw.includes('حصري') || raw.toLowerCase().includes('exclusive')) return true;
+        return false;
+    };
+
+    const isExclusiveAgent = (agent) => {
+        // Prefer backend-computed flag when available
+        if (typeof agent?.is_exclusive === 'boolean') return agent.is_exclusive;
+        return isExclusiveByLegacySignals(agent);
+    };
     
     const orderAgentsByRank = (agents, rankOrder) => {
         const orderMap = rankOrder.reduce((acc, rank, idx) => {
-            acc[rank] = idx;
+            acc[normalizeRank(rank)] = idx;
             return acc;
         }, {});
         return agents.slice().sort((a, b) => {
-            const aOrder = orderMap.hasOwnProperty(a.rank) ? orderMap[a.rank] : Number.MAX_SAFE_INTEGER;
-            const bOrder = orderMap.hasOwnProperty(b.rank) ? orderMap[b.rank] : Number.MAX_SAFE_INTEGER;
+            const aRank = normalizeRank(a.rank);
+            const bRank = normalizeRank(b.rank);
+            const aOrder = orderMap.hasOwnProperty(aRank) ? orderMap[aRank] : Number.MAX_SAFE_INTEGER;
+            const bOrder = orderMap.hasOwnProperty(bRank) ? orderMap[bRank] : Number.MAX_SAFE_INTEGER;
             if (aOrder !== bOrder) return aOrder - bOrder;
             const metricDiff = (b[sortKey] || 0) - (a[sortKey] || 0);
             if (metricDiff !== 0) return metricDiff;
@@ -6001,13 +6165,76 @@ function displayTopAgents(sortedAgents, sortKey) {
     };
 
     const exclusiveRunnersUp = orderAgentsByRank(
-        runnersUp.filter(agent => exclusiveRanks.includes(agent.rank)),
+        runnersUp.filter(agent => isExclusiveAgent(agent)),
         exclusiveRanks
     );
-    const regularRunnersUp = orderAgentsByRank(
-        runnersUp.filter(agent => regularRanks.includes(agent.rank)),
+
+    const baseRegularRunnersUp = orderAgentsByRank(
+        runnersUp.filter(agent => !isExclusiveAgent(agent) && regularRankSet.has(normalizeRank(agent.rank))),
         regularRanks
     );
+
+    // IMPORTANT: Any agent not matching either list used to be dropped entirely.
+    // To avoid "missing" agents, we bucket unknown/missing ranks by exclusivity (backend flag if present).
+    const unknownExclusiveRunnersUp = orderAgentsByRank(
+        runnersUp.filter(agent => {
+            const rankKey = normalizeRank(agent.rank);
+            return !exclusiveRankSet.has(rankKey) && !regularRankSet.has(rankKey) && isExclusiveAgent(agent);
+        }),
+        []
+    );
+    const unknownRegularRunnersUp = orderAgentsByRank(
+        runnersUp.filter(agent => {
+            const rankKey = normalizeRank(agent.rank);
+            return !exclusiveRankSet.has(rankKey) && !regularRankSet.has(rankKey) && !isExclusiveAgent(agent);
+        }),
+        []
+    );
+
+    const regularRunnersUp = baseRegularRunnersUp.concat(unknownRegularRunnersUp);
+    const finalExclusiveRunnersUp = exclusiveRunnersUp.concat(unknownExclusiveRunnersUp);
+
+    if (topAgentsDebug.enabled) {
+        topAgentsDebug.log('Top 3 count:', topThree.length);
+        topAgentsDebug.table(topThree.map((a, idx) => ({
+            idx: idx + 1,
+            _id: a?._id,
+            name: a?.name,
+            rank: a?.rank,
+            classification: a?.classification,
+            is_exclusive: a?.is_exclusive,
+            total_views: a?.total_views,
+            total_reactions: a?.total_reactions,
+            total_participants: a?.total_participants,
+        })));
+
+        topAgentsDebug.log('Runners up count:', runnersUp.length);
+        topAgentsDebug.log('Exclusive runners up count:', finalExclusiveRunnersUp.length);
+        topAgentsDebug.log('Regular runners up count:', baseRegularRunnersUp.length);
+        topAgentsDebug.log('Unknown-rank exclusive count:', unknownExclusiveRunnersUp.length);
+        topAgentsDebug.log('Unknown-rank regular count:', unknownRegularRunnersUp.length);
+
+        const showUnknown = (label, list) => {
+            if (!list || list.length === 0) return;
+            topAgentsDebug.warn(label);
+            topAgentsDebug.table(
+                list.slice(0, 50).map(a => ({
+                    _id: a?._id,
+                    name: a?.name,
+                    rank: a?.rank,
+                    rankKey: normalizeRank(a?.rank),
+                    classification: a?.classification,
+                    is_exclusive: a?.is_exclusive,
+                    total_views: a?.total_views,
+                    total_reactions: a?.total_reactions,
+                    total_participants: a?.total_participants,
+                }))
+            );
+        };
+
+        showUnknown('Unknown/missing-rank agents bucketed as EXCLUSIVE:', unknownExclusiveRunnersUp);
+        showUnknown('Unknown/missing-rank agents bucketed as REGULAR:', unknownRegularRunnersUp);
+    }
 
     // Debug logging
     /* console.log('Top Agents Debug:');
@@ -6041,10 +6268,11 @@ function displayTopAgents(sortedAgents, sortKey) {
                 : `<div class="leaderboard-avatar-placeholder"><i class="fas fa-user"></i></div>`;
 
             // Determine if agent is exclusive
-            const isExclusive = exclusiveRanks.includes(agent.rank);
+            const isExclusive = isExclusiveAgent(agent);
+            const exclusiveTitle = agent.agency_type || (isExclusive ? "وكيل حصري" : "وكيل اعتيادي");
             const exclusiveBadge = isExclusive 
-                ? `<div class="exclusive-badge" title="وكيل حصري"><i class="fas fa-crown"></i></div>` 
-                : `<div class="regular-badge" title="وكيل اعتيادي"><i class="fas fa-star"></i></div>`;
+                ? `<div class="exclusive-badge" title="${exclusiveTitle}"><i class="fas fa-crown"></i></div>` 
+                : `<div class="regular-badge" title="${exclusiveTitle}"><i class="fas fa-star"></i></div>`;
 
             // --- NEW: Special Badges Logic ---
             const isHotStreak = agent.growth_rate > 15;
@@ -6135,10 +6363,11 @@ function displayTopAgents(sortedAgents, sortKey) {
                 : `<div class="leaderboard-avatar-placeholder-simple"><i class="fas fa-user"></i></div>`;
 
             // Determine if agent is exclusive
-            const isExclusive = exclusiveRanks.includes(agent.rank);
+            const isExclusive = isExclusiveAgent(agent);
+            const exclusiveTitle = agent.agency_type || (isExclusive ? "وكيل حصري" : "وكيل اعتيادي");
             const exclusiveIcon = isExclusive 
-                ? `<i class="fas fa-crown" style="color: #f1c40f; margin-left: 5px;" title="وكيل حصري"></i>` 
-                : `<i class="fas fa-star" style="color: #95a5a6; margin-left: 5px;" title="وكيل اعتيادي"></i>`;
+                ? `<i class="fas fa-crown" style="color: #f1c40f; margin-left: 5px;" title="${exclusiveTitle}"></i>` 
+                : `<i class="fas fa-star" style="color: #95a5a6; margin-left: 5px;" title="${exclusiveTitle}"></i>`;
 
             return `
                 <div class="leaderboard-card-simple" data-agent-id="${agent._id}" style="cursor: pointer;">
@@ -6190,7 +6419,7 @@ function displayTopAgents(sortedAgents, sortKey) {
                     <div class="leaderboard-list-section">
                         <h2 class="leaderboard-section-title"><i class="fas fa-crown"></i> الوكلاء الحصريين</h2>
                         <div class="leaderboard-simple-list">
-                            ${exclusiveRunnersUp.length > 0 ? exclusiveRunnersUp.map((agent, index) => {
+                            ${finalExclusiveRunnersUp.length > 0 ? finalExclusiveRunnersUp.map((agent, index) => {
                                 const actualRank = sortedAgents.findIndex(a => a._id === agent._id) + 1;
                                 return renderSimpleCard(agent, actualRank, sortKey);
                             }).join('') : '<p class="no-results-message">لا يوجد وكلاء حصريين لعرضهم.</p>'}
@@ -6208,6 +6437,12 @@ function displayTopAgents(sortedAgents, sortKey) {
                 </div>
             ` : ''}
         `;
+
+    if (topAgentsDebug.enabled) {
+        const podiumCards = container.querySelectorAll('.leaderboard-podium [data-agent-id]').length;
+        const simpleCards = container.querySelectorAll('.leaderboard-card-simple[data-agent-id]').length;
+        topAgentsDebug.log('Rendered cards:', { podiumCards, simpleCards });
+    }
 
     // --- NEW: Trigger Animations ---
     const animatedElements = container.querySelectorAll('[data-animate-to]');
@@ -6273,6 +6508,8 @@ function displayTopAgents(sortedAgents, sortKey) {
             }
         });
     }
+
+    topAgentsDebug.groupEnd();
 
     // --- NEW: Comparison Floating Bar Logic ---
     document.getElementById('cancel-comparison-btn')?.addEventListener('click', () => {
@@ -13667,6 +13904,7 @@ function capitalizeFirst(str) {
 
 // --- أكثر مسابقات تفاعلاً ---
 async function fetchAndRenderMostInteractiveCompetitions() {
+    dlog('fetchAndRenderMostInteractiveCompetitions: Starting...');
     const listEl = document.getElementById('mostInteractiveCompetitionsList');
     const errorEl = document.getElementById('mostInteractiveCompetitionsError');
     if (!listEl) return;
@@ -13689,12 +13927,14 @@ async function fetchAndRenderMostInteractiveCompetitions() {
         else { query += 'range=30'; }
         query += `&limit=${limit}&sort=${sortBy}`;
 
+        dlog('fetchAndRenderMostInteractiveCompetitions: Fetching with query:', query);
         const res = await fetchWithAuth(`/api/stats/interactive-competitions?${query}`);
         if (!res.ok) {
             await res.text().catch(()=> '');
             throw new Error('فشل في جلب البيانات');
         }
         const data = await res.json();
+        dlog('fetchAndRenderMostInteractiveCompetitions: Data received:', data);
         let competitions = Array.isArray(data?.data) ? data.data : [];
 
         competitions = competitions.map(c => ({
@@ -13734,15 +13974,21 @@ async function fetchAndRenderMostInteractiveCompetitions() {
             const qFull = (comp.question || 'غير متوفر').toString();
             const aFull = (comp.correct_answer || 'غير متوفر').toString();
             const escapedQ = qFull.replace(/\"/g,'&quot;');
+            
+            // Truncate question logic
+            const isLong = qFull.length > 120;
+            const qDisplay = isLong ? qFull.substring(0, 120) + '...' : qFull;
+
             return `
               <div class="interactive-item" data-index="${idx+1}">
                 <div class="item-rank"><span class="index-badge">${idx+1}</span></div>
                 <div class="item-main">
-                  <div class="item-question question-cell" title="${escapedQ}" data-fulltext="${escapedQ}">
-                    <i class="fas fa-question-circle"></i>
-                    <span class="question-text">${qFull}</span>
-                    <span class="answer-badge">الإجابة: ${aFull}</span>
-                  </div>
+                                    <div class="item-question question-cell" title="${isLong ? 'انقر لعرض النص الكامل' : ''}" data-fulltext="${escapedQ}" style="cursor: ${isLong ? 'pointer' : 'default'};">
+                                        <i class="fas fa-question-circle"></i>
+                                        <span class="question-text">${qDisplay}</span>
+                                        ${isLong ? '<span class="read-more-link">(عرض المزيد)</span>' : ''}
+                                        <span class="answer-badge">الإجابة: ${aFull}</span>
+                                    </div>
                   <div class="item-meta">
                     <span class="type-badge ${badgeKey}">${displayType}</span>
                     <span class="metric-chip"><i class="fas fa-paper-plane"></i> ${ (comp.send_count ?? 0).toLocaleString('ar-EG') }</span>
@@ -13768,18 +14014,7 @@ async function fetchAndRenderMostInteractiveCompetitions() {
                     const cell = ev.target.closest('.question-cell');
                     if (!cell) return;
                     const full = cell.getAttribute('data-fulltext') || cell.textContent || '';
-                    const content = `
-                        <div class="dark-expand-modal-wrapper">
-                            <div class="dark-expand-modal">
-                                <div class="dark-expand-modal-header">
-                                    <i class="fas fa-question-circle" style="color:#4fa3ff"></i> السؤال الكامل
-                                </div>
-                                <div class="dark-expand-modal-body"><pre>${full}</pre></div>
-                            </div>
-                        </div>`;
-                    if (typeof showConfirmationModal === 'function') {
-                        showConfirmationModal(content, async () => true, { title: '', confirmText: '<i class="fas fa-times"></i> إغلاق', showCancel: false });
-                    } else { alert(full); }
+                    showQuestionModal(full);
                 });
                 container._questionClickBound = true;
             }
@@ -13795,9 +14030,30 @@ async function fetchAndRenderMostInteractiveCompetitions() {
 // Use the globally available utilities
 const { authedFetch: fetchWithAuth, showToast } = window.utils;
 
-// DEBUG gate: disable verbose logs in production to keep UI smooth
-const DEBUG = false;
-const dlog = DEBUG ? (..._args) => {} : null;
+// DEBUG gate: opt-in only
+// Enable by running in DevTools console:
+//   window.__setAnalyticsDebug(true)
+// Or set localStorage key:
+//   localStorage.setItem('debugAnalytics', '1')
+// Or add query param:
+//   ?debugAnalytics=1
+const DEBUG =
+    (typeof localStorage !== 'undefined' && localStorage.getItem('debugAnalytics') === '1') ||
+    (typeof window !== 'undefined' && new URLSearchParams(window.location.search || '').get('debugAnalytics') === '1');
+
+const dlog = (...args) => {
+    if (!DEBUG) return;
+    console.log('[Analytics DEBUG]', ...args);
+};
+
+window.__setAnalyticsDebug = (enabled) => {
+    try {
+        localStorage.setItem('debugAnalytics', enabled ? '1' : '0');
+        console.log(`[Analytics][debug] ${enabled ? 'enabled' : 'disabled'} (reload page to apply)`);
+    } catch (e) {
+        console.warn('[Analytics][debug] failed to write localStorage', e);
+    }
+};
 
 // Helper: truncate long text safely
 function truncateText(str, max) {
@@ -14013,7 +14269,7 @@ async function fetchAnalyticsData(filter) {
         // Assuming fetchWithAuth is available globally or imported
         // build query params from provided filter object
         let url = '/api/analytics';
-    dlog && dlog('DEBUG: fetchAnalyticsData - initial filter:', filter);
+        dlog('fetchAnalyticsData: Starting with filter:', filter);
         const qp = new URLSearchParams();
         qp.append('_t', Date.now()); // Cache busting
 
@@ -14036,14 +14292,16 @@ async function fetchAnalyticsData(filter) {
             url += `?${queryString}`;
         }
 
-    dlog && dlog('DEBUG: fetchAnalyticsData - constructed URL:', url);
+        dlog('fetchAnalyticsData: Fetching from URL:', url);
         const response = await fetchWithAuth(url);
         if (!response.ok) {
             throw new Error(ARABIC_LABELS.errorFetchingData);
         }
         const result = await response.json();
+        dlog('fetchAnalyticsData: Data received:', result);
         return result; // backend returns object with analytics fields
     } catch (error) {
+        dlog('fetchAnalyticsData: Error:', error);
         try { showToast && showToast(ARABIC_LABELS.errorFetchingData, 'error'); } catch (_) {}
         document.querySelectorAll('.chart-card').forEach(card => {
             const errorEl = card.querySelector('.error-message');
@@ -14092,13 +14350,13 @@ function renderKpiCards(data) {
     }
 
     // Log bonus deposit status
-    dlog && dlog('[ANALYTICS-KPI] 🎯 === تقرير البيانات ===');
-    dlog && dlog('[ANALYTICS-KPI] 📊 جميع البيانات المستلمة:', JSON.stringify(data, null, 2));
-    dlog && dlog('[ANALYTICS-KPI] 💰 بيانات الأرصدة الممنوحة:', data.granted_balances);
-    dlog && dlog('[ANALYTICS-KPI] 📈 total_competitions_sent:', data.total_competitions_sent);
-    dlog && dlog('[ANALYTICS-KPI] 👥 new_agents_in_period:', data.new_agents_in_period);
-    dlog && dlog('[ANALYTICS-KPI] 📝 total_activities:', data.total_activities);
-    dlog && dlog('[ANALYTICS-KPI] ==================');
+    dlog('[ANALYTICS-KPI] 🎯 === تقرير البيانات ===');
+    dlog('[ANALYTICS-KPI] 📊 جميع البيانات المستلمة:', JSON.stringify(data, null, 2));
+    dlog('[ANALYTICS-KPI] 💰 بيانات الأرصدة الممنوحة:', data.granted_balances);
+    dlog('[ANALYTICS-KPI] 📈 total_competitions_sent:', data.total_competitions_sent);
+    dlog('[ANALYTICS-KPI] 👥 new_agents_in_period:', data.new_agents_in_period);
+    dlog('[ANALYTICS-KPI] 📝 total_activities:', data.total_activities);
+    dlog('[ANALYTICS-KPI] ==================');
 
     // Extract granted balances data
     const grantedBalances = data.granted_balances || {};
@@ -14109,8 +14367,8 @@ function renderKpiCards(data) {
     const totalWinners = depositWinners + tradingWinners;
     const depositRatio = totalWinners > 0 ? ((depositWinners / totalWinners) * 100).toFixed(1) : '0.0';
     
-    dlog && dlog('[ANALYTICS-KPI] 💵 Trading Bonus:', tradingBonus);
-    dlog && dlog('[ANALYTICS-KPI] 🎁 Deposit Bonus:', depositBonus);
+    dlog('[ANALYTICS-KPI] 💵 Trading Bonus:', tradingBonus);
+    dlog('[ANALYTICS-KPI] 🎁 Deposit Bonus:', depositBonus);
 
     container.innerHTML = `
         <div class="stat-card-v2">
@@ -14139,11 +14397,12 @@ function renderKpiCards(data) {
         </div>
     `;
     
-    dlog && dlog('[ANALYTICS-KPI] ✅ KPI cards rendered successfully');
+    dlog('[ANALYTICS-KPI] ✅ KPI cards rendered successfully');
 }
 
 // --- NEW: Fetch top agent per classification and render table ---
 async function fetchTopAgentsPerClassification() {
+    dlog('fetchTopAgentsPerClassification: Starting...');
     const bodyEl = document.getElementById('topAgentsByClassBody');
     const errorEl = document.getElementById('topAgentsByClassError');
     if (!bodyEl) return;
@@ -14160,8 +14419,12 @@ async function fetchTopAgentsPerClassification() {
         let dateQuery = '';
         if (fromVal && toVal) {
             dateQuery = `&from=${fromVal}&to=${toVal}`;
+        } else {
+            // Default to 30 days if no specific date selected, to match other sections
+            dateQuery = '&range=30';
         }
 
+        dlog('fetchTopAgentsPerClassification: Fetching for classifications:', classifications, 'Query:', dateQuery);
         // اجلب حتى 5 وكلاء لكل تصنيف لحساب أفضلهم بنظام نقاط مركب
         const results = await Promise.all(classifications.map(c => fetchWithAuth(`/api/stats/top-agents?classification=${c}&limit=5${dateQuery}`)));
         // Permission check: if any returns 403 show message
@@ -14176,6 +14439,7 @@ async function fetchTopAgentsPerClassification() {
             }
             return r.json();
         }));
+        dlog('fetchTopAgentsPerClassification: Data received:', jsonData);
         // cache
         topAgentsLastJson = jsonData;
 
@@ -14250,6 +14514,7 @@ async function fetchTopAgentsPerClassification() {
 
 // Render KPI cards with comparison
 function renderKpiCardsComparison(data1, data2) {
+    dlog('renderKpiCardsComparison: Rendering comparison with data:', { data1, data2 });
     const container = document.getElementById('analytics-kpi-cards');
     if (!container || !data1 || !data2) return;
 
@@ -14365,12 +14630,14 @@ function translateTemplateCompetitionType(comp) {
 
 // Render Completed Competitions Table with performance optimization
 function renderCompletedCompetitionsTable(competitions) {
+    dlog('renderCompletedCompetitionsTable: Rendering with competitions:', competitions);
     const tbody = document.getElementById('completedCompetitionsTableBody');
     const errorEl = document.getElementById('completedCompetitionsError');
     
     if (!tbody) return;
     
     if (!competitions || competitions.length === 0) {
+        dlog('renderCompletedCompetitionsTable: No competitions to display');
         tbody.innerHTML = `
             <tr>
                 <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary-color);">
@@ -14450,40 +14717,13 @@ function renderCompletedCompetitionsTable(competitions) {
     requestAnimationFrame(() => updatePagination(totalPages));
 }
 
-// Enhance question click to show full text in a modal to avoid layout overflow while keeping accessibility
+// Enhance question click to show full text in a modal
 if (!window.__analyticsQuestionModalHooked) {
     window.__analyticsQuestionModalHooked = true;
     document.addEventListener('click', (e) => {
         const target = e.target.closest('.competition-question');
         if (target && target.dataset.fullQuestion) {
-            const existing = document.querySelector('.modal-overlay[data-modal="question-full-text"]');
-            if (existing) existing.remove();
-
-            const fullText = target.dataset.fullQuestion;
-            // Create lightweight modal
-            const overlay = document.createElement('div');
-            overlay.className = 'modal-overlay';
-            overlay.setAttribute('data-modal', 'question-full-text');
-            const modal = document.createElement('div');
-            modal.className = 'form-modal-content';
-            modal.style.maxWidth = '700px';
-            modal.innerHTML = `
-                <div class="form-modal-header">
-                    <h3 style="margin:0; font-size:1.1em;"><i class="fas fa-question-circle"></i> نص المسابقة الكامل</h3>
-                    <button class="btn-icon-action" id="close-question-modal" title="إغلاق">&times;</button>
-                </div>
-                <div class="form-modal-body" style="max-height:60vh; overflow-y:auto;">
-                    <p style="line-height:1.6; white-space:pre-line;">${fullText}</p>
-                </div>
-                <div class="form-actions" style="text-align:left; padding:10px 20px 20px;">
-                    <button class="btn-secondary" id="close-question-modal-btn">إغلاق</button>
-                </div>
-            `;
-            overlay.appendChild(modal);
-            document.body.appendChild(overlay);
-            const close = () => overlay.remove();
-            modal.querySelector('#close-question-modal').addEventListener('click', close);
-            modal.querySelector('#close-question-modal-btn').addEventListener('click', close);
+            showQuestionModal(target.dataset.fullQuestion);
         }
     });
 }
@@ -14496,6 +14736,7 @@ if (!window.__analyticsRecipientsHooked) {
         if (!el) return;
 
         const question = el.getAttribute('data-question') || '';
+        dlog('Recipients click handler: Question:', question);
         if (!question) return;
 
         // Build date filter from the current analytics filter controls
@@ -14513,6 +14754,7 @@ if (!window.__analyticsRecipientsHooked) {
         }
 
         try {
+            dlog('Recipients click handler: Fetching recipients with query:', query);
             showToast && showToast('جاري تحميل قائمة الوكلاء...', 'info');
             const res = await fetchWithAuth(`/api/stats/completed-competition-recipients?${query}`);
             if (!res.ok) {
@@ -14520,6 +14762,7 @@ if (!window.__analyticsRecipientsHooked) {
                 throw new Error(msg || 'فشل في جلب قائمة الوكلاء');
             }
             const data = await res.json();
+            dlog('Recipients click handler: Data received:', data);
             let agents = Array.isArray(data.agents) ? data.agents : [];
 
             // Sort agents: count desc then name asc for readability
@@ -14678,12 +14921,17 @@ function filterCompetitions(filterType) {
 
 
 function renderMostFrequentCompetitionsChart(data) {
+    dlog('renderMostFrequentCompetitionsChart: Rendering with data:', data);
     const mostFrequentCompetitionsCanvas = document.getElementById('mostFrequentCompetitionsChart');
     const mostFrequentCompetitionsError = document.getElementById('mostFrequentCompetitionsError');
-    if (!mostFrequentCompetitionsCanvas) return;
+    if (!mostFrequentCompetitionsCanvas) {
+        dlog('renderMostFrequentCompetitionsChart: Canvas not found');
+        return;
+    }
     if (mostFrequentCompetitionsChart) mostFrequentCompetitionsChart.destroy();
 
     if (!data || data.length === 0) {
+        dlog('renderMostFrequentCompetitionsChart: No data to display');
         showError(mostFrequentCompetitionsError, ARABIC_LABELS.noData, true);
         return;
     }
@@ -14744,10 +14992,12 @@ function renderMostFrequentCompetitionsChart(data) {
 }
 
 function renderCompetitionsByDayChart(data) {
+    dlog('renderCompetitionsByDayChart: Rendering with data:', data);
     if (!agentGrowthCanvas) return;
     if (agentGrowthChart) agentGrowthChart.destroy();
 
     if (!data || data.length === 0) {
+        dlog('renderCompetitionsByDayChart: No data to display');
         showError(agentGrowthError, ARABIC_LABELS.noData, true);
         return;
     }
@@ -14841,12 +15091,14 @@ function renderCompetitionsByDayChart(data) {
 
 // Render granted balances section
 function renderGrantedBalances(data) {
+    dlog('renderGrantedBalances: Rendering with data:', data);
     const tradingBonusAmount = document.getElementById('tradingBonusAmount');
     const tradingBonusWinners = document.getElementById('tradingBonusWinners');
     const depositBonusTableBody = document.getElementById('depositBonusTableBody');
     const grantedBalancesError = document.getElementById('grantedBalancesError');
 
     if (!data) {
+        dlog('renderGrantedBalances: No data to display');
         if (grantedBalancesError) {
             showError(grantedBalancesError, ARABIC_LABELS.noData, true);
         }
@@ -14859,13 +15111,14 @@ function renderGrantedBalances(data) {
     }
 
     // Debug Log for Granted Balances
-    console.log('%c[Analytics] Granted Balances Update:', 'color: #00ff00; font-weight: bold; font-size: 12px;');
-    console.log('Trading Bonus Data:', data.trading_bonus);
-    console.log('Total Amount:', data.trading_bonus?.total_amount);
-    console.log('Winners Count:', data.trading_bonus?.winners_count);
-    console.log('Breakdown:', data.trading_bonus?.breakdown);
-    console.log('[Deposit Bonus] Raw details from DB:', data.deposit_bonus_details);
-    console.log('[Deposit Bonus] Totals by band:', (data.deposit_bonus || []).map(b => ({ value: b.bonus_value ?? b.percentage, winners: b.winners_count })));
+    dlog('[Analytics] Granted Balances Update:', {
+        tradingBonusData: data.trading_bonus,
+        totalAmount: data.trading_bonus?.total_amount,
+        winnersCount: data.trading_bonus?.winners_count,
+        breakdown: data.trading_bonus?.breakdown,
+        depositBonusRawDetails: data.deposit_bonus_details,
+        depositBonusTotalsByBand: (data.deposit_bonus || []).map(b => ({ value: b.bonus_value ?? b.percentage, winners: b.winners_count }))
+    });
 
     // Update trading bonus
     if (tradingBonusAmount) {
@@ -14924,10 +15177,12 @@ function renderGrantedBalances(data) {
 
 // Render weekly excellence section
 function renderWeeklyExcellence(data) {
+    dlog('renderWeeklyExcellence: Rendering with data:', data);
     const weeklyExcellenceTableBody = document.getElementById('weeklyExcellenceTableBody');
     const weeklyExcellenceError = document.getElementById('weeklyExcellenceError');
 
     if (!data) {
+        dlog('renderWeeklyExcellence: No data to display');
         if (weeklyExcellenceError) {
             showError(weeklyExcellenceError, ARABIC_LABELS.noData, true);
         }
@@ -14972,10 +15227,15 @@ function renderWeeklyExcellence(data) {
 }
 
 function renderAgentClassificationChart(data) {
-    if (!agentClassificationCanvas) return;
+    dlog('renderAgentClassificationChart: Rendering with data:', data);
+    if (!agentClassificationCanvas) {
+        dlog('renderAgentClassificationChart: Canvas not found');
+        return;
+    }
     if (agentClassificationChart) agentClassificationChart.destroy();
 
     if (!data || Object.keys(data).length === 0) {
+        dlog('renderAgentClassificationChart: No data to display');
         showError(agentClassificationError, ARABIC_LABELS.noData, true);
         return;
     }
@@ -15022,10 +15282,12 @@ function renderAgentClassificationChart(data) {
 }
 
 function renderCompetitionPerformanceChart(data) {
+    dlog('renderCompetitionPerformanceChart: Rendering with data:', data);
     if (!competitionPerformanceCanvas) return;
     if (competitionPerformanceChart) competitionPerformanceChart.destroy();
 
     if (!data || data.length === 0) {
+        dlog('renderCompetitionPerformanceChart: No data to display');
         showError(competitionPerformanceError, ARABIC_LABELS.noData, true);
         return;
     }
@@ -15081,13 +15343,11 @@ const RANK_CHANGES_PER_PAGE = 7;
 
 // Function to fetch and render agent rank changes
 async function fetchAndRenderRankChanges(filter) {
+    dlog('fetchAndRenderRankChanges: Starting with filter:', filter);
     const rankChangesTableBody = document.getElementById('rankChangesTableBody');
     const rankChangesError = document.getElementById('rankChangesError');
     
     if (!rankChangesTableBody) return;
-    
-    // Initialize purge button after elements are loaded
-    initRankChangesPurgeButton();
     
     try {
         // Build query params
@@ -15113,6 +15373,7 @@ async function fetchAndRenderRankChanges(filter) {
             }
         }
         
+        dlog('fetchAndRenderRankChanges: Fetching from URL:', url);
         const response = await fetchWithAuth(url);
         if (!response.ok) {
             throw new Error('فشل جلب بيانات تغييرات المرتبة');
@@ -15136,10 +15397,12 @@ async function fetchAndRenderRankChanges(filter) {
 }
 
 function renderRankChangesPage(page) {
+    dlog('renderRankChangesPage: Rendering page:', page);
     const rankChangesTableBody = document.getElementById('rankChangesTableBody');
     if (!rankChangesTableBody) return;
 
     if (allRankChangesData.length === 0) {
+        dlog('renderRankChangesPage: No data to display');
         rankChangesTableBody.innerHTML = `
             <tr>
                 <td colspan="10" style="text-align: center; padding: 30px;">
@@ -15260,6 +15523,7 @@ function renderRankChangesPage(page) {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const changeId = btn.getAttribute('data-change-id');
+            dlog('Delete rank change click: ID:', changeId);
             if (!changeId) return;
             
             const confirmDelete = await new Promise(resolve => {
@@ -15274,16 +15538,20 @@ function renderRankChangesPage(page) {
 
             if (confirmDelete) {
                 try {
+                    dlog('Deleting rank change:', changeId);
                     const res = await fetchWithAuth(`/api/stats/rank-changes/${changeId}`, { method: 'DELETE' });
                     if (res.ok) {
+                        dlog('Rank change deleted successfully');
                         showToast('تم حذف السجل بنجاح', 'success');
                         // Remove from local data and re-render
                         allRankChangesData = allRankChangesData.filter(item => item._id !== changeId);
                         renderRankChangesPage(currentRankChangesPage);
                     } else {
+                        dlog('Failed to delete rank change');
                         showToast('فشل حذف السجل', 'error');
                     }
                 } catch (err) {
+                    dlog('Error deleting rank change:', err);
                     console.error(err);
                     showToast('حدث خطأ أثناء الحذف', 'error');
                 }
@@ -15295,6 +15563,7 @@ function renderRankChangesPage(page) {
 }
 
 function renderRankChangesPaginationControls() {
+    dlog('renderRankChangesPaginationControls: Rendering pagination controls');
     const table = document.getElementById('rankChangesTable');
     if (!table) return;
     
@@ -15308,6 +15577,7 @@ function renderRankChangesPaginationControls() {
     }
 
     const totalPages = Math.ceil(allRankChangesData.length / RANK_CHANGES_PER_PAGE);
+    dlog('renderRankChangesPaginationControls: Total pages:', totalPages, 'Current page:', currentRankChangesPage);
     
     if (totalPages <= 1) {
         paginationContainer.style.display = 'none';
@@ -15376,10 +15646,6 @@ async function updateDashboard(filter) {
             renderGrantedBalances(analyticsData.granted_balances);
             renderWeeklyExcellence(analyticsData.weekly_excellence);
         }, 200);
-        
-        setTimeout(() => {
-            renderCompetitionPerformanceChart(analyticsData.competition_performance);
-        }, 300);
         
         // Lazy load interactive competitions
         setTimeout(async () => {
@@ -15456,11 +15722,13 @@ async function renderComparisonView() {
         renderCompletedCompetitionsTable([]);
     }
 
-    // 3. Most frequent competitions chart comparison (already dual)
-    renderMostFrequentCompetitionsChartComparison(
-        data1.most_frequent_competitions,
-        data2.most_frequent_competitions
-    );
+    // 3. Most frequent competitions chart comparison (optional)
+    if (document.getElementById('mostFrequentCompetitionsChart')) {
+        renderMostFrequentCompetitionsChartComparison(
+            data1.most_frequent_competitions,
+            data2.most_frequent_competitions
+        );
+    }
 
     // 4. Competitions by day – overlay both periods for visual diff
     if (agentGrowthCanvas && Array.isArray(data1.competitions_by_day)) {
@@ -15482,23 +15750,25 @@ async function renderComparisonView() {
         });
     }
 
-    // 5. Agent classification – show percentage change between periods if both available
-    if (agentClassificationCanvas && data1.agent_classification && data2.agent_classification) {
-        if (agentClassificationChart) agentClassificationChart.destroy();
-        const allKeys = Array.from(new Set([...Object.keys(data1.agent_classification), ...Object.keys(data2.agent_classification)]));
-        const vals1 = allKeys.map(k => data1.agent_classification[k]||0);
-        const vals2 = allKeys.map(k => data2.agent_classification[k]||0);
-        agentClassificationChart = new Chart(agentClassificationCanvas, {
-            type: 'bar',
-            data: { labels: allKeys, datasets: [
-                { label: 'الفترة الأولى', data: vals1, backgroundColor: 'rgba(244,162,97,0.6)', borderColor:'rgba(244,162,97,1)' },
-                { label: 'الفترة الثانية', data: vals2, backgroundColor: 'rgba(153,102,255,0.6)', borderColor:'rgba(153,102,255,1)' }
-            ]},
-            options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:true}, title:{display:true, text:'مقارنة تصنيفات الوكلاء'} } },
-            plugins:[ChartDataLabels]
-        });
-    } else {
-        renderAgentClassificationChart(data1.agent_classification);
+    // 5. Agent classification – optional (section may be removed from the page)
+    if (agentClassificationCanvas) {
+        if (data1.agent_classification && data2.agent_classification) {
+            if (agentClassificationChart) agentClassificationChart.destroy();
+            const allKeys = Array.from(new Set([...Object.keys(data1.agent_classification), ...Object.keys(data2.agent_classification)]));
+            const vals1 = allKeys.map(k => data1.agent_classification[k]||0);
+            const vals2 = allKeys.map(k => data2.agent_classification[k]||0);
+            agentClassificationChart = new Chart(agentClassificationCanvas, {
+                type: 'bar',
+                data: { labels: allKeys, datasets: [
+                    { label: 'الفترة الأولى', data: vals1, backgroundColor: 'rgba(244,162,97,0.6)', borderColor:'rgba(244,162,97,1)' },
+                    { label: 'الفترة الثانية', data: vals2, backgroundColor: 'rgba(153,102,255,0.6)', borderColor:'rgba(153,102,255,1)' }
+                ]},
+                options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:true}, title:{display:true, text:'مقارنة تصنيفات الوكلاء'} } },
+                plugins:[ChartDataLabels]
+            });
+        } else {
+            renderAgentClassificationChart(data1.agent_classification);
+        }
     }
 
     // 6. Competition performance – overlay both periods
@@ -15570,6 +15840,7 @@ async function renderComparisonView() {
             if (comparisonData.periodInfo.period2.from) params2.set('from', comparisonData.periodInfo.period2.from);
             if (comparisonData.periodInfo.period2.to) params2.set('to', comparisonData.periodInfo.period2.to);
             
+            dlog('Comparison: Fetching weekly excellence for both periods', { params1: params1.toString(), params2: params2.toString() });
             const [resp1, resp2] = await Promise.all([
                 fetchWithAuth(`/api/analytics?${params1.toString()}`),
                 fetchWithAuth(`/api/analytics?${params2.toString()}`)
@@ -15584,6 +15855,7 @@ async function renderComparisonView() {
                 const d2 = await resp2.json();
                 we2 = d2.weekly_excellence;
             }
+            dlog('Comparison: Weekly excellence data received', { we1, we2 });
             
             if (we1 && we2) {
                 const cw1 = we1.current_week||{};
@@ -15666,6 +15938,7 @@ async function renderComparisonView() {
             params2.set('limit', limit);
             params2.set('sort', sortBy);
             
+            dlog('Comparison: Fetching interactive competitions for both periods', { params1: params1.toString(), params2: params2.toString() });
             const [resp1, resp2] = await Promise.all([
                 fetchWithAuth(`/api/stats/interactive-competitions?${params1.toString()}`),
                 fetchWithAuth(`/api/stats/interactive-competitions?${params2.toString()}`)
@@ -15781,12 +16054,17 @@ async function renderComparisonView() {
 
 // Render most frequent competitions chart with comparison
 function renderMostFrequentCompetitionsChartComparison(data1, data2) {
+    dlog('renderMostFrequentCompetitionsChartComparison: Rendering comparison with data:', { data1, data2 });
     const mostFrequentCompetitionsCanvas = document.getElementById('mostFrequentCompetitionsChart');
     const mostFrequentCompetitionsError = document.getElementById('mostFrequentCompetitionsError');
-    if (!mostFrequentCompetitionsCanvas) return;
+    if (!mostFrequentCompetitionsCanvas) {
+        dlog('renderMostFrequentCompetitionsChartComparison: Canvas not found');
+        return;
+    }
     if (mostFrequentCompetitionsChart) mostFrequentCompetitionsChart.destroy();
 
     if (!data1 || data1.length === 0) {
+        dlog('renderMostFrequentCompetitionsChartComparison: No data to display');
         showError(mostFrequentCompetitionsError, ARABIC_LABELS.noData, true);
         return;
     }
@@ -15889,6 +16167,11 @@ function renderMostFrequentCompetitionsChartComparison(data1, data2) {
     agentGrowthCanvas = document.getElementById('agentGrowthChart');
     agentClassificationCanvas = document.getElementById('agentClassificationChart');
     competitionPerformanceCanvas = document.getElementById('competitionPerformanceChart');
+    mostFrequentCompetitionsChart = null; // Reset chart instance
+
+    // Most frequent competitions chart is optional (not present in all layouts)
+    const mostFrequentCompetitionsCanvas = document.getElementById('mostFrequentCompetitionsChart');
+
     // activityDistributionCanvas تمت إزالته مع القسم
 
     agentGrowthError = document.getElementById('agentGrowthError');
@@ -16110,10 +16393,10 @@ function renderMostFrequentCompetitionsChartComparison(data1, data2) {
     }
 
     // NEW: بعد اكتمال تهيئة صفحة التحليلات، اجلب أبرز الوكلاء لكل تصنيف
-    fetchTopAgentsPerClassification();
+    // fetchTopAgentsPerClassification(); // Removed duplicate call
     
     // NEW: جلب بيانات الوكلاء والمسابقات
-    fetchAndRenderAgentsCompetitions();
+    // fetchAndRenderAgentsCompetitions(); // Removed duplicate call
     
     // NEW: إضافة event listeners لفلترة الوكلاء حسب التصنيف
     const agentsCompetitionsFilterButtons = document.querySelectorAll('#agentsCompetitionsCard .competition-filter-btn');
@@ -16207,6 +16490,9 @@ function renderMostFrequentCompetitionsChartComparison(data1, data2) {
             fetchAndRenderMostInteractiveCompetitions();
         }
     );
+    
+    // Initial call for most interactive competitions
+    fetchAndRenderMostInteractiveCompetitions();
 
     // 7. فلتر أبرز الوكلاء لكل تصنيف
     setupSectionDateFilter(
@@ -16215,6 +16501,9 @@ function renderMostFrequentCompetitionsChartComparison(data1, data2) {
             fetchTopAgentsPerClassification();
         }
     );
+    
+    // Initial call for top agents (moved here to avoid duplicate and ensure setup is done)
+    fetchTopAgentsPerClassification();
 
     // 8. فلتر الوكلاء والمسابقات المرسلة
     setupSectionDateFilter(
@@ -16225,11 +16514,14 @@ function renderMostFrequentCompetitionsChartComparison(data1, data2) {
             fetchAndRenderAgentsCompetitions(classification);
         }
     );
+    
+    // Initial call for agents competitions
+    fetchAndRenderAgentsCompetitions();
 }
 
 // --- دالة جلب وعرض الوكلاء والمسابقات ---
-const fetchAndRenderAgentsCompetitions = (classification = 'all') => {
-    (async () => {
+const fetchAndRenderAgentsCompetitions = async (classification = 'all') => {
+    dlog('fetchAndRenderAgentsCompetitions: Starting with classification:', classification);
     const tableBody = document.getElementById('agentsCompetitionsTableBody');
     const errorEl = document.getElementById('agentsCompetitionsError');
     
@@ -16264,6 +16556,7 @@ const fetchAndRenderAgentsCompetitions = (classification = 'all') => {
             query += `&classification=${classification}`;
         }
         
+        dlog('fetchAndRenderAgentsCompetitions: Fetching with query:', query);
         // جلب البيانات من API
         const res = await fetchWithAuth(`/api/stats/agents-competitions?${query}`);
         if (!res.ok) {
@@ -16271,6 +16564,7 @@ const fetchAndRenderAgentsCompetitions = (classification = 'all') => {
         }
         
         const data = await res.json();
+        dlog('fetchAndRenderAgentsCompetitions: Data received:', data);
         const agents = data.agents || [];
         const stats = data.aggregated_stats || {};
         
@@ -16378,8 +16672,6 @@ const fetchAndRenderAgentsCompetitions = (classification = 'all') => {
             </tr>
         `;
     }
-        
-    })();
 }
 
 // --- دالة تحديث الإحصائيات المجمعة ---
@@ -16397,34 +16689,6 @@ function updateAgentsCompetitionsStats(stats) {
     if (totalReactionsEl) totalReactionsEl.textContent = (stats.total_reactions || 0).toLocaleString('ar-EG');
     if (totalParticipantsEl) totalParticipantsEl.textContent = (stats.total_participants || 0).toLocaleString('ar-EG');
     if (averageComplianceEl) averageComplianceEl.textContent = `${stats.average_compliance_rate || 0}%`;
-}
-
-// ============================================
-// Delete Single Rank Change
-// ============================================
-async function handleDeleteRankChange(changeId, currentFilter) {
-    if (!confirm('هل أنت متأكد من حذف هذا التغيير؟\n\nلا يمكن التراجع عن هذا الإجراء.')) {
-        return;
-    }
-
-    try {
-        const response = await fetchWithAuth(`/api/stats/rank-changes/${changeId}`, {
-            method: 'DELETE',
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            showToast(data.message || 'تم حذف التغيير بنجاح', 'success');
-            // Reload the table with current filter
-            await fetchAndRenderRankChanges(currentFilter);
-        } else {
-            showToast(data.message || 'فشل حذف التغيير', 'error');
-        }
-    } catch (error) {
-        console.error('Error deleting rank change:', error);
-        showToast('حدث خطأ أثناء حذف التغيير', 'error');
-    }
 }
 
 // ============================================
@@ -16457,7 +16721,8 @@ async function handlePurgeRankChanges() {
         try {
             const response = await fetchWithAuth('/api/stats/rank-changes', {
                 method: 'DELETE',
-            });        const data = await response.json();
+            });
+            const data = await response.json();
 
         if (response.ok) {
             showToast(data.message || 'تم حذف جميع تغييرات المراتب بنجاح', 'success');
@@ -16474,8 +16739,6 @@ async function handlePurgeRankChanges() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
-
-// --- دالة عرض modal للسؤال الكامل ---
 
 
 
@@ -17222,20 +17485,24 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         
         // Always show stats - even if totalWinners is 0, we need to display the breakdown
         // Use local session selections for clearer UX while picking
+        // FIX: Use required_winners as the authoritative total if available, as it represents the target.
         const requiredTotal = (typeof competition.required_winners === 'number' && competition.required_winners > 0) 
           ? competition.required_winners 
           : totalWinners;
+
         const localSelected = (state && Array.isArray(state.winners)) ? state.winners.length : 0;
+        // Calculate remaining based on local selection + already approved winners (if any)
+        // But usually we pick all at once. Let's assume localSelected is what matters for the UI now.
         const remainingLocal = Math.max(requiredTotal - localSelected, 0);
 
         html += `<div class="wr-competition-stat-row wr-stat-total">
           <span class="wr-competition-stat-label"><i class="fas fa-trophy"></i> إجمالي الفائزين</span>
-          <span class="wr-competition-stat-value">${requiredTotal} فائز</span>
+          <span class="wr-competition-stat-value" id="stats-total-required">${requiredTotal} فائز</span>
         </div>`;
 
         html += `<div class="wr-competition-stat-row">
           <span class="wr-competition-stat-label"><i class="fas fa-hourglass-half"></i> المتبقي</span>
-          <span class="wr-competition-stat-value">${remainingLocal}</span>
+          <span class="wr-competition-stat-value" id="stats-remaining-count">${remainingLocal}</span>
         </div>`;
 
         // Bonus breakdown - show REQUIRED counts from competition, not selected
@@ -17248,12 +17515,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
         html += `<div class="wr-competition-stat-row">
             <span class="wr-competition-stat-label"><i class="fas fa-dollar-sign"></i> بونص إيداع</span>
-            <span class="wr-competition-stat-value deposit">${localDepositCount} / ${depositWinnersRequired} فائز</span>
+            <span class="wr-competition-stat-value deposit" id="stats-deposit-count">${localDepositCount} / ${depositWinnersRequired} فائز</span>
           </div>`;
 
         html += `<div class="wr-competition-stat-row">
             <span class="wr-competition-stat-label"><i class="fas fa-chart-line"></i> بونص تداولي</span>
-            <span class="wr-competition-stat-value trading">${localTradingCount} / ${tradingWinnersRequired} فائز</span>
+            <span class="wr-competition-stat-value trading" id="stats-trading-count">${localTradingCount} / ${tradingWinnersRequired} فائز</span>
           </div>`;
         
         // Add prize information - always show if deposit bonus percentage exists
@@ -17333,18 +17600,23 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const localDepositCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length : 0;
       const localTradingCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'trading').length : 0;
       
-      // تحديث العناصر في قسم معلومات المسابقة (الجانب الأيسر)
-      const remainingEl = document.querySelector('.wr-competition-stat-row:nth-child(2) .wr-competition-stat-value');
+      // تحديث العناصر في قسم معلومات المسابقة (الجانب الأيسر) باستخدام IDs
+      const totalEl = document.getElementById('stats-total-required');
+      if (totalEl) {
+        totalEl.textContent = `${requiredTotal} فائز`;
+      }
+
+      const remainingEl = document.getElementById('stats-remaining-count');
       if (remainingEl) {
         remainingEl.textContent = remainingLocal;
       }
       
-      const depositEl = document.querySelector('.wr-competition-stat-row:nth-child(3) .wr-competition-stat-value.deposit');
+      const depositEl = document.getElementById('stats-deposit-count');
       if (depositEl) {
         depositEl.textContent = `${localDepositCount} / ${depositWinnersRequired} فائز`;
       }
       
-      const tradingEl = document.querySelector('.wr-competition-stat-row:nth-child(4) .wr-competition-stat-value.trading');
+      const tradingEl = document.getElementById('stats-trading-count');
       if (tradingEl) {
         tradingEl.textContent = `${localTradingCount} / ${tradingWinnersRequired} فائز`;
       }
@@ -18755,17 +19027,36 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         // Winners selected
         const winnersCountEl = document.getElementById('winners-count');
         if (winnersCountEl) winnersCountEl.textContent = state.winners.length;
-        // Remaining required winners (bind to backend required_winners if available)
-        const remainingEl = document.getElementById('participants-count-remaining');
-        if (remainingEl) {
-          if (state.activeCompetition) {
-            const totalReq = state.activeCompetition.totalRequired || state.activeCompetition.requiredWinners || 0;
-            const current = (state.activeCompetition.currentWinners ?? state.winners.length);
+        
+        // --- NEW: Update Detailed Stats ---
+        if (state.activeCompetition) {
+            const totalReq = state.activeCompetition.totalRequired || 0;
+            const current = state.winners.length;
             const remaining = Math.max(totalReq - current, 0);
-            remainingEl.textContent = remaining;
-          } else {
-            remainingEl.textContent = Math.max(state.entries.length - state.winners.length, 0);
-          }
+
+            // Update main remaining counter (if exists)
+            const remainingEl = document.getElementById('participants-count-remaining');
+            if (remainingEl) remainingEl.textContent = remaining;
+
+            // Update stats panel remaining count
+            const statsRemainingEl = document.getElementById('stats-remaining-count');
+            if (statsRemainingEl) statsRemainingEl.textContent = remaining;
+
+            // Update Deposit Bonus Stats
+            const depositReq = state.activeCompetition.depositWinnersRequired || 0;
+            const currentDeposit = state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length;
+            const statsDepositEl = document.getElementById('stats-deposit-count');
+            if (statsDepositEl) statsDepositEl.textContent = `${currentDeposit} / ${depositReq} فائز`;
+
+            // Update Trading Bonus Stats
+            const tradingReq = state.activeCompetition.tradingWinnersRequired || 0;
+            const currentTrading = state.winners.filter(w => w.prizeType === 'trading').length;
+            const statsTradingEl = document.getElementById('stats-trading-count');
+            if (statsTradingEl) statsTradingEl.textContent = `${currentTrading} / ${tradingReq} فائز`;
+        } else {
+             // Fallback for no active competition
+            const remainingEl = document.getElementById('participants-count-remaining');
+            if (remainingEl) remainingEl.textContent = Math.max(state.entries.length - state.winners.length, 0);
         }
     }
     
@@ -19398,6 +19689,54 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       saveSession();
     };
 
+    function showEditParticipantModal(participant, onSave) {
+      const overlay = document.createElement('div');
+      overlay.className = 'wr-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="wr-confirm-modal">
+          <div class="wr-confirm-icon" style="color: #3b82f6;"><i class="fas fa-edit"></i></div>
+          <h3 class="wr-confirm-title">تعديل بيانات المشارك</h3>
+          <div style="margin: 15px 0; text-align: right;">
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">الاسم:</label>
+            <input type="text" id="edit-name" value="${participant.name}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; direction: rtl;">
+            
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">رقم الحساب:</label>
+            <input type="text" id="edit-account" value="${participant.account}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; direction: ltr;">
+          </div>
+          <div class="wr-confirm-actions">
+            <button class="wr-btn wr-btn-secondary" id="wr-edit-cancel">إلغاء</button>
+            <button class="wr-btn wr-btn-primary" id="wr-edit-save">حفظ</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      
+      const cancelBtn = overlay.querySelector('#wr-edit-cancel');
+      const saveBtn = overlay.querySelector('#wr-edit-save');
+      const nameInput = overlay.querySelector('#edit-name');
+      const accountInput = overlay.querySelector('#edit-account');
+      
+      const cleanup = () => overlay.remove();
+      
+      cancelBtn?.addEventListener('click', cleanup);
+      saveBtn?.addEventListener('click', () => {
+        const newName = nameInput.value.trim();
+        const newAccount = accountInput.value.trim();
+        
+        if (!newName || !newAccount) {
+            toast('يرجى إدخال الاسم ورقم الحساب', 'warning');
+            return;
+        }
+        
+        if (onSave) onSave(newName, newAccount);
+        cleanup();
+      });
+      
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) cleanup();
+      });
+    }
+
     function renderParticipants() {
       const container = document.getElementById('participants-list');
       if (!container) return;
@@ -19424,6 +19763,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           </div>
           <div class="wr-item-actions">
             ${e.selected ? '<span class="wr-tag wr-tag-winner">فائز</span>' : ''}
+            <button class="wr-icon-btn js-edit-btn" data-id="${e.id}" title="تعديل" style="background: #3b82f6; color: white; cursor: pointer; z-index: 100; position: relative; margin-left: 5px;"><i class="fas fa-edit" style="pointer-events: none;"></i></button>
             <button class="wr-icon-btn js-remove-btn" data-id="${e.id}" title="إزالة" style="background: #ef4444; color: white; cursor: pointer; z-index: 100; position: relative;"><i class="fas fa-times" style="pointer-events: none;"></i></button>
           </div>
         </div>
@@ -19432,9 +19772,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }).join('');
       
       // Attach event listeners directly to buttons (most robust method)
-      const buttons = container.querySelectorAll('.js-remove-btn');
+      const removeButtons = container.querySelectorAll('.js-remove-btn');
       
-      buttons.forEach(btn => {
+      removeButtons.forEach(btn => {
         btn.addEventListener('click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
@@ -19459,10 +19799,65 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           console.log('[CLICK] Removed successfully');
         });
       });
+
+      const editButtons = container.querySelectorAll('.js-edit-btn');
+      editButtons.forEach(btn => {
+        btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const id = btn.dataset.id;
+            const entry = state.entries.find(x => String(x.id) === String(id));
+            if (entry) {
+                showEditParticipantModal(entry, (newName, newAccount) => {
+                    // Update entry
+                    entry.name = newName;
+                    entry.account = newAccount;
+                    entry.label = `${newName} (${newAccount})`;
+                    
+                    // Update if in winners list
+                    const winner = state.winners.find(w => String(w.id) === String(id));
+                    if (winner) {
+                        winner.name = newName;
+                        winner.account = newAccount;
+                    }
+                    
+                    renderParticipants();
+                    renderWinners();
+                    updateCounts();
+                    drawWheel();
+                    saveSession();
+                    toast('تم تعديل بيانات المشارك بنجاح', 'success');
+                });
+            }
+        });
+      });
       
-      console.log('[renderParticipants] HTML set, buttons count:', buttons.length);
+      console.log('[renderParticipants] HTML set, buttons count:', removeButtons.length);
     }
     
+    function openImageModal(src) {
+        const overlay = document.createElement('div');
+        overlay.className = 'wr-confirm-overlay';
+        overlay.style.zIndex = '10000';
+        overlay.innerHTML = `
+            <div class="wr-confirm-modal" style="max-width: 90vw; max-height: 90vh; width: auto; padding: 10px; background: transparent; box-shadow: none;">
+                <div style="position: relative; display: inline-block;">
+                    <img src="${src}" style="max-width: 100%; max-height: 85vh; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+                    <button id="wr-img-close" style="position: absolute; top: -15px; right: -15px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        
+        const closeBtn = overlay.querySelector('#wr-img-close');
+        const cleanup = () => overlay.remove();
+        
+        closeBtn?.addEventListener('click', cleanup);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay || e.target.classList.contains('wr-confirm-modal')) cleanup();
+        });
+    }
+
     function renderWinners() {
       const bottomContainer = document.getElementById('winners-list-bottom');
       
@@ -19587,13 +19982,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                   // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
                   idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                       <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
-                      <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+                      <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${blobUrl}">
                   </div>`;
               } catch(e) { console.warn('Failed to create object URL', e); }
           } else if (w.nationalIdImage) {
               idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                   <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
-                  <img src="${w.nationalIdImage}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+                  <img src="${w.nationalIdImage}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${w.nationalIdImage}">
               </div>`;
           }
           // -------------------------------
@@ -19612,18 +20007,17 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً
                   </label>
+                  <div style="border-top: 1px solid rgba(255,255,255,0.15); margin: 6px 0;"></div>
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="prev" data-id="${w.id}" ${w.includeWarnPrev ? 'checked' : ''}> ‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية
                   </label>
                 </div>
     
               </div>
-              <div class="wr-winner-card-actions">
-                <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
-                <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — ${w.prizeValue}%" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-edit="${w.id}" title="تعديل" style="background: #3b82f6; color: white;"><i class="fas fa-edit"></i></button>
-                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
-                <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="background: #ef4444; color: white;"><i class="fas fa-trash"></i></button>
+              <div class="wr-winner-card-actions" style="display: flex; width: calc(100% + 36px); margin: 16px -18px -16px -18px; border-top: 1px solid rgba(255,255,255,0.1); border-radius: 0 0 14px 14px; overflow: hidden;">
+                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت" style="flex: 1; background: #8b5cf6; color: white; border-radius: 0; height: 40px; border: none; border-left: 1px solid rgba(255,255,255,0.2);"><i class="fas fa-redo" style="margin-left:5px;"></i> استرجاع</button>
+                <button class="wr-icon-btn" data-edit="${w.id}" title="تعديل" style="flex: 1; background: #3b82f6; color: white; border-radius: 0; height: 40px; border: none; border-left: 1px solid rgba(255,255,255,0.2);"><i class="fas fa-edit" style="margin-left:5px;"></i> تعديل</button>
+                <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="flex: 1; background: #ef4444; color: white; border-radius: 0; height: 40px; border: none;"><i class="fas fa-trash" style="margin-left:5px;"></i> حذف</button>
               </div>
             </div>`;
         });
@@ -19653,13 +20047,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                   // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
                   idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                       <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
-                      <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+                      <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${blobUrl}">
                   </div>`;
               } catch(e) { console.warn('Failed to create object URL', e); }
           } else if (w.nationalIdImage) {
               idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                   <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
-                  <img src="${w.nationalIdImage}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+                  <img src="${w.nationalIdImage}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${w.nationalIdImage}">
               </div>`;
           }
           // ---------------------------------------
@@ -19679,17 +20073,16 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً
                   </label>
+                  <div style="border-top: 1px solid rgba(255,255,255,0.15); margin: 6px 0;"></div>
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="prev" data-id="${w.id}" ${w.includeWarnPrev ? 'checked' : ''}> ‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية
                   </label>
                 </div>
               </div>
-              <div class="wr-winner-card-actions">
-                <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
-                <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — $${w.prizeValue}" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-edit="${w.id}" title="تعديل" style="background: #3b82f6; color: white;"><i class="fas fa-edit"></i></button>
-                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
-                <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="background: #ef4444; color: white;"><i class="fas fa-trash"></i></button>
+              <div class="wr-winner-card-actions" style="display: flex; width: calc(100% + 36px); margin: 16px -18px -16px -18px; border-top: 1px solid rgba(255,255,255,0.1); border-radius: 0 0 14px 14px; overflow: hidden;">
+                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت" style="flex: 1; background: #8b5cf6; color: white; border-radius: 0; height: 40px; border: none; border-left: 1px solid rgba(255,255,255,0.2);"><i class="fas fa-redo" style="margin-left:5px;"></i> استرجاع</button>
+                <button class="wr-icon-btn" data-edit="${w.id}" title="تعديل" style="flex: 1; background: #3b82f6; color: white; border-radius: 0; height: 40px; border: none; border-left: 1px solid rgba(255,255,255,0.2);"><i class="fas fa-edit" style="margin-left:5px;"></i> تعديل</button>
+                <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="flex: 1; background: #ef4444; color: white; border-radius: 0; height: 40px; border: none;"><i class="fas fa-trash" style="margin-left:5px;"></i> حذف</button>
               </div>
             </div>`;
         });
@@ -19715,6 +20108,16 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       `;
 
         bottomContainer.innerHTML = html;
+
+        // Attach event listeners for image preview
+        const previewImages = bottomContainer.querySelectorAll('.js-preview-img');
+        previewImages.forEach(img => {
+            img.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const src = img.getAttribute('data-src');
+                if (src) openImageModal(src);
+            });
+        });
 
         // Bind events for new buttons
         const approveBtn = document.getElementById('approve-winners-btn');
@@ -19766,11 +20169,49 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             });
 
             if (dbWinners.length === 0) {
-              toast('لا يوجد فائزين محفوظين في قاعدة البيانات لهذه المسابقة.', 'error');
-              return;
-            }
-
-            if (missing.length > 0) {
+              // Attempt recovery if local winners exist but DB is empty
+              if (state.winners.length > 0) {
+                  console.warn('[Approve Winners] Verification failed (0 winners in DB) but local winners exist. Attempting recovery...');
+                  toast('جاري محاولة إصلاح بيانات الفائزين...', 'info');
+                  
+                  // Strip _id from local winners to force re-save
+                  state.winners.forEach(w => {
+                      if (w._id) {
+                          // Ensure we have a local ID (fallback to _id if id is missing)
+                          if (!w.id) w.id = w._id;
+                          delete w._id;
+                      }
+                  });
+                  
+                  // Re-save
+                  await saveAllWinnersToDatabase();
+                  
+                  // Verify again
+                  const retryResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}`);
+                  const retryData = await retryResp.json();
+                  const retryCompetition = (retryData.competitions && retryData.competitions[0]) ? retryData.competitions[0] : null;
+                  const retryWinners = (retryCompetition && retryCompetition.winners) ? retryCompetition.winners : [];
+                  
+                  if (retryWinners.length === 0) {
+                       toast('فشل إصلاح البيانات. لا يوجد فائزين محفوظين في قاعدة البيانات.', 'error');
+                       return;
+                  }
+                  
+                  // Update dbWinners and missing for the next check
+                  // Note: We can't easily update 'dbWinners' variable since it's const in the original scope if we didn't change it to let.
+                  // But we can just check 'retryWinners' here.
+                  const retryMissing = retryWinners.filter(w => !w.video_url || !w.national_id_image);
+                  if (retryMissing.length > 0) {
+                      toast(`يوجد ${retryMissing.length} فائز بدون فيديو أو صورة هوية محفوظة. يرجى إعادة المحاولة.`, 'error');
+                      return;
+                  }
+                  
+                  // If recovery successful, proceed
+              } else {
+                  toast('لا يوجد فائزين محفوظين في قاعدة البيانات لهذه المسابقة.', 'error');
+                  return;
+              }
+            } else if (missing.length > 0) {
               toast(`يوجد ${missing.length} فائز بدون فيديو أو صورة هوية محفوظة. يرجى إعادة المحاولة.`, 'error');
               return;
             }
@@ -20195,13 +20636,6 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
         let msg = `◃ الفائز: ${w.name}\n`;
         msg += `           الجائزة: ${prizeText}\n`;
-
-        if (w.includeWarnMeet) {
-            msg += `\n⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً\n`;
-        }
-        if (w.includeWarnPrev) {
-            msg += `\n‼️ فائز سابق ببونص تداولي، تأكد من نشر المسابقة السابقة قبل الاعتماد\n`;
-        }
 
         msg += `\n********************************************************\n`;
         msg += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
@@ -21864,8 +22298,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                           winnerIds: validWinners.map(w => w._id),
-                          messageText,
-                          warnings // Send warnings to backend
+                          messageText
+                          // warnings removed to prevent sending warnings with video report
                       })
                   });
                   
@@ -22094,13 +22528,6 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
             msg += `◃ الفائز ${rank}: ${w.name}\n`;
             msg += `           الجائزة: ${prizeText}\n`;
-
-            if (w.includeWarnMeet) {
-                msg += `⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً\n`;
-            }
-            if (w.includeWarnPrev) {
-                msg += `‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية\n`;
-            }
 
             msg += `\n********************************************************\n`;
         });

@@ -225,6 +225,7 @@ function capitalizeFirst(str) {
 
 // --- أكثر مسابقات تفاعلاً ---
 async function fetchAndRenderMostInteractiveCompetitions() {
+    dlog('fetchAndRenderMostInteractiveCompetitions: Starting...');
     const listEl = document.getElementById('mostInteractiveCompetitionsList');
     const errorEl = document.getElementById('mostInteractiveCompetitionsError');
     if (!listEl) return;
@@ -247,12 +248,14 @@ async function fetchAndRenderMostInteractiveCompetitions() {
         else { query += 'range=30'; }
         query += `&limit=${limit}&sort=${sortBy}`;
 
+        dlog('fetchAndRenderMostInteractiveCompetitions: Fetching with query:', query);
         const res = await fetchWithAuth(`/api/stats/interactive-competitions?${query}`);
         if (!res.ok) {
             await res.text().catch(()=> '');
             throw new Error('فشل في جلب البيانات');
         }
         const data = await res.json();
+        dlog('fetchAndRenderMostInteractiveCompetitions: Data received:', data);
         let competitions = Array.isArray(data?.data) ? data.data : [];
 
         competitions = competitions.map(c => ({
@@ -292,15 +295,21 @@ async function fetchAndRenderMostInteractiveCompetitions() {
             const qFull = (comp.question || 'غير متوفر').toString();
             const aFull = (comp.correct_answer || 'غير متوفر').toString();
             const escapedQ = qFull.replace(/\"/g,'&quot;');
+            
+            // Truncate question logic
+            const isLong = qFull.length > 120;
+            const qDisplay = isLong ? qFull.substring(0, 120) + '...' : qFull;
+
             return `
               <div class="interactive-item" data-index="${idx+1}">
                 <div class="item-rank"><span class="index-badge">${idx+1}</span></div>
                 <div class="item-main">
-                  <div class="item-question question-cell" title="${escapedQ}" data-fulltext="${escapedQ}">
-                    <i class="fas fa-question-circle"></i>
-                    <span class="question-text">${qFull}</span>
-                    <span class="answer-badge">الإجابة: ${aFull}</span>
-                  </div>
+                                    <div class="item-question question-cell" title="${isLong ? 'انقر لعرض النص الكامل' : ''}" data-fulltext="${escapedQ}" style="cursor: ${isLong ? 'pointer' : 'default'};">
+                                        <i class="fas fa-question-circle"></i>
+                                        <span class="question-text">${qDisplay}</span>
+                                        ${isLong ? '<span class="read-more-link">(عرض المزيد)</span>' : ''}
+                                        <span class="answer-badge">الإجابة: ${aFull}</span>
+                                    </div>
                   <div class="item-meta">
                     <span class="type-badge ${badgeKey}">${displayType}</span>
                     <span class="metric-chip"><i class="fas fa-paper-plane"></i> ${ (comp.send_count ?? 0).toLocaleString('ar-EG') }</span>
@@ -326,18 +335,7 @@ async function fetchAndRenderMostInteractiveCompetitions() {
                     const cell = ev.target.closest('.question-cell');
                     if (!cell) return;
                     const full = cell.getAttribute('data-fulltext') || cell.textContent || '';
-                    const content = `
-                        <div class="dark-expand-modal-wrapper">
-                            <div class="dark-expand-modal">
-                                <div class="dark-expand-modal-header">
-                                    <i class="fas fa-question-circle" style="color:#4fa3ff"></i> السؤال الكامل
-                                </div>
-                                <div class="dark-expand-modal-body"><pre>${full}</pre></div>
-                            </div>
-                        </div>`;
-                    if (typeof showConfirmationModal === 'function') {
-                        showConfirmationModal(content, async () => true, { title: '', confirmText: '<i class="fas fa-times"></i> إغلاق', showCancel: false });
-                    } else { alert(full); }
+                    showQuestionModal(full);
                 });
                 container._questionClickBound = true;
             }
@@ -353,9 +351,30 @@ async function fetchAndRenderMostInteractiveCompetitions() {
 // Use the globally available utilities
 const { authedFetch: fetchWithAuth, showToast } = window.utils;
 
-// DEBUG gate: disable verbose logs in production to keep UI smooth
-const DEBUG = false;
-const dlog = DEBUG ? (..._args) => {} : null;
+// DEBUG gate: opt-in only
+// Enable by running in DevTools console:
+//   window.__setAnalyticsDebug(true)
+// Or set localStorage key:
+//   localStorage.setItem('debugAnalytics', '1')
+// Or add query param:
+//   ?debugAnalytics=1
+const DEBUG =
+    (typeof localStorage !== 'undefined' && localStorage.getItem('debugAnalytics') === '1') ||
+    (typeof window !== 'undefined' && new URLSearchParams(window.location.search || '').get('debugAnalytics') === '1');
+
+const dlog = (...args) => {
+    if (!DEBUG) return;
+    console.log('[Analytics DEBUG]', ...args);
+};
+
+window.__setAnalyticsDebug = (enabled) => {
+    try {
+        localStorage.setItem('debugAnalytics', enabled ? '1' : '0');
+        console.log(`[Analytics][debug] ${enabled ? 'enabled' : 'disabled'} (reload page to apply)`);
+    } catch (e) {
+        console.warn('[Analytics][debug] failed to write localStorage', e);
+    }
+};
 
 // Helper: truncate long text safely
 function truncateText(str, max) {
@@ -571,7 +590,7 @@ async function fetchAnalyticsData(filter) {
         // Assuming fetchWithAuth is available globally or imported
         // build query params from provided filter object
         let url = '/api/analytics';
-    dlog && dlog('DEBUG: fetchAnalyticsData - initial filter:', filter);
+        dlog('fetchAnalyticsData: Starting with filter:', filter);
         const qp = new URLSearchParams();
         qp.append('_t', Date.now()); // Cache busting
 
@@ -594,14 +613,16 @@ async function fetchAnalyticsData(filter) {
             url += `?${queryString}`;
         }
 
-    dlog && dlog('DEBUG: fetchAnalyticsData - constructed URL:', url);
+        dlog('fetchAnalyticsData: Fetching from URL:', url);
         const response = await fetchWithAuth(url);
         if (!response.ok) {
             throw new Error(ARABIC_LABELS.errorFetchingData);
         }
         const result = await response.json();
+        dlog('fetchAnalyticsData: Data received:', result);
         return result; // backend returns object with analytics fields
     } catch (error) {
+        dlog('fetchAnalyticsData: Error:', error);
         try { showToast && showToast(ARABIC_LABELS.errorFetchingData, 'error'); } catch (_) {}
         document.querySelectorAll('.chart-card').forEach(card => {
             const errorEl = card.querySelector('.error-message');
@@ -650,13 +671,13 @@ function renderKpiCards(data) {
     }
 
     // Log bonus deposit status
-    dlog && dlog('[ANALYTICS-KPI] 🎯 === تقرير البيانات ===');
-    dlog && dlog('[ANALYTICS-KPI] 📊 جميع البيانات المستلمة:', JSON.stringify(data, null, 2));
-    dlog && dlog('[ANALYTICS-KPI] 💰 بيانات الأرصدة الممنوحة:', data.granted_balances);
-    dlog && dlog('[ANALYTICS-KPI] 📈 total_competitions_sent:', data.total_competitions_sent);
-    dlog && dlog('[ANALYTICS-KPI] 👥 new_agents_in_period:', data.new_agents_in_period);
-    dlog && dlog('[ANALYTICS-KPI] 📝 total_activities:', data.total_activities);
-    dlog && dlog('[ANALYTICS-KPI] ==================');
+    dlog('[ANALYTICS-KPI] 🎯 === تقرير البيانات ===');
+    dlog('[ANALYTICS-KPI] 📊 جميع البيانات المستلمة:', JSON.stringify(data, null, 2));
+    dlog('[ANALYTICS-KPI] 💰 بيانات الأرصدة الممنوحة:', data.granted_balances);
+    dlog('[ANALYTICS-KPI] 📈 total_competitions_sent:', data.total_competitions_sent);
+    dlog('[ANALYTICS-KPI] 👥 new_agents_in_period:', data.new_agents_in_period);
+    dlog('[ANALYTICS-KPI] 📝 total_activities:', data.total_activities);
+    dlog('[ANALYTICS-KPI] ==================');
 
     // Extract granted balances data
     const grantedBalances = data.granted_balances || {};
@@ -667,8 +688,8 @@ function renderKpiCards(data) {
     const totalWinners = depositWinners + tradingWinners;
     const depositRatio = totalWinners > 0 ? ((depositWinners / totalWinners) * 100).toFixed(1) : '0.0';
     
-    dlog && dlog('[ANALYTICS-KPI] 💵 Trading Bonus:', tradingBonus);
-    dlog && dlog('[ANALYTICS-KPI] 🎁 Deposit Bonus:', depositBonus);
+    dlog('[ANALYTICS-KPI] 💵 Trading Bonus:', tradingBonus);
+    dlog('[ANALYTICS-KPI] 🎁 Deposit Bonus:', depositBonus);
 
     container.innerHTML = `
         <div class="stat-card-v2">
@@ -697,11 +718,12 @@ function renderKpiCards(data) {
         </div>
     `;
     
-    dlog && dlog('[ANALYTICS-KPI] ✅ KPI cards rendered successfully');
+    dlog('[ANALYTICS-KPI] ✅ KPI cards rendered successfully');
 }
 
 // --- NEW: Fetch top agent per classification and render table ---
 async function fetchTopAgentsPerClassification() {
+    dlog('fetchTopAgentsPerClassification: Starting...');
     const bodyEl = document.getElementById('topAgentsByClassBody');
     const errorEl = document.getElementById('topAgentsByClassError');
     if (!bodyEl) return;
@@ -718,8 +740,12 @@ async function fetchTopAgentsPerClassification() {
         let dateQuery = '';
         if (fromVal && toVal) {
             dateQuery = `&from=${fromVal}&to=${toVal}`;
+        } else {
+            // Default to 30 days if no specific date selected, to match other sections
+            dateQuery = '&range=30';
         }
 
+        dlog('fetchTopAgentsPerClassification: Fetching for classifications:', classifications, 'Query:', dateQuery);
         // اجلب حتى 5 وكلاء لكل تصنيف لحساب أفضلهم بنظام نقاط مركب
         const results = await Promise.all(classifications.map(c => fetchWithAuth(`/api/stats/top-agents?classification=${c}&limit=5${dateQuery}`)));
         // Permission check: if any returns 403 show message
@@ -734,6 +760,7 @@ async function fetchTopAgentsPerClassification() {
             }
             return r.json();
         }));
+        dlog('fetchTopAgentsPerClassification: Data received:', jsonData);
         // cache
         topAgentsLastJson = jsonData;
 
@@ -808,6 +835,7 @@ async function fetchTopAgentsPerClassification() {
 
 // Render KPI cards with comparison
 function renderKpiCardsComparison(data1, data2) {
+    dlog('renderKpiCardsComparison: Rendering comparison with data:', { data1, data2 });
     const container = document.getElementById('analytics-kpi-cards');
     if (!container || !data1 || !data2) return;
 
@@ -923,12 +951,14 @@ function translateTemplateCompetitionType(comp) {
 
 // Render Completed Competitions Table with performance optimization
 function renderCompletedCompetitionsTable(competitions) {
+    dlog('renderCompletedCompetitionsTable: Rendering with competitions:', competitions);
     const tbody = document.getElementById('completedCompetitionsTableBody');
     const errorEl = document.getElementById('completedCompetitionsError');
     
     if (!tbody) return;
     
     if (!competitions || competitions.length === 0) {
+        dlog('renderCompletedCompetitionsTable: No competitions to display');
         tbody.innerHTML = `
             <tr>
                 <td colspan="9" style="text-align: center; padding: 40px; color: var(--text-secondary-color);">
@@ -1008,40 +1038,13 @@ function renderCompletedCompetitionsTable(competitions) {
     requestAnimationFrame(() => updatePagination(totalPages));
 }
 
-// Enhance question click to show full text in a modal to avoid layout overflow while keeping accessibility
+// Enhance question click to show full text in a modal
 if (!window.__analyticsQuestionModalHooked) {
     window.__analyticsQuestionModalHooked = true;
     document.addEventListener('click', (e) => {
         const target = e.target.closest('.competition-question');
         if (target && target.dataset.fullQuestion) {
-            const existing = document.querySelector('.modal-overlay[data-modal="question-full-text"]');
-            if (existing) existing.remove();
-
-            const fullText = target.dataset.fullQuestion;
-            // Create lightweight modal
-            const overlay = document.createElement('div');
-            overlay.className = 'modal-overlay';
-            overlay.setAttribute('data-modal', 'question-full-text');
-            const modal = document.createElement('div');
-            modal.className = 'form-modal-content';
-            modal.style.maxWidth = '700px';
-            modal.innerHTML = `
-                <div class="form-modal-header">
-                    <h3 style="margin:0; font-size:1.1em;"><i class="fas fa-question-circle"></i> نص المسابقة الكامل</h3>
-                    <button class="btn-icon-action" id="close-question-modal" title="إغلاق">&times;</button>
-                </div>
-                <div class="form-modal-body" style="max-height:60vh; overflow-y:auto;">
-                    <p style="line-height:1.6; white-space:pre-line;">${fullText}</p>
-                </div>
-                <div class="form-actions" style="text-align:left; padding:10px 20px 20px;">
-                    <button class="btn-secondary" id="close-question-modal-btn">إغلاق</button>
-                </div>
-            `;
-            overlay.appendChild(modal);
-            document.body.appendChild(overlay);
-            const close = () => overlay.remove();
-            modal.querySelector('#close-question-modal').addEventListener('click', close);
-            modal.querySelector('#close-question-modal-btn').addEventListener('click', close);
+            showQuestionModal(target.dataset.fullQuestion);
         }
     });
 }
@@ -1054,6 +1057,7 @@ if (!window.__analyticsRecipientsHooked) {
         if (!el) return;
 
         const question = el.getAttribute('data-question') || '';
+        dlog('Recipients click handler: Question:', question);
         if (!question) return;
 
         // Build date filter from the current analytics filter controls
@@ -1071,6 +1075,7 @@ if (!window.__analyticsRecipientsHooked) {
         }
 
         try {
+            dlog('Recipients click handler: Fetching recipients with query:', query);
             showToast && showToast('جاري تحميل قائمة الوكلاء...', 'info');
             const res = await fetchWithAuth(`/api/stats/completed-competition-recipients?${query}`);
             if (!res.ok) {
@@ -1078,6 +1083,7 @@ if (!window.__analyticsRecipientsHooked) {
                 throw new Error(msg || 'فشل في جلب قائمة الوكلاء');
             }
             const data = await res.json();
+            dlog('Recipients click handler: Data received:', data);
             let agents = Array.isArray(data.agents) ? data.agents : [];
 
             // Sort agents: count desc then name asc for readability
@@ -1236,12 +1242,17 @@ function filterCompetitions(filterType) {
 
 
 function renderMostFrequentCompetitionsChart(data) {
+    dlog('renderMostFrequentCompetitionsChart: Rendering with data:', data);
     const mostFrequentCompetitionsCanvas = document.getElementById('mostFrequentCompetitionsChart');
     const mostFrequentCompetitionsError = document.getElementById('mostFrequentCompetitionsError');
-    if (!mostFrequentCompetitionsCanvas) return;
+    if (!mostFrequentCompetitionsCanvas) {
+        dlog('renderMostFrequentCompetitionsChart: Canvas not found');
+        return;
+    }
     if (mostFrequentCompetitionsChart) mostFrequentCompetitionsChart.destroy();
 
     if (!data || data.length === 0) {
+        dlog('renderMostFrequentCompetitionsChart: No data to display');
         showError(mostFrequentCompetitionsError, ARABIC_LABELS.noData, true);
         return;
     }
@@ -1302,10 +1313,12 @@ function renderMostFrequentCompetitionsChart(data) {
 }
 
 function renderCompetitionsByDayChart(data) {
+    dlog('renderCompetitionsByDayChart: Rendering with data:', data);
     if (!agentGrowthCanvas) return;
     if (agentGrowthChart) agentGrowthChart.destroy();
 
     if (!data || data.length === 0) {
+        dlog('renderCompetitionsByDayChart: No data to display');
         showError(agentGrowthError, ARABIC_LABELS.noData, true);
         return;
     }
@@ -1399,12 +1412,14 @@ function renderCompetitionsByDayChart(data) {
 
 // Render granted balances section
 function renderGrantedBalances(data) {
+    dlog('renderGrantedBalances: Rendering with data:', data);
     const tradingBonusAmount = document.getElementById('tradingBonusAmount');
     const tradingBonusWinners = document.getElementById('tradingBonusWinners');
     const depositBonusTableBody = document.getElementById('depositBonusTableBody');
     const grantedBalancesError = document.getElementById('grantedBalancesError');
 
     if (!data) {
+        dlog('renderGrantedBalances: No data to display');
         if (grantedBalancesError) {
             showError(grantedBalancesError, ARABIC_LABELS.noData, true);
         }
@@ -1417,13 +1432,14 @@ function renderGrantedBalances(data) {
     }
 
     // Debug Log for Granted Balances
-    console.log('%c[Analytics] Granted Balances Update:', 'color: #00ff00; font-weight: bold; font-size: 12px;');
-    console.log('Trading Bonus Data:', data.trading_bonus);
-    console.log('Total Amount:', data.trading_bonus?.total_amount);
-    console.log('Winners Count:', data.trading_bonus?.winners_count);
-    console.log('Breakdown:', data.trading_bonus?.breakdown);
-    console.log('[Deposit Bonus] Raw details from DB:', data.deposit_bonus_details);
-    console.log('[Deposit Bonus] Totals by band:', (data.deposit_bonus || []).map(b => ({ value: b.bonus_value ?? b.percentage, winners: b.winners_count })));
+    dlog('[Analytics] Granted Balances Update:', {
+        tradingBonusData: data.trading_bonus,
+        totalAmount: data.trading_bonus?.total_amount,
+        winnersCount: data.trading_bonus?.winners_count,
+        breakdown: data.trading_bonus?.breakdown,
+        depositBonusRawDetails: data.deposit_bonus_details,
+        depositBonusTotalsByBand: (data.deposit_bonus || []).map(b => ({ value: b.bonus_value ?? b.percentage, winners: b.winners_count }))
+    });
 
     // Update trading bonus
     if (tradingBonusAmount) {
@@ -1482,10 +1498,12 @@ function renderGrantedBalances(data) {
 
 // Render weekly excellence section
 function renderWeeklyExcellence(data) {
+    dlog('renderWeeklyExcellence: Rendering with data:', data);
     const weeklyExcellenceTableBody = document.getElementById('weeklyExcellenceTableBody');
     const weeklyExcellenceError = document.getElementById('weeklyExcellenceError');
 
     if (!data) {
+        dlog('renderWeeklyExcellence: No data to display');
         if (weeklyExcellenceError) {
             showError(weeklyExcellenceError, ARABIC_LABELS.noData, true);
         }
@@ -1530,10 +1548,15 @@ function renderWeeklyExcellence(data) {
 }
 
 function renderAgentClassificationChart(data) {
-    if (!agentClassificationCanvas) return;
+    dlog('renderAgentClassificationChart: Rendering with data:', data);
+    if (!agentClassificationCanvas) {
+        dlog('renderAgentClassificationChart: Canvas not found');
+        return;
+    }
     if (agentClassificationChart) agentClassificationChart.destroy();
 
     if (!data || Object.keys(data).length === 0) {
+        dlog('renderAgentClassificationChart: No data to display');
         showError(agentClassificationError, ARABIC_LABELS.noData, true);
         return;
     }
@@ -1580,10 +1603,12 @@ function renderAgentClassificationChart(data) {
 }
 
 function renderCompetitionPerformanceChart(data) {
+    dlog('renderCompetitionPerformanceChart: Rendering with data:', data);
     if (!competitionPerformanceCanvas) return;
     if (competitionPerformanceChart) competitionPerformanceChart.destroy();
 
     if (!data || data.length === 0) {
+        dlog('renderCompetitionPerformanceChart: No data to display');
         showError(competitionPerformanceError, ARABIC_LABELS.noData, true);
         return;
     }
@@ -1639,13 +1664,11 @@ const RANK_CHANGES_PER_PAGE = 7;
 
 // Function to fetch and render agent rank changes
 async function fetchAndRenderRankChanges(filter) {
+    dlog('fetchAndRenderRankChanges: Starting with filter:', filter);
     const rankChangesTableBody = document.getElementById('rankChangesTableBody');
     const rankChangesError = document.getElementById('rankChangesError');
     
     if (!rankChangesTableBody) return;
-    
-    // Initialize purge button after elements are loaded
-    initRankChangesPurgeButton();
     
     try {
         // Build query params
@@ -1671,6 +1694,7 @@ async function fetchAndRenderRankChanges(filter) {
             }
         }
         
+        dlog('fetchAndRenderRankChanges: Fetching from URL:', url);
         const response = await fetchWithAuth(url);
         if (!response.ok) {
             throw new Error('فشل جلب بيانات تغييرات المرتبة');
@@ -1694,10 +1718,12 @@ async function fetchAndRenderRankChanges(filter) {
 }
 
 function renderRankChangesPage(page) {
+    dlog('renderRankChangesPage: Rendering page:', page);
     const rankChangesTableBody = document.getElementById('rankChangesTableBody');
     if (!rankChangesTableBody) return;
 
     if (allRankChangesData.length === 0) {
+        dlog('renderRankChangesPage: No data to display');
         rankChangesTableBody.innerHTML = `
             <tr>
                 <td colspan="10" style="text-align: center; padding: 30px;">
@@ -1818,6 +1844,7 @@ function renderRankChangesPage(page) {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const changeId = btn.getAttribute('data-change-id');
+            dlog('Delete rank change click: ID:', changeId);
             if (!changeId) return;
             
             const confirmDelete = await new Promise(resolve => {
@@ -1832,16 +1859,20 @@ function renderRankChangesPage(page) {
 
             if (confirmDelete) {
                 try {
+                    dlog('Deleting rank change:', changeId);
                     const res = await fetchWithAuth(`/api/stats/rank-changes/${changeId}`, { method: 'DELETE' });
                     if (res.ok) {
+                        dlog('Rank change deleted successfully');
                         showToast('تم حذف السجل بنجاح', 'success');
                         // Remove from local data and re-render
                         allRankChangesData = allRankChangesData.filter(item => item._id !== changeId);
                         renderRankChangesPage(currentRankChangesPage);
                     } else {
+                        dlog('Failed to delete rank change');
                         showToast('فشل حذف السجل', 'error');
                     }
                 } catch (err) {
+                    dlog('Error deleting rank change:', err);
                     console.error(err);
                     showToast('حدث خطأ أثناء الحذف', 'error');
                 }
@@ -1853,6 +1884,7 @@ function renderRankChangesPage(page) {
 }
 
 function renderRankChangesPaginationControls() {
+    dlog('renderRankChangesPaginationControls: Rendering pagination controls');
     const table = document.getElementById('rankChangesTable');
     if (!table) return;
     
@@ -1866,6 +1898,7 @@ function renderRankChangesPaginationControls() {
     }
 
     const totalPages = Math.ceil(allRankChangesData.length / RANK_CHANGES_PER_PAGE);
+    dlog('renderRankChangesPaginationControls: Total pages:', totalPages, 'Current page:', currentRankChangesPage);
     
     if (totalPages <= 1) {
         paginationContainer.style.display = 'none';
@@ -1934,10 +1967,6 @@ async function updateDashboard(filter) {
             renderGrantedBalances(analyticsData.granted_balances);
             renderWeeklyExcellence(analyticsData.weekly_excellence);
         }, 200);
-        
-        setTimeout(() => {
-            renderCompetitionPerformanceChart(analyticsData.competition_performance);
-        }, 300);
         
         // Lazy load interactive competitions
         setTimeout(async () => {
@@ -2014,11 +2043,13 @@ async function renderComparisonView() {
         renderCompletedCompetitionsTable([]);
     }
 
-    // 3. Most frequent competitions chart comparison (already dual)
-    renderMostFrequentCompetitionsChartComparison(
-        data1.most_frequent_competitions,
-        data2.most_frequent_competitions
-    );
+    // 3. Most frequent competitions chart comparison (optional)
+    if (document.getElementById('mostFrequentCompetitionsChart')) {
+        renderMostFrequentCompetitionsChartComparison(
+            data1.most_frequent_competitions,
+            data2.most_frequent_competitions
+        );
+    }
 
     // 4. Competitions by day – overlay both periods for visual diff
     if (agentGrowthCanvas && Array.isArray(data1.competitions_by_day)) {
@@ -2040,23 +2071,25 @@ async function renderComparisonView() {
         });
     }
 
-    // 5. Agent classification – show percentage change between periods if both available
-    if (agentClassificationCanvas && data1.agent_classification && data2.agent_classification) {
-        if (agentClassificationChart) agentClassificationChart.destroy();
-        const allKeys = Array.from(new Set([...Object.keys(data1.agent_classification), ...Object.keys(data2.agent_classification)]));
-        const vals1 = allKeys.map(k => data1.agent_classification[k]||0);
-        const vals2 = allKeys.map(k => data2.agent_classification[k]||0);
-        agentClassificationChart = new Chart(agentClassificationCanvas, {
-            type: 'bar',
-            data: { labels: allKeys, datasets: [
-                { label: 'الفترة الأولى', data: vals1, backgroundColor: 'rgba(244,162,97,0.6)', borderColor:'rgba(244,162,97,1)' },
-                { label: 'الفترة الثانية', data: vals2, backgroundColor: 'rgba(153,102,255,0.6)', borderColor:'rgba(153,102,255,1)' }
-            ]},
-            options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:true}, title:{display:true, text:'مقارنة تصنيفات الوكلاء'} } },
-            plugins:[ChartDataLabels]
-        });
-    } else {
-        renderAgentClassificationChart(data1.agent_classification);
+    // 5. Agent classification – optional (section may be removed from the page)
+    if (agentClassificationCanvas) {
+        if (data1.agent_classification && data2.agent_classification) {
+            if (agentClassificationChart) agentClassificationChart.destroy();
+            const allKeys = Array.from(new Set([...Object.keys(data1.agent_classification), ...Object.keys(data2.agent_classification)]));
+            const vals1 = allKeys.map(k => data1.agent_classification[k]||0);
+            const vals2 = allKeys.map(k => data2.agent_classification[k]||0);
+            agentClassificationChart = new Chart(agentClassificationCanvas, {
+                type: 'bar',
+                data: { labels: allKeys, datasets: [
+                    { label: 'الفترة الأولى', data: vals1, backgroundColor: 'rgba(244,162,97,0.6)', borderColor:'rgba(244,162,97,1)' },
+                    { label: 'الفترة الثانية', data: vals2, backgroundColor: 'rgba(153,102,255,0.6)', borderColor:'rgba(153,102,255,1)' }
+                ]},
+                options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:true}, title:{display:true, text:'مقارنة تصنيفات الوكلاء'} } },
+                plugins:[ChartDataLabels]
+            });
+        } else {
+            renderAgentClassificationChart(data1.agent_classification);
+        }
     }
 
     // 6. Competition performance – overlay both periods
@@ -2128,6 +2161,7 @@ async function renderComparisonView() {
             if (comparisonData.periodInfo.period2.from) params2.set('from', comparisonData.periodInfo.period2.from);
             if (comparisonData.periodInfo.period2.to) params2.set('to', comparisonData.periodInfo.period2.to);
             
+            dlog('Comparison: Fetching weekly excellence for both periods', { params1: params1.toString(), params2: params2.toString() });
             const [resp1, resp2] = await Promise.all([
                 fetchWithAuth(`/api/analytics?${params1.toString()}`),
                 fetchWithAuth(`/api/analytics?${params2.toString()}`)
@@ -2142,6 +2176,7 @@ async function renderComparisonView() {
                 const d2 = await resp2.json();
                 we2 = d2.weekly_excellence;
             }
+            dlog('Comparison: Weekly excellence data received', { we1, we2 });
             
             if (we1 && we2) {
                 const cw1 = we1.current_week||{};
@@ -2224,6 +2259,7 @@ async function renderComparisonView() {
             params2.set('limit', limit);
             params2.set('sort', sortBy);
             
+            dlog('Comparison: Fetching interactive competitions for both periods', { params1: params1.toString(), params2: params2.toString() });
             const [resp1, resp2] = await Promise.all([
                 fetchWithAuth(`/api/stats/interactive-competitions?${params1.toString()}`),
                 fetchWithAuth(`/api/stats/interactive-competitions?${params2.toString()}`)
@@ -2339,12 +2375,17 @@ async function renderComparisonView() {
 
 // Render most frequent competitions chart with comparison
 function renderMostFrequentCompetitionsChartComparison(data1, data2) {
+    dlog('renderMostFrequentCompetitionsChartComparison: Rendering comparison with data:', { data1, data2 });
     const mostFrequentCompetitionsCanvas = document.getElementById('mostFrequentCompetitionsChart');
     const mostFrequentCompetitionsError = document.getElementById('mostFrequentCompetitionsError');
-    if (!mostFrequentCompetitionsCanvas) return;
+    if (!mostFrequentCompetitionsCanvas) {
+        dlog('renderMostFrequentCompetitionsChartComparison: Canvas not found');
+        return;
+    }
     if (mostFrequentCompetitionsChart) mostFrequentCompetitionsChart.destroy();
 
     if (!data1 || data1.length === 0) {
+        dlog('renderMostFrequentCompetitionsChartComparison: No data to display');
         showError(mostFrequentCompetitionsError, ARABIC_LABELS.noData, true);
         return;
     }
@@ -2448,6 +2489,11 @@ export function init() {
     agentGrowthCanvas = document.getElementById('agentGrowthChart');
     agentClassificationCanvas = document.getElementById('agentClassificationChart');
     competitionPerformanceCanvas = document.getElementById('competitionPerformanceChart');
+    mostFrequentCompetitionsChart = null; // Reset chart instance
+
+    // Most frequent competitions chart is optional (not present in all layouts)
+    const mostFrequentCompetitionsCanvas = document.getElementById('mostFrequentCompetitionsChart');
+
     // activityDistributionCanvas تمت إزالته مع القسم
 
     agentGrowthError = document.getElementById('agentGrowthError');
@@ -2669,10 +2715,10 @@ export function init() {
     }
 
     // NEW: بعد اكتمال تهيئة صفحة التحليلات، اجلب أبرز الوكلاء لكل تصنيف
-    fetchTopAgentsPerClassification();
+    // fetchTopAgentsPerClassification(); // Removed duplicate call
     
     // NEW: جلب بيانات الوكلاء والمسابقات
-    fetchAndRenderAgentsCompetitions();
+    // fetchAndRenderAgentsCompetitions(); // Removed duplicate call
     
     // NEW: إضافة event listeners لفلترة الوكلاء حسب التصنيف
     const agentsCompetitionsFilterButtons = document.querySelectorAll('#agentsCompetitionsCard .competition-filter-btn');
@@ -2766,6 +2812,9 @@ export function init() {
             fetchAndRenderMostInteractiveCompetitions();
         }
     );
+    
+    // Initial call for most interactive competitions
+    fetchAndRenderMostInteractiveCompetitions();
 
     // 7. فلتر أبرز الوكلاء لكل تصنيف
     setupSectionDateFilter(
@@ -2774,6 +2823,9 @@ export function init() {
             fetchTopAgentsPerClassification();
         }
     );
+    
+    // Initial call for top agents (moved here to avoid duplicate and ensure setup is done)
+    fetchTopAgentsPerClassification();
 
     // 8. فلتر الوكلاء والمسابقات المرسلة
     setupSectionDateFilter(
@@ -2784,11 +2836,14 @@ export function init() {
             fetchAndRenderAgentsCompetitions(classification);
         }
     );
+    
+    // Initial call for agents competitions
+    fetchAndRenderAgentsCompetitions();
 }
 
 // --- دالة جلب وعرض الوكلاء والمسابقات ---
-const fetchAndRenderAgentsCompetitions = (classification = 'all') => {
-    (async () => {
+const fetchAndRenderAgentsCompetitions = async (classification = 'all') => {
+    dlog('fetchAndRenderAgentsCompetitions: Starting with classification:', classification);
     const tableBody = document.getElementById('agentsCompetitionsTableBody');
     const errorEl = document.getElementById('agentsCompetitionsError');
     
@@ -2823,6 +2878,7 @@ const fetchAndRenderAgentsCompetitions = (classification = 'all') => {
             query += `&classification=${classification}`;
         }
         
+        dlog('fetchAndRenderAgentsCompetitions: Fetching with query:', query);
         // جلب البيانات من API
         const res = await fetchWithAuth(`/api/stats/agents-competitions?${query}`);
         if (!res.ok) {
@@ -2830,6 +2886,7 @@ const fetchAndRenderAgentsCompetitions = (classification = 'all') => {
         }
         
         const data = await res.json();
+        dlog('fetchAndRenderAgentsCompetitions: Data received:', data);
         const agents = data.agents || [];
         const stats = data.aggregated_stats || {};
         
@@ -2937,8 +2994,6 @@ const fetchAndRenderAgentsCompetitions = (classification = 'all') => {
             </tr>
         `;
     }
-        
-    })();
 }
 
 // --- دالة تحديث الإحصائيات المجمعة ---
@@ -2956,34 +3011,6 @@ function updateAgentsCompetitionsStats(stats) {
     if (totalReactionsEl) totalReactionsEl.textContent = (stats.total_reactions || 0).toLocaleString('ar-EG');
     if (totalParticipantsEl) totalParticipantsEl.textContent = (stats.total_participants || 0).toLocaleString('ar-EG');
     if (averageComplianceEl) averageComplianceEl.textContent = `${stats.average_compliance_rate || 0}%`;
-}
-
-// ============================================
-// Delete Single Rank Change
-// ============================================
-async function handleDeleteRankChange(changeId, currentFilter) {
-    if (!confirm('هل أنت متأكد من حذف هذا التغيير؟\n\nلا يمكن التراجع عن هذا الإجراء.')) {
-        return;
-    }
-
-    try {
-        const response = await fetchWithAuth(`/api/stats/rank-changes/${changeId}`, {
-            method: 'DELETE',
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            showToast(data.message || 'تم حذف التغيير بنجاح', 'success');
-            // Reload the table with current filter
-            await fetchAndRenderRankChanges(currentFilter);
-        } else {
-            showToast(data.message || 'فشل حذف التغيير', 'error');
-        }
-    } catch (error) {
-        console.error('Error deleting rank change:', error);
-        showToast('حدث خطأ أثناء حذف التغيير', 'error');
-    }
 }
 
 // ============================================
@@ -3016,7 +3043,8 @@ async function handlePurgeRankChanges() {
         try {
             const response = await fetchWithAuth('/api/stats/rank-changes', {
                 method: 'DELETE',
-            });        const data = await response.json();
+            });
+            const data = await response.json();
 
         if (response.ok) {
             showToast(data.message || 'تم حذف جميع تغييرات المراتب بنجاح', 'success');
@@ -3033,7 +3061,5 @@ async function handlePurgeRankChanges() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
-
-// --- دالة عرض modal للسؤال الكامل ---
 
 

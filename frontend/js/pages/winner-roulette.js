@@ -739,20 +739,24 @@
         
         // Always show stats - even if totalWinners is 0, we need to display the breakdown
         // Use local session selections for clearer UX while picking
+        // FIX: Use required_winners as the authoritative total if available, as it represents the target.
         const requiredTotal = (typeof competition.required_winners === 'number' && competition.required_winners > 0) 
           ? competition.required_winners 
           : totalWinners;
+
         const localSelected = (state && Array.isArray(state.winners)) ? state.winners.length : 0;
+        // Calculate remaining based on local selection + already approved winners (if any)
+        // But usually we pick all at once. Let's assume localSelected is what matters for the UI now.
         const remainingLocal = Math.max(requiredTotal - localSelected, 0);
 
         html += `<div class="wr-competition-stat-row wr-stat-total">
           <span class="wr-competition-stat-label"><i class="fas fa-trophy"></i> إجمالي الفائزين</span>
-          <span class="wr-competition-stat-value">${requiredTotal} فائز</span>
+          <span class="wr-competition-stat-value" id="stats-total-required">${requiredTotal} فائز</span>
         </div>`;
 
         html += `<div class="wr-competition-stat-row">
           <span class="wr-competition-stat-label"><i class="fas fa-hourglass-half"></i> المتبقي</span>
-          <span class="wr-competition-stat-value">${remainingLocal}</span>
+          <span class="wr-competition-stat-value" id="stats-remaining-count">${remainingLocal}</span>
         </div>`;
 
         // Bonus breakdown - show REQUIRED counts from competition, not selected
@@ -765,12 +769,12 @@
 
         html += `<div class="wr-competition-stat-row">
             <span class="wr-competition-stat-label"><i class="fas fa-dollar-sign"></i> بونص إيداع</span>
-            <span class="wr-competition-stat-value deposit">${localDepositCount} / ${depositWinnersRequired} فائز</span>
+            <span class="wr-competition-stat-value deposit" id="stats-deposit-count">${localDepositCount} / ${depositWinnersRequired} فائز</span>
           </div>`;
 
         html += `<div class="wr-competition-stat-row">
             <span class="wr-competition-stat-label"><i class="fas fa-chart-line"></i> بونص تداولي</span>
-            <span class="wr-competition-stat-value trading">${localTradingCount} / ${tradingWinnersRequired} فائز</span>
+            <span class="wr-competition-stat-value trading" id="stats-trading-count">${localTradingCount} / ${tradingWinnersRequired} فائز</span>
           </div>`;
         
         // Add prize information - always show if deposit bonus percentage exists
@@ -850,18 +854,23 @@
       const localDepositCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length : 0;
       const localTradingCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'trading').length : 0;
       
-      // تحديث العناصر في قسم معلومات المسابقة (الجانب الأيسر)
-      const remainingEl = document.querySelector('.wr-competition-stat-row:nth-child(2) .wr-competition-stat-value');
+      // تحديث العناصر في قسم معلومات المسابقة (الجانب الأيسر) باستخدام IDs
+      const totalEl = document.getElementById('stats-total-required');
+      if (totalEl) {
+        totalEl.textContent = `${requiredTotal} فائز`;
+      }
+
+      const remainingEl = document.getElementById('stats-remaining-count');
       if (remainingEl) {
         remainingEl.textContent = remainingLocal;
       }
       
-      const depositEl = document.querySelector('.wr-competition-stat-row:nth-child(3) .wr-competition-stat-value.deposit');
+      const depositEl = document.getElementById('stats-deposit-count');
       if (depositEl) {
         depositEl.textContent = `${localDepositCount} / ${depositWinnersRequired} فائز`;
       }
       
-      const tradingEl = document.querySelector('.wr-competition-stat-row:nth-child(4) .wr-competition-stat-value.trading');
+      const tradingEl = document.getElementById('stats-trading-count');
       if (tradingEl) {
         tradingEl.textContent = `${localTradingCount} / ${tradingWinnersRequired} فائز`;
       }
@@ -2272,17 +2281,36 @@
         // Winners selected
         const winnersCountEl = document.getElementById('winners-count');
         if (winnersCountEl) winnersCountEl.textContent = state.winners.length;
-        // Remaining required winners (bind to backend required_winners if available)
-        const remainingEl = document.getElementById('participants-count-remaining');
-        if (remainingEl) {
-          if (state.activeCompetition) {
-            const totalReq = state.activeCompetition.totalRequired || state.activeCompetition.requiredWinners || 0;
-            const current = (state.activeCompetition.currentWinners ?? state.winners.length);
+        
+        // --- NEW: Update Detailed Stats ---
+        if (state.activeCompetition) {
+            const totalReq = state.activeCompetition.totalRequired || 0;
+            const current = state.winners.length;
             const remaining = Math.max(totalReq - current, 0);
-            remainingEl.textContent = remaining;
-          } else {
-            remainingEl.textContent = Math.max(state.entries.length - state.winners.length, 0);
-          }
+
+            // Update main remaining counter (if exists)
+            const remainingEl = document.getElementById('participants-count-remaining');
+            if (remainingEl) remainingEl.textContent = remaining;
+
+            // Update stats panel remaining count
+            const statsRemainingEl = document.getElementById('stats-remaining-count');
+            if (statsRemainingEl) statsRemainingEl.textContent = remaining;
+
+            // Update Deposit Bonus Stats
+            const depositReq = state.activeCompetition.depositWinnersRequired || 0;
+            const currentDeposit = state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length;
+            const statsDepositEl = document.getElementById('stats-deposit-count');
+            if (statsDepositEl) statsDepositEl.textContent = `${currentDeposit} / ${depositReq} فائز`;
+
+            // Update Trading Bonus Stats
+            const tradingReq = state.activeCompetition.tradingWinnersRequired || 0;
+            const currentTrading = state.winners.filter(w => w.prizeType === 'trading').length;
+            const statsTradingEl = document.getElementById('stats-trading-count');
+            if (statsTradingEl) statsTradingEl.textContent = `${currentTrading} / ${tradingReq} فائز`;
+        } else {
+             // Fallback for no active competition
+            const remainingEl = document.getElementById('participants-count-remaining');
+            if (remainingEl) remainingEl.textContent = Math.max(state.entries.length - state.winners.length, 0);
         }
     }
     
@@ -2915,6 +2943,54 @@
       saveSession();
     };
 
+    function showEditParticipantModal(participant, onSave) {
+      const overlay = document.createElement('div');
+      overlay.className = 'wr-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="wr-confirm-modal">
+          <div class="wr-confirm-icon" style="color: #3b82f6;"><i class="fas fa-edit"></i></div>
+          <h3 class="wr-confirm-title">تعديل بيانات المشارك</h3>
+          <div style="margin: 15px 0; text-align: right;">
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">الاسم:</label>
+            <input type="text" id="edit-name" value="${participant.name}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; direction: rtl;">
+            
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">رقم الحساب:</label>
+            <input type="text" id="edit-account" value="${participant.account}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; direction: ltr;">
+          </div>
+          <div class="wr-confirm-actions">
+            <button class="wr-btn wr-btn-secondary" id="wr-edit-cancel">إلغاء</button>
+            <button class="wr-btn wr-btn-primary" id="wr-edit-save">حفظ</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      
+      const cancelBtn = overlay.querySelector('#wr-edit-cancel');
+      const saveBtn = overlay.querySelector('#wr-edit-save');
+      const nameInput = overlay.querySelector('#edit-name');
+      const accountInput = overlay.querySelector('#edit-account');
+      
+      const cleanup = () => overlay.remove();
+      
+      cancelBtn?.addEventListener('click', cleanup);
+      saveBtn?.addEventListener('click', () => {
+        const newName = nameInput.value.trim();
+        const newAccount = accountInput.value.trim();
+        
+        if (!newName || !newAccount) {
+            toast('يرجى إدخال الاسم ورقم الحساب', 'warning');
+            return;
+        }
+        
+        if (onSave) onSave(newName, newAccount);
+        cleanup();
+      });
+      
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) cleanup();
+      });
+    }
+
     function renderParticipants() {
       const container = document.getElementById('participants-list');
       if (!container) return;
@@ -2941,6 +3017,7 @@
           </div>
           <div class="wr-item-actions">
             ${e.selected ? '<span class="wr-tag wr-tag-winner">فائز</span>' : ''}
+            <button class="wr-icon-btn js-edit-btn" data-id="${e.id}" title="تعديل" style="background: #3b82f6; color: white; cursor: pointer; z-index: 100; position: relative; margin-left: 5px;"><i class="fas fa-edit" style="pointer-events: none;"></i></button>
             <button class="wr-icon-btn js-remove-btn" data-id="${e.id}" title="إزالة" style="background: #ef4444; color: white; cursor: pointer; z-index: 100; position: relative;"><i class="fas fa-times" style="pointer-events: none;"></i></button>
           </div>
         </div>
@@ -2949,9 +3026,9 @@
       }).join('');
       
       // Attach event listeners directly to buttons (most robust method)
-      const buttons = container.querySelectorAll('.js-remove-btn');
+      const removeButtons = container.querySelectorAll('.js-remove-btn');
       
-      buttons.forEach(btn => {
+      removeButtons.forEach(btn => {
         btn.addEventListener('click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
@@ -2976,10 +3053,65 @@
           console.log('[CLICK] Removed successfully');
         });
       });
+
+      const editButtons = container.querySelectorAll('.js-edit-btn');
+      editButtons.forEach(btn => {
+        btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const id = btn.dataset.id;
+            const entry = state.entries.find(x => String(x.id) === String(id));
+            if (entry) {
+                showEditParticipantModal(entry, (newName, newAccount) => {
+                    // Update entry
+                    entry.name = newName;
+                    entry.account = newAccount;
+                    entry.label = `${newName} (${newAccount})`;
+                    
+                    // Update if in winners list
+                    const winner = state.winners.find(w => String(w.id) === String(id));
+                    if (winner) {
+                        winner.name = newName;
+                        winner.account = newAccount;
+                    }
+                    
+                    renderParticipants();
+                    renderWinners();
+                    updateCounts();
+                    drawWheel();
+                    saveSession();
+                    toast('تم تعديل بيانات المشارك بنجاح', 'success');
+                });
+            }
+        });
+      });
       
-      console.log('[renderParticipants] HTML set, buttons count:', buttons.length);
+      console.log('[renderParticipants] HTML set, buttons count:', removeButtons.length);
     }
     
+    function openImageModal(src) {
+        const overlay = document.createElement('div');
+        overlay.className = 'wr-confirm-overlay';
+        overlay.style.zIndex = '10000';
+        overlay.innerHTML = `
+            <div class="wr-confirm-modal" style="max-width: 90vw; max-height: 90vh; width: auto; padding: 10px; background: transparent; box-shadow: none;">
+                <div style="position: relative; display: inline-block;">
+                    <img src="${src}" style="max-width: 100%; max-height: 85vh; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+                    <button id="wr-img-close" style="position: absolute; top: -15px; right: -15px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        
+        const closeBtn = overlay.querySelector('#wr-img-close');
+        const cleanup = () => overlay.remove();
+        
+        closeBtn?.addEventListener('click', cleanup);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay || e.target.classList.contains('wr-confirm-modal')) cleanup();
+        });
+    }
+
     function renderWinners() {
       const bottomContainer = document.getElementById('winners-list-bottom');
       
@@ -3104,13 +3236,13 @@
                   // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
                   idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                       <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
-                      <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+                      <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${blobUrl}">
                   </div>`;
               } catch(e) { console.warn('Failed to create object URL', e); }
           } else if (w.nationalIdImage) {
               idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                   <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
-                  <img src="${w.nationalIdImage}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+                  <img src="${w.nationalIdImage}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${w.nationalIdImage}">
               </div>`;
           }
           // -------------------------------
@@ -3129,18 +3261,17 @@
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً
                   </label>
+                  <div style="border-top: 1px solid rgba(255,255,255,0.15); margin: 6px 0;"></div>
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="prev" data-id="${w.id}" ${w.includeWarnPrev ? 'checked' : ''}> ‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية
                   </label>
                 </div>
     
               </div>
-              <div class="wr-winner-card-actions">
-                <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
-                <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — ${w.prizeValue}%" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-edit="${w.id}" title="تعديل" style="background: #3b82f6; color: white;"><i class="fas fa-edit"></i></button>
-                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
-                <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="background: #ef4444; color: white;"><i class="fas fa-trash"></i></button>
+              <div class="wr-winner-card-actions" style="display: flex; width: calc(100% + 36px); margin: 16px -18px -16px -18px; border-top: 1px solid rgba(255,255,255,0.1); border-radius: 0 0 14px 14px; overflow: hidden;">
+                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت" style="flex: 1; background: #8b5cf6; color: white; border-radius: 0; height: 40px; border: none; border-left: 1px solid rgba(255,255,255,0.2);"><i class="fas fa-redo" style="margin-left:5px;"></i> استرجاع</button>
+                <button class="wr-icon-btn" data-edit="${w.id}" title="تعديل" style="flex: 1; background: #3b82f6; color: white; border-radius: 0; height: 40px; border: none; border-left: 1px solid rgba(255,255,255,0.2);"><i class="fas fa-edit" style="margin-left:5px;"></i> تعديل</button>
+                <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="flex: 1; background: #ef4444; color: white; border-radius: 0; height: 40px; border: none;"><i class="fas fa-trash" style="margin-left:5px;"></i> حذف</button>
               </div>
             </div>`;
         });
@@ -3170,13 +3301,13 @@
                   // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
                   idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                       <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
-                      <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+                      <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${blobUrl}">
                   </div>`;
               } catch(e) { console.warn('Failed to create object URL', e); }
           } else if (w.nationalIdImage) {
               idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                   <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
-                  <img src="${w.nationalIdImage}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" onclick="window.open(this.src, '_blank')">
+                  <img src="${w.nationalIdImage}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${w.nationalIdImage}">
               </div>`;
           }
           // ---------------------------------------
@@ -3196,17 +3327,16 @@
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="meet" data-id="${w.id}" ${w.includeWarnMeet ? 'checked' : ''}> ⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً
                   </label>
+                  <div style="border-top: 1px solid rgba(255,255,255,0.15); margin: 6px 0;"></div>
                   <label class="wr-toggle-label" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">
                     <input type="checkbox" data-warn="prev" data-id="${w.id}" ${w.includeWarnPrev ? 'checked' : ''}> ‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية
                   </label>
                 </div>
               </div>
-              <div class="wr-winner-card-actions">
-                <button class="wr-icon-btn" data-send="${w.id}" title="إرسال للوكيل"><i class="fas fa-paper-plane"></i></button>
-                <button class="wr-icon-btn" data-copy="${w.name} — ${w.account} — ${w.email} — $${w.prizeValue}" title="نسخ"><i class="fas fa-copy"></i></button>
-                <button class="wr-icon-btn" data-edit="${w.id}" title="تعديل" style="background: #3b82f6; color: white;"><i class="fas fa-edit"></i></button>
-                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت" style="width:auto; padding:0 10px; gap:6px;"><i class="fas fa-redo"></i> استرجاع</button>
-                <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="background: #ef4444; color: white;"><i class="fas fa-trash"></i></button>
+              <div class="wr-winner-card-actions" style="display: flex; width: calc(100% + 36px); margin: 16px -18px -16px -18px; border-top: 1px solid rgba(255,255,255,0.1); border-radius: 0 0 14px 14px; overflow: hidden;">
+                <button class="wr-icon-btn" data-restore="${w.id}" title="استرجاع للروليت" style="flex: 1; background: #8b5cf6; color: white; border-radius: 0; height: 40px; border: none; border-left: 1px solid rgba(255,255,255,0.2);"><i class="fas fa-redo" style="margin-left:5px;"></i> استرجاع</button>
+                <button class="wr-icon-btn" data-edit="${w.id}" title="تعديل" style="flex: 1; background: #3b82f6; color: white; border-radius: 0; height: 40px; border: none; border-left: 1px solid rgba(255,255,255,0.2);"><i class="fas fa-edit" style="margin-left:5px;"></i> تعديل</button>
+                <button class="wr-icon-btn" data-delete="${w.id}" title="حذف" style="flex: 1; background: #ef4444; color: white; border-radius: 0; height: 40px; border: none;"><i class="fas fa-trash" style="margin-left:5px;"></i> حذف</button>
               </div>
             </div>`;
         });
@@ -3232,6 +3362,16 @@
       `;
 
         bottomContainer.innerHTML = html;
+
+        // Attach event listeners for image preview
+        const previewImages = bottomContainer.querySelectorAll('.js-preview-img');
+        previewImages.forEach(img => {
+            img.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const src = img.getAttribute('data-src');
+                if (src) openImageModal(src);
+            });
+        });
 
         // Bind events for new buttons
         const approveBtn = document.getElementById('approve-winners-btn');
@@ -3283,11 +3423,49 @@
             });
 
             if (dbWinners.length === 0) {
-              toast('لا يوجد فائزين محفوظين في قاعدة البيانات لهذه المسابقة.', 'error');
-              return;
-            }
-
-            if (missing.length > 0) {
+              // Attempt recovery if local winners exist but DB is empty
+              if (state.winners.length > 0) {
+                  console.warn('[Approve Winners] Verification failed (0 winners in DB) but local winners exist. Attempting recovery...');
+                  toast('جاري محاولة إصلاح بيانات الفائزين...', 'info');
+                  
+                  // Strip _id from local winners to force re-save
+                  state.winners.forEach(w => {
+                      if (w._id) {
+                          // Ensure we have a local ID (fallback to _id if id is missing)
+                          if (!w.id) w.id = w._id;
+                          delete w._id;
+                      }
+                  });
+                  
+                  // Re-save
+                  await saveAllWinnersToDatabase();
+                  
+                  // Verify again
+                  const retryResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}`);
+                  const retryData = await retryResp.json();
+                  const retryCompetition = (retryData.competitions && retryData.competitions[0]) ? retryData.competitions[0] : null;
+                  const retryWinners = (retryCompetition && retryCompetition.winners) ? retryCompetition.winners : [];
+                  
+                  if (retryWinners.length === 0) {
+                       toast('فشل إصلاح البيانات. لا يوجد فائزين محفوظين في قاعدة البيانات.', 'error');
+                       return;
+                  }
+                  
+                  // Update dbWinners and missing for the next check
+                  // Note: We can't easily update 'dbWinners' variable since it's const in the original scope if we didn't change it to let.
+                  // But we can just check 'retryWinners' here.
+                  const retryMissing = retryWinners.filter(w => !w.video_url || !w.national_id_image);
+                  if (retryMissing.length > 0) {
+                      toast(`يوجد ${retryMissing.length} فائز بدون فيديو أو صورة هوية محفوظة. يرجى إعادة المحاولة.`, 'error');
+                      return;
+                  }
+                  
+                  // If recovery successful, proceed
+              } else {
+                  toast('لا يوجد فائزين محفوظين في قاعدة البيانات لهذه المسابقة.', 'error');
+                  return;
+              }
+            } else if (missing.length > 0) {
               toast(`يوجد ${missing.length} فائز بدون فيديو أو صورة هوية محفوظة. يرجى إعادة المحاولة.`, 'error');
               return;
             }
@@ -3712,13 +3890,6 @@
     
         let msg = `◃ الفائز: ${w.name}\n`;
         msg += `           الجائزة: ${prizeText}\n`;
-
-        if (w.includeWarnMeet) {
-            msg += `\n⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً\n`;
-        }
-        if (w.includeWarnPrev) {
-            msg += `\n‼️ فائز سابق ببونص تداولي، تأكد من نشر المسابقة السابقة قبل الاعتماد\n`;
-        }
 
         msg += `\n********************************************************\n`;
         msg += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
@@ -5381,8 +5552,8 @@
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                           winnerIds: validWinners.map(w => w._id),
-                          messageText,
-                          warnings // Send warnings to backend
+                          messageText
+                          // warnings removed to prevent sending warnings with video report
                       })
                   });
                   
@@ -5611,13 +5782,6 @@
     
             msg += `◃ الفائز ${rank}: ${w.name}\n`;
             msg += `           الجائزة: ${prizeText}\n`;
-
-            if (w.includeWarnMeet) {
-                msg += `⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً\n`;
-            }
-            if (w.includeWarnPrev) {
-                msg += `‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية\n`;
-            }
 
             msg += `\n********************************************************\n`;
         });

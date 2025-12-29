@@ -532,7 +532,9 @@ function renderCompetitionsTable() {
         const createBtn = document.getElementById('create-first-competition-btn');
         if (createBtn) {
             createBtn.addEventListener('click', () => {
-                window.location.hash = `competitions/new?agentId=${agentData?.agent?._id || ''}`;
+                const urlParams = new URLSearchParams(window.location.search);
+                const currentAgentId = urlParams.get('agent_id');
+                window.location.href = `/#competitions/new?agentId=${currentAgentId || agentData?.agent?._id || ''}`;
             });
         }
         return;

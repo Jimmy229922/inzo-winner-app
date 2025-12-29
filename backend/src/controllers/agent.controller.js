@@ -940,7 +940,7 @@ exports.toggleAuditing = async (req, res) => {
 exports.sendWinnersReport = async (req, res) => {
     try {
         const { agentId } = req.params;
-        const { winnerIds, messageText, warnings } = req.body;
+        const { winnerIds, messageText } = req.body;
         const bot = req.app.locals.telegramBot;
 
         if (!bot) {
@@ -949,19 +949,6 @@ exports.sendWinnersReport = async (req, res) => {
 
         if (!agentId || !winnerIds || !Array.isArray(winnerIds) || winnerIds.length === 0) {
             return res.status(400).json({ message: 'Invalid request data' });
-        }
-
-        // Map warnings for easy lookup
-        const warnMap = new Map();
-        if (Array.isArray(warnings)) {
-            warnings.forEach(w => {
-                if (w.winnerId) {
-                    warnMap.set(String(w.winnerId), {
-                        meet: !!w.include_warn_meet,
-                        prev: !!w.include_warn_prev
-                    });
-                }
-            });
         }
 
         const agent = await Agent.findById(agentId);
@@ -1044,15 +1031,6 @@ exports.sendWinnersReport = async (req, res) => {
         
                 msg += `◃ الفائز ${rank}: ${w.name}\n`;
                 msg += `           الجائزة: ${prizeText}\n`;
-
-                // Add warnings
-                const wPrefs = warnMap.get(String(w._id)) || {};
-                if (wPrefs.meet) {
-                    msg += `⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً\n`;
-                }
-                if (wPrefs.prev) {
-                    msg += `‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية\n`;
-                }
 
                 msg += `\n********************************************************\n`;
             });
@@ -1151,10 +1129,12 @@ exports.sendWinnersDetails = async (req, res) => {
         }
 
         const mapAgencyType = (agentDoc) => {
-            const exclusiveRanks = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND'];
-            const rank = (agentDoc?.rank || '').toUpperCase();
-            const classification = (agentDoc?.classification || '').toUpperCase();
-            if (classification === 'EXCLUSIVE' || classification === 'E' || exclusiveRanks.includes(rank)) {
+            const exclusiveRanks = ['CENTER', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND', 'وكيل حصري بدون مرتبة'];
+            const rawRank = (agentDoc?.rank || '').toString().trim();
+            const rank = /[A-Za-z]/.test(rawRank) ? rawRank.toUpperCase() : rawRank;
+            const classification = (agentDoc?.classification || '').toString().trim().toUpperCase();
+
+            if (classification === 'EXCLUSIVE' || classification === 'E' || exclusiveRanks.includes(rank) || rawRank.includes('حصري')) {
                 return 'حصرية';
             }
             return 'اعتيادية';
