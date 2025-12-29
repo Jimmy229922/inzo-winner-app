@@ -304,12 +304,16 @@ async function fetchAndRenderMostInteractiveCompetitions() {
               <div class="interactive-item" data-index="${idx+1}">
                 <div class="item-rank"><span class="index-badge">${idx+1}</span></div>
                 <div class="item-main">
-                                    <div class="item-question question-cell" title="${isLong ? 'انقر لعرض النص الكامل' : ''}" data-fulltext="${escapedQ}" style="cursor: ${isLong ? 'pointer' : 'default'};">
-                                        <i class="fas fa-question-circle"></i>
-                                        <span class="question-text">${qDisplay}</span>
-                                        ${isLong ? '<span class="read-more-link">(عرض المزيد)</span>' : ''}
-                                        <span class="answer-badge">الإجابة: ${aFull}</span>
-                                    </div>
+                    <div class="item-question question-cell" title="${isLong ? 'انقر لعرض النص الكامل' : ''}" data-fulltext="${escapedQ}" style="cursor: ${isLong ? 'pointer' : 'default'};">
+                        <div class="question-content">
+                            <i class="fas fa-question-circle"></i>
+                            <span class="question-text">${qDisplay}</span>
+                            ${isLong ? '<span class="read-more-link">(عرض المزيد)</span>' : ''}
+                        </div>
+                        <div class="answer-content">
+                            <span class="answer-badge">الإجابة: ${aFull}</span>
+                        </div>
+                    </div>
                   <div class="item-meta">
                     <span class="type-badge ${badgeKey}">${displayType}</span>
                     <span class="metric-chip"><i class="fas fa-paper-plane"></i> ${ (comp.send_count ?? 0).toLocaleString('ar-EG') }</span>
