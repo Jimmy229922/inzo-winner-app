@@ -165,7 +165,23 @@ async function bundle() {
         await fs.promises.writeFile(jsBundlePath, jsContent, { encoding: 'utf8' });
         console.log(`JS bundle created at: ${jsBundlePath}`);
 
-        console.log('\nBuild complete! Now update your index.html to use the new bundles.');
+        // --- NEW: Auto-update version in index.html ---
+        const indexHtmlPath = path.join(basePath, 'index.html');
+        try {
+            let htmlContent = await fs.promises.readFile(indexHtmlPath, 'utf8');
+            const version = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14); // YYYYMMDDHHMMSS
+            
+            // Update bundle.js and bundle.css versions
+            htmlContent = htmlContent.replace(/(\/dist\/bundle\.js)(\?v=\d+)?/g, `$1?v=${version}`);
+            htmlContent = htmlContent.replace(/(\/dist\/bundle\.css)(\?v=\d+)?/g, `$1?v=${version}`);
+            
+            await fs.promises.writeFile(indexHtmlPath, htmlContent, 'utf8');
+            console.log(`Updated index.html with new version: ${version}`);
+        } catch (err) {
+            console.error('Failed to update index.html version:', err);
+        }
+
+        console.log('\nBuild complete!');
 
     } catch (error) {
         console.error('An error occurred during the build process:', error);

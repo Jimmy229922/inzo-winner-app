@@ -7,6 +7,7 @@ const ActivityLog = require('../models/ActivityLog');
 const AgentRankChange = require('../models/AgentRankChange');
 const Log = require('../models/Log');
 const Winner = require('../models/Winner'); // Added
+const onlineClients = require('../utils/clients'); // Added for WebSocket updates
 const { logActivity } = require('../utils/logActivity');
 const { translateField, formatValue } = require('../utils/fieldTranslations');
 const { postToTelegram, sendPhotoToTelegram, sendMediaGroupToTelegram } = require('../utils/telegram');
@@ -535,45 +536,87 @@ exports.bulkRenewBalances = async (req, res) => {
         // FIX: Find all agents that are NOT explicitly inactive. This includes new agents ('Active') and old agents (status is undefined).
         const agents = await Agent.find({ status: { $ne: 'inactive' } });
         let processedCount = 0;
+        let totalRestoredAmount = 0;
 
         if (!agents || agents.length === 0) {
             return res.json({ message: 'No active agents found to renew.', processedCount: 0 });
         }
 
+        const now = new Date();
+
         for (const agent of agents) {
             // --- FIX: Sanitize old/invalid enum values before saving ---
-            // This prevents validation errors on agents with legacy data like '1d' or '2d'.
             if (agent.competition_duration && !['24h', '48h'].includes(agent.competition_duration)) {
-                agent.competition_duration = null; // Set to null or a valid default
+                agent.competition_duration = null; 
             }
 
-            // The new logic: add consumed balance back to remaining and reset consumed.
-            const newRemainingBalance = (agent.remaining_balance || 0) + (agent.consumed_balance || 0);
-            agent.remaining_balance = newRemainingBalance;
+            const amountRestored = agent.consumed_balance || 0;
+            const bonusRestored = agent.used_deposit_bonus || 0;
+            const balanceBefore = agent.remaining_balance || 0;
+
+            // 1. Restore Balance
+            agent.remaining_balance = balanceBefore + amountRestored;
             agent.consumed_balance = 0;
 
-            // --- FIX: Roll over deposit bonus during bulk renewal ---
-            const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) + (agent.used_deposit_bonus || 0);
-            agent.remaining_deposit_bonus = newRemainingDepositBonus;
+            // 2. Restore Deposit Bonus
+            agent.remaining_deposit_bonus = (agent.remaining_deposit_bonus || 0) + bonusRestored;
             agent.used_deposit_bonus = 0;
+
+            // 3. Update Last Renewal Date (To prevent auto-renewal from running again today, but allow manual re-runs)
+            agent.last_renewal_date = now;
             
-            // Save each agent individually for better reliability over bulkWrite
+            // Save the agent
             await agent.save();
+
+            // 4. Create Transaction Record (Only if there was something to restore, or force log it?)
+            // Better to log it if amountRestored > 0 to keep ledger clean, or maybe log 0 amount for tracking?
+            // Usually we only care about money movement. But user wants to "renew".
+            // Let's log if amountRestored > 0.
+            if (amountRestored > 0) {
+                try {
+                    await Transaction.create({
+                        agent_id: agent._id,
+                        type: 'manual_renewal', // Using manual_renewal for bulk action initiated by admin
+                        amount: amountRestored,
+                        previous_balance: balanceBefore,
+                        new_balance: agent.remaining_balance,
+                        details: `Bulk Manual Renewal: Restored ${amountRestored} to balance.`,
+                        performed_by: req.user ? req.user._id : null
+                    });
+                } catch (txError) {
+                    console.error(`[Bulk Renewal] Failed to create transaction for agent ${agent.name}:`, txError);
+                }
+            }
             
             processedCount++;
+            totalRestoredAmount += amountRestored;
+
+            // --- NEW: Send progress update via WebSocket ---
+            if (req.user && req.user._id) {
+                const ws = onlineClients.get(req.user._id.toString());
+                if (ws && ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'bulk_renew_progress',
+                        agentName: agent.name,
+                        current: processedCount,
+                        total: agents.length
+                    }));
+                }
+            }
 
             // --- NEW: Add a delay to avoid overwhelming the server ---
-            await sleep(500);
+            await sleep(500); // Increased to 500ms to ensure server stability with large datasets
         }
 
         // --- FIX: Log this bulk action ---
         const userId = req.user?._id;
         if (userId) {
-            await logActivity(userId, null, 'AGENT_BULK_RENEW', `ØªÙ… ØªØ´ØºÙŠÙ„ Ø¹Ù…Ù„ÙŠØ© ØªØ¬Ø¯ÙŠØ¯ Ø§Ù„Ø±ØµÙŠØ¯ Ø§Ù„Ø¬Ù…Ø§Ø¹ÙŠ Ù„Ù€ ${processedCount} ÙˆÙƒÙŠÙ„.`);
+            await logActivity(userId, null, 'AGENT_BULK_RENEW', `تم تشغيل عملية تجديد الرصيد الجماعي لـ ${processedCount} وكيل. إجمالي المسترد: ${totalRestoredAmount}`);
         }
 
-        res.json({ message: 'Bulk renewal process completed successfully.', processedCount });
+        res.json({ message: 'Bulk renewal process completed successfully.', processedCount, totalRestoredAmount });
     } catch (error) {
+        console.error('[Bulk Renewal] Error:', error);
         res.status(500).json({ message: 'Server error during bulk balance renewal.', error: error.message });
     }
 };
@@ -671,6 +714,8 @@ exports.renewSingleAgentBalance = async (req, res) => {
         }
 
         // --- RACE CONDITION PROTECTION ---
+        // REMOVED: We want to allow manual renewal multiple times a day if needed (similar to bulk renew).
+        /*
         if (agent.last_renewal_date) {
             const lastRenewal = new Date(agent.last_renewal_date);
             const now = new Date();
@@ -681,6 +726,7 @@ exports.renewSingleAgentBalance = async (req, res) => {
                 return res.status(400).json({ message: 'Agent balance has already been renewed today.' });
             }
         }
+        */
 
         // --- FIX: Sanitize old/invalid enum values before saving, similar to bulk renew ---
         if (agent.competition_duration && !['24h', '48h'].includes(agent.competition_duration)) {

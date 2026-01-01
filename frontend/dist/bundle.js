@@ -1357,59 +1357,86 @@ async function handleBulkRenewBalances() {
         showConfirmationModal(
             `سيتم تجديد أرصدة <strong>${agentCount}</strong> وكيل. هذه العملية قد تستغرق بعض الوقت. هل أنت متأكد من المتابعة؟`,
             async () => {
-                console.log('[Bulk Renew] Starting client-side bulk renewal process.');
+                console.log('[Bulk Renew] Starting server-side bulk renewal process.');
+                
+                // Show a simple processing modal since the server handles it in one go
                 const progressModalOverlay = showProgressModal(
                     'تجديد الأرصدة الجماعي',
                     `
                     <div class="update-progress-container">
                         <i class="fas fa-sync-alt fa-spin update-icon"></i>
-                        <h3 id="bulk-renew-status-text">جاري التهيئة...</h3>
-                        <div class="progress-bar-outer">
-                            <div id="bulk-renew-progress-bar-inner" class="progress-bar-inner"></div>
+                        <h3 id="bulk-renew-status-text" style="color: var(--primary-color);">جاري بدء العملية...</h3>
+                        <div class="progress-bar-outer" style="margin-top: 15px;">
+                            <div id="bulk-renew-progress-bar-inner" class="progress-bar-inner" style="width: 0%"></div>
                         </div>
+                        <p id="bulk-renew-details" style="text-align: center; margin-top: 10px; color: var(--text-color); font-weight: bold; font-size: 1.1em;">يرجى الانتظار...</p>
                     </div>
                     `
                 );
 
                 const statusText = document.getElementById('bulk-renew-status-text');
+                const detailsText = document.getElementById('bulk-renew-details');
                 const progressBar = document.getElementById('bulk-renew-progress-bar-inner');
-                const updateIcon = progressModalOverlay.querySelector('.update-icon');
-                let processedCount = 0;
-                let errorCount = 0;
 
-                for (let i = 0; i < agents.length; i++) {
-                    const agent = agents[i];
-                    processedCount++;
-                    const progressPercentage = Math.round((processedCount / agentCount) * 100);
+                // --- NEW: Listen for WebSocket progress updates ---
+                const progressHandler = (e) => {
+                    const { agentName, current, total } = e.detail;
+                    const percentage = Math.round((current / total) * 100);
+                    
+                    if (statusText) statusText.innerHTML = `جاري التجديد (${current}/${total})`;
+                    if (detailsText) detailsText.innerHTML = `جاري معالجة: <strong>${agentName}</strong>`;
+                    if (progressBar) progressBar.style.width = `${percentage}%`;
+                };
+                window.addEventListener('bulk-renew-progress', progressHandler);
 
-                    statusText.innerHTML = `(${processedCount}/${agentCount}) جاري تجديد رصيد: <strong>${agent.name}</strong>`;
-                    progressBar.style.width = `${progressPercentage}%`;
+                try {
+                    // Call the single bulk endpoint
+                    const renewResponse = await authedFetch('/api/agents/bulk-renew', { 
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
 
-                    try {
-                        const renewResponse = await authedFetch(`/api/agents/${agent._id}/renew`, { method: 'POST' });
-                        if (!renewResponse.ok) {
-                            errorCount++;
-                            console.error(`Failed to renew balance for agent ${agent.name}`);
-                        }
-                        // A small delay to prevent overwhelming the server and to make the UI updates visible
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    } catch (err) {
-                        errorCount++;
-                        console.error(`Error renewing balance for agent ${agent.name}:`, err);
+                    if (!renewResponse.ok) {
+                        const errData = await renewResponse.json();
+                        throw new Error(errData.message || 'فشل في عملية التجديد الجماعي.');
                     }
+
+                    const result = await renewResponse.json();
+                    
+                    // Success UI
+                    const updateIcon = progressModalOverlay.querySelector('.update-icon');
+                    
+                    updateIcon.className = 'fas fa-check-circle update-icon';
+                    updateIcon.style.color = 'var(--success-color)';
+                    statusText.innerHTML = `اكتمل التجديد بنجاح`;
+                    detailsText.innerHTML = `تمت معالجة <strong>${result.processedCount}</strong> وكيل.<br>إجمالي المسترد: <strong>${result.totalRestoredAmount || 0}</strong>`;
+                    if (progressBar) progressBar.style.width = '100%';
+
+                    console.log(`[Bulk Renew] Process finished. Processed: ${result.processedCount}`);
+                    
+                    // Refresh the agents list
+                    await fetchAndDisplayAgents(1); 
+
+                    setTimeout(() => {
+                        if (progressModalOverlay) progressModalOverlay.remove();
+                    }, 3000);
+
+                } catch (err) {
+                    console.error('[Bulk Renew] Error:', err);
+                    const updateIcon = progressModalOverlay.querySelector('.update-icon');
+                    
+                    updateIcon.className = 'fas fa-exclamation-triangle update-icon';
+                    updateIcon.style.color = 'var(--warning-color)';
+                    statusText.innerHTML = `حدث خطأ أثناء العملية`;
+                    detailsText.innerHTML = err.message;
+                    
+                    setTimeout(() => {
+                        if (progressModalOverlay) progressModalOverlay.remove();
+                    }, 5000);
+                } finally {
+                    // Clean up listener
+                    window.removeEventListener('bulk-renew-progress', progressHandler);
                 }
-
-                progressBar.style.width = '100%';
-                updateIcon.className = errorCount > 0 ? 'fas fa-exclamation-triangle update-icon' : 'fas fa-check-circle update-icon';
-                progressBar.style.backgroundColor = errorCount > 0 ? 'var(--warning-color)' : 'var(--success-color)';
-                statusText.innerHTML = `اكتمل التجديد.<br>تمت معالجة <strong>${processedCount}</strong> وكيل.<br>${errorCount > 0 ? `(مع وجود <strong>${errorCount}</strong> أخطاء)` : ''}`;
-
-                console.log(`[Bulk Renew] Client-side process finished. Processed: ${processedCount}, Errors: ${errorCount}`);
-                await fetchAndDisplayAgents(1); // Refresh the agents list
-
-                setTimeout(() => {
-                    if (progressModalOverlay) progressModalOverlay.remove();
-                }, 4000);
             },
             { title: 'تأكيد تجديد الأرصدة', confirmText: 'نعم، جدد الآن', confirmClass: 'btn-renewal' }
         );
@@ -13983,12 +14010,16 @@ async function fetchAndRenderMostInteractiveCompetitions() {
               <div class="interactive-item" data-index="${idx+1}">
                 <div class="item-rank"><span class="index-badge">${idx+1}</span></div>
                 <div class="item-main">
-                                    <div class="item-question question-cell" title="${isLong ? 'انقر لعرض النص الكامل' : ''}" data-fulltext="${escapedQ}" style="cursor: ${isLong ? 'pointer' : 'default'};">
-                                        <i class="fas fa-question-circle"></i>
-                                        <span class="question-text">${qDisplay}</span>
-                                        ${isLong ? '<span class="read-more-link">(عرض المزيد)</span>' : ''}
-                                        <span class="answer-badge">الإجابة: ${aFull}</span>
-                                    </div>
+                    <div class="item-question question-cell" title="${isLong ? 'انقر لعرض النص الكامل' : ''}" data-fulltext="${escapedQ}" style="cursor: ${isLong ? 'pointer' : 'default'};">
+                        <div class="question-content">
+                            <i class="fas fa-question-circle"></i>
+                            <span class="question-text">${qDisplay}</span>
+                            ${isLong ? '<span class="read-more-link">(عرض المزيد)</span>' : ''}
+                        </div>
+                        <div class="answer-content">
+                            <span class="answer-badge">الإجابة: ${aFull}</span>
+                        </div>
+                    </div>
                   <div class="item-meta">
                     <span class="type-badge ${badgeKey}">${displayType}</span>
                     <span class="metric-chip"><i class="fas fa-paper-plane"></i> ${ (comp.send_count ?? 0).toLocaleString('ar-EG') }</span>
@@ -25520,6 +25551,10 @@ function setupRealtimeListeners() {
                     case 'agent_renewed':
                         showToast(`تم تجديد رصيد الوكيل ${message.data.agentName} تلقائياً.`, 'success');
                         break;
+                    case 'bulk_renew_progress':
+                        // Dispatch event for specific page handlers
+                        window.dispatchEvent(new CustomEvent('bulk-renew-progress', { detail: message }));
+                        break;
                     case 'presence_update':
                         // message.data should be an array of online user IDs
                         if (Array.isArray(message.data)) {
@@ -25694,7 +25729,7 @@ try { window.showConfirmationModal = showConfirmationModal; } catch (e) { /* ign
 function showProgressModal(title, content) {
     const existingOverlay = document.querySelector('.modal-overlay');
     if (existingOverlay) {
-        console.warn('[showProgressModal] A modal is already open. Removing it.');
+        // console.log('[showProgressModal] Closing existing modal to show new one.');
         existingOverlay.remove();
     }
 

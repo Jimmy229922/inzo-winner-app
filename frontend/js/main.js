@@ -477,6 +477,10 @@ function setupRealtimeListeners() {
                     case 'agent_renewed':
                         showToast(`تم تجديد رصيد الوكيل ${message.data.agentName} تلقائياً.`, 'success');
                         break;
+                    case 'bulk_renew_progress':
+                        // Dispatch event for specific page handlers
+                        window.dispatchEvent(new CustomEvent('bulk-renew-progress', { detail: message }));
+                        break;
                     case 'presence_update':
                         // message.data should be an array of online user IDs
                         if (Array.isArray(message.data)) {
@@ -651,7 +655,7 @@ try { window.showConfirmationModal = showConfirmationModal; } catch (e) { /* ign
 function showProgressModal(title, content) {
     const existingOverlay = document.querySelector('.modal-overlay');
     if (existingOverlay) {
-        console.warn('[showProgressModal] A modal is already open. Removing it.');
+        // console.log('[showProgressModal] Closing existing modal to show new one.');
         existingOverlay.remove();
     }
 
