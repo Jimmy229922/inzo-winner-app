@@ -22221,6 +22221,62 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       return savedWinners;
     }
 
+    // --- NEW: Server-side validation helper ---
+    async function validateWinnersOnServer(winnerIds) {
+        const authedFetch = window.authedFetch || fetch;
+        const sendingOverlay = document.createElement('div');
+        sendingOverlay.className = 'wr-confirm-overlay';
+        sendingOverlay.innerHTML = `
+          <div class="wr-confirm-modal" style="text-align: center;">
+            <div class="wr-confirm-icon" style="color: #3b82f6;"><i class="fas fa-spinner fa-spin"></i></div>
+            <h3 class="wr-confirm-title">جاري التحقق من الملفات...</h3>
+            <p class="wr-confirm-message">يتم الآن التأكد من وجود الصور والفيديوهات على السيرفر.</p>
+          </div>
+        `;
+        document.body.appendChild(sendingOverlay);
+
+        try {
+            const response = await authedFetch('/api/agents/validate-winners-images', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ winnerIds })
+            });
+
+            const result = await response.json();
+            sendingOverlay.remove();
+
+            if (!result.valid) {
+                let errorMsg = '<div style="text-align: right; max-height: 300px; overflow-y: auto;"><strong>تنبيه: توجد مشاكل في ملفات بعض الفائزين:</strong><ul style="margin-top: 10px; padding-right: 20px; list-style-type: disc;">';
+                result.invalidWinners.forEach(err => {
+                    errorMsg += `<li style="margin-bottom: 5px; color: #ef4444;"><strong>${err.name}:</strong> ${err.reason}</li>`;
+                });
+                errorMsg += '</ul><p style="margin-top: 10px; font-weight: bold;">يرجى إعادة رفع الملفات المطلوبة للفائزين المذكورين قبل المحاولة مرة أخرى.</p></div>';
+
+                const alertOverlay = document.createElement('div');
+                alertOverlay.className = 'wr-confirm-overlay';
+                alertOverlay.innerHTML = `
+                <div class="wr-confirm-modal" style="width: min(90%, 500px);">
+                    <div class="wr-confirm-icon" style="background: linear-gradient(135deg, #ef4444, #b91c1c);"><i class="fas fa-times"></i></div>
+                    <h3 class="wr-confirm-title">فشل التحقق من الملفات</h3>
+                    <div class="wr-confirm-message" style="text-align: right;">${errorMsg}</div>
+                    <div class="wr-confirm-actions">
+                        <button class="wr-btn wr-btn-secondary" id="wr-alert-ok">حسناً</button>
+                    </div>
+                </div>
+                `;
+                document.body.appendChild(alertOverlay);
+                alertOverlay.querySelector('#wr-alert-ok').onclick = () => alertOverlay.remove();
+                return false;
+            }
+            return true;
+        } catch (error) {
+            sendingOverlay.remove();
+            console.error('Validation error:', error);
+            toast('حدث خطأ أثناء التحقق من الملفات: ' + error.message, 'error');
+            return false;
+        }
+    }
+
     async function sendWinnersReport() {
       // console.log('[sendWinnersReport] Button clicked');
       if (!state.selectedAgent) {
@@ -22268,10 +22324,15 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
       const messageText = generateWinnersMessage();
       
+      // --- NEW: Validate files on server before confirmation ---
+      const isValid = await validateWinnersOnServer(validWinners.map(w => w._id));
+      if (!isValid) return;
+      // ---------------------------------------------------------
+
         // Directly send without confirmation modal
           // Confirm before sending all winners to agent
           showConfirmModal(
-          `سيتم إرسال جميع الفائزين (${validWinners.length}) إلى الوكيل. هل أنت متأكد من المتابعة؟`,
+          `تم التحقق من الملفات بنجاح ✅<br>سيتم إرسال جميع الفائزين (${validWinners.length}) إلى الوكيل. هل أنت متأكد من المتابعة؟`,
           async () => {
               // console.log('[sendWinnersReport] User confirmed send');
               const sendingOverlay = document.createElement('div');
@@ -22462,8 +22523,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         return;
       }
     
+      // --- NEW: Validate files on server before confirmation ---
+      const isValid = await validateWinnersOnServer(validWinners.map(w => w._id));
+      if (!isValid) return;
+      // ---------------------------------------------------------
+
       showConfirmModal(
-        `سيتم إرسال بيانات الفائزين (${validWinners.length}) مع صور الهوية والكليشة إلى جروب الشركة (Agent competitions). هل أنت متأكد؟`,
+        `تم التحقق من الملفات بنجاح ✅<br>سيتم إرسال بيانات الفائزين (${validWinners.length}) مع صور الهوية والكليشة إلى جروب الشركة (Agent competitions). هل أنت متأكد؟`,
         async () => {
           const sendingOverlay = document.createElement('div');
           sendingOverlay.className = 'wr-confirm-overlay';

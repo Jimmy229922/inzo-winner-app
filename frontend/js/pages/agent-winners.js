@@ -135,11 +135,18 @@ async function initializeWinnersPage() {
         // تهيئة البحث
         initializeSearch();
 
-        // ربط زر إرسال الهوية والكليشة
+        // ربط زر إرسال الهوية والكليشة للوكيل
         const sendDetailsBtn = document.getElementById('sendWinnersDetailsBtn');
         if (sendDetailsBtn) {
             sendDetailsBtn.addEventListener('click', sendWinnersDetailsToAgent);
             console.log('[agent-winners] Send winners details button listener attached');
+        }
+
+        // ربط زر إرسال لجروب الشركة
+        const sendCompanyBtn = document.getElementById('sendWinnersToCompanyBtn');
+        if (sendCompanyBtn) {
+            sendCompanyBtn.addEventListener('click', sendWinnersToCompany);
+            console.log('[agent-winners] Send company details button listener attached');
         }
 
     } catch (error) {
@@ -638,10 +645,9 @@ function notify(message, type = 'info') {
     alert(message);
 }
 
-// --- إرسال بيانات الفائزين مع صور الهوية للوكيل ---
-async function sendWinnersDetailsToAgent() {
+// --- التحقق من الصور وإرسال البيانات ---
+async function validateAndSendWinners(target) {
     try {
-        // الحصول على معرف الوكيل من URL
         const urlParams = new URLSearchParams(window.location.search);
         const agentId = urlParams.get('agent_id');
 
@@ -655,33 +661,85 @@ async function sendWinnersDetailsToAgent() {
             return;
         }
 
-        // تصفية الفائزين الذين لديهم معرفات في قاعدة البيانات
         const validWinners = allWinners.filter(w => w._id || w.id);
-        
         if (validWinners.length === 0) {
             notify('لم يتم العثور على معرفات الفائزين في قاعدة البيانات', 'error');
             return;
         }
 
-        // رسالة تأكيد للمستخدم
-        const confirmMessage = `سيتم إرسال بيانات الفائزين (${validWinners.length}) مع صور الهوية والكليشة إلى مجموعة الوكيل على تلجرام. هل أنت متأكد؟`;
+        const winnerIds = validWinners.map(w => w._id || w.id);
+
+        // 1. التحقق من الصور أولاً
+        showLoadingOverlay('جاري التحقق من ملفات الصور على السيرفر...');
+        
+        try {
+            const validateResponse = await authedFetch('/api/agents/validate-winners-images', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ winnerIds })
+            });
+
+            const validateResult = await validateResponse.json();
+            hideLoadingOverlay();
+
+            if (!validateResult.valid) {
+                // عرض الأخطاء
+                let errorMsg = '<div style="text-align: right;"><strong>تنبيه: توجد مشاكل في صور بعض الفائزين:</strong><ul style="margin-top: 10px; padding-right: 20px;">';
+                validateResult.invalidWinners.forEach(err => {
+                    errorMsg += `<li style="margin-bottom: 5px;"><strong>${err.name}:</strong> ${err.reason}</li>`;
+                });
+                errorMsg += '</ul><p style="margin-top: 10px;">يرجى التأكد من رفع الهوية مرة أخرى للفائزين المذكورين.</p></div>';
+                
+                // استخدام showConfirmModal لعرض الخطأ (بدون زر تأكيد فعال أو بتغيير النص)
+                // أو استخدام notify إذا كان يدعم HTML، لكن الأفضل مودال مخصص
+                // سنستخدم showConfirmModal لكن سنغير سلوكه ليكون "تنبيه" فقط
+                
+                // Hack: Reuse confirm modal but make it look like an alert
+                injectModalStyles();
+                const overlay = document.createElement('div');
+                overlay.className = 'wr-confirm-overlay';
+                overlay.innerHTML = `
+                <div class="wr-confirm-modal" style="width: min(90%, 500px);">
+                    <div class="wr-confirm-icon" style="background: linear-gradient(135deg, #ef4444, #b91c1c);"><i class="fas fa-times"></i></div>
+                    <h3 class="wr-confirm-title">فشل التحقق من الصور</h3>
+                    <div class="wr-confirm-message" style="text-align: right;">${errorMsg}</div>
+                    <div class="wr-confirm-actions">
+                        <button class="wr-btn wr-btn-secondary" id="wr-alert-ok">حسناً</button>
+                    </div>
+                </div>
+                `;
+                document.body.appendChild(overlay);
+                overlay.querySelector('#wr-alert-ok').onclick = () => overlay.remove();
+                return; // Stop here
+            }
+
+        } catch (valError) {
+            hideLoadingOverlay();
+            console.error('Validation error:', valError);
+            notify('حدث خطأ أثناء التحقق من الصور: ' + valError.message, 'error');
+            return;
+        }
+
+        // 2. إذا كان التحقق ناجحاً، عرض رسالة التأكيد والإرسال
+        const targetName = target === 'company' ? 'جروب المسابقات (Agent competitions)' : 'مجموعة الوكيل';
+        const confirmMessage = `تم التحقق من جميع الصور بنجاح ✅<br>سيتم إرسال بيانات الفائزين (${validWinners.length}) مع صور الهوية والكليشة إلى <strong>${targetName}</strong>.<br>هل أنت متأكد؟`;
         
         showConfirmModal(confirmMessage, async () => {
             try {
-                // استخراج معرفات الفائزين
-                const winnerIds = validWinners.map(w => w._id || w.id);
+                showLoadingOverlay('جاري إرسال البيانات...');
+                
+                const payload = { 
+                    winnerIds,
+                    override_chat_id: target === 'company' ? 'COMPANY_GROUP' : null
+                };
 
-                console.log('[agent-winners] Sending winners details...', { agentId, winnerIds });
-                notify('جاري إرسال البيانات...', 'info');
-
-                // إرسال الطلب إلى الـ API
                 const response = await authedFetch(`/api/agents/${encodeURIComponent(agentId)}/send-winners-details`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ winnerIds })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
+
+                hideLoadingOverlay();
 
                 if (!response.ok) {
                     const errorData = await response.json();
@@ -690,19 +748,30 @@ async function sendWinnersDetailsToAgent() {
                 }
 
                 const result = await response.json();
-                notify('تم إرسال بيانات الفائزين مع صور الهوية بنجاح إلى مجموعة الوكيل', 'success');
-                console.log('[agent-winners] Winners details sent successfully', result);
+                notify(`تم الإرسال بنجاح إلى ${targetName}`, 'success');
 
             } catch (error) {
-                console.error('[agent-winners] Error sending winners details:', error);
-                notify('حدث خطأ أثناء إرسال بيانات الفائزين: ' + error.message, 'error');
+                hideLoadingOverlay();
+                console.error('Error sending winners details:', error);
+                notify('حدث خطأ أثناء الإرسال: ' + error.message, 'error');
             }
         });
 
     } catch (error) {
-        console.error('[agent-winners] Error sending winners details:', error);
-        notify('حدث خطأ أثناء إرسال بيانات الفائزين: ' + error.message, 'error');
+        hideLoadingOverlay();
+        console.error('Error in validateAndSendWinners:', error);
+        notify('حدث خطأ غير متوقع: ' + error.message, 'error');
     }
+}
+
+// --- إرسال بيانات الفائزين مع صور الهوية للوكيل (Legacy Wrapper) ---
+async function sendWinnersDetailsToAgent() {
+    await validateAndSendWinners('agent');
+}
+
+// --- إرسال لجروب الشركة ---
+async function sendWinnersToCompany() {
+    await validateAndSendWinners('company');
 }
 
 // Helper to show full screen loading

@@ -1,6 +1,7 @@
 ﻿const Agent = require('../models/agent.model');
 const Transaction = require('../models/Transaction'); // Added
 const path = require('path'); // Added
+const fs = require('fs'); // Added for file checks
 const Competition = require('../models/Competition');
 const Task = require('../models/Task');
 const ActivityLog = require('../models/ActivityLog');
@@ -1347,66 +1348,87 @@ exports.sendWinnersDetails = async (req, res) => {
             return 'اعتيادية';
         };
 
+        let successCount = 0;
+        let failCount = 0;
+        const errors = [];
+
         for (const w of winners) {
-            let prizeText = '';
-            if (w.prize_type === 'deposit_prev') {
-                prizeText = `${w.prize_value || 0}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
-            } else if (w.prize_type === 'deposit') {
-                prizeText = `${w.prize_value || 0}% بونص إيداع`;
-            } else {
-                prizeText = `${w.prize_value || 0}$ بونص تداولي`;
-            }
+            try {
+                let prizeText = '';
+                if (w.prize_type === 'deposit_prev') {
+                    prizeText = `${w.prize_value || 0}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+                } else if (w.prize_type === 'deposit') {
+                    prizeText = `${w.prize_value || 0}% بونص إيداع`;
+                } else {
+                    prizeText = `${w.prize_value || 0}$ بونص تداولي`;
+                }
 
-            const lines = [
-                `الاسم: ${w.name || 'غير معروف'}`,
-                `البريد الإلكتروني: ${w.email || 'غير متاح'}`,
-                `قيمة الجائزة: ${prizeText}`,
-                `اسم الوكيل: ${agent.name || 'غير متاح'}`,
-                `نوع وكالة الوكيل: ${mapAgencyType(agent)}${agent.rank ? ` (${agent.rank})` : ''}`,
-                `رقم الوكالة: ${agent.agent_id || 'غير متاح'}`
-            ];
+                const lines = [
+                    `الاسم: ${w.name || 'غير معروف'}`,
+                    `البريد الإلكتروني: ${w.email || 'غير متاح'}`,
+                    `قيمة الجائزة: ${prizeText}`,
+                    `اسم الوكيل: ${agent.name || 'غير متاح'}`,
+                    `نوع وكالة الوكيل: ${mapAgencyType(agent)}${agent.rank ? ` (${agent.rank})` : ''}`,
+                    `رقم الوكالة: ${agent.agent_id || 'غير متاح'}`
+                ];
 
-            const warnPrefs = warnMap.get(String(w._id)) || {};
-            const useWarnMeet = warnPrefs.meet ?? includeWarnMeet;
-            const useWarnPrev = warnPrefs.prev ?? includeWarnPrev;
+                const warnPrefs = warnMap.get(String(w._id)) || {};
+                const useWarnMeet = warnPrefs.meet ?? includeWarnMeet;
+                const useWarnPrev = warnPrefs.prev ?? includeWarnPrev;
 
-            const warningBlocks = [];
-            if (useWarnMeet) {
-                warningBlocks.push("⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً");
-            }
-            if (useWarnPrev) {
-                warningBlocks.push("‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية.\nيُرجى التأكد من أن الوكيل قد قام بنشر المسابقة السابقة الخاصة بهذا العميل قبل اعتماد الجائزة الحالية");
-            }
-            if (warningBlocks.length > 0) {
-                lines.push(warningBlocks.join("\n\n"));
-            }
+                const warningBlocks = [];
+                if (useWarnMeet) {
+                    warningBlocks.push("⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً");
+                }
+                if (useWarnPrev) {
+                    warningBlocks.push("‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية.\nيُرجى التأكد من أن الوكيل قد قام بنشر المسابقة السابقة الخاصة بهذا العميل قبل اعتماد الجائزة الحالية");
+                }
+                if (warningBlocks.length > 0) {
+                    lines.push(warningBlocks.join("\n\n"));
+                }
 
-            const caption = lines.join('\n');
+                const caption = lines.join('\n');
 
-            let imageSource = w.national_id_image || null;
-            if (imageSource && imageSource.startsWith('/uploads')) {
-                const rel = imageSource.startsWith('/') ? imageSource.slice(1) : imageSource;
-                imageSource = path.join(__dirname, '../../', rel);
-            }
+                let imageSource = w.national_id_image || null;
+                if (imageSource && imageSource.startsWith('/uploads')) {
+                    const rel = imageSource.startsWith('/') ? imageSource.slice(1) : imageSource;
+                    imageSource = path.join(__dirname, '../../', rel);
+                    
+                    // Check if file exists
+                    if (!fs.existsSync(imageSource)) {
+                        console.warn(`[sendWinnersDetails] Image file not found for winner ${w._id}: ${imageSource}`);
+                        imageSource = null; // Fallback to text
+                    }
+                }
 
-            // Use override_chat_id if provided, otherwise fallback to agent's chat
-            // Special case: if override_chat_id is 'COMPANY_GROUP', use the env var
-            let targetChatId = agent.telegram_chat_id;
-            
-            if (override_chat_id === 'COMPANY_GROUP') {
-                targetChatId = process.env.AGENT_COMPETITIONS_CHAT_ID;
-            } else if (override_chat_id) {
-                targetChatId = override_chat_id;
-            }
-            
-            if (!targetChatId) {
-                console.warn('[sendWinnersDetails] No target chat id available');
-                continue; // Skip sending if no chat id
-            }
-            if (imageSource) {
-                await sendPhotoToTelegram(bot, imageSource, caption, targetChatId);
-            } else {
-                await postToTelegram(bot, caption, targetChatId);
+                // Use override_chat_id if provided, otherwise fallback to agent's chat
+                // Special case: if override_chat_id is 'COMPANY_GROUP', use the env var
+                let targetChatId = agent.telegram_chat_id;
+                
+                if (override_chat_id === 'COMPANY_GROUP') {
+                    targetChatId = process.env.AGENT_COMPETITIONS_CHAT_ID;
+                } else if (override_chat_id) {
+                    targetChatId = override_chat_id;
+                }
+                
+                if (!targetChatId) {
+                    console.warn('[sendWinnersDetails] No target chat id available');
+                    failCount++;
+                    errors.push({ winner: w.name, error: 'No chat ID available' });
+                    continue; 
+                }
+
+                if (imageSource) {
+                    await sendPhotoToTelegram(bot, imageSource, caption, targetChatId);
+                } else {
+                    await postToTelegram(bot, caption, targetChatId);
+                }
+                successCount++;
+
+            } catch (innerError) {
+                console.error(`[sendWinnersDetails] Failed to send winner ${w._id}:`, innerError);
+                failCount++;
+                errors.push({ winner: w.name, error: innerError.message });
             }
         }
 
@@ -1421,10 +1443,106 @@ exports.sendWinnersDetails = async (req, res) => {
         }
         */
 
-        return res.json({ message: 'Winners details sent successfully', target: override_chat_id ? 'company_group' : 'agent_group' });
+        if (successCount === 0 && failCount > 0) {
+            return res.status(500).json({ message: 'فشل إرسال جميع الفائزين.', errors });
+        }
+
+        return res.json({ 
+            message: `تم إرسال البيانات. نجح: ${successCount}, فشل: ${failCount}`, 
+            target: override_chat_id ? 'company_group' : 'agent_group',
+            details: { successCount, failCount, errors }
+        });
+
     } catch (error) {
         console.error('Error sending winners details:', error);
         return res.status(500).json({ message: 'Failed to send winners details: ' + error.message });
+    }
+};
+
+/**
+ * @route   POST /api/agents/validate-winners-images
+ * @desc    Check if winner images exist on server before sending
+ * @access  Private
+ */
+exports.validateWinnersImages = async (req, res) => {
+    try {
+        const { winnerIds } = req.body;
+        if (!winnerIds || !Array.isArray(winnerIds) || winnerIds.length === 0) {
+            return res.status(400).json({ message: 'Invalid request data' });
+        }
+
+        const winners = await Winner.find({ _id: { $in: winnerIds } });
+        const invalidWinners = [];
+
+        for (const w of winners) {
+            let isValid = true;
+            let reason = '';
+
+            if (!w.national_id_image) {
+                isValid = false;
+                reason = 'لم يتم رفع صورة الهوية';
+            } else {
+                let imagePath = w.national_id_image;
+                if (imagePath.startsWith('/uploads')) {
+                    const rel = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
+                    const absolutePath = path.join(__dirname, '../../', rel);
+                    
+                    if (!fs.existsSync(absolutePath)) {
+                        isValid = false;
+                        reason = 'ملف صورة الهوية غير موجود على السيرفر';
+                    } else {
+                        // Professional Check: Ensure file is not empty (0 bytes)
+                        const stats = fs.statSync(absolutePath);
+                        if (stats.size === 0) {
+                            isValid = false;
+                            reason = 'ملف صورة الهوية تالف (حجمه 0 بايت)';
+                        }
+                    }
+                }
+            }
+
+            // Check for video if it exists in the record
+            if (w.video_url) {
+                let videoPath = w.video_url;
+                if (videoPath.startsWith('/uploads')) {
+                    const rel = videoPath.startsWith('/') ? videoPath.slice(1) : videoPath;
+                    const absolutePath = path.join(__dirname, '../../', rel);
+                    
+                    if (!fs.existsSync(absolutePath)) {
+                        isValid = false;
+                        reason = reason ? reason + ' + ملف الفيديو غير موجود' : 'ملف الفيديو غير موجود على السيرفر';
+                    } else {
+                        // Professional Check: Ensure video file is not empty
+                        const stats = fs.statSync(absolutePath);
+                        if (stats.size === 0) {
+                            isValid = false;
+                            reason = reason ? reason + ' + ملف الفيديو تالف' : 'ملف الفيديو تالف (حجمه 0 بايت)';
+                        }
+                    }
+                }
+            } else {
+                // If video is mandatory for all winners, uncomment below:
+                // isValid = false;
+                // reason = reason ? reason + ' + لم يتم رفع الفيديو' : 'لم يتم رفع الفيديو';
+            }
+
+            if (!isValid) {
+                invalidWinners.push({
+                    id: w._id,
+                    name: w.name,
+                    reason: reason
+                });
+            }
+        }
+
+        res.json({
+            valid: invalidWinners.length === 0,
+            invalidWinners
+        });
+
+    } catch (error) {
+        console.error('Error validating winners images:', error);
+        res.status(500).json({ message: 'Validation failed', error: error.message });
     }
 };
 

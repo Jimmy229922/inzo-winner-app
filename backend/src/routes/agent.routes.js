@@ -29,5 +29,6 @@ router.post('/:id/classification-change', agentController.recordClassificationCh
 router.patch('/:id/toggle-auditing', authenticate, agentController.toggleAuditing);
 router.post('/:agentId/send-winners-report', authenticate, agentController.sendWinnersReport); // Added
 router.post('/:agentId/send-winners-details', authenticate, agentController.sendWinnersDetails);
+router.post('/validate-winners-images', authenticate, agentController.validateWinnersImages); // NEW
 
 module.exports = router;
