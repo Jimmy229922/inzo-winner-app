@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const notificationController = require('../controllers/notification.controller');
-const authMiddleware = require('../api/middleware/auth.middleware');
+const { authenticate } = require('../api/middleware/auth.middleware');
 
-router.use(authMiddleware); // Protect all routes
+router.use(authenticate); // Protect all routes
 
 router.get('/', notificationController.getNotifications);
 router.delete('/:id', notificationController.deleteNotification);
