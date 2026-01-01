@@ -266,7 +266,8 @@ exports.createAgent = async (req, res) => {
                 userId, 
                 agent._id, 
                 'AGENT_CREATED', 
-                `ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ ÙˆÙƒÙŠÙ„ Ø¬Ø¯ÙŠØ¯: ${agent.name} (Ø§Ù„ØªØµÙ†ÙŠÙ: ${agent.classification})`
+                `تم إنشاء وكيل جديد: ${agent.name} (التصنيف: ${agent.classification})`,
+                agent.toObject()
             ).catch(err => 
                 console.warn('[Agent Create] Failed to log activity:', err)
             );
@@ -416,7 +417,7 @@ exports.deleteAgent = async (req, res) => {
         // --- FIX: Log this action ---
         const userId = req.user?._id;
         if (userId) { // Log even if agent object is gone, we have the name
-            await logActivity(userId, agentId, 'AGENT_DELETED', `ØªÙ… Ø­Ø°Ù Ø§Ù„ÙˆÙƒÙŠÙ„: ${agent.name} ÙˆÙƒÙ„ Ø¨ÙŠØ§Ù†Ø§ØªÙ‡ Ø§Ù„Ù…Ø±ØªØ¨Ø·Ø©.`);
+            await logActivity(userId, agentId, 'AGENT_DELETED', `تم حذف الوكيل: ${agent.name} وكل بياناته المرتبطة.`, agent.toObject());
         }
 
         res.json({ message: 'Agent and all associated data deleted successfully.' });

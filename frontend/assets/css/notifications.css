@@ -1,0 +1,40 @@
+
+/* Notification Dropdown Styles */
+.notification-dropdown {
+    min-width: 320px;
+    padding: 0;
+    border: none;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+    border-radius: 8px;
+}
+
+.notification-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.notification-item {
+    transition: background-color 0.2s;
+    cursor: default;
+}
+
+.notification-item:hover {
+    background-color: #f8f9fa;
+}
+
+.notification-item.unread {
+    background-color: #f0f7ff;
+}
+
+.notification-item.unread:hover {
+    background-color: #e0efff;
+}
+
+.delete-notification-btn {
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.notification-item:hover .delete-notification-btn {
+    opacity: 1;
+}

@@ -517,6 +517,10 @@ function setupRealtimeListeners() {
                             console.error('[WebSocket] showToast function is not defined!');
                             alert(message.message); // Fallback
                         }
+                        // Refresh notification list
+                        if (window.NotificationSystem) {
+                            window.NotificationSystem.fetchNotifications();
+                        }
                         break;
 
                     case 'global_notification':

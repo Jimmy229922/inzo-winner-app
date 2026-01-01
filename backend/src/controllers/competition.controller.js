@@ -114,8 +114,8 @@ exports.getAllCompetitions = async (req, res) => {
             return {
                 ...rest,
                 agents: agent_id || {
-                    name: '┘ê┘â┘è┘ä ┘àÏ¡Ï░┘ê┘ü',
-                    classification: 'Ï║┘èÏ▒ ┘àÏ¬ÏºÏ¡',
+                    name: 'وكيل محذوف',
+                    classification: 'غير متاح',
                     avatar_url: null
                 },
                 id: comp._id
@@ -533,13 +533,13 @@ exports.updateCompetition = async (req, res) => {
             const changes = Object.entries(req.body).map(([field, newValue]) => {
                 const oldValue = competitionBeforeUpdate[field];
                 if (String(oldValue) !== String(newValue)) {
-                    return `Ï¡┘é┘ä "${field}" Ï¬Ï║┘èÏ▒ ┘à┘å "${oldValue}" ÏÑ┘ä┘ë "${newValue}"`;
+                    return `حقل "${field}" تغير من "${oldValue}" إلى "${newValue}"`;
                 }
                 return null;
             }).filter(Boolean);
 
             if (changes.length > 0) {
-                const description = `Ï¬┘à Ï¬Ï¡Ï»┘èÏ½ ┘àÏ│ÏºÏ¿┘éÏ® "${updatedCompetition.name}":\n${changes.join('\n')}`;
+                const description = `تم تحديث مسابقة "${updatedCompetition.name}":\n${changes.join('\n')}`;
                 await logActivity(userId, updatedCompetition.agent_id, 'COMPETITION_UPDATE', description);
             }
         }
@@ -556,7 +556,7 @@ exports.deleteCompetition = async (req, res) => {
         // --- FIX: Log this action ---
         const userId = req.user?._id;
         if (userId && competition) {
-            await logActivity(userId, competition.agent_id, 'COMPETITION_DELETED', `Ï¬┘à Ï¡Ï░┘ü Ïº┘ä┘àÏ│ÏºÏ¿┘éÏ®: ${competition.name}.`);
+            await logActivity(userId, competition.agent_id, 'COMPETITION_DELETED', `تم حذف المسابقة: ${competition.name}.`);
         }
         if (!competition) return res.status(404).json({ message: 'Competition not found.' });
         res.json({ message: 'Competition deleted successfully.' });

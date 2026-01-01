@@ -11,6 +11,7 @@ const cssFiles = [
     'assets/css/style.css',
     'css/styles.css',
     'assets/css/navbar.css',
+    'assets/css/notifications.css', // Notification Styles
     'assets/css/components.css',
     'assets/css/home.css',
     'assets/css/agents.css',
@@ -47,6 +48,7 @@ const jsFiles = [
     'js/pages/winner-roulette.js',
     'js/pages/question-suggestions.js',
     'js/pages/admin-question-suggestions.js',
+    'js/notifications.js', // Notification System
     // 'js/utils.js' is intentionally excluded because build.js injects a small utilities block
     'js/main.js'
 ].map(f => path.join(basePath, f));

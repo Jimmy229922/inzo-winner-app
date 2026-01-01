@@ -1,15 +1,27 @@
 const onlineClients = require('./clients');
+const Notification = require('../models/Notification');
 
 /**
- * Broadcasts a notification to connected WebSocket clients.
+ * Broadcasts a notification to connected WebSocket clients and saves it to the database.
  * 
  * @param {Object} app - DEPRECATED: The Express app instance (ignored).
  * @param {string} message - The notification message text.
  * @param {string} level - The notification level ('info', 'success', 'warning', 'error').
  * @param {string|null} targetUserId - Optional. If provided, sends only to this user. Otherwise, broadcasts to all.
  */
-const broadcastNotification = (app, message, level = 'info', targetUserId = null) => {
+const broadcastNotification = async (app, message, level = 'info', targetUserId = null) => {
     try {
+        // Save to Database
+        try {
+            await Notification.create({
+                user_id: targetUserId,
+                message: message,
+                type: level
+            });
+        } catch (dbError) {
+            console.error('[Notification] Error saving to DB:', dbError);
+        }
+
         // console.log(`[Notification] Broadcasting: "${message}" (Level: ${level}) to ${targetUserId ? 'User ' + targetUserId : 'All Users'}`);
         // console.log(`[Notification] Current online clients: ${onlineClients.size}`);
 

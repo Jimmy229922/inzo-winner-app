@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const logController = require('../controllers/log.controller');
 
+// GET /api/logs/stats - Get log statistics (Must be before /:id or /)
+router.get('/stats', logController.getLogStats);
+
 // GET /api/logs - Fetches all logs with pagination and filtering
 router.get('/', logController.getAllLogs);
 

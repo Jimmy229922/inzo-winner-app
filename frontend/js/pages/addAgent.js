@@ -347,7 +347,7 @@ async function saveAgent(newAgentData) {
         // TODO: Re-implement avatar upload. This will require a separate endpoint on the backend
         // that handles file uploads (e.g., using multer) and saves them to a folder or a cloud service like S3.
 
-        await logAgentActivity(currentUserProfile?._id, insertedAgent._id, 'AGENT_CREATED', `تم إنشاء وكيل جديد: ${insertedAgent.name}.`);
+        // await logAgentActivity(currentUserProfile?._id, insertedAgent._id, 'AGENT_CREATED', `تم إنشاء وكيل جديد: ${insertedAgent.name}.`);
         showToast('تمت إضافة الوكيل بنجاح!', 'success');
         window.allAgentsData = []; // مسح ذاكرة التخزين المؤقت للوكلاء لإعادة جلبها عند العودة
         // Use replace to avoid adding the 'add-agent' page to history

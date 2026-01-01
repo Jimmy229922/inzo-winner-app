@@ -100,6 +100,57 @@ exports.createLog = async (req, res) => {
 };
 
 /**
+ * @desc    Get activity log statistics
+ * @route   GET /api/logs/stats
+ * @access  Private (Admin/Super Admin)
+ */
+exports.getLogStats = async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // 1. Total actions today
+        const todayCount = await ActivityLog.countDocuments({ createdAt: { $gte: today } });
+
+        // 2. Critical actions today (DELETE, PURGE, etc.)
+        const criticalCount = await ActivityLog.countDocuments({
+            createdAt: { $gte: today },
+            action_type: { $regex: /DELETE|REMOVE|PURGE|DESTROY/i }
+        });
+
+        // 3. Top active user today
+        const topUserAgg = await ActivityLog.aggregate([
+            { $match: { createdAt: { $gte: today }, user_id: { $ne: null } } },
+            { $group: { _id: "$user_id", count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: 1 },
+            { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
+            { $unwind: "$user" },
+            { $project: { name: "$user.full_name", count: 1 } }
+        ]);
+        const topUser = topUserAgg[0] || null;
+
+        // 4. Most frequent action type today
+        const topActionAgg = await ActivityLog.aggregate([
+            { $match: { createdAt: { $gte: today } } },
+            { $group: { _id: "$action_type", count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $limit: 1 }
+        ]);
+        const topAction = topActionAgg[0] || null;
+
+        res.json({
+            todayCount,
+            criticalCount,
+            topUser,
+            topAction
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error fetching stats.', error: error.message });
+    }
+};
+
+/**
  * @desc    Delete multiple logs by IDs
  * @route   DELETE /api/logs
  * @access  Private (Admin/Super Admin)

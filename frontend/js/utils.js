@@ -202,13 +202,29 @@ if (typeof window.showToast !== 'function') {
                     <div class="toast-title">${titles[type] || 'إشعار'}</div>
                     <div class="toast-message">${message}</div>
                 </div>
-                <div class="toast-close" onclick="this.parentElement.remove()">×</div>
+                <div class="toast-close">×</div>
                 <div class="toast-progress">
                     <div class="toast-progress-bar" style="animation-duration: ${duration}ms"></div>
                 </div>
             `;
 
             container.appendChild(toast);
+
+            // Attach close handler with animation
+            const closeBtn = toast.querySelector('.toast-close');
+            if (closeBtn) {
+                closeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    // Reset animation to trigger slide out
+                    toast.style.animation = 'none';
+                    toast.offsetHeight; /* trigger reflow */
+                    toast.style.animation = 'toastSlideOut 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+                    
+                    toast.addEventListener('animationend', () => {
+                        if (toast.parentElement) toast.parentElement.removeChild(toast);
+                    }, { once: true });
+                };
+            }
 
             // Auto remove
             setTimeout(() => {
