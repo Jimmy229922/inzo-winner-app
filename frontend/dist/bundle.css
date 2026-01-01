@@ -2001,10 +2001,10 @@ footer {
 }
 
 .search-result-item {
-    padding: 10px 15px;
+    padding: 8px 12px; /* Reduced padding for more compact look */
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 10px; /* Reduced gap */
     cursor: pointer;
     border-bottom: 1px solid var(--border-color);
 }
@@ -2043,10 +2043,11 @@ footer {
     font-weight: bold;
     color: var(--text-color);
     margin: 0 0 4px 0;
+    font-size: 0.9rem; /* Reduced font size */
 }
 
 .search-result-item .agent-id {
-    font-size: 0.9em;
+    font-size: 0.8rem; /* Reduced font size */
     color: var(--text-secondary-color);
     margin: 0;
 }
