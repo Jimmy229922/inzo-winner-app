@@ -419,20 +419,51 @@ async function handleBulkRenewBalances() {
                     // Success UI
                     const updateIcon = progressModalOverlay.querySelector('.update-icon');
                     
-                    updateIcon.className = 'fas fa-check-circle update-icon';
-                    updateIcon.style.color = 'var(--success-color)';
-                    statusText.innerHTML = `اكتمل التجديد بنجاح`;
-                    detailsText.innerHTML = `تمت معالجة <strong>${result.processedCount}</strong> وكيل.<br>إجمالي المسترد: <strong>${result.totalRestoredAmount || 0}</strong>`;
+                    if (result.errors && result.errors.length > 0) {
+                        updateIcon.className = 'fas fa-exclamation-triangle update-icon';
+                        updateIcon.style.color = 'var(--warning-color)';
+                        statusText.innerHTML = `اكتمل مع وجود تنبيهات`;
+                        
+                        const errorList = result.errors.map(e => 
+                            `<li style="margin-bottom: 4px;"><b>${e.name}</b>: ${e.reason}</li>`
+                        ).join('');
+
+                        detailsText.innerHTML = `
+                            <div style="text-align: right;">
+                                <p>✅ تم التجديد بنجاح: <strong>${result.processedCount}</strong></p>
+                                <p>❌ فشل التجديد: <strong>${result.failedCount}</strong></p>
+                                <div style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-top: 10px; max-height: 200px; overflow-y: auto; font-size: 0.9em; text-align: right;">
+                                    <ul style="padding-right: 20px; margin: 0;">${errorList}</ul>
+                                </div>
+                                <button id="close-bulk-renew-modal" class="btn-primary" style="margin-top: 15px; width: 100%;">إغلاق</button>
+                            </div>
+                        `;
+                        
+                        // Add close handler
+                        setTimeout(() => {
+                            const closeBtn = document.getElementById('close-bulk-renew-modal');
+                            if (closeBtn) {
+                                closeBtn.onclick = () => progressModalOverlay.remove();
+                            }
+                        }, 100);
+
+                    } else {
+                        updateIcon.className = 'fas fa-check-circle update-icon';
+                        updateIcon.style.color = 'var(--success-color)';
+                        statusText.innerHTML = `اكتمل التجديد بنجاح`;
+                        detailsText.innerHTML = `تمت معالجة <strong>${result.processedCount}</strong> وكيل.<br>إجمالي المسترد: <strong>${result.totalRestoredAmount || 0}</strong>`;
+                        
+                        setTimeout(() => {
+                            if (progressModalOverlay) progressModalOverlay.remove();
+                        }, 3000);
+                    }
+
                     if (progressBar) progressBar.style.width = '100%';
 
                     console.log(`[Bulk Renew] Process finished. Processed: ${result.processedCount}`);
                     
                     // Refresh the agents list
-                    await fetchAndDisplayAgents(1); 
-
-                    setTimeout(() => {
-                        if (progressModalOverlay) progressModalOverlay.remove();
-                    }, 3000);
+                    await fetchAndDisplayAgents(1);
 
                 } catch (err) {
                     console.error('[Bulk Renew] Error:', err);

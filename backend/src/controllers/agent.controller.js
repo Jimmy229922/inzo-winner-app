@@ -540,7 +540,10 @@ exports.bulkRenewBalances = async (req, res) => {
         // FIX: Find all agents that are NOT explicitly inactive. This includes new agents ('Active') and old agents (status is undefined).
         const agents = await Agent.find({ status: { $ne: 'inactive' } });
         let processedCount = 0;
+        let failedCount = 0;
+        let errors = [];
         let totalRestoredAmount = 0;
+        let failedAgents = []; // Store full agent objects for retry
 
         if (!agents || agents.length === 0) {
             return res.json({ message: 'No active agents found to renew.', processedCount: 0 });
@@ -548,9 +551,10 @@ exports.bulkRenewBalances = async (req, res) => {
 
         const now = new Date();
 
-        for (const agent of agents) {
+        // Helper function to process a single agent
+        const processAgent = async (agent) => {
             // --- FIX: Sanitize old/invalid enum values before saving ---
-            if (agent.competition_duration && !['24h', '48h'].includes(agent.competition_duration)) {
+            if (agent.competition_duration && !['24h', '48h', '5s'].includes(agent.competition_duration)) {
                 agent.competition_duration = null; 
             }
 
@@ -566,21 +570,18 @@ exports.bulkRenewBalances = async (req, res) => {
             agent.remaining_deposit_bonus = (agent.remaining_deposit_bonus || 0) + bonusRestored;
             agent.used_deposit_bonus = 0;
 
-            // 3. Update Last Renewal Date (To prevent auto-renewal from running again today, but allow manual re-runs)
+            // 3. Update Last Renewal Date
             agent.last_renewal_date = now;
             
             // Save the agent
             await agent.save();
 
-            // 4. Create Transaction Record (Only if there was something to restore, or force log it?)
-            // Better to log it if amountRestored > 0 to keep ledger clean, or maybe log 0 amount for tracking?
-            // Usually we only care about money movement. But user wants to "renew".
-            // Let's log if amountRestored > 0.
+            // 4. Create Transaction Record
             if (amountRestored > 0) {
                 try {
                     await Transaction.create({
                         agent_id: agent._id,
-                        type: 'manual_renewal', // Using manual_renewal for bulk action initiated by admin
+                        type: 'manual_renewal',
                         amount: amountRestored,
                         previous_balance: balanceBefore,
                         new_balance: agent.remaining_balance,
@@ -591,34 +592,74 @@ exports.bulkRenewBalances = async (req, res) => {
                     console.error(`[Bulk Renewal] Failed to create transaction for agent ${agent.name}:`, txError);
                 }
             }
-            
-            processedCount++;
-            totalRestoredAmount += amountRestored;
+            return amountRestored;
+        };
 
-            // --- NEW: Send progress update via WebSocket ---
+        // --- MAIN LOOP ---
+        for (const agent of agents) {
+            try {
+                const amount = await processAgent(agent);
+                processedCount++;
+                totalRestoredAmount += amount;
+            } catch (agentError) {
+                console.error(`[Bulk Renewal] Failed to renew agent ${agent.name}:`, agentError);
+                failedAgents.push({ agent, error: agentError.message }); // Store for retry
+            }
+
+            // Send progress update via WebSocket
             if (req.user && req.user._id) {
                 const ws = onlineClients.get(req.user._id.toString());
                 if (ws && ws.readyState === ws.OPEN) {
                     ws.send(JSON.stringify({
                         type: 'bulk_renew_progress',
                         agentName: agent.name,
-                        current: processedCount,
+                        current: processedCount + failedAgents.length,
                         total: agents.length
                     }));
                 }
             }
 
-            // --- NEW: Add a delay to avoid overwhelming the server ---
-            await sleep(500); // Increased to 500ms to ensure server stability with large datasets
+            // --- DELAY: 200ms to balance server load vs timeout risk ---
+            await sleep(200);
+        }
+
+        // --- RETRY LOGIC ---
+        if (failedAgents.length > 0) {
+            console.log(`[Bulk Renewal] Retrying ${failedAgents.length} failed agents...`);
+            const retryList = [...failedAgents];
+            failedAgents = []; // Reset for final count
+
+            for (const item of retryList) {
+                try {
+                    const amount = await processAgent(item.agent);
+                    processedCount++;
+                    totalRestoredAmount += amount;
+                    // If successful, remove from error list (it's not added to failedAgents)
+                } catch (retryError) {
+                    console.error(`[Bulk Renewal] Retry failed for agent ${item.agent.name}:`, retryError);
+                    failedCount++;
+                    errors.push({ 
+                        name: item.agent.name, 
+                        agent_id: item.agent.agent_id,
+                        reason: retryError.message 
+                    });
+                }
+            }
         }
 
         // --- FIX: Log this bulk action ---
         const userId = req.user?._id;
         if (userId) {
-            await logActivity(userId, null, 'AGENT_BULK_RENEW', `تم تشغيل عملية تجديد الرصيد الجماعي لـ ${processedCount} وكيل. إجمالي المسترد: ${totalRestoredAmount}`);
+            await logActivity(userId, null, 'AGENT_BULK_RENEW', `تم تشغيل عملية تجديد الرصيد الجماعي. نجح: ${processedCount}، فشل نهائي: ${failedCount}. إجمالي المسترد: ${totalRestoredAmount}`);
         }
 
-        res.json({ message: 'Bulk renewal process completed successfully.', processedCount, totalRestoredAmount });
+        res.json({ 
+            message: 'Bulk renewal process completed.', 
+            processedCount, 
+            failedCount,
+            totalRestoredAmount,
+            errors // This array contains the final list of agents who failed even after retry
+        });
     } catch (error) {
         console.error('[Bulk Renewal] Error:', error);
         res.status(500).json({ message: 'Server error during bulk balance renewal.', error: error.message });
