@@ -11,6 +11,8 @@ router.post('/', agentController.createAgent);
 router.get('/check-uniqueness', agentController.checkUniqueness);
 router.post('/bulk-insert', agentController.bulkInsertAgents);
 router.post('/bulk-renew', agentController.bulkRenewBalances);
+router.post('/bulk-broadcast-balance', agentController.bulkBroadcastBalance); // NEW: Server-side bulk broadcast
+router.post('/bulk-broadcast-message', agentController.bulkSendMessage); // NEW: Server-side bulk custom message
 router.put('/bulk-update', agentController.bulkUpdateAgents);
 router.delete('/delete-all', agentController.deleteAllAgents);
 

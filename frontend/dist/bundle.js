@@ -1303,13 +1303,21 @@ async function handleDeleteAllAgents() {
     showConfirmationModal(
         modalContent,
         async () => {
-            const response = await authedFetch('/api/agents/delete-all', { method: 'DELETE' });
-            if (response.ok) {
-                showToast('تم حذف جميع الوكلاء بنجاح.', 'success');
-                await fetchAndDisplayAgents(1);
-            } else {
-                const result = await response.json();
-                showToast(result.message || 'فشل حذف جميع الوكلاء.', 'error');
+            try {
+                showLoader();
+                const response = await authedFetch('/api/agents/delete-all', { method: 'DELETE' });
+                if (response.ok) {
+                    showToast('تم حذف جميع الوكلاء بنجاح.', 'success');
+                    await fetchAndDisplayAgents(1);
+                } else {
+                    const result = await response.json();
+                    showToast(result.message || 'فشل حذف جميع الوكلاء.', 'error');
+                }
+            } catch (error) {
+                showToast('حدث خطأ أثناء الحذف.', 'error');
+                console.error(error);
+            } finally {
+                hideLoader();
             }
         },
         {
@@ -1486,112 +1494,111 @@ async function handleMarkAllTasksComplete() {
 }
 
 async function handleBulkSendBalances() {
-    // تعديل: جلب الوكلاء المؤهلين من الواجهة الخلفية الجديدة
-    const response = await authedFetch('/api/agents?eligibleForBalance=true');
-    if (!response.ok) {
-        showToast('فشل جلب بيانات الوكلاء المؤهلين.', 'error');
-        return;
-    }
-    const { data: eligibleAgents, error: fetchError } = await response.json();
+    showLoader('جاري التحقق من الوكلاء المؤهلين...');
+    try {
+        // Fetch count of eligible agents
+        const response = await authedFetch('/api/agents?eligibleForBalance=true&select=_id');
+        if (!response.ok) throw new Error('فشل التحقق من الوكلاء.');
+        const { data: eligibleAgents } = await response.json();
+        hideLoader();
 
-    if (fetchError) {
-        showToast('فشل جلب بيانات الوكلاء المؤهلين.', 'error');
-        return;
-    }
+        const agentCount = eligibleAgents.length;
 
-    const agentCount = eligibleAgents.length;
+        if (agentCount === 0) {
+            showToast('لا يوجد وكلاء مؤهلون (لديهم معرف دردشة ورصيد متاح) لإرسال التعميم.', 'info');
+            return;
+        }
 
-    if (agentCount === 0) {
-        showToast('لا يوجد وكلاء مؤهلون (لديهم معرف دردشة ورصيد متاح) لإرسال التعميم.', 'info');
-        return;
-    }
+        const modalContent = `
+            <p>سيتم إرسال كليشة الرصيد المتاح إلى <strong>${agentCount}</strong> وكيل مؤهل.</p>
+            <p>سيتم تجهيز رسالة فريدة لكل وكيل تحتوي على تفاصيل رصيده وبونص الإيداع الخاص به.</p>
+            <p class="warning-text" style="margin-top: 15px;"><i class="fas fa-exclamation-triangle"></i> هل أنت متأكد من المتابعة؟</p>
+        `;
 
-    const modalContent = `
-        <p>سيتم إرسال كليشة الرصيد المتاح إلى <strong>${agentCount}</strong> وكيل مؤهل.</p>
-        <p>سيتم تجهيز رسالة فريدة لكل وكيل تحتوي على تفاصيل رصيده وبونص الإيداع الخاص به.</p>
-        <p class="warning-text" style="margin-top: 15px;"><i class="fas fa-exclamation-triangle"></i> هل أنت متأكد من المتابعة؟</p>
-    `;
+        showConfirmationModal(
+            modalContent,
+            async () => {
+                // Show progress modal
+                const progressModalOverlay = showProgressModal(
+                    'تعميم الأرصدة المتاحة',
+                    `
+                    <div class="update-progress-container">
+                        <i class="fas fa-paper-plane fa-spin update-icon" style="color: var(--primary-color);"></i>
+                        <h3 id="bulk-broadcast-status-text" style="color: var(--primary-color);">جاري بدء الإرسال...</h3>
+                        <div class="progress-bar-outer" style="margin-top: 15px;">
+                            <div id="bulk-broadcast-progress-bar-inner" class="progress-bar-inner" style="width: 0%"></div>
+                        </div>
+                        <p id="bulk-broadcast-details" style="text-align: center; margin-top: 10px; color: var(--text-color); font-weight: bold; font-size: 1.1em;">يرجى الانتظار...</p>
+                    </div>
+                    `
+                );
 
-    showConfirmationModal(
-        modalContent,
-        async () => {
-            showBulkSendProgressModal(agentCount);
+                const statusText = document.getElementById('bulk-broadcast-status-text');
+                const detailsText = document.getElementById('bulk-broadcast-details');
+                const progressBar = document.getElementById('bulk-broadcast-progress-bar-inner');
 
-            let successCount = 0;
-            let errorCount = 0;
-            const progressBar = document.getElementById('bulk-send-progress-bar-inner');
-            const statusText = document.getElementById('bulk-send-status-text');
-            const renewalPeriodMap = {
-                'weekly': 'أسبوعي',
-                'biweekly': 'كل أسبوعين',
-                'monthly': 'شهري'
-            };
+                // WebSocket Listener
+                const progressHandler = (e) => {
+                    const { agentName, current, total, success, failed } = e.detail;
+                    const percentage = Math.round((current / total) * 100);
+                    
+                    if (statusText) statusText.innerHTML = `جاري الإرسال (${current}/${total})`;
+                    if (detailsText) detailsText.innerHTML = `جاري إرسال إلى: <strong>${agentName}</strong>`;
+                    if (progressBar) progressBar.style.width = `${percentage}%`;
+                };
+                window.addEventListener('bulk-broadcast-progress', progressHandler);
 
-            for (let i = 0; i < eligibleAgents.length; i++) {
-                const agent = eligibleAgents[i];
-                
-                // --- FIX: Improved message construction logic ---
-                const renewalValue = (agent.renewal_period && agent.renewal_period !== 'none') 
-                    ? (renewalPeriodMap[agent.renewal_period] || '')
-                    : '';
-
-                let benefitsText = '';
-                if ((agent.remaining_balance || 0) > 0) {
-                    benefitsText += `💰 <b>بونص تداولي:</b> <code>${agent.remaining_balance}$</code>\n`;
-                }
-                if ((agent.remaining_deposit_bonus || 0) > 0) {
-                    benefitsText += `🎁 <b>بونص ايداع:</b> <code>${agent.remaining_deposit_bonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
-                }
-
-                const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...\n\nيسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع برصيد مسابقات:\n${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}\n\nبامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.\n\nهل ترغب بارسال مسابقة لحضرتك؟`;
-
-                // --- FIX: Use authedFetch for authenticated requests ---
                 try {
-                    if (!agent.telegram_chat_id) throw new Error('لا يوجد معرف مجموعة تلجرام للوكيل.');
-                    const response = await authedFetch('/api/post-announcement', {
+                    const broadcastResponse = await authedFetch('/api/agents/bulk-broadcast-balance', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json;charset=UTF-8' },
-                        body: JSON.stringify({ message: clicheText, chatId: agent.telegram_chat_id })
+                        headers: { 'Content-Type': 'application/json' }
                     });
 
-                    if (!response.ok) errorCount++;
-                    else successCount++;
+                    if (!broadcastResponse.ok) {
+                        const errData = await broadcastResponse.json();
+                        throw new Error(errData.message || 'فشل في عملية الإرسال الجماعي.');
+                    }
 
-                } catch (e) {
-                    errorCount++;
+                    const result = await broadcastResponse.json();
+
+                    // Success UI
+                    const updateIcon = progressModalOverlay.querySelector('.update-icon');
+                    updateIcon.className = 'fas fa-check-circle update-icon';
+                    updateIcon.style.color = 'var(--success-color)';
+                    updateIcon.classList.remove('fa-spin'); // Stop spinning
+                    
+                    statusText.innerHTML = `اكتمل الإرسال بنجاح`;
+                    detailsText.innerHTML = `تم الإرسال إلى <strong>${result.successCount}</strong> وكيل.<br>فشل: <strong>${result.errorCount}</strong>`;
+                    if (progressBar) progressBar.style.width = '100%';
+
+                    setTimeout(() => {
+                        if (progressModalOverlay) progressModalOverlay.remove();
+                    }, 4000);
+
+                } catch (err) {
+                    console.error('[Bulk Broadcast] Error:', err);
+                    const updateIcon = progressModalOverlay.querySelector('.update-icon');
+                    updateIcon.className = 'fas fa-exclamation-triangle update-icon';
+                    updateIcon.style.color = 'var(--warning-color)';
+                    updateIcon.classList.remove('fa-spin');
+                    
+                    statusText.innerHTML = `حدث خطأ أثناء العملية`;
+                    detailsText.innerHTML = err.message;
+                    
+                    setTimeout(() => {
+                        if (progressModalOverlay) progressModalOverlay.remove();
+                    }, 5000);
+                } finally {
+                    window.removeEventListener('bulk-broadcast-progress', progressHandler);
                 }
+            },
+            { title: 'تأكيد الإرسال الجماعي', confirmText: 'نعم، إرسال الآن', confirmClass: 'btn-telegram-bonus' }
+        );
 
-                const progress = Math.round(((i + 1) / agentCount) * 100);
-                progressBar.style.width = `${progress}%`;
-                statusText.innerHTML = `جاري إرسال الأرصدة... (${i + 1} / ${agentCount})<br>نجح: ${successCount} | فشل: ${errorCount}`;
-                // إصلاح: نقل التأخير الزمني إلى داخل الحلقة ليعمل بشكل صحيح
-                if (i < eligibleAgents.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 400)); // 400ms delay
-                }
-            } // نهاية الحلقة for
-
-            // Update modal with final result
-            statusText.innerHTML = `اكتمل تعميم الأرصدة.<br><strong>${successCount}</strong> رسالة ناجحة | <strong>${errorCount}</strong> رسالة فاشلة.`;
-            progressBar.style.backgroundColor = errorCount > 0 ? 'var(--danger-color)' : 'var(--success-color)';
-            document.querySelector('.modal-no-actions .update-icon').className = 'fas fa-check-circle update-icon';
-            await logAgentActivity(null, 'BULK_BALANCE_SENT', `تم تعميم الأرصدة إلى ${successCount} وكيل (فشل ${errorCount}).`);
-
-            // --- تعديل: إخفاء نافذة التقدم تلقائياً بعد 3 ثوانٍ ---
-            setTimeout(() => {
-                // ابحث عن النافذة المنبثقة النشطة وقم بإزالتها
-                const modalOverlay = document.querySelector('.modal-overlay');
-                if (modalOverlay) {
-                    modalOverlay.remove();
-                }
-            }, 3000); // إغلاق بعد 3 ثوانٍ
-        }, {
-            title: 'تعميم الأرصدة المتاحة',
-            confirmText: 'إرسال الآن',
-            confirmClass: 'btn-telegram-bonus',
-            cancelText: 'إلغاء',
-            modalClass: 'modal-wide'
-        }
-    );
+    } catch (error) {
+        hideLoader();
+        showToast(error.message, 'error');
+    }
 }
 
 // --- NEW: Bulk Broadcast Feature (Super Admin only) ---
@@ -1614,93 +1621,62 @@ async function handleBulkBroadcast() {
                 return;
             }
 
-            // Step 2: Fetch eligible agents to get the count
-            try {
-                showLoader();
-                const response = await authedFetch('/api/agents?eligibleForBroadcast=true&limit=5000&select=_id name agent_id telegram_chat_id');
-                if (!response.ok) throw new Error('فشل جلب قائمة الوكلاء.');
-                
-                const { data: eligibleAgents } = await response.json();
-                hideLoader();
+            // Step 2: Confirm and Send
+            showConfirmationModal(
+                `سيتم إرسال رسالتك إلى جميع الوكلاء المؤهلين. هل أنت متأكد من المتابعة؟`,
+                async () => {
+                    // Show progress modal immediately
+                    showBulkSendProgressModal(0, 'تعميم جماعي');
+                    const progressBar = document.getElementById('bulk-send-progress-bar-inner');
+                    const statusText = document.getElementById('bulk-send-status-text');
+                    const modalIcon = document.querySelector('.modal-no-actions .update-icon');
 
-                console.log('Eligible agents for broadcast:', eligibleAgents); // DEBUG
+                    // Setup WebSocket listener
+                    const progressHandler = (e) => {
+                        const { current, total, success, failed, agentName } = e.detail;
+                        const progress = Math.round((current / total) * 100);
+                        progressBar.style.width = `${progress}%`;
+                        statusText.innerHTML = `جاري الإرسال إلى: <strong>${agentName}</strong><br>
+                                                التقدم: ${current} / ${total}<br>
+                                                <span class="text-success">نجح: ${success}</span> | <span class="text-danger">فشل: ${failed}</span>`;
+                    };
+                    window.addEventListener('bulk-message-progress', progressHandler);
 
-                if (!eligibleAgents || eligibleAgents.length === 0) {
-                    showToast('لا يوجد وكلاء مؤهلون لإرسال التعميم لهم.', 'info');
-                    return;
-                }
+                    try {
+                        const response = await authedFetch('/api/agents/bulk-broadcast-message', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ message })
+                        });
 
-                // Step 3: Show final confirmation and then start sending
-                showConfirmationModal(
-                    `سيتم إرسال رسالتك إلى <strong>${eligibleAgents.length}</strong> وكيل. هل أنت متأكد من المتابعة؟`,
-                    async () => {
-                        showBulkSendProgressModal(eligibleAgents.length, 'تعميم جماعي');
+                        const result = await response.json();
 
-                        let successCount = 0;
-                        let errorCount = 0;
-                        const failedAgents = [];
-                        const progressBar = document.getElementById('bulk-send-progress-bar-inner');
-                        const statusText = document.getElementById('bulk-send-status-text');
-
-                        for (let i = 0; i < eligibleAgents.length; i++) {
-                            const agent = eligibleAgents[i];
-                            try {
-                                if (!agent.telegram_chat_id) throw new Error('لا يوجد معرف مجموعة تلجرام للوكيل.');
-                                const sendResponse = await authedFetch('/api/post-announcement', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json;charset=UTF-8' },
-                                    body: JSON.stringify({ message: message, chatId: agent.telegram_chat_id })
-                                });
-                                if (!sendResponse.ok) {
-                                    const errorData = await sendResponse.json();
-                                    const reason = translateTelegramError(errorData.telegram_error || errorData.message);
-                                    throw new Error(reason);
-                                }
-                                successCount++;
-                            } catch (e) {
-                                errorCount++;
-                                const errorMessage = e.message;
-                                failedAgents.push({ name: agent.name, reason: errorMessage });
-                                console.error(`Failed to send broadcast to agent ${agent.name} (${agent.agent_id}): ${errorMessage}`);
-                            }
-
-                            const progress = Math.round(((i + 1) / eligibleAgents.length) * 100);
-                            progressBar.style.width = `${progress}%`;
-                            statusText.innerHTML = `جاري الإرسال... (${i + 1} / ${eligibleAgents.length})<br>نجح: ${successCount} | فشل: ${errorCount}`;
-                            
-                            // Add a small delay between messages to avoid rate limiting
-                            if (i < eligibleAgents.length - 1) {
-                                await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay
-                            }
+                        if (response.ok) {
+                            statusText.innerHTML = `✅ اكتمل التعميم بنجاح.<br>
+                                                    <span class="text-success">نجح: ${result.successCount}</span> | <span class="text-danger">فشل: ${result.errorCount}</span>`;
+                            progressBar.style.backgroundColor = 'var(--success-color)';
+                            if (modalIcon) modalIcon.className = 'fas fa-check-circle update-icon text-success';
+                        } else {
+                            throw new Error(result.message || 'فشل في إرسال التعميم.');
                         }
-
-                        // Final update to progress modal
-                        let finalMessage = `اكتمل التعميم.<br><strong>${successCount}</strong> رسالة ناجحة | <strong>${errorCount}</strong> رسالة فاشلة.`;
-                        if (errorCount > 0) {
-                            finalMessage += `<br><br><strong>الأخطاء:</strong><ul class="error-list">`;
-                            failedAgents.forEach(fail => {
-                                finalMessage += `<li><strong>${fail.name}:</strong> ${fail.reason}</li>`;
-                            });
-                            finalMessage += `</ul>`;
-                        }
-                        statusText.innerHTML = finalMessage;
-                        progressBar.style.backgroundColor = errorCount > 0 ? 'var(--danger-color)' : 'var(--success-color)';
-                        document.querySelector('.modal-no-actions .update-icon').className = 'fas fa-check-circle update-icon';
+                    } catch (error) {
+                        console.error('Bulk broadcast error:', error);
+                        statusText.innerHTML = `❌ حدث خطأ أثناء التعميم:<br>${error.message}`;
+                        progressBar.style.backgroundColor = 'var(--danger-color)';
+                        if (modalIcon) modalIcon.className = 'fas fa-times-circle update-icon text-danger';
+                    } finally {
+                        // Remove listener
+                        window.removeEventListener('bulk-message-progress', progressHandler);
                         
-                        // Log the activity
-                        await logAgentActivity(currentUserProfile?._id, null, 'BULK_BROADCAST', `تم إرسال تعميم جماعي إلى ${successCount} وكيل (فشل ${errorCount}).`);
-
+                        // Close modal after delay
                         setTimeout(() => {
                             const modalOverlay = document.querySelector('.modal-overlay');
                             if (modalOverlay) modalOverlay.remove();
-                        }, 4000 + (errorCount * 500)); // Keep modal open a bit longer if there are errors to read
-                    },
-                    { title: 'تأكيد الإرسال الجماعي', confirmText: 'نعم، أرسل الآن', confirmClass: 'btn-telegram-broadcast' }
-                );
-            } catch (error) {
-                hideLoader();
-                showToast(error.message, 'error');
-            }
+                        }, 5000);
+                    }
+                },
+                { title: 'تأكيد الإرسال الجماعي', confirmText: 'نعم، أرسل الآن', confirmClass: 'btn-telegram-broadcast' }
+            );
         },
         {
             title: 'إنشاء رسالة تعميم جماعي',
@@ -1711,22 +1687,17 @@ async function handleBulkBroadcast() {
     );
 }
 
-function showBulkSendProgressModal(total) {
+function showBulkSendProgressModal(total, title = 'عملية الإرسال الجماعي') {
     const modalContent = `
         <div class="update-progress-container">
             <i class="fas fa-paper-plane update-icon"></i>
-            <h3 id="bulk-send-status-text">جاري التهيئة لإرسال ${total} رسالة...</h3>
+            <h3 id="bulk-send-status-text">جاري التهيئة لإرسال ${total > 0 ? total : '...'} رسالة...</h3>
             <div class="progress-bar-outer">
                 <div id="bulk-send-progress-bar-inner" class="progress-bar-inner"></div>
             </div>
         </div>
     `;
-    showConfirmationModal(modalContent, null, {
-        title: 'عملية الإرسال الجماعي',
-        showCancel: false,
-        showConfirm: false,
-        modalClass: 'modal-no-actions'
-    });
+    showProgressModal(title, modalContent);
 }
 
 async function renderMiniCalendar() {
@@ -25555,6 +25526,12 @@ function setupRealtimeListeners() {
                         // Dispatch event for specific page handlers
                         window.dispatchEvent(new CustomEvent('bulk-renew-progress', { detail: message }));
                         break;
+                    case 'bulk_broadcast_progress':
+                        window.dispatchEvent(new CustomEvent('bulk-broadcast-progress', { detail: message }));
+                        break;
+                    case 'bulk_message_progress':
+                        window.dispatchEvent(new CustomEvent('bulk-message-progress', { detail: message }));
+                        break;
                     case 'presence_update':
                         // message.data should be an array of online user IDs
                         if (Array.isArray(message.data)) {
@@ -25702,17 +25679,20 @@ function showConfirmationModal(message, onConfirm, options = {}) {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    document.getElementById('confirm-btn').onclick = async () => {
-        // FIX: Support async callbacks and allow them to prevent modal closing
-        if (onConfirm) {
-            const result = await Promise.resolve(onConfirm());
-            // If callback returns false, don't close the modal
-            if (result === false) return;
-        }
-        overlay.remove();
-    
-    };
-    const cancelBtn = document.getElementById('cancel-btn');
+    const confirmBtn = modal.querySelector('#confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.onclick = async () => {
+            // FIX: Support async callbacks and allow them to prevent modal closing
+            if (onConfirm) {
+                const result = await Promise.resolve(onConfirm());
+                // If callback returns false, don't close the modal
+                if (result === false) return;
+            }
+            overlay.remove();
+        };
+    }
+
+    const cancelBtn = modal.querySelector('#cancel-btn');
     if (cancelBtn) {
         cancelBtn.onclick = () => {
             if (onCancel) onCancel();
@@ -25749,6 +25729,7 @@ function showProgressModal(title, content) {
 
     return overlay; // Return the overlay so it can be closed later
 }
+try { window.showProgressModal = showProgressModal; } catch (e) { /* ignore */ }
 
 // Fallback toast helper: ensures a visible message even if the app's showToast is absent or hidden
 function showFallbackToast(message, duration = 1600) {

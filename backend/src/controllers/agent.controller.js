@@ -344,13 +344,14 @@ exports.deleteAllAgents = async (req, res) => {
         console.log('[Delete All Agents] Starting full cascade deletion for all agents and related data...');
 
         // Delete related documents first to avoid orphans
-        const [compRes, taskRes, winnerRes, activityRes, rankRes, adminLogRes] = await Promise.all([
+        const [compRes, taskRes, winnerRes, activityRes, rankRes, adminLogRes, transRes] = await Promise.all([
             Competition.deleteMany({}),
             Task.deleteMany({}),
             Winner.deleteMany({}),
             ActivityLog.deleteMany({}),
             AgentRankChange.deleteMany({}),
-            Log.deleteMany({})
+            Log.deleteMany({}),
+            Transaction.deleteMany({})
         ]);
 
         console.log(`[Delete All Agents] Deleted competitions: ${compRes.deletedCount}`);
@@ -359,6 +360,7 @@ exports.deleteAllAgents = async (req, res) => {
         console.log(`[Delete All Agents] Deleted activity logs: ${activityRes.deletedCount}`);
         console.log(`[Delete All Agents] Deleted rank/class changes: ${rankRes.deletedCount}`);
         console.log(`[Delete All Agents] Deleted admin logs: ${adminLogRes.deletedCount}`);
+        console.log(`[Delete All Agents] Deleted transactions: ${transRes.deletedCount}`);
 
         const agentRes = await Agent.deleteMany({});
         console.log(`[Delete All Agents] Deleted agents: ${agentRes.deletedCount}`);
@@ -618,6 +620,165 @@ exports.bulkRenewBalances = async (req, res) => {
     } catch (error) {
         console.error('[Bulk Renewal] Error:', error);
         res.status(500).json({ message: 'Server error during bulk balance renewal.', error: error.message });
+    }
+};
+
+// --- NEW: Bulk broadcast balance to all eligible agents ---
+exports.bulkBroadcastBalance = async (req, res) => {
+    try {
+        // Find agents with balance > 0 OR deposit bonus > 0 AND have a telegram chat ID
+        const agents = await Agent.find({
+            $and: [
+                { telegram_chat_id: { $nin: [null, '', 0] } },
+                {
+                    $or: [
+                        { remaining_balance: { $gt: 0 } },
+                        { remaining_deposit_bonus: { $gt: 0 } }
+                    ]
+                }
+            ]
+        });
+
+        if (!agents || agents.length === 0) {
+            return res.json({ message: 'No eligible agents found for broadcast.', processedCount: 0 });
+        }
+
+        let successCount = 0;
+        let errorCount = 0;
+        const bot = req.app.locals.telegramBot;
+
+        if (!bot) {
+            return res.status(503).json({ message: 'Telegram bot is not initialized.' });
+        }
+
+        const renewalPeriodMap = {
+            'weekly': 'أسبوعي',
+            'biweekly': 'كل أسبوعين',
+            'monthly': 'شهري'
+        };
+
+        for (let i = 0; i < agents.length; i++) {
+            const agent = agents[i];
+            
+            try {
+                const renewalValue = (agent.renewal_period && agent.renewal_period !== 'none') 
+                    ? (renewalPeriodMap[agent.renewal_period] || '')
+                    : '';
+
+                let benefitsText = '';
+                if ((agent.remaining_balance || 0) > 0) {
+                    benefitsText += `💰 <b>بونص تداولي:</b> <code>${agent.remaining_balance}$</code>\n`;
+                }
+                if ((agent.remaining_deposit_bonus || 0) > 0) {
+                    benefitsText += `🎁 <b>بونص ايداع:</b> <code>${agent.remaining_deposit_bonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
+                }
+
+                const clicheText = `<b>دمت بخير شريكنا العزيز ${agent.name}</b> ...\n\nيسرنا ان نحيطك علما بأن حضرتك كوكيل لدى شركة انزو تتمتع برصيد مسابقات:\n${renewalValue ? `(<b>${renewalValue}</b>):\n\n` : ''}${benefitsText.trim()}\n\nبامكانك الاستفادة منه من خلال انشاء مسابقات اسبوعية لتنمية وتطوير العملاء التابعين للوكالة.\n\nهل ترغب بارسال مسابقة لحضرتك؟`;
+
+                await postToTelegram(bot, clicheText, agent.telegram_chat_id);
+                successCount++;
+            } catch (err) {
+                console.error(`[Bulk Broadcast] Failed to send to agent ${agent.name}:`, err.message);
+                errorCount++;
+            }
+
+            // Send progress update via WebSocket
+            if (req.user && req.user._id) {
+                const ws = onlineClients.get(req.user._id.toString());
+                if (ws && ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'bulk_broadcast_progress',
+                        agentName: agent.name,
+                        current: i + 1,
+                        total: agents.length,
+                        success: successCount,
+                        failed: errorCount
+                    }));
+                }
+            }
+
+            // Delay to avoid hitting Telegram rate limits (30 messages per second max, but safer to go slower)
+            await sleep(300); 
+        }
+
+        // Log activity
+        const userId = req.user?._id;
+        if (userId) {
+            await logActivity(userId, null, 'BULK_BALANCE_SENT', `تم تعميم الأرصدة إلى ${successCount} وكيل (فشل ${errorCount}).`);
+        }
+
+        res.json({ message: 'Bulk broadcast completed.', successCount, errorCount });
+
+    } catch (error) {
+        console.error('[Bulk Broadcast] Error:', error);
+        res.status(500).json({ message: 'Server error during bulk broadcast.', error: error.message });
+    }
+};
+
+// --- NEW: Bulk send custom message to all eligible agents ---
+exports.bulkSendMessage = async (req, res) => {
+    try {
+        const { message } = req.body;
+        if (!message) {
+            return res.status(400).json({ message: 'Message content is required.' });
+        }
+
+        // Find agents with a valid telegram chat ID
+        const agents = await Agent.find({ telegram_chat_id: { $nin: [null, '', 0] } });
+
+        if (!agents || agents.length === 0) {
+            return res.json({ message: 'No eligible agents found for broadcast.', processedCount: 0 });
+        }
+
+        let successCount = 0;
+        let errorCount = 0;
+        const bot = req.app.locals.telegramBot;
+
+        if (!bot) {
+            return res.status(503).json({ message: 'Telegram bot is not initialized.' });
+        }
+
+        for (let i = 0; i < agents.length; i++) {
+            const agent = agents[i];
+            
+            try {
+                await postToTelegram(bot, message, agent.telegram_chat_id);
+                successCount++;
+            } catch (err) {
+                console.error(`[Bulk Message] Failed to send to agent ${agent.name}:`, err.message);
+                errorCount++;
+            }
+
+            // Send progress update via WebSocket
+            if (req.user && req.user._id) {
+                const ws = onlineClients.get(req.user._id.toString());
+                if (ws && ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'bulk_message_progress',
+                        agentName: agent.name,
+                        current: i + 1,
+                        total: agents.length,
+                        success: successCount,
+                        failed: errorCount
+                    }));
+                }
+            }
+
+            // Delay to avoid hitting Telegram rate limits
+            await sleep(300); 
+        }
+
+        // Log activity
+        const userId = req.user?._id;
+        if (userId) {
+            await logActivity(userId, null, 'BULK_BROADCAST', `تم إرسال تعميم جماعي إلى ${successCount} وكيل (فشل ${errorCount}).`);
+        }
+
+        res.json({ message: 'Bulk message broadcast completed.', successCount, errorCount });
+
+    } catch (error) {
+        console.error('[Bulk Message] Error:', error);
+        res.status(500).json({ message: 'Server error during bulk message broadcast.', error: error.message });
     }
 };
 

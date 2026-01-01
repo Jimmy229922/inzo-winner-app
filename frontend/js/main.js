@@ -481,6 +481,12 @@ function setupRealtimeListeners() {
                         // Dispatch event for specific page handlers
                         window.dispatchEvent(new CustomEvent('bulk-renew-progress', { detail: message }));
                         break;
+                    case 'bulk_broadcast_progress':
+                        window.dispatchEvent(new CustomEvent('bulk-broadcast-progress', { detail: message }));
+                        break;
+                    case 'bulk_message_progress':
+                        window.dispatchEvent(new CustomEvent('bulk-message-progress', { detail: message }));
+                        break;
                     case 'presence_update':
                         // message.data should be an array of online user IDs
                         if (Array.isArray(message.data)) {
@@ -628,17 +634,20 @@ function showConfirmationModal(message, onConfirm, options = {}) {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    document.getElementById('confirm-btn').onclick = async () => {
-        // FIX: Support async callbacks and allow them to prevent modal closing
-        if (onConfirm) {
-            const result = await Promise.resolve(onConfirm());
-            // If callback returns false, don't close the modal
-            if (result === false) return;
-        }
-        overlay.remove();
-    
-    };
-    const cancelBtn = document.getElementById('cancel-btn');
+    const confirmBtn = modal.querySelector('#confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.onclick = async () => {
+            // FIX: Support async callbacks and allow them to prevent modal closing
+            if (onConfirm) {
+                const result = await Promise.resolve(onConfirm());
+                // If callback returns false, don't close the modal
+                if (result === false) return;
+            }
+            overlay.remove();
+        };
+    }
+
+    const cancelBtn = modal.querySelector('#cancel-btn');
     if (cancelBtn) {
         cancelBtn.onclick = () => {
             if (onCancel) onCancel();
@@ -675,6 +684,7 @@ function showProgressModal(title, content) {
 
     return overlay; // Return the overlay so it can be closed later
 }
+try { window.showProgressModal = showProgressModal; } catch (e) { /* ignore */ }
 
 // Fallback toast helper: ensures a visible message even if the app's showToast is absent or hidden
 function showFallbackToast(message, duration = 1600) {
