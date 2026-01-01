@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto'); // NEW: Import crypto for hashing
 
 const basePath = 'frontend';
 const distPath = path.join(basePath, 'dist');
@@ -165,18 +166,25 @@ async function bundle() {
         await fs.promises.writeFile(jsBundlePath, jsContent, { encoding: 'utf8' });
         console.log(`JS bundle created at: ${jsBundlePath}`);
 
-        // --- NEW: Auto-update version in index.html ---
+        // --- NEW: Auto-update version in index.html using Content Hash ---
         const indexHtmlPath = path.join(basePath, 'index.html');
         try {
             let htmlContent = await fs.promises.readFile(indexHtmlPath, 'utf8');
-            const version = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14); // YYYYMMDDHHMMSS
             
-            // Update bundle.js and bundle.css versions
-            htmlContent = htmlContent.replace(/(\/dist\/bundle\.js)(\?v=\d+)?/g, `$1?v=${version}`);
-            htmlContent = htmlContent.replace(/(\/dist\/bundle\.css)(\?v=\d+)?/g, `$1?v=${version}`);
+            // Calculate MD5 hash of the JS bundle
+            const jsHash = crypto.createHash('md5').update(jsContent).digest('hex').substring(0, 8);
+            
+            // Calculate MD5 hash of the CSS bundle
+            const cssHash = crypto.createHash('md5').update(cssContent).digest('hex').substring(0, 8);
+            
+            // Update bundle.js version with its specific hash
+            htmlContent = htmlContent.replace(/(\/dist\/bundle\.js)(\?v=[a-zA-Z0-9]+)?/g, `$1?v=${jsHash}`);
+            
+            // Update bundle.css version with its specific hash
+            htmlContent = htmlContent.replace(/(\/dist\/bundle\.css)(\?v=[a-zA-Z0-9]+)?/g, `$1?v=${cssHash}`);
             
             await fs.promises.writeFile(indexHtmlPath, htmlContent, 'utf8');
-            console.log(`Updated index.html with new version: ${version}`);
+            console.log(`Updated index.html with new versions - JS: ${jsHash}, CSS: ${cssHash}`);
         } catch (err) {
             console.error('Failed to update index.html version:', err);
         }
