@@ -619,8 +619,8 @@ exports.bulkRenewBalances = async (req, res) => {
                 }
             }
 
-            // --- DELAY: 200ms to balance server load vs timeout risk ---
-            await sleep(200);
+            // --- DELAY: 50ms is safe for 500 agents (Total ~25s) to avoid HTTP timeout ---
+            await sleep(50);
         }
 
         // --- RETRY LOGIC ---
