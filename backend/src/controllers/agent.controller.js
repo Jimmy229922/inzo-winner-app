@@ -471,9 +471,9 @@ exports.renewEligibleAgentBalances = async (onlineClients) => {
                 [
                     {
                         $set: {
-                            remaining_balance: { $add: [{ $ifNull: ["$remaining_balance", 0] }, { $ifNull: ["$consumed_balance", 0] }] },
+                            remaining_balance: "$competition_bonus",
                             consumed_balance: 0,
-                            remaining_deposit_bonus: { $add: [{ $ifNull: ["$remaining_deposit_bonus", 0] }, { $ifNull: ["$used_deposit_bonus", 0] }] },
+                            remaining_deposit_bonus: "$deposit_bonus_count",
                             used_deposit_bonus: 0,
                             last_renewal_date: now
                         }
@@ -489,9 +489,9 @@ exports.renewEligibleAgentBalances = async (onlineClients) => {
             }
 
             // Calculate amounts from the state BEFORE update
-            const amountRestored = originalAgentState.consumed_balance || 0;
             const balanceBefore = originalAgentState.remaining_balance || 0;
-            const newRemainingBalance = balanceBefore + amountRestored;
+            const newRemainingBalance = agent.competition_bonus || 0;
+            const amountRestored = newRemainingBalance - balanceBefore;
 
             // --- TRANSACTION LEDGER ---
             try {
@@ -501,7 +501,7 @@ exports.renewEligibleAgentBalances = async (onlineClients) => {
                     amount: amountRestored,
                     previous_balance: balanceBefore,
                     new_balance: newRemainingBalance,
-                    details: `Auto-renewal: Restored ${amountRestored} to balance.`,
+                    details: `Auto-renewal: Reset balance to ${newRemainingBalance}.`,
                     performed_by: null // System
                 });
             } catch (txError) {
@@ -558,16 +558,16 @@ exports.bulkRenewBalances = async (req, res) => {
                 agent.competition_duration = null; 
             }
 
-            const amountRestored = agent.consumed_balance || 0;
-            const bonusRestored = agent.used_deposit_bonus || 0;
             const balanceBefore = agent.remaining_balance || 0;
+            const newBalance = agent.competition_bonus || 0;
+            const amountRestored = newBalance - balanceBefore;
 
             // 1. Restore Balance
-            agent.remaining_balance = balanceBefore + amountRestored;
+            agent.remaining_balance = newBalance;
             agent.consumed_balance = 0;
 
             // 2. Restore Deposit Bonus
-            agent.remaining_deposit_bonus = (agent.remaining_deposit_bonus || 0) + bonusRestored;
+            agent.remaining_deposit_bonus = agent.deposit_bonus_count || 0;
             agent.used_deposit_bonus = 0;
 
             // 3. Update Last Renewal Date
@@ -577,7 +577,7 @@ exports.bulkRenewBalances = async (req, res) => {
             await agent.save();
 
             // 4. Create Transaction Record
-            if (amountRestored > 0) {
+            if (amountRestored !== 0) {
                 try {
                     await Transaction.create({
                         agent_id: agent._id,
@@ -585,7 +585,7 @@ exports.bulkRenewBalances = async (req, res) => {
                         amount: amountRestored,
                         previous_balance: balanceBefore,
                         new_balance: agent.remaining_balance,
-                        details: `Bulk Manual Renewal: Restored ${amountRestored} to balance.`,
+                        details: `Bulk Manual Renewal: Reset balance to ${newBalance}.`,
                         performed_by: req.user ? req.user._id : null
                     });
                 } catch (txError) {
@@ -939,15 +939,13 @@ exports.renewSingleAgentBalance = async (req, res) => {
         }
 
         const balanceBefore = agent.remaining_balance || 0;
-        const amountRestored = agent.consumed_balance || 0;
+        const newRemainingBalance = agent.competition_bonus || 0;
+        const amountRestored = newRemainingBalance - balanceBefore;
 
-        // New "roll-over" renewal logic
-        const newRemainingBalance = (agent.remaining_balance || 0) + (agent.consumed_balance || 0);
         agent.remaining_balance = newRemainingBalance;
         agent.consumed_balance = 0;
 
-        const newRemainingDepositBonus = (agent.remaining_deposit_bonus || 0) + (agent.used_deposit_bonus || 0);
-        agent.remaining_deposit_bonus = newRemainingDepositBonus;
+        agent.remaining_deposit_bonus = agent.deposit_bonus_count || 0;
         agent.used_deposit_bonus = 0;
 
         agent.last_renewal_date = new Date();
@@ -963,7 +961,7 @@ exports.renewSingleAgentBalance = async (req, res) => {
                 amount: amountRestored,
                 previous_balance: balanceBefore,
                 new_balance: newRemainingBalance,
-                details: `Manual renewal: Restored ${amountRestored} to balance.`,
+                details: `Manual renewal: Reset balance to ${newRemainingBalance}.`,
                 performed_by: userId || null
             });
         } catch (txError) {
