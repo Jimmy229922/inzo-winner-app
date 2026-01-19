@@ -17131,6 +17131,267 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
     // === END PERFORMANCE OPTIMIZATIONS ===
     
+    // === SEARCHABLE AGENT DROPDOWN ===
+    function initSearchableAgentDropdown() {
+      const originalSelect = document.getElementById('agent-select');
+      if (!originalSelect || document.getElementById('agent-search-container')) return;
+      
+      // إضافة styles للـ hover
+      if (!document.getElementById('agent-search-styles')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'agent-search-styles';
+        styleEl.textContent = `
+          .agent-option:hover, .agent-option.active {
+            background: rgba(99, 102, 241, 0.2) !important;
+          }
+          #agent-search-dropdown::-webkit-scrollbar {
+            width: 6px;
+          }
+          #agent-search-dropdown::-webkit-scrollbar-track {
+            background: #1e293b;
+            border-radius: 3px;
+          }
+          #agent-search-dropdown::-webkit-scrollbar-thumb {
+            background: #6366f1;
+            border-radius: 3px;
+          }
+          #agent-search-input:focus {
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+          }
+        `;
+        document.head.appendChild(styleEl);
+      }
+      
+      // إخفاء الـ select الأصلي
+      originalSelect.style.display = 'none';
+      
+      // إنشاء container للـ searchable dropdown
+      const container = document.createElement('div');
+      container.id = 'agent-search-container';
+      container.style.cssText = 'position: relative; min-width: 220px; display: inline-block;';
+      
+      // إنشاء input للبحث
+      const searchInput = document.createElement('input');
+      searchInput.type = 'text';
+      searchInput.id = 'agent-search-input';
+      searchInput.placeholder = '🔍 ابحث عن الوكيل...';
+      searchInput.autocomplete = 'off';
+      searchInput.style.cssText = `
+        width: 100%;
+        padding: 10px 14px;
+        border: 2px solid #334155;
+        border-radius: 10px;
+        background: #1e293b;
+        color: #fff;
+        font-size: 0.95rem;
+        outline: none;
+        cursor: pointer;
+        transition: all 0.2s;
+      `;
+      
+      // إنشاء قائمة الخيارات - تُضاف لـ body مباشرة
+      const dropdown = document.createElement('div');
+      dropdown.id = 'agent-search-dropdown';
+      dropdown.style.cssText = `
+        position: fixed;
+        max-height: 300px;
+        min-width: 250px;
+        overflow-y: auto;
+        background: #1e293b;
+        border: 2px solid #6366f1;
+        border-radius: 10px;
+        z-index: 999999;
+        display: none;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      `;
+      
+      container.appendChild(searchInput);
+      // القائمة تُضاف لـ body بدلاً من container
+      document.body.appendChild(dropdown);
+      originalSelect.parentNode.insertBefore(container, originalSelect);
+      
+      // دالة لتحديث موقع القائمة
+      function positionDropdown() {
+        const rect = searchInput.getBoundingClientRect();
+        dropdown.style.top = (rect.bottom + 2) + 'px';
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.width = Math.max(rect.width, 250) + 'px';
+      }
+      
+      // تحديث موقع القائمة عند الـ scroll
+      let scrollHandler = null;
+      function attachScrollListener() {
+        if (scrollHandler) return;
+        scrollHandler = () => {
+          if (dropdown.style.display !== 'none') {
+            positionDropdown();
+          }
+        };
+        window.addEventListener('scroll', scrollHandler, true);
+      }
+      
+      function detachScrollListener() {
+        if (scrollHandler) {
+          window.removeEventListener('scroll', scrollHandler, true);
+          scrollHandler = null;
+        }
+      }
+      
+      // تحديث القائمة
+      updateSearchableAgentDropdown();
+      
+      // Event: فتح القائمة عند الضغط على الـ input
+      searchInput.addEventListener('focus', () => {
+        positionDropdown();
+        dropdown.style.display = 'block';
+        searchInput.style.borderColor = '#6366f1';
+        attachScrollListener();
+        updateSearchableAgentDropdown(searchInput.value);
+      });
+      
+      // Event: البحث أثناء الكتابة
+      searchInput.addEventListener('input', (e) => {
+        updateSearchableAgentDropdown(e.target.value);
+      });
+      
+      // Event: إغلاق القائمة عند الضغط خارجها
+      document.addEventListener('click', (e) => {
+        if (!container.contains(e.target) && !dropdown.contains(e.target)) {
+          dropdown.style.display = 'none';
+          searchInput.style.borderColor = '#334155';
+          detachScrollListener();
+        }
+      });
+      
+      // Event: التنقل بالأسهم
+      searchInput.addEventListener('keydown', (e) => {
+        const items = dropdown.querySelectorAll('.agent-option');
+        const activeItem = dropdown.querySelector('.agent-option.active');
+        let activeIndex = Array.from(items).indexOf(activeItem);
+        
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (activeIndex < items.length - 1) {
+            items[activeIndex]?.classList.remove('active');
+            items[activeIndex + 1]?.classList.add('active');
+            items[activeIndex + 1]?.scrollIntoView({ block: 'nearest' });
+          }
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (activeIndex > 0) {
+            items[activeIndex]?.classList.remove('active');
+            items[activeIndex - 1]?.classList.add('active');
+            items[activeIndex - 1]?.scrollIntoView({ block: 'nearest' });
+          }
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (activeItem) {
+            activeItem.click();
+          }
+        } else if (e.key === 'Escape') {
+          dropdown.style.display = 'none';
+          searchInput.style.borderColor = '#334155';
+          searchInput.blur();
+        }
+      });
+    }
+    
+    function updateSearchableAgentDropdown(filter = '') {
+      const dropdown = document.getElementById('agent-search-dropdown');
+      const originalSelect = document.getElementById('agent-select');
+      const searchInput = document.getElementById('agent-search-input');
+      if (!dropdown || !originalSelect) return;
+      
+      const filterLower = filter.toLowerCase().trim();
+      let html = '';
+      let count = 0;
+      
+      Array.from(originalSelect.options).forEach((option, index) => {
+        if (index === 0 && !option.value) {
+          // Skip placeholder option
+          return;
+        }
+        
+        const text = option.textContent;
+        const value = option.value;
+        
+        if (!filterLower || text.toLowerCase().includes(filterLower)) {
+          const isSelected = originalSelect.value === value;
+          html += `
+            <div class="agent-option ${isSelected ? 'selected' : ''} ${count === 0 && filterLower ? 'active' : ''}" 
+                 data-value="${value}" 
+                 style="
+                   padding: 10px 14px;
+                   cursor: pointer;
+                   transition: background 0.2s;
+                   border-bottom: 1px solid #334155;
+                   color: ${isSelected ? '#10b981' : '#e2e8f0'};
+                   background: ${isSelected ? 'rgba(16, 185, 129, 0.1)' : 'transparent'};
+                   display: flex;
+                   align-items: center;
+                   gap: 8px;
+                 ">
+              ${isSelected ? '<i class="fas fa-check" style="color: #10b981;"></i>' : '<i class="fas fa-user-tie" style="color: #6366f1;"></i>'}
+              <span>${text}</span>
+            </div>
+          `;
+          count++;
+        }
+      });
+      
+      if (count === 0) {
+        html = `
+          <div style="padding: 15px; text-align: center; color: #64748b;">
+            <i class="fas fa-search"></i> لا توجد نتائج
+          </div>
+        `;
+      }
+      
+      dropdown.innerHTML = html;
+      
+      // Add hover and click events
+      dropdown.querySelectorAll('.agent-option').forEach(item => {
+        item.addEventListener('mouseenter', () => {
+          dropdown.querySelectorAll('.agent-option').forEach(i => i.classList.remove('active'));
+          item.classList.add('active');
+        });
+        
+        item.addEventListener('click', () => {
+          const value = item.dataset.value;
+          originalSelect.value = value;
+          originalSelect.dispatchEvent(new Event('change'));
+          
+          // تحديث الـ input
+          if (searchInput) {
+            const selectedOption = originalSelect.options[originalSelect.selectedIndex];
+            searchInput.value = selectedOption ? selectedOption.textContent : '';
+          }
+          
+          // إغلاق القائمة
+          dropdown.style.display = 'none';
+          if (searchInput) {
+            searchInput.style.borderColor = '#334155';
+          }
+        });
+      });
+    }
+    
+    // تحديث input الوكيل عند تحديده من مكان آخر
+    function syncSearchableAgentInput() {
+      const searchInput = document.getElementById('agent-search-input');
+      const originalSelect = document.getElementById('agent-select');
+      if (searchInput && originalSelect) {
+        const selectedOption = originalSelect.options[originalSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+          searchInput.value = selectedOption.textContent;
+        } else {
+          searchInput.value = '';
+        }
+      }
+    }
+    // === END SEARCHABLE AGENT DROPDOWN ===
+    
     function cleanName(name) {
       if (!name) return '';
       // Remove sequential numbers like "1- ", "2- ", etc. from the beginning
@@ -17152,6 +17413,34 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       if (!select) return;
       try {
         const authedFetch = window.authedFetch || fetch;
+        
+        // === تحسين الأداء: لو في agent_id محدد، نحمّل الوكيل ده بس أولاً ===
+        if (forceIncludeAgentId) {
+          try {
+            // جلب بيانات الوكيل المحدد مباشرة (سريع جداً)
+            const singleAgentResp = await authedFetch(`/api/agents/${forceIncludeAgentId}`);
+            if (singleAgentResp.ok) {
+              const singleAgentData = await singleAgentResp.json();
+              const agent = singleAgentData.data || singleAgentData;
+              if (agent && agent._id) {
+                const option = document.createElement('option');
+                option.value = agent._id;
+                option.textContent = `${agent.name} (#${agent.agent_id})`;
+                option.dataset.agentId = agent.agent_id;
+                select.appendChild(option);
+                console.log('[loadAgents] تم تحميل الوكيل المحدد بسرعة:', agent.name);
+                
+                // نحمّل باقي الوكلاء في الخلفية (بدون انتظار)
+                loadRemainingAgentsInBackground(select, agent._id);
+                return; // خلاص، الوكيل المطلوب جاهز
+              }
+            }
+          } catch (e) {
+            console.warn('[loadAgents] فشل تحميل الوكيل المحدد، سنحمّل الكل:', e);
+          }
+        }
+        
+        // === الطريقة العادية: جلب كل الوكلاء ذوي المسابقات النشطة ===
         // Fetch ALL competitions to filter agents who have active competitions
         const response = await authedFetch('/api/competitions?limit=2000&sort=-createdAt');
         const result = await response.json();
@@ -17160,62 +17449,19 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         // Filter for active competitions
         const activeComps = competitions.filter(c => ['active', 'awaiting_winners', 'sent'].includes(c.status));
         
-        // Extract unique agents
-        const agentMap = new Map();
-        activeComps.forEach(comp => {
-            // comp.agents is the populated agent object (mapped from agent_id in backend)
-            const agent = comp.agents;
-            if (agent && agent._id && !agentMap.has(agent._id)) {
-                agentMap.set(agent._id, {
-                    _id: agent._id,
-                    name: agent.name,
-                    agent_id: agent.agent_id || '?' // agent_id might not be in the populated object if not selected
-                });
-            }
-        });
-        
-        // If we need the agent.agent_id (the numeric ID), we might need to ensure the backend returns it.
-        // The backend controller says: .populate('agent_id', 'name avatar_url classification')
-        // It does NOT populate 'agent_id' (the numeric field).
-        // Wait, the backend model likely has 'agent_id' as the numeric ID.
-        // Let's check the backend controller again.
-        // .populate('agent_id', 'name avatar_url classification')
-        // It seems 'agent_id' (numeric) is NOT selected.
-        // This is a problem if I need it for the option text `${agent.name} (#${agent.agent_id})`.
-        // However, I can just use the name if the ID is missing, or try to fetch agents separately if needed.
-        // Or I can rely on the fact that maybe the user doesn't strictly need the ID number if they just want to select the agent.
-        // But the existing code uses `option.dataset.agentId = agent.agent_id;`.
-        // And `updateAgentStatus` uses it.
-        
-        // Let's check if I can get the agent_id.
-        // If I can't, I might need to fetch all agents AND all competitions, then intersect.
-        // Fetching all agents is cheap (limit=1000).
-        // Fetching all competitions is cheapish.
-        
-        // ALTERNATIVE STRATEGY:
-        // 1. Fetch all agents (to get full details including numeric ID).
-        // 2. Fetch all active competitions (to know which agents to show).
-        // 3. Filter the agents list based on the competitions.
-        
         const agentsResponse = await authedFetch('/api/agents?limit=1000');
         const agentsResult = await agentsResponse.json();
         const allAgents = agentsResult.data || [];
-        
-        // Filter agents who appear in activeComps
-        // activeComps have `agent_id` (which is the ObjectId, or the populated object).
-        // In the formatted response, `agents` is the populated object. `agents._id` is the ObjectId.
         
         const activeAgentIds = new Set();
         activeComps.forEach(c => {
             if (c.agents && c.agents._id) {
                 activeAgentIds.add(String(c.agents._id));
             } else if (c.agent_id) {
-                 // Fallback if not populated as expected
                  activeAgentIds.add(String(c.agent_id));
             }
         });
         
-        // في وضع الاستعادة، نضيف الوكيل المحدد حتى لو لم يكن لديه مسابقة نشطة
         if (forceIncludeAgentId) {
           activeAgentIds.add(String(forceIncludeAgentId));
         }
@@ -17230,9 +17476,58 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           select.appendChild(option);
         });
         
-        // Agent restoration is handled by restoreSession()
       } catch(e) {
         console.warn('Failed to load agents:', e);
+      }
+    }
+    
+    // دالة لتحميل باقي الوكلاء في الخلفية (بدون blocking)
+    async function loadRemainingAgentsInBackground(select, alreadyLoadedAgentId) {
+      try {
+        const authedFetch = window.authedFetch || fetch;
+        
+        // جلب المسابقات والوكلاء
+        const [compResponse, agentsResponse] = await Promise.all([
+          authedFetch('/api/competitions?limit=2000&sort=-createdAt'),
+          authedFetch('/api/agents?limit=1000')
+        ]);
+        
+        const competitions = (await compResponse.json()).data || [];
+        const allAgents = (await agentsResponse.json()).data || [];
+        
+        const activeComps = competitions.filter(c => ['active', 'awaiting_winners', 'sent'].includes(c.status));
+        
+        const activeAgentIds = new Set();
+        activeComps.forEach(c => {
+            if (c.agents && c.agents._id) {
+                activeAgentIds.add(String(c.agents._id));
+            } else if (c.agent_id) {
+                activeAgentIds.add(String(c.agent_id));
+            }
+        });
+        
+        // إضافة الوكيل المحمّل مسبقاً
+        activeAgentIds.add(String(alreadyLoadedAgentId));
+        
+        const filteredAgents = allAgents.filter(a => 
+          activeAgentIds.has(String(a._id)) && String(a._id) !== String(alreadyLoadedAgentId)
+        );
+        
+        // إضافة الوكلاء الباقين للقائمة
+        filteredAgents.forEach(agent => {
+          const option = document.createElement('option');
+          option.value = agent._id;
+          option.textContent = `${agent.name} (#${agent.agent_id})`;
+          option.dataset.agentId = agent.agent_id;
+          select.appendChild(option);
+        });
+        
+        console.log('[loadRemainingAgentsInBackground] تم تحميل', filteredAgents.length, 'وكيل إضافي');
+        
+        // تحديث الـ searchable dropdown إذا كان موجود
+        updateSearchableAgentDropdown();
+      } catch(e) {
+        console.warn('[loadRemainingAgentsInBackground] Error:', e);
       }
     }
     
@@ -18381,8 +18676,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // state.selectedAgent = null; // REMOVED to allow session restore
       state.activeCompetition = null;
       
-      // في وضع الاستعادة، نمرر agent_id لضمان إضافته للقائمة حتى لو لم يكن لديه مسابقة نشطة
-      await loadAgents(isRestoreMode ? agentIdFromUrl : null);
+      // تحميل الوكلاء - لو في agent_id في URL نمرره لتحميل سريع
+      await loadAgents(agentIdFromUrl || null);
+      
+      // تهيئة الـ searchable dropdown للوكلاء
+      initSearchableAgentDropdown();
+      
       bindUI();
       // startPulseAnimation() removed - animation only during spin
       drawWheel(); // رسم العجلة مرة واحدة عند التحميل
@@ -18404,8 +18703,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         }
       }
       
-      // لا تستعيد الجلسة في وضع الاستعادة لأننا سنحمّل من قاعدة البيانات
-      if (!isRestoreMode) {
+      // لا تستعيد الجلسة إذا كان هناك agent_id في URL (لأننا حددنا الوكيل من URL)
+      // أو في وضع الاستعادة لأننا سنحمّل من قاعدة البيانات
+      if (!isRestoreMode && !agentIdFromUrl) {
         await restoreSession(); // Restore everything including agent
       }
       // state.selectedAgent = null; // REMOVED
@@ -18511,46 +18811,389 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     // ==========================================
     // تحميل مسابقة مكتملة لإعادة الإرسال (وضع الاستعادة)
     // استخدام API محسّن مع التحقق من سلامة الملفات
+    // مع نظام إشعارات احترافي لكل مرحلة
     // ==========================================
+    
+    // === دالة إظهار إشعار التقدم الاحترافي ===
+    function showProgressToast(title, message, type = 'loading', stage = 0) {
+      // Remove existing progress toast
+      const existingToast = document.getElementById('restore-progress-toast');
+      if (existingToast) existingToast.remove();
+      
+      const colors = {
+        loading: { bg: 'linear-gradient(135deg, #6366f1, #8b5cf6)', icon: 'fa-spinner fa-spin', glow: 'rgba(99, 102, 241, 0.4)' },
+        success: { bg: 'linear-gradient(135deg, #10b981, #059669)', icon: 'fa-check-circle', glow: 'rgba(16, 185, 129, 0.4)' },
+        error: { bg: 'linear-gradient(135deg, #ef4444, #dc2626)', icon: 'fa-times-circle', glow: 'rgba(239, 68, 68, 0.4)' },
+        warning: { bg: 'linear-gradient(135deg, #f59e0b, #d97706)', icon: 'fa-exclamation-triangle', glow: 'rgba(245, 158, 11, 0.4)' }
+      };
+      
+      const color = colors[type] || colors.loading;
+      
+      // Add animation keyframes if not exists
+      if (!document.getElementById('progress-toast-styles')) {
+        const style = document.createElement('style');
+        style.id = 'progress-toast-styles';
+        style.textContent = `
+          @keyframes slideDown {
+            from { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(0.9); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+          }
+          @keyframes slideUp {
+            from { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+            to { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(0.9); }
+          }
+          @keyframes pulse {
+            0%, 100% { box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+            50% { box-shadow: 0 15px 50px rgba(0,0,0,0.4); }
+          }
+          @keyframes progressBar {
+            0% { width: 0%; }
+            100% { width: var(--progress-width, 25%); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      const progressWidth = stage > 0 ? (stage * 25) : 0;
+      
+      const toastEl = document.createElement('div');
+      toastEl.id = 'restore-progress-toast';
+      toastEl.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 100000;
+        background: ${color.bg};
+        color: white;
+        padding: 16px 24px;
+        border-radius: 16px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3), 0 0 20px ${color.glow};
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 350px;
+        max-width: 500px;
+        animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        backdrop-filter: blur(10px);
+      `;
+      
+      toastEl.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <i class="fas ${color.icon}" style="font-size: 20px;"></i>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 700; font-size: 1rem; margin-bottom: 2px;">${title}</div>
+            <div style="font-size: 0.85rem; opacity: 0.95; line-height: 1.4;">${message}</div>
+          </div>
+          ${stage > 0 ? `
+            <div style="background: rgba(255,255,255,0.25); padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; flex-shrink: 0;">
+              ${stage}/4
+            </div>
+          ` : ''}
+        </div>
+        ${stage > 0 ? `
+          <div style="background: rgba(255,255,255,0.2); border-radius: 10px; height: 6px; overflow: hidden;">
+            <div style="background: rgba(255,255,255,0.9); height: 100%; width: ${progressWidth}%; border-radius: 10px; transition: width 0.5s ease;"></div>
+          </div>
+        ` : ''}
+      `;
+      
+      document.body.appendChild(toastEl);
+      
+      // Auto-remove success toasts after delay
+      if (type === 'success') {
+        setTimeout(() => {
+          if (toastEl.parentNode) {
+            toastEl.style.animation = 'slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards';
+            setTimeout(() => toastEl.remove(), 400);
+          }
+        }, 2500);
+      }
+    }
+    
+    // === دالة عرض رسالة اكتمال الاسترجاع النهائية ===
+    function showRestoreCompleteMessage(summary) {
+      console.log('[showRestoreCompleteMessage] Called with summary:', summary);
+      
+      // Remove any existing complete message
+      const existingMsg = document.getElementById('restore-complete-overlay');
+      if (existingMsg) existingMsg.remove();
+      
+      // Remove progress toast if still visible
+      const progressToast = document.getElementById('restore-progress-toast');
+      if (progressToast) progressToast.remove();
+      
+      // Add confetti animation styles if not exists
+      if (!document.getElementById('restore-complete-styles')) {
+        const style = document.createElement('style');
+        style.id = 'restore-complete-styles';
+        style.textContent = `
+          @keyframes confettiFall {
+            0% { transform: translateY(-100%) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+          }
+          @keyframes scaleIn {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+          }
+          @keyframes checkmarkDraw {
+            0% { stroke-dashoffset: 100; }
+            100% { stroke-dashoffset: 0; }
+          }
+          @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+          }
+          @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .restore-stat-item {
+            animation: fadeInUp 0.5s ease forwards;
+            opacity: 0;
+          }
+          .restore-stat-item:nth-child(1) { animation-delay: 0.2s; }
+          .restore-stat-item:nth-child(2) { animation-delay: 0.3s; }
+          .restore-stat-item:nth-child(3) { animation-delay: 0.4s; }
+          .restore-stat-item:nth-child(4) { animation-delay: 0.5s; }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      const winnersCount = state.winners ? state.winners.length : (summary?.totalWinners || 0);
+      const imagesCount = summary?.imagesOk || 0;
+      const videosCount = summary?.videosOk || 0;
+      
+      const overlay = document.createElement('div');
+      overlay.id = 'restore-complete-overlay';
+      overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(8px);
+        z-index: 200000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      `;
+      
+      // إغلاق عند الضغط على الـ overlay
+      overlay.addEventListener('click', (e) => {
+        // إغلاق فقط إذا تم الضغط على الـ overlay نفسه وليس على المحتوى
+        if (e.target === overlay) {
+          overlay.style.transition = 'opacity 0.3s ease';
+          overlay.style.opacity = '0';
+          setTimeout(() => overlay.remove(), 300);
+        }
+      });
+      
+      // Create confetti
+      let confettiHtml = '';
+      const colors = ['#10b981', '#6366f1', '#f59e0b', '#ec4899', '#3b82f6', '#8b5cf6'];
+      for (let i = 0; i < 50; i++) {
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const left = Math.random() * 100;
+        const delay = Math.random() * 2;
+        const duration = 2 + Math.random() * 2;
+        const size = 8 + Math.random() * 8;
+        confettiHtml += `<div style="position: absolute; top: -20px; left: ${left}%; width: ${size}px; height: ${size}px; background: ${color}; border-radius: ${Math.random() > 0.5 ? '50%' : '2px'}; animation: confettiFall ${duration}s ease-in ${delay}s forwards;"></div>`;
+      }
+      
+      overlay.innerHTML = `
+        ${confettiHtml}
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;">
+          <div style="background: linear-gradient(145deg, #1e293b, #0f172a); border-radius: 24px; padding: 40px 50px; text-align: center; box-shadow: 0 25px 80px rgba(0,0,0,0.5), 0 0 40px rgba(16, 185, 129, 0.3); border: 1px solid rgba(16, 185, 129, 0.3); max-width: 450px;">
+            
+            <!-- Success Icon with Animation -->
+            <div style="width: 100px; height: 100px; margin: 0 auto 24px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 40px rgba(16, 185, 129, 0.4); animation: pulse 2s ease-in-out infinite;">
+              <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5" style="stroke-dasharray: 100; animation: checkmarkDraw 0.8s ease 0.3s forwards;"/>
+              </svg>
+            </div>
+            
+            <!-- Title -->
+            <h2 style="color: #10b981; font-size: 1.8rem; font-weight: 800; margin: 0 0 8px 0; text-shadow: 0 0 20px rgba(16, 185, 129, 0.5);">
+              🎉 تم الاسترجاع بنجاح!
+            </h2>
+            
+            <p style="color: #94a3b8; font-size: 1rem; margin: 0 0 24px 0;">
+              تم استرجاع المسابقة بالكامل وجميع البيانات جاهزة
+            </p>
+            
+            <!-- Stats Grid -->
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px;">
+              <div class="restore-stat-item" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 16px;">
+                <div style="font-size: 1.8rem; font-weight: 800; color: #818cf8;">${winnersCount}</div>
+                <div style="font-size: 0.85rem; color: #94a3b8;">فائز</div>
+              </div>
+              <div class="restore-stat-item" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 16px;">
+                <div style="font-size: 1.8rem; font-weight: 800; color: #10b981;">${imagesCount}</div>
+                <div style="font-size: 0.85rem; color: #94a3b8;">صورة هوية</div>
+              </div>
+              <div class="restore-stat-item" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 16px;">
+                <div style="font-size: 1.8rem; font-weight: 800; color: #f59e0b;">${videosCount}</div>
+                <div style="font-size: 0.85rem; color: #94a3b8;">فيديو</div>
+              </div>
+              <div class="restore-stat-item" style="background: rgba(236, 72, 153, 0.15); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 12px; padding: 16px;">
+                <div style="font-size: 1.8rem; font-weight: 800; color: #ec4899;">✓</div>
+                <div style="font-size: 0.85rem; color: #94a3b8;">جاهز للإرسال</div>
+              </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div style="display: flex; gap: 12px; justify-content: center;">
+              <button onclick="document.getElementById('restore-complete-overlay').remove();" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 14px 32px; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);">
+                <i class="fas fa-check"></i> تم، متابعة
+              </button>
+            </div>
+            
+            <!-- Footer Note -->
+            <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); color: #64748b; font-size: 0.8rem;">
+              <i class="fas fa-info-circle"></i> يمكنك الآن إرسال التقارير للوكيل أو الجروب
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(overlay);
+      
+      // Auto-close after 2.5 seconds
+      setTimeout(() => {
+        const el = document.getElementById('restore-complete-overlay');
+        if (el) {
+          el.style.transition = 'opacity 0.5s ease';
+          el.style.opacity = '0';
+          setTimeout(() => el.remove(), 500);
+        }
+      }, 1000);
+    }
+    
     async function loadCompetitionForRestore(competitionId) {
       console.log('[Restore Mode] Loading competition:', competitionId);
       
       const authedFetch = window.authedFetch || fetch;
       const competitionInfo = document.querySelector('.wr-competition-info');
       
+      // === المرحلة 1: عرض شاشة التحميل مع progress ===
+      showProgressToast('🚀 المرحلة 1/4', 'تهيئة عملية الاسترجاع...', 'loading', 1);
+      
       if (competitionInfo) {
-        competitionInfo.innerHTML = '<div class="wr-agent-info-empty"><i class="fas fa-spinner fa-spin"></i> جاري تحميل بيانات المسابقة...</div>';
+        competitionInfo.innerHTML = `
+          <div class="wr-loading-state" style="text-align: center; padding: 24px;">
+            <div class="wr-progress-container" style="margin-bottom: 24px;">
+              <div class="wr-progress-bar" style="width: 100%; height: 8px; background: rgba(99, 102, 241, 0.15); border-radius: 4px; overflow: hidden;">
+                <div id="restore-progress-fill" style="width: 10%; height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7); transition: width 0.4s ease; border-radius: 4px; box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);"></div>
+              </div>
+              <div id="restore-progress-text" style="margin-top: 10px; font-size: 0.9rem; color: #818cf8; font-weight: 600;">10%</div>
+            </div>
+            <i class="fas fa-spinner fa-spin" style="font-size: 36px; color: #6366f1; filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.5));"></i>
+            <div style="margin-top: 16px; color: var(--text-color); font-weight: 700; font-size: 1.1rem;">جاري استرجاع المسابقة</div>
+            <div class="wr-loading-stages" style="margin-top: 20px; text-align: right; font-size: 0.9rem; max-width: 320px; margin-left: auto; margin-right: auto;">
+              <div id="stage-1" class="wr-stage" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin: 6px 0; background: rgba(99, 102, 241, 0.15); border-radius: 10px; color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span style="flex: 1;">تهيئة عملية الاسترجاع</span>
+                <span style="font-size: 0.75rem; opacity: 0.7;">< 0.3 ثانية</span>
+              </div>
+              <div id="stage-2" class="wr-stage" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin: 6px 0; background: rgba(100, 116, 139, 0.1); border-radius: 10px; color: #64748b;">
+                <i class="fas fa-clock"></i>
+                <span style="flex: 1;">جلب البيانات الأساسية</span>
+                <span style="font-size: 0.75rem; opacity: 0.7;">< 0.5 ثانية</span>
+              </div>
+              <div id="stage-3" class="wr-stage" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin: 6px 0; background: rgba(100, 116, 139, 0.1); border-radius: 10px; color: #64748b;">
+                <i class="fas fa-clock"></i>
+                <span style="flex: 1;">عرض الواجهة والبيانات</span>
+                <span style="font-size: 0.75rem; opacity: 0.7;">فوري</span>
+              </div>
+              <div id="stage-4" class="wr-stage" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin: 6px 0; background: rgba(100, 116, 139, 0.1); border-radius: 10px; color: #64748b;">
+                <i class="fas fa-clock"></i>
+                <span style="flex: 1;">التحقق من الملفات</span>
+                <span style="font-size: 0.75rem; opacity: 0.7;">في الخلفية</span>
+              </div>
+            </div>
+          </div>
+        `;
       }
       
+      // Helper function to update progress UI
+      const updateProgress = (stage, percent, status = 'loading') => {
+        const progressFill = document.getElementById('restore-progress-fill');
+        const progressText = document.getElementById('restore-progress-text');
+        if (progressFill) progressFill.style.width = `${percent}%`;
+        if (progressText) progressText.textContent = `${percent}%`;
+        
+        // Update stage indicators
+        for (let i = 1; i <= 4; i++) {
+          const stageEl = document.getElementById(`stage-${i}`);
+          if (!stageEl) continue;
+          
+          if (i < stage) {
+            // Completed stages
+            stageEl.style.background = 'rgba(16, 185, 129, 0.15)';
+            stageEl.style.color = '#10b981';
+            stageEl.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+            stageEl.querySelector('i').className = 'fas fa-check-circle';
+          } else if (i === stage) {
+            // Current stage
+            stageEl.style.background = 'rgba(99, 102, 241, 0.15)';
+            stageEl.style.color = '#818cf8';
+            stageEl.style.border = '1px solid rgba(99, 102, 241, 0.3)';
+            stageEl.querySelector('i').className = status === 'loading' ? 'fas fa-spinner fa-spin' : 'fas fa-check-circle';
+            if (status !== 'loading') {
+              stageEl.style.background = 'rgba(16, 185, 129, 0.15)';
+              stageEl.style.color = '#10b981';
+              stageEl.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+            }
+          }
+        }
+      };
+      
       try {
-        // استخدام API الجديد المحسّن للاسترجاع
-        const restoreResponse = await authedFetch(`/api/competitions/${competitionId}/restore-data`);
+        // Small delay for stage 1 visibility
+        await new Promise(r => setTimeout(r, 250));
+        updateProgress(1, 25, 'done');
+        
+        // === المرحلة 2: جلب البيانات الأساسية (skipValidation=true) ===
+        updateProgress(2, 30);
+        showProgressToast('📥 المرحلة 2/4', 'جلب بيانات المسابقة والوكيل والفائزين...', 'loading', 2);
+        
+        const restoreResponse = await authedFetch(`/api/competitions/${competitionId}/restore-data?skipValidation=true`);
         
         if (!restoreResponse.ok) {
-          // Fallback للطريقة القديمة إذا فشل API الجديد
-          console.warn('[Restore Mode] New API failed, falling back to legacy method');
+          console.warn('[Restore Mode] API failed, falling back to legacy method');
           return await loadCompetitionForRestoreLegacy(competitionId);
         }
         
         const restoreData = await restoreResponse.json();
-        const { competition, agent, winners, validation, hasSnapshot, canRestore } = restoreData;
+        const { competition, agent, winners, hasSnapshot } = restoreData;
         
         if (!competition) {
           throw new Error('المسابقة غير موجودة');
         }
         
-        // تحقق من الوكيل - استخدام بيانات الـ snapshot أو البيانات الحالية
+        updateProgress(2, 50, 'done');
+        showProgressToast('✅ المرحلة 2/4', `تم جلب البيانات: ${winners.length} فائز، الوكيل: ${agent?.name || 'غير محدد'}`, 'success', 2);
+        
+        // === المرحلة 3: عرض الواجهة كاملة ===
+        await new Promise(r => setTimeout(r, 300)); // انتظار قليل لرؤية نجاح المرحلة 2
+        updateProgress(3, 60);
+        showProgressToast('🎨 المرحلة 3/4', 'عرض معلومات المسابقة والفائزين والعجلة...', 'loading', 3);
+        
         if (agent && !state.selectedAgent) {
           state.selectedAgent = {
             id: agent._id,
             name: agent.name,
             agentId: agent.agent_id
           };
-          // محاولة تحديد الوكيل في القائمة
           autoSelectAgent(agent._id);
         }
         
-        // إعداد حالة المسابقة
         const tradingWinners = competition.trading_winners_count || 0;
         const depositWinners = competition.deposit_winners_count || 0;
         const totalWinners = tradingWinners + depositWinners;
@@ -18566,7 +19209,6 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           depositBonusPercentage: competition.deposit_bonus_percentage || 0
         };
         
-        // تحويل الفائزين لتنسيق الـ state
         state.winners = winners.map(w => ({
           id: w._id,
           _id: w._id,
@@ -18588,77 +19230,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         
         state.reportSent = false;
         
-        // بناء واجهة المعلومات مع التحذيرات
-        let validationHtml = '';
-        if (validation && validation.issues && validation.issues.length > 0) {
-          // تصنيف التحذيرات
-          const missingVideos = validation.missingVideos || [];
-          const missingImages = validation.missingImages || [];
-          
-          let warningsContent = '';
-          
-          if (missingImages.length > 0) {
-            warningsContent += `
-              <div style="margin-bottom: 10px;">
-                <strong style="color: #ef4444;"><i class="fas fa-id-card"></i> صور هوية مفقودة (${missingImages.length}):</strong>
-                <ul style="margin: 5px 0; padding-right: 20px;">
-                  ${missingImages.map(m => `<li>${m.winnerName}</li>`).join('')}
-                </ul>
-              </div>
-            `;
-          }
-          
-          if (missingVideos.length > 0) {
-            warningsContent += `
-              <div style="margin-bottom: 10px;">
-                <strong style="color: #f59e0b;"><i class="fas fa-video-slash"></i> فيديوهات مفقودة (${missingVideos.length}):</strong>
-                <ul style="margin: 5px 0; padding-right: 20px;">
-                  ${missingVideos.map(m => `<li>${m.winnerName}</li>`).join('')}
-                </ul>
-              </div>
-            `;
-          }
-          
-          // إذا لم يكن هناك تصنيف للملفات، اعرض كل الـ issues مباشرة
-          if (warningsContent === '') {
-            warningsContent = `
-              <ul style="margin: 0; padding-right: 20px;">
-                ${validation.issues.map(issue => `<li>${issue}</li>`).join('')}
-              </ul>
-            `;
-          } else {
-            // إذا كانت هناك تحذيرات أخرى غير الملفات
-            const otherIssues = validation.issues.filter(issue => 
-              !issue.includes('صورة هوية') && !issue.includes('فيديو')
-            );
-            if (otherIssues.length > 0) {
-              warningsContent += `
-                <div>
-                  <strong><i class="fas fa-info-circle"></i> تحذيرات أخرى:</strong>
-                  <ul style="margin: 5px 0; padding-right: 20px;">
-                    ${otherIssues.map(issue => `<li>${issue}</li>`).join('')}
-                  </ul>
-                </div>
-              `;
-            }
-          }
-          
-          validationHtml = `
-            <div class="wr-validation-warnings" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 12px; margin-top: 12px;">
-              <div style="color: #ef4444; font-weight: bold; margin-bottom: 10px; font-size: 1rem;">
-                <i class="fas fa-exclamation-triangle"></i> ⚠️ تحذيرات:
-              </div>
-              <div style="font-size: 0.85rem; color: #fca5a5;">
-                ${warningsContent}
-              </div>
-              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.8rem; color: #f87171;">
-                💡 <strong>نصيحة:</strong> اضغط على "تعديل" لكل فائز لإعادة رفع الملفات المفقودة
-              </div>
-            </div>
-          `;
-          console.log('[Restore Mode] Built validationHtml:', validationHtml.substring(0, 200));
-        }
+        updateProgress(3, 80);
         
+        // عرض الواجهة
         let snapshotInfo = '';
         if (hasSnapshot && competition.completion_snapshot) {
           snapshotInfo = `
@@ -18700,53 +19274,184 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 <div><i class="fas fa-percent"></i> بونص إيداع: <strong>${competition.deposit_bonus_percentage || 0}%</strong></div>
                 <div><i class="fas fa-calendar"></i> ${new Date(competition.createdAt).toLocaleDateString('ar-EG')}</div>
               </div>
-              ${validationHtml}
+              <div id="file-validation-area" style="margin-top: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px; padding: 12px; background: rgba(99, 102, 241, 0.1); border-radius: 10px; font-size: 0.9rem; color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2);">
+                  <i class="fas fa-spinner fa-spin"></i>
+                  <span style="flex: 1;">المرحلة 4/4: جاري التحقق من الملفات في الخلفية...</span>
+                  <span style="font-size: 0.75rem; opacity: 0.7;">🔄</span>
+                </div>
+              </div>
             </div>
           `;
         }
         
-        // تحديث العرض
+        // عرض الفائزين والعجلة
         renderWinners();
         updateCounts();
         drawWheel();
         
-        // إظهار رسالة نجاح مع تحذير إذا لزم الأمر
-        if (validation && validation.issues && validation.issues.length > 0) {
-          console.log('[Restore Mode] Validation issues:', validation.issues);
-          console.log('[Restore Mode] Missing videos:', validation.missingVideos);
-          console.log('[Restore Mode] Missing images:', validation.missingImages);
-          
-          const missingVideos = validation.missingVideos?.length || 0;
-          const missingImages = validation.missingImages?.length || 0;
-          
-          let warningMsg = 'تم تحميل المسابقة. ';
-          if (missingImages > 0) {
-            warningMsg += `⚠️ ${missingImages} صور هوية مفقودة. `;
-          }
-          if (missingVideos > 0) {
-            warningMsg += `⚠️ ${missingVideos} فيديوهات مفقودة. `;
-          }
-          warningMsg += 'راجع التفاصيل أدناه.';
-          
-          toast(warningMsg, 'warning');
-        } else {
-          toast('تم تحميل بيانات المسابقة بنجاح. يمكنك الآن إعادة إرسال التقارير.', 'success');
-        }
+        updateProgress(3, 90, 'done');
+        showProgressToast('✅ المرحلة 3/4', 'تم عرض الواجهة والعجلة والفائزين!', 'success', 3);
         
-        console.log('[Restore Mode] Loaded successfully:', {
-          competition: competition.name,
-          winnersCount: winners.length,
-          hasSnapshot,
-          validationIssues: validation?.issues?.length || 0,
-          issueDetails: validation?.issues || []
-        });
+        // === المرحلة 4: التحقق من الملفات في الخلفية (بدون blocking) ===
+        await new Promise(r => setTimeout(r, 500)); // انتظار قليل لرؤية نجاح المرحلة 3
+        showProgressToast('🔍 المرحلة 4/4', 'فحص صور الهوية والفيديوهات...', 'loading', 4);
+        
+        console.log('[Restore Mode] Data loaded, starting background validation...');
+        
+        validateFilesInBackground(competitionId);
         
       } catch (error) {
         console.error('[Restore Mode] Error:', error);
+        showProgressToast('❌ خطأ', error.message, 'error');
         if (competitionInfo) {
           competitionInfo.innerHTML = `<div class="wr-agent-info-empty" style="color: #ef4444;"><i class="fas fa-exclamation-circle"></i> ${error.message}</div>`;
         }
         toast(`فشل تحميل المسابقة: ${error.message}`, 'error');
+      }
+    }
+    
+    // === دالة التحقق من الملفات في الخلفية ===
+    async function validateFilesInBackground(competitionId) {
+      const validationArea = document.getElementById('file-validation-area');
+      const authedFetch = window.authedFetch || fetch;
+      
+      console.log('[Background Validation] Starting validation for competition:', competitionId);
+      
+      try {
+        const response = await authedFetch(`/api/competitions/${competitionId}/validate-files`);
+        
+        console.log('[Background Validation] Response status:', response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.warn('[Background Validation] Failed to validate files. Status:', response.status, 'Error:', errorText);
+          showProgressToast('⚠️ المرحلة 4/4', 'لم يتم التحقق من الملفات', 'warning', 4);
+          if (validationArea) {
+            validationArea.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px; padding: 12px; background: rgba(251, 191, 36, 0.1); border-radius: 10px; font-size: 0.9rem; color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2);">
+                <i class="fas fa-info-circle"></i>
+                <span>لم يتم التحقق من الملفات</span>
+              </div>
+            `;
+          }
+          // Remove progress toast
+          setTimeout(() => {
+            const toast = document.getElementById('restore-progress-toast');
+            if (toast) {
+              toast.style.animation = 'slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards';
+              setTimeout(() => toast.remove(), 400);
+            }
+          }, 3000);
+          return;
+        }
+        
+        const validation = await response.json();
+        console.log('[Background Validation] Results:', validation);
+        console.log('[Background Validation] valid:', validation.valid, 'issues:', validation.issues?.length);
+        console.log('[Background Validation] validationArea element:', validationArea);
+        
+        // التحقق من النجاح - نعتبره ناجح إذا لم تكن هناك ملفات مفقودة
+        const isSuccess = validation.valid || (validation.missingImages?.length === 0 && validation.missingVideos?.length === 0);
+        console.log('[Background Validation] isSuccess:', isSuccess);
+        
+        // عرض نتائج التحقق
+        if (isSuccess) {
+          // كل شيء صحيح ✓
+          showProgressToast('✅ المرحلة 4/4', `تم التحقق بنجاح: ${validation.summary?.imagesOk || 0} صور ✓ و ${validation.summary?.videosOk || 0} فيديوهات ✓`, 'success', 4);
+          
+          if (validationArea) {
+            validationArea.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 10px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 10px; font-size: 0.9rem; color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2);">
+                <i class="fas fa-check-circle" style="font-size: 1.1rem;"></i>
+                <span style="flex: 1; font-weight: 600;">تم التحقق: جميع الملفات موجودة ✓</span>
+                <span style="font-size: 0.8rem; opacity: 0.8;">(${validation.summary?.imagesOk || 0} صور، ${validation.summary?.videosOk || 0} فيديوهات)</span>
+              </div>
+            `;
+          }
+          
+          // === عرض رسالة الاكتمال النهائية ===
+          console.log('[Restore Complete] Showing completion message...');
+          setTimeout(() => {
+            console.log('[Restore Complete] Calling showRestoreCompleteMessage with:', validation.summary);
+            showRestoreCompleteMessage(validation.summary);
+          }, 1500);
+          
+        } else if (validationArea) {
+            // هناك ملفات مفقودة ⚠️
+            showProgressToast('⚠️ المرحلة 4/4', `تم اكتشاف: ${validation.missingImages.length} صور ⚠️ و ${validation.missingVideos.length} فيديوهات ⚠️ مفقودة`, 'warning', 4);
+            
+            let warningsHtml = '';
+            
+            if (validation.missingImages.length > 0) {
+              warningsHtml += `
+                <div style="margin-bottom: 10px;">
+                  <strong style="color: #ef4444; display: flex; align-items: center; gap: 6px;"><i class="fas fa-id-card"></i> صور هوية مفقودة (${validation.missingImages.length}):</strong>
+                  <ul style="margin: 6px 0 0 0; padding-right: 20px; font-size: 0.85rem; color: #fca5a5;">
+                    ${validation.missingImages.slice(0, 5).map(m => `<li>${m.winnerName}</li>`).join('')}
+                    ${validation.missingImages.length > 5 ? `<li style="color: #f87171; font-weight: 600;">... و ${validation.missingImages.length - 5} آخرين</li>` : ''}
+                  </ul>
+                </div>
+              `;
+            }
+            
+            if (validation.missingVideos.length > 0) {
+              warningsHtml += `
+                <div style="margin-bottom: 10px;">
+                  <strong style="color: #f59e0b; display: flex; align-items: center; gap: 6px;"><i class="fas fa-video-slash"></i> فيديوهات مفقودة (${validation.missingVideos.length}):</strong>
+                  <ul style="margin: 6px 0 0 0; padding-right: 20px; font-size: 0.85rem; color: #fcd34d;">
+                    ${validation.missingVideos.slice(0, 5).map(m => `<li>${m.winnerName}</li>`).join('')}
+                    ${validation.missingVideos.length > 5 ? `<li style="color: #fbbf24; font-weight: 600;">... و ${validation.missingVideos.length - 5} آخرين</li>` : ''}
+                  </ul>
+                </div>
+              `;
+            }
+            
+            validationArea.innerHTML = `
+              <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 10px; padding: 14px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: #ef4444; font-weight: bold; font-size: 0.95rem;">
+                  <i class="fas fa-exclamation-triangle"></i>
+                  <span>تحذيرات التحقق (${validation.issues.length})</span>
+                </div>
+                <div style="font-size: 0.9rem;">
+                  ${warningsHtml}
+                </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(239, 68, 68, 0.15); font-size: 0.85rem; color: #f87171; display: flex; align-items: center; gap: 6px;">
+                  <span>💡</span>
+                  <strong>نصيحة:</strong> اضغط على "تعديل" لكل فائز لإعادة رفع الملفات المفقودة
+                </div>
+              </div>
+            `;
+        }
+        
+        // Remove progress toast after delay
+        setTimeout(() => {
+          const toast = document.getElementById('restore-progress-toast');
+          if (toast) {
+            toast.style.animation = 'slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards';
+            setTimeout(() => toast.remove(), 400);
+          }
+        }, 4000);
+        
+      } catch (error) {
+        console.error('[Background Validation] Error:', error);
+        showProgressToast('❌ المرحلة 4/4', 'فشل التحقق من الملفات', 'error', 4);
+        if (validationArea) {
+          validationArea.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 10px; font-size: 0.9rem; color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2);">
+              <i class="fas fa-times-circle"></i>
+              <span>فشل التحقق من الملفات</span>
+            </div>
+          `;
+        }
+        // Remove progress toast after delay
+        setTimeout(() => {
+          const toast = document.getElementById('restore-progress-toast');
+          if (toast) {
+            toast.style.animation = 'slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards';
+            setTimeout(() => toast.remove(), 400);
+          }
+        }, 4000);
       }
     }
     
@@ -18974,6 +19679,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           agentId: agentIdNum
         };
         updateAgentStatus(agentName, agentIdNum);
+        syncSearchableAgentInput(); // تحديث input البحث
         await loadAgentCompetitionInfo(agentId);
         updateSpinControls?.();
         updateBatchCount?.();

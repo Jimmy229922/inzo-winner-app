@@ -794,19 +794,20 @@ exports.restoreCompetition = async (req, res) => {
  */
 exports.getCompetitionForRestore = async (req, res) => {
     const { id } = req.params;
-    const fsSync = require('fs');
+    const skipValidation = req.query.skipValidation === 'true'; // خيار لتخطي التحقق من الملفات
     
     try {
-        // جلب المسابقة مع الوكيل
-        const competition = await Competition.findById(id).populate('agent_id');
+        // جلب المسابقة مع الوكيل بشكل متوازي مع الفائزين
+        const [competition, winners] = await Promise.all([
+            Competition.findById(id).populate('agent_id').lean(), // استخدام lean() للأداء
+            Winner.find({ competition_id: id }).sort({ order_number: 1 }).lean()
+        ]);
+        
         if (!competition) {
             return res.status(404).json({ message: 'المسابقة غير موجودة.' });
         }
         
-        // جلب الفائزين
-        const winners = await Winner.find({ competition_id: id }).sort({ order_number: 1 });
-        
-        // التحقق من سلامة الملفات
+        // التحقق من سلامة الملفات (اختياري - يمكن تخطيه للسرعة)
         const fileValidation = {
             valid: true,
             issues: [],
@@ -814,37 +815,41 @@ exports.getCompetitionForRestore = async (req, res) => {
             missingVideos: []
         };
         
-        for (const winner of winners) {
-            // التحقق من صورة الهوية
-            if (winner.national_id_image) {
-                const imagePath = winner.national_id_image.startsWith('/uploads') 
-                    ? path.join(__dirname, '../../', winner.national_id_image.slice(1))
-                    : winner.national_id_image;
-                    
-                if (!fsSync.existsSync(imagePath)) {
-                    fileValidation.valid = false;
-                    fileValidation.missingImages.push({
-                        winnerId: winner._id,
-                        winnerName: winner.name,
-                        path: winner.national_id_image
-                    });
-                    fileValidation.issues.push(`صورة هوية "${winner.name}" غير موجودة`);
+        // فقط نتحقق من الملفات إذا لم يُطلب تخطي التحقق
+        if (!skipValidation && winners.length <= 20) { // نتحقق فقط لو الفائزين قليلين
+            const fsSync = require('fs');
+            for (const winner of winners) {
+                // التحقق من صورة الهوية
+                if (winner.national_id_image) {
+                    const imagePath = winner.national_id_image.startsWith('/uploads') 
+                        ? path.join(__dirname, '../../', winner.national_id_image.slice(1))
+                        : winner.national_id_image;
+                        
+                    if (!fsSync.existsSync(imagePath)) {
+                        fileValidation.valid = false;
+                        fileValidation.missingImages.push({
+                            winnerId: winner._id,
+                            winnerName: winner.name,
+                            path: winner.national_id_image
+                        });
+                        fileValidation.issues.push(`صورة هوية "${winner.name}" غير موجودة`);
+                    }
                 }
-            }
-            
-            // التحقق من الفيديو
-            if (winner.video_url) {
-                const videoPath = winner.video_url.startsWith('/uploads')
-                    ? path.join(__dirname, '../../', winner.video_url.slice(1))
-                    : winner.video_url;
-                    
-                if (!fsSync.existsSync(videoPath)) {
-                    fileValidation.missingVideos.push({
-                        winnerId: winner._id,
-                        winnerName: winner.name,
-                        path: winner.video_url
-                    });
-                    fileValidation.issues.push(`فيديو "${winner.name}" غير موجود`);
+                
+                // التحقق من الفيديو
+                if (winner.video_url) {
+                    const videoPath = winner.video_url.startsWith('/uploads')
+                        ? path.join(__dirname, '../../', winner.video_url.slice(1))
+                        : winner.video_url;
+                        
+                    if (!fsSync.existsSync(videoPath)) {
+                        fileValidation.missingVideos.push({
+                            winnerId: winner._id,
+                            winnerName: winner.name,
+                            path: winner.video_url
+                        });
+                        fileValidation.issues.push(`فيديو "${winner.name}" غير موجود`);
+                    }
                 }
             }
         }
@@ -857,7 +862,7 @@ exports.getCompetitionForRestore = async (req, res) => {
             agentData = competition.completion_snapshot.agent;
             
             // التحقق من أن الوكيل لا يزال موجوداً (للحصول على أحدث chat_id إذا تغير)
-            const currentAgent = await Agent.findById(agentData._id);
+            const currentAgent = await Agent.findById(agentData._id).select('telegram_chat_id').lean();
             if (currentAgent) {
                 agentData.chat_id = currentAgent.telegram_chat_id; // استخدام أحدث chat_id
                 agentData.is_active = true;
@@ -878,7 +883,7 @@ exports.getCompetitionForRestore = async (req, res) => {
             };
         } else {
             // محاولة جلب الوكيل يدوياً
-            const agent = await Agent.findById(competition.agent_id);
+            const agent = await Agent.findById(competition.agent_id).lean();
             if (agent) {
                 agentData = {
                     _id: agent._id,
@@ -936,5 +941,99 @@ exports.getCompetitionForRestore = async (req, res) => {
     } catch (error) {
         console.error('[Get Competition For Restore Error]:', error);
         res.status(500).json({ message: 'فشل في جلب بيانات المسابقة للاسترجاع.', error: error.toString() });
+    }
+};
+
+// ==========================================
+// التحقق من الملفات في الخلفية (Background Validation)
+// يُستدعى بعد تحميل البيانات الأساسية
+// ==========================================
+exports.validateCompetitionFiles = async (req, res) => {
+    const { id } = req.params;
+    const fsSync = require('fs');
+    
+    try {
+        // جلب الفائزين فقط (نحتاج الملفات)
+        const winners = await Winner.find({ competition_id: id })
+            .select('_id name national_id_image video_url')
+            .lean();
+        
+        const validation = {
+            valid: true,
+            totalFiles: 0,
+            checkedFiles: 0,
+            missingImages: [],
+            missingVideos: [],
+            validImages: [],
+            validVideos: [],
+            issues: []
+        };
+        
+        // التحقق من كل ملف
+        for (const winner of winners) {
+            // التحقق من صورة الهوية
+            if (winner.national_id_image) {
+                validation.totalFiles++;
+                const imagePath = winner.national_id_image.startsWith('/uploads') 
+                    ? path.join(__dirname, '../../', winner.national_id_image.slice(1))
+                    : winner.national_id_image;
+                
+                if (fsSync.existsSync(imagePath)) {
+                    validation.validImages.push({
+                        winnerId: winner._id,
+                        winnerName: winner.name
+                    });
+                } else {
+                    validation.valid = false;
+                    validation.missingImages.push({
+                        winnerId: winner._id,
+                        winnerName: winner.name,
+                        path: winner.national_id_image
+                    });
+                    validation.issues.push(`صورة هوية "${winner.name}" غير موجودة`);
+                }
+                validation.checkedFiles++;
+            }
+            
+            // التحقق من الفيديو
+            if (winner.video_url) {
+                validation.totalFiles++;
+                const videoPath = winner.video_url.startsWith('/uploads')
+                    ? path.join(__dirname, '../../', winner.video_url.slice(1))
+                    : winner.video_url;
+                
+                if (fsSync.existsSync(videoPath)) {
+                    validation.validVideos.push({
+                        winnerId: winner._id,
+                        winnerName: winner.name
+                    });
+                } else {
+                    validation.missingVideos.push({
+                        winnerId: winner._id,
+                        winnerName: winner.name,
+                        path: winner.video_url
+                    });
+                    validation.issues.push(`فيديو "${winner.name}" غير موجود`);
+                }
+                validation.checkedFiles++;
+            }
+        }
+        
+        // إحصائيات
+        validation.summary = {
+            totalWinners: winners.length,
+            winnersWithImages: validation.validImages.length + validation.missingImages.length,
+            winnersWithVideos: validation.validVideos.length + validation.missingVideos.length,
+            imagesOk: validation.validImages.length,
+            imagesMissing: validation.missingImages.length,
+            videosOk: validation.validVideos.length,
+            videosMissing: validation.missingVideos.length
+        };
+        
+        res.json(validation);
+        
+    } catch (error) {
+        console.error('[Validate Competition Files Error]:', error);
+        res.status(500).json({ message: 'فشل في التحقق من الملفات.', error: error.toString() });
     }
 };
