@@ -1,6 +1,6 @@
 ﻿const RANKS_DATA = {
     // الاعتيادية
-    'BEGINNING': { competition_bonus: 60, deposit_bonus_percentage: null, deposit_bonus_count: null },
+    'BEGINNING': { competition_bonus: 60, deposit_bonus_percentage: 40, deposit_bonus_count: 1, hideDepositBonusInMessage: true },
     'GROWTH': { competition_bonus: 100, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
     'PRO': { competition_bonus: 150, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
     'ELITE': { competition_bonus: 200, deposit_bonus_percentage: 50, deposit_bonus_count: 4 },
@@ -15,7 +15,7 @@
     'EMERALD': { competition_bonus: 2000, deposit_bonus_percentage: 90, deposit_bonus_count: 4 },
     'KING': { competition_bonus: 2500, deposit_bonus_percentage: 95, deposit_bonus_count: 4 },
     'LEGEND': { competition_bonus: Infinity, deposit_bonus_percentage: 100, deposit_bonus_count: Infinity },
-    'وكيل حصري بدون مرتبة': { competition_bonus: 60, deposit_bonus_percentage: null, deposit_bonus_count: null },
+    'وكيل حصري بدون مرتبة': { competition_bonus: 60, deposit_bonus_percentage: 40, deposit_bonus_count: 1, hideDepositBonusInMessage: true },
 };
 
 function renderAddAgentForm() {

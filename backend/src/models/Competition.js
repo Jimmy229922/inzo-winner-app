@@ -94,6 +94,46 @@ const competitionSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    restored_at: {
+        type: Date,
+        default: null
+    },
+    // سجل كل مرات الاسترجاع
+    restore_history: [{
+        restored_at: { type: Date, default: Date.now },
+        restored_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        restored_by_name: { type: String }
+    }],
+    // نسخة كاملة من البيانات عند اكتمال المسابقة للاسترجاع المستقبلي
+    completion_snapshot: {
+        // بيانات الوكيل وقت الاكتمال
+        agent: {
+            _id: { type: mongoose.Schema.Types.ObjectId },
+            name: { type: String },
+            agent_id: { type: Number },
+            chat_id: { type: String },
+            avatar_url: { type: String }
+        },
+        // بيانات الفائزين الكاملة
+        winners: [{
+            _id: { type: mongoose.Schema.Types.ObjectId },
+            name: { type: String },
+            account_number: { type: String },
+            email: { type: String },
+            national_id: { type: String },
+            national_id_image: { type: String },
+            prize_type: { type: String },
+            prize_value: { type: Number },
+            video_url: { type: String },
+            order_number: { type: Number }
+        }],
+        // تاريخ حفظ النسخة
+        snapshot_at: { type: Date },
+        // معلومات إضافية
+        total_prize_value: { type: Number },
+        completed_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        completed_by_name: { type: String }
+    },
     template_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'CompetitionTemplate'

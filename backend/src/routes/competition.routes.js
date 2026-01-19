@@ -43,6 +43,8 @@ router.delete('/bulk-delete', competitionController.bulkDeleteCompetitions);
 
 router.put('/:id', competitionController.updateCompetition);
 router.post('/:id/complete', competitionController.completeCompetition);
+router.post('/:id/restore', competitionController.restoreCompetition);
+router.get('/:id/restore-data', competitionController.getCompetitionForRestore); // NEW: Get full data for restore
 router.delete('/:id', competitionController.deleteCompetition);
 
 module.exports = router;

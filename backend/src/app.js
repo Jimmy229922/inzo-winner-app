@@ -191,6 +191,8 @@ app.use('/api/integrations', authMiddleware.authenticate, activityLogger, integr
 // نظام اقتراح الأسئلة
 app.use('/api/question-suggestions', questionSuggestionRoutes);
 app.use('/api/notifications', notificationRoutes); // إضافة: مسارات الإشعارات
+const insightsRoutes = require('./routes/insights.routes'); // NEW: Insights Routes
+app.use('/api/insights', authMiddleware.authenticate, activityLogger, insightsRoutes); // NEW: Register Insights Routes
 // Expose a top-level analytics endpoint that the frontend expects (/api/analytics)
 const statsController = require('./controllers/stats.controller');
 app.get('/api/analytics', authMiddleware.authenticate, activityLogger, statsController.getAnalytics);

@@ -633,30 +633,84 @@ exports.uploadImage = async (req, res) => {
  */
 exports.completeCompetition = async (req, res) => {
     const { id } = req.params;
-    const { winners, noWinners } = req.body;
+    const { winners, noWinners, isRestoreMode } = req.body;
     const userId = req.user?._id;
+    const userName = req.user?.full_name || req.user?.username || 'مستخدم';
 
     try {
-        const competition = await Competition.findById(id);
+        const competition = await Competition.findById(id).populate('agent_id');
         if (!competition) {
             return res.status(404).json({ message: 'Competition not found.' });
         }
 
-        if (competition.status === 'completed') {
+        // في وضع الاستعادة، نسمح بالحفظ حتى لو المسابقة مكتملة
+        if (competition.status === 'completed' && !isRestoreMode) {
             return res.status(400).json({ message: 'Competition is already completed.' });
         }
 
+        // === حفظ نسخة كاملة من البيانات (Snapshot) للاسترجاع المستقبلي ===
+        let completionSnapshot = null;
+        
+        // جلب الفائزين من قاعدة البيانات
+        const winnersFromDB = await Winner.find({ competition_id: id });
+        
+        // جلب بيانات الوكيل إذا لم تكن محملة
+        let agentData = competition.agent_id;
+        if (!agentData || typeof agentData === 'string' || agentData instanceof mongoose.Types.ObjectId) {
+            agentData = await Agent.findById(competition.agent_id);
+        }
+        
+        if (agentData) {
+            completionSnapshot = {
+                agent: {
+                    _id: agentData._id,
+                    name: agentData.name,
+                    agent_id: agentData.agent_id,
+                    chat_id: agentData.telegram_chat_id,
+                    avatar_url: agentData.avatar_url
+                },
+                winners: winnersFromDB.map(w => ({
+                    _id: w._id,
+                    name: w.name,
+                    account_number: w.account_number,
+                    email: w.email,
+                    national_id: w.national_id,
+                    national_id_image: w.national_id_image,
+                    prize_type: w.prize_type,
+                    prize_value: w.prize_value,
+                    video_url: w.video_url,
+                    order_number: w.order_number
+                })),
+                snapshot_at: new Date(),
+                total_prize_value: winnersFromDB.reduce((sum, w) => sum + (w.prize_value || 0), 0),
+                completed_by: userId,
+                completed_by_name: userName
+            };
+        }
+
         // Use updateOne to avoid validation errors on legacy documents that might be missing new required fields
+        const updateData = { 
+            status: 'completed', 
+            is_active: false 
+        };
+        
+        // إضافة الـ snapshot فقط إذا لم يكن موجوداً أو في وضع غير الاستعادة
+        if (completionSnapshot && !isRestoreMode) {
+            updateData.completion_snapshot = completionSnapshot;
+        }
+        
         await Competition.updateOne(
             { _id: id }, 
-            { $set: { status: 'completed', is_active: false } }
+            { $set: updateData }
         );
         
         // Update local object for logging/response (optional but good for consistency)
         competition.status = 'completed';
         competition.is_active = false;
 
-        let logDescription = `تم اعتماد المسابقة "${competition.name}" وإغلاقها.`;
+        let logDescription = isRestoreMode 
+            ? `تم حفظ تعديلات المسابقة المسترجعة "${competition.name}".`
+            : `تم اعتماد المسابقة "${competition.name}" وإغلاقها.`;
         if (noWinners) {
             logDescription += ' (بدون فائزين)';
         } else if (winners && winners.length > 0) {
@@ -664,21 +718,223 @@ exports.completeCompetition = async (req, res) => {
         }
 
         if (userId) {
-            await logActivity(userId, competition.agent_id, 'COMPETITION_COMPLETED', logDescription);
+            const activityType = isRestoreMode ? 'COMPETITION_RESTORED_UPDATED' : 'COMPETITION_COMPLETED';
+            await logActivity(userId, competition.agent_id._id || competition.agent_id, activityType, logDescription);
         }
 
         // --- NEW: Broadcast Event for Real-time UI Update ---
         broadcastEvent('COMPETITION_COMPLETED', {
-            agentId: competition.agent_id,
+            agentId: competition.agent_id._id || competition.agent_id,
             competitionId: competition._id,
             competitionName: competition.name,
-            completedBy: req.user ? req.user.full_name : 'System'
+            completedBy: userName,
+            isRestoreMode: !!isRestoreMode
         });
 
-        res.json({ message: 'Competition completed successfully.', competition });
+        res.json({ 
+            message: isRestoreMode ? 'Changes saved successfully.' : 'Competition completed successfully.', 
+            competition,
+            snapshotSaved: !!completionSnapshot && !isRestoreMode
+        });
     } catch (error) {
         console.error('[Complete Competition Error]:', error);
         res.status(500).json({ message: 'Failed to complete competition.', error: error.toString() });
     }
 };
 
+/**
+ * تسجيل استرجاع المسابقة
+ */
+exports.restoreCompetition = async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user?._id;
+    const userName = req.user?.full_name || req.user?.username || 'مستخدم';
+
+    try {
+        const competition = await Competition.findById(id);
+        if (!competition) {
+            return res.status(404).json({ message: 'Competition not found.' });
+        }
+
+        if (competition.status !== 'completed') {
+            return res.status(400).json({ message: 'Only completed competitions can be restored.' });
+        }
+
+        // تسجيل تاريخ الاسترجاع وإضافته للسجل
+        const restoreEntry = {
+            restored_at: new Date(),
+            restored_by: userId,
+            restored_by_name: userName
+        };
+        
+        await Competition.updateOne(
+            { _id: id }, 
+            { 
+                $set: { restored_at: new Date() },
+                $push: { restore_history: restoreEntry }
+            }
+        );
+
+        const restoreCount = (competition.restore_history?.length || 0) + 1;
+        const logDescription = `تم استرجاع المسابقة المكتملة "${competition.name}" لإعادة إرسال التقارير (المرة رقم ${restoreCount}).`;
+        if (userId) {
+            await logActivity(userId, competition.agent_id, 'COMPETITION_RESTORED', logDescription);
+        }
+
+        res.json({ message: 'Competition restored successfully.', competitionId: id, restoreCount });
+    } catch (error) {
+        console.error('[Restore Competition Error]:', error);
+        res.status(500).json({ message: 'Failed to restore competition.', error: error.toString() });
+    }
+};
+
+/**
+ * جلب بيانات المسابقة الكاملة للاسترجاع
+ * يحاول أولاً استخدام الـ snapshot المحفوظ، وإن لم يوجد يجلب البيانات الحالية
+ */
+exports.getCompetitionForRestore = async (req, res) => {
+    const { id } = req.params;
+    const fsSync = require('fs');
+    
+    try {
+        // جلب المسابقة مع الوكيل
+        const competition = await Competition.findById(id).populate('agent_id');
+        if (!competition) {
+            return res.status(404).json({ message: 'المسابقة غير موجودة.' });
+        }
+        
+        // جلب الفائزين
+        const winners = await Winner.find({ competition_id: id }).sort({ order_number: 1 });
+        
+        // التحقق من سلامة الملفات
+        const fileValidation = {
+            valid: true,
+            issues: [],
+            missingImages: [],
+            missingVideos: []
+        };
+        
+        for (const winner of winners) {
+            // التحقق من صورة الهوية
+            if (winner.national_id_image) {
+                const imagePath = winner.national_id_image.startsWith('/uploads') 
+                    ? path.join(__dirname, '../../', winner.national_id_image.slice(1))
+                    : winner.national_id_image;
+                    
+                if (!fsSync.existsSync(imagePath)) {
+                    fileValidation.valid = false;
+                    fileValidation.missingImages.push({
+                        winnerId: winner._id,
+                        winnerName: winner.name,
+                        path: winner.national_id_image
+                    });
+                    fileValidation.issues.push(`صورة هوية "${winner.name}" غير موجودة`);
+                }
+            }
+            
+            // التحقق من الفيديو
+            if (winner.video_url) {
+                const videoPath = winner.video_url.startsWith('/uploads')
+                    ? path.join(__dirname, '../../', winner.video_url.slice(1))
+                    : winner.video_url;
+                    
+                if (!fsSync.existsSync(videoPath)) {
+                    fileValidation.missingVideos.push({
+                        winnerId: winner._id,
+                        winnerName: winner.name,
+                        path: winner.video_url
+                    });
+                    fileValidation.issues.push(`فيديو "${winner.name}" غير موجود`);
+                }
+            }
+        }
+        
+        // بناء بيانات الوكيل
+        let agentData = null;
+        
+        // أولاً: محاولة استخدام الـ snapshot إذا كان موجوداً
+        if (competition.completion_snapshot?.agent) {
+            agentData = competition.completion_snapshot.agent;
+            
+            // التحقق من أن الوكيل لا يزال موجوداً (للحصول على أحدث chat_id إذا تغير)
+            const currentAgent = await Agent.findById(agentData._id);
+            if (currentAgent) {
+                agentData.chat_id = currentAgent.telegram_chat_id; // استخدام أحدث chat_id
+                agentData.is_active = true;
+            } else {
+                agentData.is_active = false;
+                fileValidation.issues.push('الوكيل محذوف من النظام - سيتم استخدام البيانات المحفوظة');
+            }
+        } 
+        // ثانياً: استخدام البيانات الحالية
+        else if (competition.agent_id && typeof competition.agent_id === 'object') {
+            agentData = {
+                _id: competition.agent_id._id,
+                name: competition.agent_id.name,
+                agent_id: competition.agent_id.agent_id,
+                chat_id: competition.agent_id.telegram_chat_id,
+                avatar_url: competition.agent_id.avatar_url,
+                is_active: true
+            };
+        } else {
+            // محاولة جلب الوكيل يدوياً
+            const agent = await Agent.findById(competition.agent_id);
+            if (agent) {
+                agentData = {
+                    _id: agent._id,
+                    name: agent.name,
+                    agent_id: agent.agent_id,
+                    chat_id: agent.telegram_chat_id,
+                    avatar_url: agent.avatar_url,
+                    is_active: true
+                };
+            } else {
+                fileValidation.valid = false;
+                fileValidation.issues.push('الوكيل غير موجود في النظام');
+            }
+        }
+        
+        // بناء الاستجابة
+        res.json({
+            competition: {
+                _id: competition._id,
+                name: competition.name,
+                description: competition.description,
+                status: competition.status,
+                prize_per_winner: competition.prize_per_winner,
+                deposit_bonus_percentage: competition.deposit_bonus_percentage,
+                trading_winners_count: competition.trading_winners_count,
+                deposit_winners_count: competition.deposit_winners_count,
+                required_winners: competition.required_winners,
+                createdAt: competition.createdAt,
+                ends_at: competition.ends_at,
+                restore_history: competition.restore_history,
+                completion_snapshot: competition.completion_snapshot ? {
+                    snapshot_at: competition.completion_snapshot.snapshot_at,
+                    completed_by_name: competition.completion_snapshot.completed_by_name,
+                    total_prize_value: competition.completion_snapshot.total_prize_value
+                } : null
+            },
+            agent: agentData,
+            winners: winners.map(w => ({
+                _id: w._id,
+                name: w.name,
+                account_number: w.account_number,
+                email: w.email,
+                national_id: w.national_id,
+                national_id_image: w.national_id_image,
+                prize_type: w.prize_type,
+                prize_value: w.prize_value,
+                video_url: w.video_url,
+                order_number: w.order_number
+            })),
+            validation: fileValidation,
+            hasSnapshot: !!competition.completion_snapshot,
+            canRestore: fileValidation.valid || fileValidation.missingImages.length === 0
+        });
+        
+    } catch (error) {
+        console.error('[Get Competition For Restore Error]:', error);
+        res.status(500).json({ message: 'فشل في جلب بيانات المسابقة للاسترجاع.', error: error.toString() });
+    }
+};

@@ -1,5 +1,6 @@
 const fieldTranslations = {
     rank: 'الرتبة',
+    agent_id: 'رقم الوكالة',
     renewal_period: 'فترة التجديد',
     competition_bonus: 'مكافأة المسابقة',
     deposit_bonus_percentage: 'نسبة مكافأة الإيداع',

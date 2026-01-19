@@ -128,6 +128,7 @@ async function updateHomePageUI(stats) {
 
         // 1. Update Stat Cards
         const statsContainer = document.getElementById('home-stats-container');
+        if (!statsContainer) return;
         statsContainer.innerHTML = ` 
             <div class="dashboard-grid-v2">
                 <a href="#manage-agents" class="stat-card-v2 color-1">
@@ -260,22 +261,6 @@ async function updateHomePageUI(stats) {
 
                 // عرض قائمة الوكلاء المتبقين
                 if (pendingAgents.length > 0) {
-                    pendingList.innerHTML = pendingAgents.map(agent => `
-                        <a href="#tasks?highlight=${agent._id}" class="pending-task-item ${tasksMap[agent._id]?.competition_sent ? 'partial' : ''}">
-                            <div class="pending-task-info">
-                                <span class="pending-agent-name">${agent.name}</span>
-                                <span class="pending-agent-id">#${agent.agent_id}</span>
-                            </div>
-                            <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
-                        </a>
-                    `).join('');
-                } else {
-                    pendingList.innerHTML = '<p class="no-pending-tasks">لا توجد مهام متبقية لليوم 🎉</p>';
-                }
-                
-                let pendingHtml = '';
-
-                if (pendingAgents.length > 0) {
                     // --- تعديل: عرض قائمة واحدة مبسطة ---
                     pendingHtml = pendingAgents.slice(0, 5).map(agent => {
                         const task = tasksMap[agent._id] || {}; // FIX: Use _id instead of id
@@ -308,24 +293,26 @@ async function updateHomePageUI(stats) {
                 } else {
                     pendingHtml = '<p class="no-pending-tasks">لا توجد مهام متبقية لهذا اليوم. عمل رائع!</p>';
                 }
-                pendingList.innerHTML = pendingHtml;
+                if (pendingList) pendingList.innerHTML = pendingHtml;
 
                 // --- NEW: Event Delegation for CSP Compliance ---
-                pendingList.addEventListener('click', (e) => {
-                    const taskAction = e.target.closest('.home-task-action');
-                    if (taskAction) {
-                        handleHomeTaskAction(e);
-                        return;
-                    }
-                    const card = e.target.closest('.pending-agent-card-v2');
-                    if (card && !e.target.closest('a')) {
-                        window.location.hash = `#profile/${card.dataset.agentId}`;
-                    }
-                });
+                if (pendingList) {
+                    pendingList.addEventListener('click', (e) => {
+                        const taskAction = e.target.closest('.home-task-action');
+                        if (taskAction) {
+                            handleHomeTaskAction(e);
+                            return;
+                        }
+                        const card = e.target.closest('.pending-agent-card-v2');
+                        if (card && !e.target.closest('a')) {
+                            window.location.hash = `#profile/${card.dataset.agentId}`;
+                        }
+                    });
+                }
         } else {
             // NEW: Handle the case where there are no tasks scheduled for today at all
             /* logs suppressed: no agents scheduled */
-            pendingList.innerHTML = '<p class="no-pending-tasks">لا توجد مهام مجدولة لهذا اليوم.</p>';
+            if (pendingList) pendingList.innerHTML = '<p class="no-pending-tasks">لا توجد مهام مجدولة لهذا اليوم.</p>';
             
             const progressPercentEl = document.getElementById('progress-percentage');
             const pendingCountEl = document.getElementById('pending-count');

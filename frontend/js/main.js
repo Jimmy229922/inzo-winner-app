@@ -108,6 +108,7 @@ function updateUIAfterLogin(user) {
     const userAvatar = document.getElementById('user-avatar');
     const usersNavItem = document.getElementById('nav-users');
     const activityLogNavItem = document.getElementById('nav-activity-log');
+    const insightsDropdownItem = document.getElementById('nav-insights-dropdown'); // NEW
 
     if (settingsMenu) settingsMenu.style.display = 'block';
     if (userNameDisplay) userNameDisplay.textContent = user.full_name;
@@ -120,6 +121,11 @@ function updateUIAfterLogin(user) {
     if (activityLogNavItem) {
         const canViewLogs = user.role === 'super_admin' || user.role === 'admin';
         activityLogNavItem.style.display = canViewLogs ? 'block' : 'none';
+    }
+
+    // --- NEW: Show Insights link only to super_admin ---
+    if (insightsDropdownItem) {
+        insightsDropdownItem.style.display = (user.role === 'super_admin') ? 'block' : 'none';
     }
 
     // Show admin-only links if the user is a super_admin or admin
@@ -955,6 +961,7 @@ function setupNavbar() {
     const navProfileSettings = document.getElementById('nav-profile-settings'); // This is a dropdown item
     const navStatistics = document.getElementById('nav-statistics');
     const navAnalytics = document.getElementById('nav-analytics'); // NEW
+    const navInsightsDropdown = document.getElementById('nav-insights-dropdown'); // NEW
     const navWinnerRoulette = document.getElementById('nav-winner-roulette');
 
     // NEW: Tasks & Calendar Dropdown Navigation (for admins only)
@@ -1009,6 +1016,7 @@ function setupNavbar() {
     if (navCompetitionTemplates) navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
     if (navActivityLog) navActivityLog.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'activity-log'; });
     if (navUsers) navUsers.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'users'; }); // NEW
+    if (navInsightsDropdown) navInsightsDropdown.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'insights'; }); // NEW
     if (navAnalytics) navAnalytics.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'analytics'; }); // NEW
     if (navWinnerRoulette) navWinnerRoulette.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'winner-roulette'; });
     if (navStatistics) navStatistics.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'statistics'; });
@@ -1231,7 +1239,7 @@ function baseRouletteMarkup() {
             </div>
             <div class=\"wr-winners-section\">
                 <div class=\"wr-winners-header\">
-                    <h3><i class=\"fas fa-trophy\"></i> قائمة الفائزين</h3>
+                    <h3><i class=\"fas fa-trophy\"></i> قائمة الفائزين <span id=\"winners-count-badge\" style=\"display: none; min-width: 24px; height: 24px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 50%; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.5); margin-right: 8px;\"></span></h3>
                     <div class=\"wr-winners-actions\">
                         <button id=\"export-winners-bottom\" class=\"wr-btn wr-btn-success wr-btn-small\"><i class=\"fas fa-download\"></i> تصدير</button>
                         <button id=\"reset-winners-bottom\" class=\"wr-btn wr-btn-secondary wr-btn-small\"><i class=\"fas fa-trash\"></i> مسح الفائزين</button>
@@ -1427,7 +1435,31 @@ document.addEventListener('DOMContentLoaded', () => {
         // Attempt to re-initialize the session
         initializeApp();
     });
+
+    // --- NEW: Handle Hash Navigation ---
+    window.addEventListener('hashchange', handleHashChange);
+    handleHashChange(); // Handle initial load
 });
+
+async function handleHashChange() {
+    const hash = window.location.hash.substring(1); // Remove #
+    const appContent = document.getElementById('app-content');
+    
+    if (!hash) return; // Default home is handled elsewhere or by default
+
+    if (hash === 'insights') {
+        // Dynamically load the insights script if not already loaded
+        if (typeof renderInsightsPage === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'js/pages/insights.js';
+            script.onload = () => renderInsightsPage();
+            document.body.appendChild(script);
+        } else {
+            renderInsightsPage();
+        }
+    }
+    // ... other routes can be added here or in a dedicated router file
+}
 
 // Fallback: ensure logout button always opens confirmation modal.
 // This adds a non-destructive listener after DOM is ready.

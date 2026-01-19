@@ -616,7 +616,10 @@ function renderCompetitionsTable() {
                 <td><span class="stat-number">${(comp.views_count || 0).toLocaleString('ar-EG')}</span></td>
                 <td><span class="stat-number">${(comp.reactions_count || 0).toLocaleString('ar-EG')}</span></td>
                 <td><span class="stat-number">${(comp.participants_count || 0).toLocaleString('ar-EG')}</span></td>
-                <td><span class="status-badge status-${comp.status}" data-competition-id="${comp._id}" ${comp.status === 'awaiting_winners' ? 'style=\"cursor:pointer\" title=\"إدخال الإحصائيات\"' : ''}>${statusText}</span></td>
+                <td>
+                    <span class="status-badge status-${comp.status}" data-competition-id="${comp._id}" ${comp.status === 'awaiting_winners' ? 'style=\"cursor:pointer\" title=\"إدخال الإحصائيات\"' : ''}>${statusText}</span>
+                    ${comp.restored_at ? `<span class="restored-badge" data-restore-history='${JSON.stringify(comp.restore_history || []).replace(/'/g, "&#39;")}' data-restore-count="${(comp.restore_history?.length || 1)}"><i class="fas fa-history"></i><span class="restore-count">${(comp.restore_history?.length || 1)}</span></span>` : ''}
+                </td>
                 <td>
                     <button class="btn-icon-action view-winners-btn" data-competition-id="${comp._id}" title="عرض فائزين هذه المسابقة">
                         <i class="fas fa-trophy"></i>
@@ -624,6 +627,9 @@ function renderCompetitionsTable() {
                     <button class="btn-icon-action view-videos-btn" data-competition-id="${comp._id}" title="عرض فيديوهات الفائزين">
                         <i class="fas fa-eye"></i>
                     </button>
+                    ${comp.status === 'completed' ? `<button class="btn-icon-action reopen-roulette-btn" data-competition-id="${comp._id}" title="إعادة فتح في الروليت لإرسال التقارير مجدداً">
+                        <i class="fas fa-redo-alt"></i>
+                    </button>` : ''}
                     <button class="btn-icon-action delete-competition-btn" data-competition-id="${comp._id}" data-competition-name="${(comp.name || comp.description || 'هذه المسابقة').substring(0, 50)}" title="حذف المسابقة">
                         <i class="fas fa-trash-alt"></i>
                     </button>
@@ -645,6 +651,12 @@ function renderCompetitionsTable() {
     
     // Add click event listeners for view videos
     setupViewVideosButtons();
+    
+    // Add click event listeners for reopen roulette
+    setupReopenRouletteButtons();
+    
+    // Add click event listeners for restored badges
+    setupRestoredBadgeClicks();
 
     // إضافة حدث النقر على حالة "في انتظار الفائزين" لفتح نافذة الإدخال
     const awaitingBadges = tableBody.querySelectorAll('.status-badge.status-awaiting_winners');
@@ -779,6 +791,123 @@ function setupViewVideosButtons() {
                 return;
             }
             showCompetitionWinnersModal(agentId, competitionId, 'videos');
+        });
+    });
+}
+
+// إعداد أزرار إعادة فتح الروليت لإرسال التقارير مجدداً
+function setupReopenRouletteButtons() {
+    const btns = document.querySelectorAll('.reopen-roulette-btn');
+    const agentId = (agentData && agentData.agent && (agentData.agent._id || agentData.agent.id)) || new URLSearchParams(window.location.search).get('agent_id');
+    btns.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const competitionId = btn.getAttribute('data-competition-id');
+            if (!agentId || !competitionId) {
+                notify('بيانات غير مكتملة لفتح الروليت', 'error');
+                return;
+            }
+            
+            // تسجيل الاسترجاع في قاعدة البيانات
+            try {
+                const res = await window.authedFetch(`/api/competitions/${competitionId}/restore`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    notify(err.message || 'فشل تسجيل الاسترجاع', 'error');
+                    return;
+                }
+            } catch (err) {
+                console.error('Error restoring competition:', err);
+                notify('حدث خطأ أثناء تسجيل الاسترجاع', 'error');
+                return;
+            }
+            
+            // فتح صفحة الروليت مع وضع الاستعادة - التحويل للتطبيق الرئيسي
+            window.location.href = `/#winner-roulette?agent_id=${encodeURIComponent(agentId)}&competition_id=${encodeURIComponent(competitionId)}&mode=restore`;
+        });
+    });
+}
+
+// إعداد أحداث النقر على علامة المسابقة المسترجعة
+function setupRestoredBadgeClicks() {
+    const badges = document.querySelectorAll('.restored-badge');
+    badges.forEach(badge => {
+        badge.addEventListener('click', (e) => {
+            e.stopPropagation();
+            
+            // جلب سجل الاسترجاع
+            let restoreHistory = [];
+            try {
+                const historyStr = badge.getAttribute('data-restore-history');
+                if (historyStr) {
+                    restoreHistory = JSON.parse(historyStr.replace(/&#39;/g, "'"));
+                }
+            } catch (err) {
+                console.error('Error parsing restore history:', err);
+            }
+            
+            const restoreCount = badge.getAttribute('data-restore-count') || 1;
+            
+            // إنشاء محتوى السجل
+            let historyHtml = '';
+            if (restoreHistory.length > 0) {
+                historyHtml = '<div style="max-height: 200px; overflow-y: auto; margin-top: 12px; text-align: right;">';
+                restoreHistory.forEach((entry, idx) => {
+                    const date = new Date(entry.restored_at).toLocaleString('ar-EG');
+                    const by = entry.restored_by_name || 'مستخدم';
+                    historyHtml += `
+                        <div style="background: rgba(139, 92, 246, 0.1); padding: 10px; border-radius: 8px; margin-bottom: 8px; border-right: 3px solid #8b5cf6;">
+                            <div style="font-weight: bold; color: #8b5cf6;">المرة ${idx + 1}</div>
+                            <div style="font-size: 0.85em; color: var(--text-color-secondary, #666);">
+                                <i class="fas fa-clock"></i> ${date}
+                            </div>
+                            <div style="font-size: 0.85em; color: var(--text-color-secondary, #666);">
+                                <i class="fas fa-user"></i> ${by}
+                            </div>
+                        </div>
+                    `;
+                });
+                historyHtml += '</div>';
+            } else {
+                historyHtml = '<p style="color: var(--text-color-secondary, #666); font-size: 0.9em;">لا توجد تفاصيل</p>';
+            }
+            
+            // إنشاء popup
+            const existingPopup = document.querySelector('.restored-popup');
+            if (existingPopup) existingPopup.remove();
+            
+            const popup = document.createElement('div');
+            popup.className = 'restored-popup';
+            popup.innerHTML = `
+                <div class="restored-popup-content">
+                    <i class="fas fa-history" style="color: #8b5cf6; font-size: 28px; margin-bottom: 10px;"></i>
+                    <h3 style="margin: 0 0 5px 0; color: var(--text-color);">سجل الاسترجاع</h3>
+                    <p style="margin: 0; font-size: 0.9em; color: var(--text-color-secondary, #666);">تم استرجاع هذه المسابقة ${restoreCount} مرة</p>
+                    ${historyHtml}
+                    <button class="restored-popup-close" style="margin-top: 12px; padding: 8px 20px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">حسناً</button>
+                </div>
+            `;
+            popup.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); display: flex; align-items: center;
+                justify-content: center; z-index: 9999;
+            `;
+            popup.querySelector('.restored-popup-content').style.cssText = `
+                background: var(--card-bg-color, #fff); padding: 24px; border-radius: 12px;
+                text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                max-width: 300px;
+            `;
+            
+            document.body.appendChild(popup);
+            
+            popup.addEventListener('click', (ev) => {
+                if (ev.target === popup || ev.target.classList.contains('restored-popup-close')) {
+                    popup.remove();
+                }
+            });
         });
     });
 }

@@ -42,6 +42,7 @@ exports.getWinnersByAgent = async (req, res) => {
                 national_id_image: w.national_id_image,
                 prize_type: w.prize_type, // Include prize_type
                 prize_value: w.prize_value, // Include prize_value
+                order_number: w.order_number, // رقم ترتيب الفائز
                 selected_at: w.selected_at,
                 video_url: w.video_url, // Include video_url
                 meta: w.meta
@@ -119,6 +120,39 @@ exports.importWinnersForAgent = async (req, res) => {
         const mongoose = require('mongoose');
         const competitionId = activeCompetition._id;
 
+        // التحقق من أن كل فائز لديه order_number (مطلوب)
+        const winnersWithoutOrder = payload.winners.filter(w => !w.order_number);
+        if (winnersWithoutOrder.length > 0) {
+            const names = winnersWithoutOrder.map(w => w.name).join(', ');
+            return res.status(400).json({ 
+                message: `رقم الترتيب مطلوب للفائزين: ${names}` 
+            });
+        }
+
+        // التحقق من عدم تكرار order_number لنفس المسابقة
+        const orderNumbers = payload.winners.map(w => w.order_number);
+        
+        // التحقق من التكرار داخل الطلب نفسه
+        const duplicatesInPayload = orderNumbers.filter((num, idx) => orderNumbers.indexOf(num) !== idx);
+        if (duplicatesInPayload.length > 0) {
+            return res.status(400).json({ 
+                message: `أرقام الترتيب مكررة في الطلب: ${[...new Set(duplicatesInPayload)].join(', ')}` 
+            });
+        }
+        
+        // التحقق من التكرار في قاعدة البيانات
+        const existingWithOrderNumbers = await Winner.find({
+            competition_id: competitionId,
+            order_number: { $in: orderNumbers }
+        }).lean();
+        
+        if (existingWithOrderNumbers.length > 0) {
+            const existingNumbers = existingWithOrderNumbers.map(w => `${w.order_number} (${w.name})`);
+            return res.status(400).json({ 
+                message: `أرقام الترتيب مستخدمة بالفعل: ${existingNumbers.join(', ')}` 
+            });
+        }
+
         const docs = payload.winners.map(w => ({
             agent_id: agentId,
             competition_id: competitionId,
@@ -128,6 +162,7 @@ exports.importWinnersForAgent = async (req, res) => {
             national_id: w.national_id || (w.meta && w.meta.national_id) || null,
             prize_type: w.prize_type || (w.meta && w.meta.prize_type) || null,
             prize_value: typeof w.prize_value !== 'undefined' ? w.prize_value : (w.meta && w.meta.prize_value) || null,
+            order_number: typeof w.order_number !== 'undefined' ? w.order_number : null, // رقم ترتيب الفائز اليدوي
             selected_at: w.selected_at ? new Date(w.selected_at) : new Date(),
             // Keep meta for backward compatibility and extra data
             meta: Object.assign({}, w.meta || {}, {
@@ -303,9 +338,9 @@ exports.updateWinner = async (req, res) => {
         
         // Prevent updating immutable fields if necessary, but for now allow editing details
         // Map frontend fields to backend fields if needed, or assume payload matches schema
-        // Frontend sends: name, account_number, email, prize_type, prize_value
+        // Frontend sends: name, account_number, email, prize_type, prize_value, order_number
         
-        const allowedUpdates = ['name', 'account_number', 'email', 'national_id', 'prize_type', 'prize_value', 'meta'];
+        const allowedUpdates = ['name', 'account_number', 'email', 'national_id', 'prize_type', 'prize_value', 'order_number', 'meta'];
         const updateData = {};
         
         Object.keys(updates).forEach(key => {

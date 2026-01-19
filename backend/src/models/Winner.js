@@ -10,6 +10,7 @@ const winnerSchema = new mongoose.Schema({
     national_id_image: { type: String }, // Path to national ID image
     prize_type: { type: String }, // Added prize type
     prize_value: { type: Number }, // Added prize value
+    order_number: { type: Number }, // رقم ترتيب الفائز (يدوي)
     video_url: { type: String }, // Added video URL
     selected_at: { type: Date, default: Date.now },
     meta: { type: Object, default: {} }

@@ -39,7 +39,9 @@ function generateArabicDescription(method, path, userName, status) {
         'task': { singular: 'مهمة', plural: 'مهام' },
         'calendar': { singular: 'التقويم', plural: 'التقويم' },
         'stats': { singular: 'إحصائيات', plural: 'إحصائيات' },
-        'logs': { singular: 'سجل', plural: 'سجلات' }
+        'logs': { singular: 'سجل', plural: 'سجلات' },
+        'dashboard': { singular: 'لوحة التحكم', plural: 'لوحة التحكم' },
+        'insights': { singular: 'رؤى', plural: 'رؤى' }
     };
     
     // Check for specific patterns

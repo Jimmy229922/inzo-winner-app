@@ -900,7 +900,10 @@ async function renderAgentProfilePage(agentId, options = {}) {
         if (remainingBalance > 0) {
             benefitsText += `💰 <b>بونص تداولي:</b> <code>${remainingBalance}$</code>\n`;
         }
-        if (remainingDepositBonus > 0) {
+        // إخفاء سطر بونص الإيداع لمرتبتي BEGINNING ووكيل حصري بدون مرتبة
+        const hideDepositBonusRanks = ['BEGINNING', 'وكيل حصري بدون مرتبة'];
+        const shouldHideDepositBonus = hideDepositBonusRanks.includes(agent.rank);
+        if (remainingDepositBonus > 0 && !shouldHideDepositBonus) {
             benefitsText += `🎁 <b>بونص ايداع:</b> <code>${remainingDepositBonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
         }
 
@@ -1396,7 +1399,8 @@ function renderEditProfileHeader(agent) {
 
     headerContainer.innerHTML = `
         <div class="form-layout-grid" style="gap: 10px;">
-            <div class="form-group" style="grid-column: 1 / span 2;"><label>اسم الوكيل</label><input type="text" id="header-edit-name" value="${agent.name || ''}"></div>
+            <div class="form-group"><label>اسم الوكيل</label><input type="text" id="header-edit-name" value="${agent.name || ''}"></div>
+            <div class="form-group"><label>رقم الوكالة</label><input type="text" id="header-edit-agent-id" value="${agent.agent_id || ''}"></div>
             <div class="form-group">
                 <label>التصنيف</label>
                 <select id="header-edit-classification">
@@ -1453,6 +1457,7 @@ function renderEditProfileHeader(agent) {
                 
                 const updatedData = {
                     name: document.getElementById('header-edit-name').value,
+                    agent_id: document.getElementById('header-edit-agent-id').value.trim(),
                     telegram_channel_url: document.getElementById('header-edit-channel').value,
                     telegram_group_url: document.getElementById('header-edit-group').value,
                     telegram_chat_id: document.getElementById('header-edit-chatid').value,
@@ -1510,6 +1515,7 @@ function renderEditProfileHeader(agent) {
         // Normal save flow (no classification change)
         const updatedData = {
             name: document.getElementById('header-edit-name').value,
+            agent_id: document.getElementById('header-edit-agent-id').value.trim(),
             telegram_channel_url: document.getElementById('header-edit-channel').value,
             telegram_group_url: document.getElementById('header-edit-group').value,
             telegram_chat_id: document.getElementById('header-edit-chatid').value,

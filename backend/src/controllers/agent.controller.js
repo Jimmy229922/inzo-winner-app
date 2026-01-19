@@ -288,12 +288,25 @@ exports.updateAgent = async (req, res) => {
             return res.status(404).json({ message: 'Agent not found.' });
         }
 
+        // --- NEW: Check if agent_id is being updated and ensure it's unique ---
+        if (req.body.agent_id && req.body.agent_id !== agentBeforeUpdate.agent_id) {
+            const existingAgent = await Agent.findOne({ 
+                agent_id: req.body.agent_id.trim(), 
+                _id: { $ne: req.params.id } 
+            });
+            if (existingAgent) {
+                return res.status(400).json({ message: 'رقم الوكالة مستخدم بالفعل لوكيل آخر.' });
+            }
+            // Trim the agent_id
+            req.body.agent_id = req.body.agent_id.trim();
+        }
+
         // --- FIX: Directly use req.body for the update payload ---
         const updatedAgent = await Agent.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true, runValidators: true });
 
         // --- FIX: Always log activity on update from the backend for reliability ---
         const userId = req.user?._id; // Use optional chaining
-        const hasProfileUpdate = ['name', 'telegram_channel_url', 'telegram_group_url', 'telegram_chat_id', 'telegram_group_name'].some(key => key in req.body);
+        const hasProfileUpdate = ['name', 'agent_id', 'telegram_channel_url', 'telegram_group_url', 'telegram_chat_id', 'telegram_group_name'].some(key => key in req.body);
         
         const actionType = hasProfileUpdate ? 'PROFILE_UPDATE' : 'DETAILS_UPDATE';
         const isFinancialUpdate = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period', 'deposit_bonus_winners_count'].some(key => key in req.body);
@@ -1204,9 +1217,10 @@ exports.sendWinnersReport = async (req, res) => {
             return res.status(404).json({ message: 'Agent not found or has no Telegram chat ID' });
         }
 
-        const winners = await Winner.find({ _id: { $in: winnerIds } });
+        // جلب الفائزين مرتبين حسب order_number
+        const winners = await Winner.find({ _id: { $in: winnerIds } }).sort({ order_number: 1 });
         
-        // Filter winners with videos
+        // Filter winners with videos - مع الحفاظ على الترتيب
         const winnersWithVideos = winners.filter(w => w.video_url);
         
         if (winnersWithVideos.length === 0) {
@@ -1243,7 +1257,13 @@ exports.sendWinnersReport = async (req, res) => {
                     prizeText = `${w.prize_value}$ بونص تداولي`;
                 }
                 
-                caption = `◃ الفائز: ${w.name}\n`;
+                // استخدام رقم الترتيب اليدوي إذا كان موجوداً
+                const ordinals = ['الاول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'];
+                const rank = w.order_number 
+                    ? (ordinals[w.order_number - 1] || `رقم ${w.order_number}`)
+                    : 'الاول';
+                
+                caption = `◃ الفائز ${rank}: ${w.name}\n`;
                 caption += `           الجائزة: ${prizeText}\n\n`;
                 caption += `********************************************************\n`;
                 caption += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
@@ -1267,7 +1287,10 @@ exports.sendWinnersReport = async (req, res) => {
             let msg = '';
             chunkWinners.forEach((w, i) => {
                 const globalIndex = startIndex + i;
-                const rank = ordinals[globalIndex] || (globalIndex + 1);
+                // استخدام رقم الترتيب اليدوي إذا كان موجوداً
+                const rank = w.order_number 
+                    ? (ordinals[w.order_number - 1] || `رقم ${w.order_number}`)
+                    : (ordinals[globalIndex] || (globalIndex + 1));
                 let prizeText = '';
                 if (w.prize_type === 'deposit_prev') {
                     prizeText = `${w.prize_value}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
@@ -1357,7 +1380,8 @@ exports.sendWinnersDetails = async (req, res) => {
             return res.status(404).json({ message: 'Agent not found.' });
         }
 
-        const winners = await Winner.find({ _id: { $in: winnerIds } });
+        // جلب الفائزين مرتبين حسب order_number
+        const winners = await Winner.find({ _id: { $in: winnerIds } }).sort({ order_number: 1 });
         if (!winners || winners.length === 0) {
             return res.status(404).json({ message: 'No winners found for provided IDs' });
         }

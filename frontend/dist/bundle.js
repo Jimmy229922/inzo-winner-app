@@ -442,6 +442,7 @@ async function updateHomePageUI(stats) {
 
         // 1. Update Stat Cards
         const statsContainer = document.getElementById('home-stats-container');
+        if (!statsContainer) return;
         statsContainer.innerHTML = ` 
             <div class="dashboard-grid-v2">
                 <a href="#manage-agents" class="stat-card-v2 color-1">
@@ -574,22 +575,6 @@ async function updateHomePageUI(stats) {
 
                 // عرض قائمة الوكلاء المتبقين
                 if (pendingAgents.length > 0) {
-                    pendingList.innerHTML = pendingAgents.map(agent => `
-                        <a href="#tasks?highlight=${agent._id}" class="pending-task-item ${tasksMap[agent._id]?.competition_sent ? 'partial' : ''}">
-                            <div class="pending-task-info">
-                                <span class="pending-agent-name">${agent.name}</span>
-                                <span class="pending-agent-id">#${agent.agent_id}</span>
-                            </div>
-                            <span class="classification-badge classification-${agent.classification.toLowerCase()}">${agent.classification}</span>
-                        </a>
-                    `).join('');
-                } else {
-                    pendingList.innerHTML = '<p class="no-pending-tasks">لا توجد مهام متبقية لليوم 🎉</p>';
-                }
-                
-                let pendingHtml = '';
-
-                if (pendingAgents.length > 0) {
                     // --- تعديل: عرض قائمة واحدة مبسطة ---
                     pendingHtml = pendingAgents.slice(0, 5).map(agent => {
                         const task = tasksMap[agent._id] || {}; // FIX: Use _id instead of id
@@ -622,24 +607,26 @@ async function updateHomePageUI(stats) {
                 } else {
                     pendingHtml = '<p class="no-pending-tasks">لا توجد مهام متبقية لهذا اليوم. عمل رائع!</p>';
                 }
-                pendingList.innerHTML = pendingHtml;
+                if (pendingList) pendingList.innerHTML = pendingHtml;
 
                 // --- NEW: Event Delegation for CSP Compliance ---
-                pendingList.addEventListener('click', (e) => {
-                    const taskAction = e.target.closest('.home-task-action');
-                    if (taskAction) {
-                        handleHomeTaskAction(e);
-                        return;
-                    }
-                    const card = e.target.closest('.pending-agent-card-v2');
-                    if (card && !e.target.closest('a')) {
-                        window.location.hash = `#profile/${card.dataset.agentId}`;
-                    }
-                });
+                if (pendingList) {
+                    pendingList.addEventListener('click', (e) => {
+                        const taskAction = e.target.closest('.home-task-action');
+                        if (taskAction) {
+                            handleHomeTaskAction(e);
+                            return;
+                        }
+                        const card = e.target.closest('.pending-agent-card-v2');
+                        if (card && !e.target.closest('a')) {
+                            window.location.hash = `#profile/${card.dataset.agentId}`;
+                        }
+                    });
+                }
         } else {
             // NEW: Handle the case where there are no tasks scheduled for today at all
             /* logs suppressed: no agents scheduled */
-            pendingList.innerHTML = '<p class="no-pending-tasks">لا توجد مهام مجدولة لهذا اليوم.</p>';
+            if (pendingList) pendingList.innerHTML = '<p class="no-pending-tasks">لا توجد مهام مجدولة لهذا اليوم.</p>';
             
             const progressPercentEl = document.getElementById('progress-percentage');
             const pendingCountEl = document.getElementById('pending-count');
@@ -7817,7 +7804,10 @@ async function renderAgentProfilePage(agentId, options = {}) {
         if (remainingBalance > 0) {
             benefitsText += `💰 <b>بونص تداولي:</b> <code>${remainingBalance}$</code>\n`;
         }
-        if (remainingDepositBonus > 0) {
+        // إخفاء سطر بونص الإيداع لمرتبتي BEGINNING ووكيل حصري بدون مرتبة
+        const hideDepositBonusRanks = ['BEGINNING', 'وكيل حصري بدون مرتبة'];
+        const shouldHideDepositBonus = hideDepositBonusRanks.includes(agent.rank);
+        if (remainingDepositBonus > 0 && !shouldHideDepositBonus) {
             benefitsText += `🎁 <b>بونص ايداع:</b> <code>${remainingDepositBonus}</code> مرات بنسبة <code>${agent.deposit_bonus_percentage || 0}%</code>\n`;
         }
 
@@ -8313,7 +8303,8 @@ function renderEditProfileHeader(agent) {
 
     headerContainer.innerHTML = `
         <div class="form-layout-grid" style="gap: 10px;">
-            <div class="form-group" style="grid-column: 1 / span 2;"><label>اسم الوكيل</label><input type="text" id="header-edit-name" value="${agent.name || ''}"></div>
+            <div class="form-group"><label>اسم الوكيل</label><input type="text" id="header-edit-name" value="${agent.name || ''}"></div>
+            <div class="form-group"><label>رقم الوكالة</label><input type="text" id="header-edit-agent-id" value="${agent.agent_id || ''}"></div>
             <div class="form-group">
                 <label>التصنيف</label>
                 <select id="header-edit-classification">
@@ -8370,6 +8361,7 @@ function renderEditProfileHeader(agent) {
                 
                 const updatedData = {
                     name: document.getElementById('header-edit-name').value,
+                    agent_id: document.getElementById('header-edit-agent-id').value.trim(),
                     telegram_channel_url: document.getElementById('header-edit-channel').value,
                     telegram_group_url: document.getElementById('header-edit-group').value,
                     telegram_chat_id: document.getElementById('header-edit-chatid').value,
@@ -8427,6 +8419,7 @@ function renderEditProfileHeader(agent) {
         // Normal save flow (no classification change)
         const updatedData = {
             name: document.getElementById('header-edit-name').value,
+            agent_id: document.getElementById('header-edit-agent-id').value.trim(),
             telegram_channel_url: document.getElementById('header-edit-channel').value,
             telegram_group_url: document.getElementById('header-edit-group').value,
             telegram_chat_id: document.getElementById('header-edit-chatid').value,
@@ -12075,7 +12068,7 @@ async function handlePurgeAllUsers() {
 // == addAgent.js ==
 ﻿const RANKS_DATA = {
     // الاعتيادية
-    'BEGINNING': { competition_bonus: 60, deposit_bonus_percentage: null, deposit_bonus_count: null },
+    'BEGINNING': { competition_bonus: 60, deposit_bonus_percentage: 40, deposit_bonus_count: 1, hideDepositBonusInMessage: true },
     'GROWTH': { competition_bonus: 100, deposit_bonus_percentage: 40, deposit_bonus_count: 2 },
     'PRO': { competition_bonus: 150, deposit_bonus_percentage: 50, deposit_bonus_count: 3 },
     'ELITE': { competition_bonus: 200, deposit_bonus_percentage: 50, deposit_bonus_count: 4 },
@@ -12090,7 +12083,7 @@ async function handlePurgeAllUsers() {
     'EMERALD': { competition_bonus: 2000, deposit_bonus_percentage: 90, deposit_bonus_count: 4 },
     'KING': { competition_bonus: 2500, deposit_bonus_percentage: 95, deposit_bonus_count: 4 },
     'LEGEND': { competition_bonus: Infinity, deposit_bonus_percentage: 100, deposit_bonus_count: Infinity },
-    'وكيل حصري بدون مرتبة': { competition_bonus: 60, deposit_bonus_percentage: null, deposit_bonus_count: null },
+    'وكيل حصري بدون مرتبة': { competition_bonus: 60, deposit_bonus_percentage: 40, deposit_bonus_count: 1, hideDepositBonusInMessage: true },
 };
 
 function renderAddAgentForm() {
@@ -16638,59 +16631,276 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const modal = document.createElement('div');
       modal.id='winner-modal';
       modal.className='wr-celebration-modal';
-      modal.style.display='none';
+      modal.style.cssText = `
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 99999;
+        background: rgba(0, 0, 0, 0.75);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 15px;
+        box-sizing: border-box;
+      `;
       modal.innerHTML = `
-        <div class="wr-celebration-content" role="dialog" aria-modal="true" style="width: 100%; max-width: 600px; padding: 2rem; box-sizing: border-box;">
-          <h2 class="wr-celebration-title" style="font-size: 2rem; margin-bottom: 1rem;">مبروك الفوز!</h2>
-          <div class="wr-winner-card" style="margin-bottom: 1.5rem; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px;">
-              <div class="wr-winner-name" id="celebration-winner-name" style="font-size: 1.5rem; font-weight: bold; color: #fff;">—</div>
-              <div class="wr-winner-account" id="celebration-winner-account" style="color: #ccc;">—</div>
+        <div class="wr-celebration-content" role="dialog" aria-modal="true" style="
+          width: 100%;
+          max-width: 520px;
+          max-height: calc(100vh - 30px);
+          background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+          border-radius: 24px;
+          box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(99, 102, 241, 0.3);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          animation: modalSlideIn 0.25s ease-out;
+        ">
+          <style>
+            @keyframes modalSlideIn {
+              from { opacity: 0; transform: scale(0.96) translateY(15px); }
+              to { opacity: 1; transform: scale(1) translateY(0); }
+            }
+            .winner-input:focus {
+              border-color: #6366f1 !important;
+              box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3) !important;
+              outline: none !important;
+            }
+            .winner-btn {
+              transition: all 0.2s ease;
+            }
+            .winner-btn:hover {
+              transform: translateY(-2px);
+              filter: brightness(1.1);
+            }
+            .winner-btn:active {
+              transform: translateY(0);
+            }
+            #winner-modal input::placeholder {
+              color: #64748b;
+            }
+          </style>
+          
+          <!-- Header with Trophy -->
+          <div style="
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+            padding: 24px 20px;
+            text-align: center;
+            position: relative;
+          ">
+            <div style="font-size: 3rem; margin-bottom: 10px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));">🏆</div>
+            <h2 style="margin: 0; font-size: 1.6rem; color: #fff; font-weight: 700; letter-spacing: 0.5px;">
+              مبروك الفوز!
+            </h2>
           </div>
           
-          <div class="wr-form-group" style="text-align: right; margin-bottom: 1rem; position: relative; z-index: 10;">
-              <label for="winner-email" class="wr-label" style="display: block; margin-bottom: 0.5rem; color: #ddd;">
-                  <i class="fas fa-envelope"></i> البريد الإلكتروني
-              </label>
-              <input type="email" id="winner-email" class="wr-form-input" placeholder="example@email.com" autocomplete="email" tabindex="0" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; position: relative; z-index: 10;" />
-              <div id="winner-email-error" class="wr-error-msg" style="display:none;color:#f87171;font-size:.75rem;margin-top:4px;">البريد غير صالح</div>
-            </div>
-  
-            <div class="wr-form-group" style="text-align: right; margin-bottom: 1rem; position: relative; z-index: 10;">
-              <label for="winner-id-image" class="wr-label" style="display: block; margin-bottom: 0.5rem; color: #ddd;">
-                <i class="fas fa-image"></i> صورة الهوية
-              </label>
-              <input type="file" id="winner-id-image" accept="image/*" class="wr-form-input" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff;" />
-              <div style="color:#9ca3af; font-size:.8rem; margin-top:6px;">يمكنك لصق الصورة مباشرة باستخدام Ctrl+V</div>
-              <img id="winner-id-image-preview" alt="معاينة صورة الهوية" style="display:none; margin-top:8px; max-width:100%; max-height:80px; border-radius:8px; border:1px solid #444; background:#111; object-fit: contain; cursor: zoom-in;" />
-          </div>
-  
-          <div class="wr-form-group" style="text-align: right; margin-bottom: 1rem; position: relative; z-index: 10;">
-              <label class="wr-label" style="display: block; margin-bottom: 0.5rem; color: #ddd;">
-                  <i class="fas fa-gift"></i> نوع الجائزة
-              </label>
-              <select id="winner-prize-type" class="wr-form-input" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff;">
-                  <option value="trading">بونص تداولي</option>
-                <option value="deposit">بونص إيداع</option>
-                <option value="deposit_prev">بونص إيداع كونه فائز مسبقاً ببونص تداولي</option>
-              </select>
-          </div>
-  
-          <div class="wr-form-group" style="text-align: right; margin-bottom: 1.5rem; position: relative; z-index: 10;">
-              <label class="wr-label" style="display: block; margin-bottom: 0.5rem; color: #ddd;">
-                  <i class="fas fa-dollar-sign"></i> قيمة الجائزة
-              </label>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <input type="text" id="winner-prize-value" class="wr-form-input" dir="rtl" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #10b981; background: rgba(16, 185, 129, 0.1); color: #10b981; font-weight: bold; text-align: center;" placeholder="0" readonly />
+          <!-- Winner Card - Separate from header -->
+          <div style="
+            margin: 16px 20px;
+            padding: 18px 20px;
+            background: linear-gradient(145deg, #1e293b, #334155);
+            border-radius: 16px;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+          ">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div style="
+                width: 52px;
+                height: 52px;
+                background: linear-gradient(135deg, #6366f1, #8b5cf6);
+                border-radius: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.5rem;
+                flex-shrink: 0;
+                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+              ">👤</div>
+              <div style="flex: 1; min-width: 0;">
+                <div id="celebration-winner-name" style="
+                  font-size: 1.15rem;
+                  font-weight: 700;
+                  color: #fff;
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  letter-spacing: 0.5px;
+                ">—</div>
+                <div id="celebration-winner-account" style="
+                  color: #94a3b8;
+                  font-size: 0.9rem;
+                  margin-top: 4px;
+                  direction: ltr;
+                  text-align: right;
+                  font-weight: 500;
+                ">—</div>
               </div>
+            </div>
           </div>
-  
-          <div style="display: flex; gap: 10px;">
-              <button id="confirm-winner" class="wr-confirm-btn" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
-                  <i class="fas fa-check-circle"></i> تجهيز فائز
-              </button>
-              <button id="skip-winner" class="wr-skip-btn" style="flex: 1; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; position: relative; z-index: 10;">
-                  <i class="fas fa-redo"></i> تخطي
-              </button>
+          
+          <!-- Scrollable Form -->
+          <div style="flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 20px 20px;">
+            
+            <!-- Email Field -->
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; color: #e2e8f0; font-size: 0.95rem; font-weight: 600;">
+                📧 البريد الإلكتروني
+              </label>
+              <input type="email" id="winner-email" class="winner-input" placeholder="example@email.com" autocomplete="email" style="
+                width: 100%;
+                padding: 14px 16px;
+                border-radius: 12px;
+                border: 2px solid #334155;
+                background: #1e293b;
+                color: #fff;
+                font-size: 1rem;
+                outline: none;
+                transition: all 0.2s;
+                box-sizing: border-box;
+              " />
+              <div id="winner-email-error" style="display:none; color:#f87171; font-size:0.8rem; margin-top:6px;">البريد غير صالح</div>
+            </div>
+            
+            <!-- ID Image -->
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; color: #e2e8f0; font-size: 0.95rem; font-weight: 600;">
+                🪪 صورة الهوية
+              </label>
+              <div style="
+                position: relative;
+                border: 2px dashed #475569;
+                border-radius: 12px;
+                padding: 14px;
+                background: #1e293b;
+                transition: all 0.2s;
+              ">
+                <input type="file" id="winner-id-image" accept="image/*" style="
+                  position: absolute;
+                  inset: 0;
+                  opacity: 0;
+                  cursor: pointer;
+                " />
+                <div style="text-align: center; color: #64748b; font-size: 0.9rem;">
+                  <span style="color: #6366f1; font-weight: 600;">اختر ملف</span> أو اسحب هنا
+                  <div style="font-size: 0.8rem; margin-top: 6px; color: #64748b;">Ctrl+V للصق مباشرة</div>
+                </div>
+              </div>
+              <img id="winner-id-image-preview" alt="معاينة" style="display:none; margin-top:10px; max-width:100%; max-height:70px; border-radius:10px; border:2px solid #334155; object-fit:contain; cursor:zoom-in;" />
+            </div>
+            
+            <!-- Order Number -->
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; color: #e2e8f0; font-size: 0.95rem; font-weight: 600;">
+                🔢 رقم الترتيب <span style="color: #f87171; font-size: 1.1rem;">*</span>
+              </label>
+              <input type="number" id="winner-order-number" class="winner-input" min="1" required placeholder="1, 2, 3..." style="
+                width: 100%;
+                padding: 14px 16px;
+                border-radius: 12px;
+                border: 2px solid #f59e0b60;
+                background: #f59e0b20;
+                color: #fbbf24;
+                font-size: 1.2rem;
+                font-weight: 700;
+                text-align: center;
+                outline: none;
+                transition: all 0.2s;
+                box-sizing: border-box;
+              " />
+              <div id="winner-order-error" style="display:none; color:#f87171; font-size:0.8rem; margin-top:6px; font-weight: 500;">رقم الترتيب مطلوب</div>
+            </div>
+            
+            <!-- Prize Row -->
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px;">
+              <div>
+                <label style="display: block; margin-bottom: 8px; color: #e2e8f0; font-size: 0.95rem; font-weight: 600;">
+                  🎁 نوع الجائزة
+                </label>
+                <select id="winner-prize-type" class="winner-input" style="
+                  width: 100%;
+                  padding: 14px 12px;
+                  border-radius: 12px;
+                  border: 2px solid #334155;
+                  background: #1e293b;
+                  color: #fff;
+                  font-size: 0.95rem;
+                  outline: none;
+                  cursor: pointer;
+                  box-sizing: border-box;
+                ">
+                  <option value="trading">بونص تداولي</option>
+                  <option value="deposit">بونص إيداع</option>
+                  <option value="deposit_prev">إيداع (فائز سابق)</option>
+                </select>
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 8px; color: #e2e8f0; font-size: 0.95rem; font-weight: 600;">
+                  💰 القيمة
+                </label>
+                <input type="text" id="winner-prize-value" readonly style="
+                  width: 100%;
+                  padding: 14px 12px;
+                  border-radius: 12px;
+                  border: 2px solid #10b98160;
+                  background: #10b98125;
+                  color: #34d399;
+                  font-size: 1.15rem;
+                  font-weight: 700;
+                  text-align: center;
+                  box-sizing: border-box;
+                " />
+              </div>
+            </div>
+            
+          </div>
+          
+          <!-- Action Buttons -->
+          <div style="
+            padding: 18px 20px;
+            background: linear-gradient(to top, #0f172a 80%, transparent);
+            display: flex;
+            gap: 14px;
+          ">
+            <button id="confirm-winner" class="winner-btn" style="
+              flex: 1.5;
+              padding: 16px 22px;
+              background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+              color: white;
+              border: none;
+              border-radius: 14px;
+              font-size: 1.05rem;
+              font-weight: 700;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 10px;
+              transition: all 0.2s;
+              box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+            ">
+              ✓ تجهيز فائز
+            </button>
+            <button id="skip-winner" class="winner-btn" style="
+              flex: 1;
+              padding: 16px 18px;
+              background: transparent;
+              color: #f87171;
+              border: 2px solid #f8717160;
+              border-radius: 14px;
+              font-size: 0.95rem;
+              font-weight: 700;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+              transition: all 0.2s;
+            ">
+              ↻ تخطي
+            </button>
           </div>
         </div>`;
       document.body.appendChild(modal);
@@ -16730,12 +16940,196 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       lastPickedIndex: -1, // Track last picked index for sequential selection
       reportSent: false, // Winners report sent to agent flag
       includeWarnMeet: false,
-      includeWarnPrev: false
+      includeWarnPrev: false,
+      isRestoreMode: false // وضع استعادة المسابقة المكتملة
     };
     
     const LS_KEY = 'winnerRouletteSession.v1';
     const STAGED_WINNERS_KEY = 'winnerRouletteStagedWinners.v1';
-    // Persist session across reloads
+    
+    // === WINNER PROTECTION CONSTANTS ===
+    // الحد الأقصى للفائزين للحماية من مشاكل الأداء والذاكرة
+    const MAX_WINNERS_LIMIT = 100; // حد عالي جداً - يمكن زيادته حسب الحاجة
+    const SAVE_RETRY_COUNT = 3; // عدد محاولات إعادة الحفظ
+    const SAVE_RETRY_DELAY = 1000; // تأخير بين المحاولات (مللي ثانية)
+    
+    // === PERFORMANCE OPTIMIZATIONS ===
+    
+    // Debounce helper - يأخر التنفيذ حتى يتوقف المستخدم
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+    
+    // Track blob URLs to clean up memory leaks
+    const activeBlobUrls = [];
+    function cleanupBlobUrls() {
+      // حد أقصى لمنع التسرب الكبير للذاكرة
+      const maxToClean = Math.min(activeBlobUrls.length, 500);
+      for (let i = 0; i < maxToClean; i++) {
+        const url = activeBlobUrls.pop();
+        try { URL.revokeObjectURL(url); } catch(e) {}
+      }
+    }
+    function trackBlobUrl(url) {
+      if (url && url.startsWith('blob:')) {
+        activeBlobUrls.push(url);
+        // تنظيف تلقائي إذا تجاوز الحد
+        if (activeBlobUrls.length > 200) {
+          const oldUrls = activeBlobUrls.splice(0, 50);
+          oldUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch(e) {} });
+        }
+      }
+      return url;
+    }
+    
+    // === WINNER PROTECTION FUNCTIONS ===
+    
+    // دالة آمنة للحصول على مصفوفة الفائزين - تمنع الأخطاء
+    function getSafeWinnersArray() {
+      if (!state.winners || !Array.isArray(state.winners)) {
+        console.warn('[PROTECTION] state.winners was corrupted, restoring empty array');
+        state.winners = [];
+      }
+      return state.winners;
+    }
+    
+    // دالة آمنة لإضافة فائز - تمنع التكرار وتضمن الحفظ
+    function safeAddWinner(winnerData) {
+      const winners = getSafeWinnersArray();
+      
+      // التحقق من عدم التكرار بناءً على ID أو (الاسم + رقم الحساب)
+      const isDuplicate = winners.some(w => {
+        if (w.id === winnerData.id) return true;
+        if (w.account && winnerData.account && w.account === winnerData.account) return true;
+        if (!w.account && !winnerData.account && w.name === winnerData.name) return true;
+        return false;
+      });
+      
+      if (isDuplicate) {
+        console.warn('[PROTECTION] Duplicate winner prevented:', winnerData.name);
+        return false;
+      }
+      
+      // التحقق من الحد الأقصى
+      if (winners.length >= MAX_WINNERS_LIMIT) {
+        console.error('[PROTECTION] Max winners limit reached:', MAX_WINNERS_LIMIT);
+        toast(`تم الوصول للحد الأقصى من الفائزين (${MAX_WINNERS_LIMIT})`, 'error');
+        return false;
+      }
+      
+      // إضافة الفائز بشكل آمن
+      winners.push(winnerData);
+      
+      // حفظ فوري مع إعادة المحاولة
+      safeImmediateSave();
+      
+      console.log('[PROTECTION] Winner added safely:', winnerData.name, 'Total:', winners.length);
+      return true;
+    }
+    
+    // دالة حفظ فوري آمنة مع إعادة المحاولة
+    async function safeImmediateSave(retryCount = 0) {
+      try {
+        saveSessionImmediate();
+        
+        // حفظ نسخة احتياطية إضافية في localStorage منفصل
+        const backupKey = `winnerRoulette_backup_${Date.now()}`;
+        const backupData = {
+          winners: state.winners.map(w => ({
+            id: w.id,
+            _id: w._id,
+            name: w.name,
+            account: w.account,
+            email: w.email,
+            prizeType: w.prizeType,
+            prizeValue: w.prizeValue,
+            orderNumber: w.orderNumber,
+            timestamp: w.timestamp
+          })),
+          competitionId: state.activeCompetition?.id,
+          agentId: state.selectedAgent?.id,
+          savedAt: new Date().toISOString()
+        };
+        
+        // حفظ نسخة احتياطية (احتفظ بآخر 5 نسخ فقط)
+        try {
+          localStorage.setItem(backupKey, JSON.stringify(backupData));
+          cleanupOldBackups();
+        } catch (e) {
+          console.warn('[PROTECTION] Backup save failed:', e);
+        }
+        
+        return true;
+      } catch (e) {
+        console.error('[PROTECTION] Save failed, retry:', retryCount, e);
+        if (retryCount < SAVE_RETRY_COUNT) {
+          await new Promise(r => setTimeout(r, SAVE_RETRY_DELAY));
+          return safeImmediateSave(retryCount + 1);
+        }
+        toast('تحذير: فشل حفظ البيانات. يرجى عدم إغلاق الصفحة!', 'error');
+        return false;
+      }
+    }
+    
+    // تنظيف النسخ الاحتياطية القديمة
+    function cleanupOldBackups() {
+      const backupKeys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('winnerRoulette_backup_')) {
+          backupKeys.push(key);
+        }
+      }
+      // ترتيب حسب التاريخ والاحتفاظ بآخر 5
+      backupKeys.sort().reverse();
+      backupKeys.slice(5).forEach(key => {
+        try { localStorage.removeItem(key); } catch (e) {}
+      });
+    }
+    
+    // استعادة الفائزين من النسخ الاحتياطية في حالة الطوارئ
+    function emergencyRestoreWinners() {
+      const backupKeys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('winnerRoulette_backup_')) {
+          backupKeys.push(key);
+        }
+      }
+      
+      if (backupKeys.length === 0) return null;
+      
+      // الحصول على أحدث نسخة
+      backupKeys.sort().reverse();
+      try {
+        const backup = JSON.parse(localStorage.getItem(backupKeys[0]));
+        if (backup && backup.winners && backup.winners.length > 0) {
+          console.log('[PROTECTION] Emergency restore found:', backup.winners.length, 'winners');
+          return backup;
+        }
+      } catch (e) {
+        console.error('[PROTECTION] Emergency restore failed:', e);
+      }
+      return null;
+    }
+    
+    // Event delegation flags - prevent re-binding
+    let participantsDelegationBound = false;
+    let winnersDelegationBound = false;
+    
+    // Debounced save session - waits 500ms before saving
+    let saveSessionImmediate;
+    let debouncedSaveSession;
+    
+    // === END PERFORMANCE OPTIMIZATIONS ===
     
     function cleanName(name) {
       if (!name) return '';
@@ -16753,7 +17147,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       return cleanName(name || '');
     }
     
-    async function loadAgents() {
+    async function loadAgents(forceIncludeAgentId = null) {
       const select = document.getElementById('agent-select');
       if (!select) return;
       try {
@@ -16820,6 +17214,11 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                  activeAgentIds.add(String(c.agent_id));
             }
         });
+        
+        // في وضع الاستعادة، نضيف الوكيل المحدد حتى لو لم يكن لديه مسابقة نشطة
+        if (forceIncludeAgentId) {
+          activeAgentIds.add(String(forceIncludeAgentId));
+        }
         
         const filteredAgents = allAgents.filter(a => activeAgentIds.has(String(a._id)));
         
@@ -16937,8 +17336,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             // console.log(`[DEBUG] Ended count: ${endedCompetitions.length}`);
 
             // Determine default selection (Latest Active only)
+            // في وضع الاسترجاع، لا نحدد أي مسابقة تلقائياً
             let defaultCompId = null;
-            if (activeCompetitions.length > 0) {
+            if (!state.isRestoreMode && activeCompetitions.length > 0) {
                 defaultCompId = activeCompetitions[0]._id;
             }
 
@@ -16952,9 +17352,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                     'archived': 'مؤرشفة'
                 };
                 const status = statusMap[c.status] || c.status;
+                // في وضع الاسترجاع، لا نحدد أي خيار
                 // Select if it matches active competition OR if it's the default and no active competition is set
-                const isSelected = (state.activeCompetition && state.activeCompetition.id === c._id) || 
-                                   (!state.activeCompetition && c._id === defaultCompId);
+                const isSelected = !state.isRestoreMode && (
+                    (state.activeCompetition && state.activeCompetition.id === c._id) || 
+                    (!state.activeCompetition && c._id === defaultCompId)
+                );
                 return `<option value="${c._id}" ${isSelected ? 'selected' : ''}>
                     ${c.name || 'مسابقة'} (${date}) - ${status}
                 </option>`;
@@ -16993,7 +17396,11 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             };
 
             // Auto-load default competition if none is active
-            if (defaultCompId && !state.activeCompetition) {
+            // في وضع الاسترجاع، لا نحمّل أي مسابقة تلقائياً - المسابقة تُحمّل من API الاسترجاع
+            if (state.isRestoreMode) {
+                console.log('[Restore Mode] Skipping auto-load of competition - using restore API');
+                // لا نغير شيء - المسابقة ستُحمّل من loadCompetitionForRestore
+            } else if (defaultCompId && !state.activeCompetition) {
                 // console.log(`[DEBUG] Auto-loading default competition: ${defaultCompId}`);
                 await loadCompetitionById(defaultCompId);
             } else if (!defaultCompId) {
@@ -17026,13 +17433,15 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 const data = await response.json();
                 const competition = data.competition;
 
-                // 2. Fetch Winners for this competition
-                const winnersResponse = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${compId}`);
+                // 2. Fetch Winners for this competition (only if agent is selected)
                 let winners = [];
-                if (winnersResponse.ok) {
-                    const winnersData = await winnersResponse.json();
-                    if (winnersData.competitions && winnersData.competitions.length > 0) {
-                        winners = winnersData.competitions[0].winners || [];
+                if (state.selectedAgent && state.selectedAgent.id) {
+                    const winnersResponse = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${compId}`);
+                    if (winnersResponse.ok) {
+                        const winnersData = await winnersResponse.json();
+                        if (winnersData.competitions && winnersData.competitions.length > 0) {
+                            winners = winnersData.competitions[0].winners || [];
+                        }
                     }
                 }
 
@@ -17217,20 +17626,36 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           depositBonusPercentage: competition.deposit_bonus_percentage || 0
         };
         
-        // If competition ID changed, ensure we start fresh (though restoreSession handles it, we can be explicit)
+        // If competition ID changed, save old one and prepare for new
         if (previousCompetitionId && previousCompetitionId !== competition._id) {
-             // Only clear if we are going to restore session or if we didn't load anything
-             if (shouldRestoreSession) {
-                 state.winners = [];
-                 state.entries = [];
-                 const ta = document.getElementById('participants-input');
-                 if (ta) ta.value = '';
+             // === حفظ بيانات المسابقة السابقة قبل التبديل ===
+             if (state.entries.length > 0 || state.winners.length > 0) {
+               saveSessionImmediate(); // احفظ بيانات المسابقة السابقة
              }
+             // مسح البيانات المحلية للتحضير للمسابقة الجديدة
+             state.winners = [];
+             state.entries = [];
+             const ta = document.getElementById('participants-input');
+             if (ta) ta.value = '';
         }
 
-        // Restore session for this specific competition ONLY if requested
-        if (shouldRestoreSession) {
+        // === محاولة استرجاع بيانات المسابقة المحفوظة محلياً ===
+        const competitionId = competition._id || competition.id;
+        const restoredFromStorage = loadCompetitionEntriesFromStorage(competitionId);
+        
+        // Restore session for this specific competition ONLY if requested AND no data was restored
+        if (shouldRestoreSession && !restoredFromStorage) {
             await restoreSession(true);
+        }
+        
+        // إذا تم الاسترجاع من localStorage، حدث الواجهة
+        if (restoredFromStorage) {
+            renderParticipants();
+            renderWinners();
+            updateCounts();
+            drawWheel();
+            // استرجاع الصور من IndexedDB
+            await restoreImagesFromDB();
         }
     
         // --- NEW: Fetch agent winner history for validation ---
@@ -17912,38 +18337,81 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     // ==========================================
     async function init() {
       // [init] Winner Roulette initialization started
+      console.log('[INIT] Starting winner roulette initialization...');
       
       try { document.body.classList.add('dark-mode'); } catch(e) {}
+      
+      // === WINNER PROTECTION: التحقق من حالة الفائزين عند بدء التشغيل ===
+      try {
+        // محاولة استعادة من النسخ الاحتياطية إذا كانت الجلسة فارغة
+        const savedSession = localStorage.getItem(LS_KEY);
+        if (!savedSession || savedSession === '{}') {
+          const emergencyBackup = emergencyRestoreWinners();
+          if (emergencyBackup && emergencyBackup.winners && emergencyBackup.winners.length > 0) {
+            console.log('[PROTECTION] Restoring winners from emergency backup:', emergencyBackup.winners.length);
+            state.winners = emergencyBackup.winners;
+            toast(`تم استعادة ${emergencyBackup.winners.length} فائز من النسخة الاحتياطية`, 'info');
+          }
+        }
+      } catch (e) {
+        console.warn('[PROTECTION] Emergency restore check failed:', e);
+      }
       
       // Make sure the modal structure is up-to-date before any winner selection occurs
       // Calling ensureWinnerModalStructure
       ensureWinnerModalStructure();
       // ensureWinnerModalStructure completed
       
-      // التحقق من agent_id في URL للتحديد التلقائي
-      const hash = window.location.hash;
-      const [route, query] = hash.split('?');
-      const urlParams = new URLSearchParams(query || '');
-      const agentIdFromUrl = urlParams.get('agent_id');
+      // التحقق من agent_id و competition_id و mode في URL أو hash
+      // الـ hash يكون على الشكل: #winner-roulette?agent_id=xxx&competition_id=yyy&mode=restore
+      const hashParts = window.location.hash.split('?');
+      const hashParams = hashParts.length > 1 ? new URLSearchParams(hashParts[1]) : new URLSearchParams();
+      // أيضاً نتحقق من search params للتوافق
+      const urlSearchParams = new URLSearchParams(window.location.search);
+      
+      const agentIdFromUrl = hashParams.get('agent_id') || urlSearchParams.get('agent_id');
+      const competitionIdFromUrl = hashParams.get('competition_id') || urlSearchParams.get('competition_id');
+      const modeFromUrl = hashParams.get('mode') || urlSearchParams.get('mode');
+      const isRestoreMode = modeFromUrl === 'restore';
+      
+      // حفظ وضع الاستعادة في الـ state للوصول إليه من أي مكان
+      state.isRestoreMode = isRestoreMode;
       
       // Clear selected agent on page load - always start fresh
       // state.selectedAgent = null; // REMOVED to allow session restore
       state.activeCompetition = null;
       
-      await loadAgents();
+      // في وضع الاستعادة، نمرر agent_id لضمان إضافته للقائمة حتى لو لم يكن لديه مسابقة نشطة
+      await loadAgents(isRestoreMode ? agentIdFromUrl : null);
       bindUI();
-      startPulseAnimation(); // بدء التأثير المتحرك للخلفية
+      // startPulseAnimation() removed - animation only during spin
+      drawWheel(); // رسم العجلة مرة واحدة عند التحميل
       
       // إذا كان هناك agent_id في URL، حدد الوكيل تلقائياً
       if (agentIdFromUrl) {
-        setTimeout(() => {
-          autoSelectAgent(agentIdFromUrl);
-        }, 500); // انتظار تحميل الوكلاء
+        // تحديد الوكيل مباشرة بدون setTimeout لأن loadAgents اكتمل
+        const agentSelected = autoSelectAgent(agentIdFromUrl);
+        
+        // إذا كان وضع الاستعادة وتم تحديد الوكيل، حمّل المسابقة
+        if (isRestoreMode && competitionIdFromUrl && agentSelected) {
+          // انتظار قليل لتحميل معلومات الوكيل
+          setTimeout(async () => {
+            await loadCompetitionForRestore(competitionIdFromUrl);
+          }, 500);
+        } else if (isRestoreMode && competitionIdFromUrl && !agentSelected) {
+          console.error('[Restore Mode] فشل في تحديد الوكيل، لن يتم تحميل المسابقة');
+          toast('فشل في تحديد الوكيل للاستعادة', 'error');
+        }
       }
       
-      await restoreSession(); // Restore everything including agent
+      // لا تستعيد الجلسة في وضع الاستعادة لأننا سنحمّل من قاعدة البيانات
+      if (!isRestoreMode) {
+        await restoreSession(); // Restore everything including agent
+      }
       // state.selectedAgent = null; // REMOVED
       updateSpinControls?.();
+      
+      console.log('[INIT] Winner roulette initialized. Winners count:', state.winners.length);
       drawWheel();
 
       // مزامنة تلقائية للمتبقي: حدث دوري يحدث كل 25 ثانية لجلب حالة المسابقة الحالية
@@ -17978,6 +18446,36 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             // تجاهل أخطاء الشبكة المؤقتة
           }
         }, 25000);
+        
+        // === WINNER PROTECTION: حفظ تلقائي دوري كل 30 ثانية ===
+        if (window._wrAutoSaveTimer) { clearInterval(window._wrAutoSaveTimer); }
+        window._wrAutoSaveTimer = setInterval(() => {
+          if (state.winners && state.winners.length > 0) {
+            console.log('[AUTO-SAVE] Saving', state.winners.length, 'winners...');
+            safeImmediateSave();
+          }
+        }, 30000);
+        
+        // === إيقاف المزامنة عند عدم التركيز على الصفحة لتوفير الموارد ===
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) {
+            // الصفحة مخفية - أوقف المزامنة
+            if (window._wrAutoSyncTimer) {
+              clearInterval(window._wrAutoSyncTimer);
+              window._wrAutoSyncTimer = null;
+            }
+            // === WINNER PROTECTION: حفظ فوري عند مغادرة الصفحة ===
+            if (state.winners && state.winners.length > 0) {
+              safeImmediateSave();
+            }
+          } else {
+            // الصفحة ظاهرة - أعد تشغيل المزامنة إذا كان هناك وكيل محدد
+            if (!window._wrAutoSyncTimer && state.selectedAgent) {
+              // إعادة تحميل البيانات فوراً
+              updateCounts();
+            }
+          }
+        });
       } catch (e) { /* ignore */ }
     
       // Log screen size for debugging
@@ -17986,32 +18484,385 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
     function autoSelectAgent(agentId) {
       const agentSelect = document.getElementById('agent-select');
-      if (!agentSelect) return;
+      if (!agentSelect) return false;
       
       // البحث عن الخيار الذي يطابق agent _id
       const option = Array.from(agentSelect.options).find(opt => opt.value === agentId);
       if (option) {
         agentSelect.value = option.value;
+        // تعيين state.selectedAgent مباشرة قبل إطلاق الحدث
+        const agentIdNum = option.dataset.agentId;
+        const agentName = option.textContent.split(' (#')[0];
+        state.selectedAgent = {
+          id: agentId,
+          name: agentName,
+          agentId: agentIdNum
+        };
         // محاكاة حدث change لتحديد الوكيل
         agentSelect.dispatchEvent(new Event('change'));
-        // console.log(`تم تحديد الوكيل تلقائياً: ${option.textContent}`);
+        console.log(`[AutoSelect] تم تحديد الوكيل تلقائياً: ${option.textContent}`);
+        return true;
       } else {
-        console.warn(`لم يتم العثور على وكيل بالمعرف: ${agentId}`);
+        console.warn(`[AutoSelect] لم يتم العثور على وكيل بالمعرف: ${agentId}`);
+        return false;
       }
     }
     
-    function startPulseAnimation() {
-      if (state.isAnimating) return; // تجنب التكرار
-      state.isAnimating = true;
+    // ==========================================
+    // تحميل مسابقة مكتملة لإعادة الإرسال (وضع الاستعادة)
+    // استخدام API محسّن مع التحقق من سلامة الملفات
+    // ==========================================
+    async function loadCompetitionForRestore(competitionId) {
+      console.log('[Restore Mode] Loading competition:', competitionId);
       
-      const animate = () => {
-        if (!state.isAnimating) return;
-        state.pulseTime += 0.05;
-        drawWheel(); // إعادة رسم العجلة مع التحديث الجديد
-        requestAnimationFrame(animate);
+      const authedFetch = window.authedFetch || fetch;
+      const competitionInfo = document.querySelector('.wr-competition-info');
+      
+      if (competitionInfo) {
+        competitionInfo.innerHTML = '<div class="wr-agent-info-empty"><i class="fas fa-spinner fa-spin"></i> جاري تحميل بيانات المسابقة...</div>';
+      }
+      
+      try {
+        // استخدام API الجديد المحسّن للاسترجاع
+        const restoreResponse = await authedFetch(`/api/competitions/${competitionId}/restore-data`);
+        
+        if (!restoreResponse.ok) {
+          // Fallback للطريقة القديمة إذا فشل API الجديد
+          console.warn('[Restore Mode] New API failed, falling back to legacy method');
+          return await loadCompetitionForRestoreLegacy(competitionId);
+        }
+        
+        const restoreData = await restoreResponse.json();
+        const { competition, agent, winners, validation, hasSnapshot, canRestore } = restoreData;
+        
+        if (!competition) {
+          throw new Error('المسابقة غير موجودة');
+        }
+        
+        // تحقق من الوكيل - استخدام بيانات الـ snapshot أو البيانات الحالية
+        if (agent && !state.selectedAgent) {
+          state.selectedAgent = {
+            id: agent._id,
+            name: agent.name,
+            agentId: agent.agent_id
+          };
+          // محاولة تحديد الوكيل في القائمة
+          autoSelectAgent(agent._id);
+        }
+        
+        // إعداد حالة المسابقة
+        const tradingWinners = competition.trading_winners_count || 0;
+        const depositWinners = competition.deposit_winners_count || 0;
+        const totalWinners = tradingWinners + depositWinners;
+        
+        state.activeCompetition = {
+          id: competition._id,
+          tradingWinnersRequired: tradingWinners,
+          depositWinnersRequired: depositWinners,
+          totalRequired: competition.required_winners || totalWinners,
+          requiredWinners: competition.required_winners || totalWinners,
+          currentWinners: winners.length,
+          prizePerWinner: competition.prize_per_winner || 0,
+          depositBonusPercentage: competition.deposit_bonus_percentage || 0
+        };
+        
+        // تحويل الفائزين لتنسيق الـ state
+        state.winners = winners.map(w => ({
+          id: w._id,
+          _id: w._id,
+          name: w.name,
+          account: w.account_number,
+          email: w.email,
+          prizeType: w.prize_type || 'trading',
+          prizeValue: w.prize_value,
+          videoUrl: w.video_url,
+          nationalIdImage: w.national_id_image,
+          idImageUploaded: true,
+          selected: true,
+          agent: state.selectedAgent ? {
+            id: state.selectedAgent.id,
+            name: state.selectedAgent.name,
+            agentId: state.selectedAgent.agentId
+          } : null
+        }));
+        
+        state.reportSent = false;
+        
+        // بناء واجهة المعلومات مع التحذيرات
+        let validationHtml = '';
+        if (validation && validation.issues && validation.issues.length > 0) {
+          // تصنيف التحذيرات
+          const missingVideos = validation.missingVideos || [];
+          const missingImages = validation.missingImages || [];
+          
+          let warningsContent = '';
+          
+          if (missingImages.length > 0) {
+            warningsContent += `
+              <div style="margin-bottom: 10px;">
+                <strong style="color: #ef4444;"><i class="fas fa-id-card"></i> صور هوية مفقودة (${missingImages.length}):</strong>
+                <ul style="margin: 5px 0; padding-right: 20px;">
+                  ${missingImages.map(m => `<li>${m.winnerName}</li>`).join('')}
+                </ul>
+              </div>
+            `;
+          }
+          
+          if (missingVideos.length > 0) {
+            warningsContent += `
+              <div style="margin-bottom: 10px;">
+                <strong style="color: #f59e0b;"><i class="fas fa-video-slash"></i> فيديوهات مفقودة (${missingVideos.length}):</strong>
+                <ul style="margin: 5px 0; padding-right: 20px;">
+                  ${missingVideos.map(m => `<li>${m.winnerName}</li>`).join('')}
+                </ul>
+              </div>
+            `;
+          }
+          
+          // إذا لم يكن هناك تصنيف للملفات، اعرض كل الـ issues مباشرة
+          if (warningsContent === '') {
+            warningsContent = `
+              <ul style="margin: 0; padding-right: 20px;">
+                ${validation.issues.map(issue => `<li>${issue}</li>`).join('')}
+              </ul>
+            `;
+          } else {
+            // إذا كانت هناك تحذيرات أخرى غير الملفات
+            const otherIssues = validation.issues.filter(issue => 
+              !issue.includes('صورة هوية') && !issue.includes('فيديو')
+            );
+            if (otherIssues.length > 0) {
+              warningsContent += `
+                <div>
+                  <strong><i class="fas fa-info-circle"></i> تحذيرات أخرى:</strong>
+                  <ul style="margin: 5px 0; padding-right: 20px;">
+                    ${otherIssues.map(issue => `<li>${issue}</li>`).join('')}
+                  </ul>
+                </div>
+              `;
+            }
+          }
+          
+          validationHtml = `
+            <div class="wr-validation-warnings" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 12px; margin-top: 12px;">
+              <div style="color: #ef4444; font-weight: bold; margin-bottom: 10px; font-size: 1rem;">
+                <i class="fas fa-exclamation-triangle"></i> ⚠️ تحذيرات:
+              </div>
+              <div style="font-size: 0.85rem; color: #fca5a5;">
+                ${warningsContent}
+              </div>
+              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.8rem; color: #f87171;">
+                💡 <strong>نصيحة:</strong> اضغط على "تعديل" لكل فائز لإعادة رفع الملفات المفقودة
+              </div>
+            </div>
+          `;
+          console.log('[Restore Mode] Built validationHtml:', validationHtml.substring(0, 200));
+        }
+        
+        let snapshotInfo = '';
+        if (hasSnapshot && competition.completion_snapshot) {
+          snapshotInfo = `
+            <div style="font-size: 0.8rem; color: #10b981; margin-top: 8px;">
+              <i class="fas fa-check-circle"></i> 
+              نسخة محفوظة من ${new Date(competition.completion_snapshot.snapshot_at).toLocaleDateString('ar-EG')}
+              ${competition.completion_snapshot.completed_by_name ? `بواسطة ${competition.completion_snapshot.completed_by_name}` : ''}
+            </div>
+          `;
+        }
+        
+        let restoreHistoryHtml = '';
+        if (competition.restore_history && competition.restore_history.length > 0) {
+          restoreHistoryHtml = `
+            <div style="font-size: 0.8rem; color: #f59e0b; margin-top: 8px;">
+              <i class="fas fa-history"></i> تم الاسترجاع ${competition.restore_history.length} مرة سابقاً
+            </div>
+          `;
+        }
+        
+        if (competitionInfo) {
+          competitionInfo.innerHTML = `
+            <div class="wr-restore-mode-banner" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(234, 88, 12, 0.15)); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+              <div style="display: flex; align-items: center; gap: 12px; color: #f59e0b;">
+                <i class="fas fa-redo-alt" style="font-size: 24px;"></i>
+                <div>
+                  <div style="font-weight: bold; font-size: 1.1rem;">وضع إعادة الإرسال</div>
+                  <div style="font-size: 0.9rem; opacity: 0.9;">يمكنك إعادة إرسال التقارير للوكيل أو للجروب من هنا</div>
+                  ${snapshotInfo}
+                  ${restoreHistoryHtml}
+                </div>
+              </div>
+            </div>
+            <div class="wr-competition-details" style="background: var(--card-bg-color); border-radius: 12px; padding: 16px;">
+              <h4 style="margin: 0 0 12px 0; color: var(--text-color);"><i class="fas fa-trophy"></i> ${competition.name || 'مسابقة'}</h4>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 0.9rem;">
+                <div><i class="fas fa-users"></i> الفائزون: <strong>${winners.length}</strong></div>
+                <div><i class="fas fa-dollar-sign"></i> الجائزة: <strong>$${competition.prize_per_winner || 0}</strong></div>
+                <div><i class="fas fa-percent"></i> بونص إيداع: <strong>${competition.deposit_bonus_percentage || 0}%</strong></div>
+                <div><i class="fas fa-calendar"></i> ${new Date(competition.createdAt).toLocaleDateString('ar-EG')}</div>
+              </div>
+              ${validationHtml}
+            </div>
+          `;
+        }
+        
+        // تحديث العرض
+        renderWinners();
+        updateCounts();
+        drawWheel();
+        
+        // إظهار رسالة نجاح مع تحذير إذا لزم الأمر
+        if (validation && validation.issues && validation.issues.length > 0) {
+          console.log('[Restore Mode] Validation issues:', validation.issues);
+          console.log('[Restore Mode] Missing videos:', validation.missingVideos);
+          console.log('[Restore Mode] Missing images:', validation.missingImages);
+          
+          const missingVideos = validation.missingVideos?.length || 0;
+          const missingImages = validation.missingImages?.length || 0;
+          
+          let warningMsg = 'تم تحميل المسابقة. ';
+          if (missingImages > 0) {
+            warningMsg += `⚠️ ${missingImages} صور هوية مفقودة. `;
+          }
+          if (missingVideos > 0) {
+            warningMsg += `⚠️ ${missingVideos} فيديوهات مفقودة. `;
+          }
+          warningMsg += 'راجع التفاصيل أدناه.';
+          
+          toast(warningMsg, 'warning');
+        } else {
+          toast('تم تحميل بيانات المسابقة بنجاح. يمكنك الآن إعادة إرسال التقارير.', 'success');
+        }
+        
+        console.log('[Restore Mode] Loaded successfully:', {
+          competition: competition.name,
+          winnersCount: winners.length,
+          hasSnapshot,
+          validationIssues: validation?.issues?.length || 0,
+          issueDetails: validation?.issues || []
+        });
+        
+      } catch (error) {
+        console.error('[Restore Mode] Error:', error);
+        if (competitionInfo) {
+          competitionInfo.innerHTML = `<div class="wr-agent-info-empty" style="color: #ef4444;"><i class="fas fa-exclamation-circle"></i> ${error.message}</div>`;
+        }
+        toast(`فشل تحميل المسابقة: ${error.message}`, 'error');
+      }
+    }
+    
+    // === Fallback للطريقة القديمة ===
+    async function loadCompetitionForRestoreLegacy(competitionId) {
+      const authedFetch = window.authedFetch || fetch;
+      const competitionInfo = document.querySelector('.wr-competition-info');
+      
+      // جلب تفاصيل المسابقة
+      const compResponse = await authedFetch(`/api/competitions/${competitionId}`);
+      if (!compResponse.ok) {
+        throw new Error('فشل في جلب بيانات المسابقة');
+      }
+      const compData = await compResponse.json();
+      const competition = compData.competition;
+      
+      if (!competition) {
+        throw new Error('المسابقة غير موجودة');
+      }
+      
+      // جلب الفائزين
+      const agentId = state.selectedAgent?.id;
+      if (!agentId) {
+        throw new Error('لم يتم تحديد الوكيل');
+      }
+      
+      const winnersResponse = await authedFetch(`/api/agents/${agentId}/winners?competition_id=${competitionId}`);
+      let winners = [];
+      if (winnersResponse.ok) {
+        const winnersData = await winnersResponse.json();
+        if (winnersData.competitions && winnersData.competitions.length > 0) {
+          winners = winnersData.competitions[0].winners || [];
+        }
+      }
+      
+      // إعداد حالة المسابقة
+      const tradingWinners = competition.trading_winners_count || 0;
+      const depositWinners = competition.deposit_winners_count || 0;
+      const totalWinners = tradingWinners + depositWinners;
+      
+      state.activeCompetition = {
+        id: competition._id || competition.id,
+        tradingWinnersRequired: tradingWinners,
+        depositWinnersRequired: depositWinners,
+        totalRequired: competition.required_winners || totalWinners,
+        requiredWinners: competition.required_winners || totalWinners,
+        currentWinners: winners.length,
+        prizePerWinner: competition.prize_per_winner || 0,
+        depositBonusPercentage: competition.deposit_bonus_percentage || 0
       };
       
-      animate();
+      state.winners = winners.map(w => ({
+        id: w.id,
+        _id: w.id,
+        name: w.name,
+        account: w.account_number,
+        email: w.email,
+        prizeType: w.prize_type || 'trading',
+        prizeValue: w.prize_value,
+        videoUrl: w.video_url,
+        nationalIdImage: w.national_id_image,
+        idImageUploaded: true,
+        selected: true,
+        agent: state.selectedAgent ? {
+          id: state.selectedAgent.id,
+          name: state.selectedAgent.name,
+          agentId: state.selectedAgent.agentId
+        } : null
+      }));
+      
+      state.reportSent = false;
+      
+      if (competitionInfo) {
+        competitionInfo.innerHTML = `
+          <div class="wr-restore-mode-banner" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(234, 88, 12, 0.15)); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px; color: #f59e0b;">
+              <i class="fas fa-redo-alt" style="font-size: 24px;"></i>
+              <div>
+                <div style="font-weight: bold; font-size: 1.1rem;">وضع إعادة الإرسال</div>
+                <div style="font-size: 0.9rem; opacity: 0.9;">يمكنك إعادة إرسال التقارير للوكيل أو للجروب من هنا</div>
+              </div>
+            </div>
+          </div>
+          <div class="wr-competition-details" style="background: var(--card-bg-color); border-radius: 12px; padding: 16px;">
+            <h4 style="margin: 0 0 12px 0; color: var(--text-color);"><i class="fas fa-trophy"></i> ${competition.name || 'مسابقة'}</h4>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 0.9rem;">
+              <div><i class="fas fa-users"></i> الفائزون: <strong>${winners.length}</strong></div>
+              <div><i class="fas fa-dollar-sign"></i> الجائزة: <strong>$${competition.prize_per_winner || 0}</strong></div>
+              <div><i class="fas fa-percent"></i> بونص إيداع: <strong>${competition.deposit_bonus_percentage || 0}%</strong></div>
+              <div><i class="fas fa-calendar"></i> ${new Date(competition.createdAt).toLocaleDateString('ar-EG')}</div>
+            </div>
+          </div>
+        `;
+      }
+      
+      renderWinners();
+      updateCounts();
+      drawWheel();
+      
+      toast('تم تحميل بيانات المسابقة بنجاح. يمكنك الآن إعادة إرسال التقارير.', 'success');
+      
+      console.log('[Restore Mode Legacy] Loaded successfully:', {
+        competition: competition.name,
+        winnersCount: winners.length
+      });
+    }
+    
+    function startPulseAnimation() {
+      // DEPRECATED: Animation loop removed for performance
+      // The wheel is now drawn on-demand only when needed
+      // This function is kept for backwards compatibility
+      drawWheel();
+    }
+    
+    function stopPulseAnimation() {
+      state.isAnimating = false;
     }
     
     function bindUI() {
@@ -18069,8 +18920,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         const agentId = e.target.value;
         const prevAgentId = state.selectedAgent?.id || null;
         if (!agentId) {
+          // === حفظ بيانات المسابقة الحالية قبل التبديل ===
+          if (state.activeCompetition && state.activeCompetition.id) {
+            saveSessionImmediate(); // احفظ البيانات الحالية قبل مسحها
+          }
           state.selectedAgent = null;
-          // Switching away from an agent: clear participants so they don't bleed into the next selection
+          // مسح البيانات المحلية فقط
           state.entries = [];
           state.filterTerm = '';
           // Clear UI elements tied to participants
@@ -18081,7 +18936,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           try { renderParticipants(); } catch {}
           try { updateCounts(); } catch {}
           try { drawWheel(); } catch {}
-          saveSession();
+          // لا تستدعي saveSession هنا
           updateAgentStatus('', '');
           hideAgentInfoBox();
           updateSpinControls?.();
@@ -18091,6 +18946,11 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
         // If the user switched to a different agent, wipe participants (and winners UI) to prevent inheritance
         if (prevAgentId && prevAgentId !== agentId) {
+          // === حفظ بيانات المسابقة الحالية قبل التبديل ===
+          if (state.activeCompetition && state.activeCompetition.id) {
+            saveSessionImmediate(); // احفظ البيانات الحالية قبل مسحها
+          }
+          // مسح البيانات المحلية فقط (بدون حفظ بعد المسح)
           state.entries = [];
           state.filterTerm = '';
           state.winners = [];
@@ -18102,7 +18962,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           try { renderWinners(); } catch {}
           try { updateCounts(); } catch {}
           try { drawWheel(); } catch {}
-          saveSession();
+          // لا تستدعي saveSession هنا لأن ده هيحفظ entries فارغة للمسابقة الحالية
         }
 
         const option = e.target.selectedOptions[0];
@@ -18600,7 +19460,70 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         activeCompetitionId: state.activeCompetition ? state.activeCompetition.id : null
       };
       try { localStorage.setItem(LS_KEY, JSON.stringify(session)); } catch {}
+      
+      // === حفظ بيانات المسابقة بشكل منفصل لضمان عدم الفقدان ===
+      if (state.activeCompetition && state.activeCompetition.id) {
+        const competitionKey = `winnerRoulette_competition_${state.activeCompetition.id}`;
+        const competitionData = {
+          entries: state.entries,
+          winners: state.winners,
+          competitionId: state.activeCompetition.id,
+          agentId: state.selectedAgent?.id || null,
+          agentName: state.selectedAgent?.name || null,
+          savedAt: new Date().toISOString()
+        };
+        try { localStorage.setItem(competitionKey, JSON.stringify(competitionData)); } catch {}
+      }
     }
+    
+    // === استرجاع بيانات مسابقة محددة من localStorage ===
+    function restoreCompetitionData(competitionId) {
+      if (!competitionId) return null;
+      const competitionKey = `winnerRoulette_competition_${competitionId}`;
+      try {
+        const raw = localStorage.getItem(competitionKey);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (e) {
+        console.warn('Failed to restore competition data:', e);
+        return null;
+      }
+    }
+    
+    // === تحميل بيانات المسابقة عند اختيارها ===
+    function loadCompetitionEntriesFromStorage(competitionId) {
+      const saved = restoreCompetitionData(competitionId);
+      if (saved) {
+        // استرجاع المشاركين والفائزين المحفوظين
+        if (saved.entries && saved.entries.length > 0) {
+          state.entries = saved.entries;
+          const ta = document.getElementById('participants-input');
+          if (ta) {
+            ta.value = state.entries.map(e => e.account ? `${e.name} — ${e.account}` : e.name).join('\n');
+          }
+        }
+        if (saved.winners && saved.winners.length > 0) {
+          // دمج الفائزين المحفوظين مع الحاليين (تجنب التكرار)
+          saved.winners.forEach(sw => {
+            if (!state.winners.find(w => w.id === sw.id)) {
+              state.winners.push(sw);
+            }
+          });
+        }
+        console.log(`[loadCompetitionEntriesFromStorage] Restored ${saved.entries?.length || 0} entries and ${saved.winners?.length || 0} winners for competition ${competitionId}`);
+        return true;
+      }
+      return false;
+    }
+    
+    // Initialize debounced version
+    saveSessionImmediate = saveSession;
+    debouncedSaveSession = debounce(saveSession, 500);
+    
+    // حفظ فوري عند إغلاق الصفحة لضمان عدم فقدان البيانات
+    window.addEventListener('beforeunload', () => {
+      saveSessionImmediate();
+    });
     
     async function restoreVideosFromDB() {
       if (!state.winners || state.winners.length === 0) return;
@@ -19225,8 +20148,11 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const W = canvas.width;
       const H = canvas.height;
       
-      // Draw semi-transparent overlay
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+      // رسم العجلة أولاً كخلفية
+      drawWheel();
+      
+      // Draw semi-transparent overlay on top of the wheel (lighter)
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
       ctx.fillRect(0, 0, W, H);
       
       // Draw Winner Info
@@ -19252,12 +20178,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       ctx.fillStyle = '#94a3b8';
       ctx.fillText(`رقم الحساب: ${winner.account}`, W/2, H/2 + 70);
       
-      // Agent Name
-      if (state.selectedAgent) {
-        ctx.font = '18px Arial';
-        ctx.fillStyle = '#64748b';
-        ctx.fillText(`الوكيل: ${state.selectedAgent.name}`, W/2, H/2 + 120);
-      }
+      // Agent Name - Removed from video recording
+      // if (state.selectedAgent) {
+      //   ctx.font = '18px Arial';
+      //   ctx.fillStyle = '#64748b';
+      //   ctx.fillText(`الوكيل: ${state.selectedAgent.name}`, W/2, H/2 + 120);
+      // }
     }
     
     function showVideoPreview(blob, winner) {
@@ -19639,68 +20565,54 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         return html;
       }).join('');
       
-      // Attach event listeners directly to buttons (most robust method)
-      const removeButtons = container.querySelectorAll('.js-remove-btn');
-      
-      removeButtons.forEach(btn => {
-        btn.addEventListener('click', (ev) => {
+      // === EVENT DELEGATION - ربط مرة واحدة فقط بدلاً من كل زر ===
+      if (!participantsDelegationBound) {
+        participantsDelegationBound = true;
+        container.addEventListener('click', (ev) => {
+          const target = ev.target.closest('button');
+          if (!target) return;
+          
           ev.preventDefault();
           ev.stopPropagation();
-          const id = btn.dataset.id;
+          const id = target.dataset.id;
+          if (!id) return;
           
-          // Call the removal logic directly
-          state.entries = state.entries.filter(x => String(x.id) !== String(id));
-          
-          // Update textarea - DISABLED
-          /*
-          const ta = document.getElementById('participants-input');
-          if (ta) {
-            ta.value = state.entries.map(e => `${e.name} — ${e.account}`).join('\n');
+          // Remove button
+          if (target.classList.contains('js-remove-btn')) {
+            state.entries = state.entries.filter(x => String(x.id) !== String(id));
+            renderParticipants();
+            renderWinners();
+            updateCounts();
+            drawWheel();
+            debouncedSaveSession();
           }
-          */
           
-          renderParticipants();
-          renderWinners();
-          updateCounts();
-          drawWheel();
-          saveSession();
-          console.log('[CLICK] Removed successfully');
-        });
-      });
-
-      const editButtons = container.querySelectorAll('.js-edit-btn');
-      editButtons.forEach(btn => {
-        btn.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            const id = btn.dataset.id;
+          // Edit button
+          if (target.classList.contains('js-edit-btn')) {
             const entry = state.entries.find(x => String(x.id) === String(id));
             if (entry) {
-                showEditParticipantModal(entry, (newName, newAccount) => {
-                    // Update entry
-                    entry.name = newName;
-                    entry.account = newAccount;
-                    entry.label = `${newName} (${newAccount})`;
-                    
-                    // Update if in winners list
-                    const winner = state.winners.find(w => String(w.id) === String(id));
-                    if (winner) {
-                        winner.name = newName;
-                        winner.account = newAccount;
-                    }
-                    
-                    renderParticipants();
-                    renderWinners();
-                    updateCounts();
-                    drawWheel();
-                    saveSession();
-                    toast('تم تعديل بيانات المشارك بنجاح', 'success');
-                });
+              showEditParticipantModal(entry, (newName, newAccount) => {
+                entry.name = newName;
+                entry.account = newAccount;
+                entry.label = `${newName} (${newAccount})`;
+                
+                const winner = state.winners.find(w => String(w.id) === String(id));
+                if (winner) {
+                  winner.name = newName;
+                  winner.account = newAccount;
+                }
+                
+                renderParticipants();
+                renderWinners();
+                updateCounts();
+                drawWheel();
+                debouncedSaveSession();
+                toast('تم تعديل بيانات المشارك بنجاح', 'success');
+              });
             }
+          }
         });
-      });
-      
-      console.log('[renderParticipants] HTML set, buttons count:', removeButtons.length);
+      }
     }
     
     function openImageModal(src) {
@@ -19731,8 +20643,28 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       if (!bottomContainer) return;
 
+      // === WINNER PROTECTION: تحقق من سلامة المصفوفة ===
+      const winners = getSafeWinnersArray();
+      console.log('[renderWinners] Rendering', winners.length, 'winners');
+
+      // === تحديث شارة عدد الفائزين (الدائرة الصغيرة) ===
+      const countBadge = document.getElementById('winners-count-badge');
+      console.log('[renderWinners] Badge element:', countBadge, 'Winners count:', winners.length);
+      if (countBadge) {
+        if (winners.length > 0) {
+          countBadge.textContent = winners.length;
+          countBadge.style.cssText = 'display: inline-flex; min-width: 24px; height: 24px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 50%; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.5);';
+          console.log('[renderWinners] Badge shown with count:', winners.length);
+        } else {
+          countBadge.style.display = 'none';
+        }
+      }
+
+      // === تنظيف Blob URLs القديمة لمنع تسرب الذاكرة ===
+      cleanupBlobUrls();
+
       const activeCompetitionId = state.activeCompetition?.id || null;
-      if (state.winners.length === 0 && activeCompetitionId) {
+      if (winners.length === 0 && activeCompetitionId) {
         const stagedForCompetition = getStagedWinnersForCompetition(activeCompetitionId);
         if (stagedForCompetition.length > 0) {
           state.winners = stagedForCompetition.map(w => ({ ...w }));
@@ -19740,12 +20672,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }
       
       // Separate winners by prize type
-      const depositWinners = state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev');
-      const tradingWinners = state.winners.filter(w => w.prizeType === 'trading');
+      const depositWinners = winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev');
+      const tradingWinners = winners.filter(w => w.prizeType === 'trading');
       
       let html = '';
 
-      if (state.winners.length === 0) {
+      if (winners.length === 0) {
         html += '<div class="wr-winner-empty"><i class="fas fa-trophy" style="font-size:2rem;opacity:.3;margin-bottom:8px;"></i><p>لا يوجد اسماء</p></div>';
       }
     
@@ -19754,7 +20686,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // UPDATED: Always show buttons if not approved, regardless of winner count (user request)
       if (!state.noWinnersApproved) {
           // Check if all winners have ID images
-          const allHaveIds = state.winners.length > 0 && state.winners.every(w => 
+          const allHaveIds = winners.length > 0 && winners.every(w => 
               (w.pendingIdImage && (w.pendingIdImage instanceof Blob || w.pendingIdImage instanceof File)) || 
               w.nationalIdImage
           );
@@ -19846,7 +20778,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                       ? w.pendingIdImage 
                       : new Blob([w.pendingIdImage]); // Fallback if it's an ArrayBuffer or similar
                   
-                  const blobUrl = URL.createObjectURL(blob);
+                  const blobUrl = trackBlobUrl(URL.createObjectURL(blob)); // تتبع URL للتنظيف لاحقاً
                   // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
                   idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                       <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
@@ -19863,9 +20795,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
           html += `
             <div class="wr-winner-card" data-id="${w.id}">
-              <div class="wr-winner-card-badge">#${i+1}</div>
+              <div class="wr-winner-card-badge">${w.orderNumber ? `#${w.orderNumber}` : `#${i+1}`}</div>
               <div class="wr-winner-card-body">
-                <div class="wr-winner-card-name" style="color: #000000; font-weight: bold; font-size: 1.1rem;">الاسم: ${w.name}</div>
+                <div class="wr-winner-card-name" style="color: #000000; font-weight: bold; font-size: 1.1rem;">${w.orderNumber ? `<span style="background:#f59e0b; color:#fff; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-left:8px;">الفائز #${w.orderNumber}</span>` : ''} الاسم: ${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
                 <div class="wr-winner-card-prize"><i class="fas fa-gift"></i> ${prizeDisplay}</div>
@@ -19911,7 +20843,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                       ? w.pendingIdImage 
                       : new Blob([w.pendingIdImage]); // Fallback if it's an ArrayBuffer or similar
 
-                  const blobUrl = URL.createObjectURL(blob);
+                  const blobUrl = trackBlobUrl(URL.createObjectURL(blob)); // تتبع URL للتنظيف لاحقاً
                   // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
                   idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                       <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
@@ -19928,9 +20860,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
           html += `
             <div class="wr-winner-card" data-id="${w.id}">
-              <div class="wr-winner-card-badge">#${i+1}</div>
+              <div class="wr-winner-card-badge">${w.orderNumber ? `#${w.orderNumber}` : `#${i+1}`}</div>
               <div class="wr-winner-card-body">
-                <div class="wr-winner-card-name" style="color: #000000; font-weight: bold; font-size: 1.1rem;">الاسم: ${w.name}</div>
+                <div class="wr-winner-card-name" style="color: #000000; font-weight: bold; font-size: 1.1rem;">${w.orderNumber ? `<span style="background:#f59e0b; color:#fff; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-left:8px;">الفائز #${w.orderNumber}</span>` : ''} الاسم: ${w.name}</div>
                 <div class="wr-winner-card-account">رقم الحساب: ${w.account}</div>
                 ${w.email ? `<div class="wr-winner-card-email"><i class="fas fa-envelope"></i> ${w.email}</div>` : ''}
     
@@ -20088,9 +21020,14 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             toast('حدث خطأ أثناء التحقق من حفظ البيانات.', 'error');
             return;
           }
+          
+            // في وضع الاستعادة: لا نحتاج تأكيد إغلاق المسابقة لأنها مغلقة بالفعل
+            const confirmMessage = state.isRestoreMode
+                ? `هل أنت متأكد من حفظ التعديلات على الفائزين (${state.winners.length})؟`
+                : `هل أنت متأكد من اعتماد الفائزين (${state.winners.length}) وإغلاق المسابقة؟<br><small style="color:#ef4444">لن تتمكن من تعديل الفائزين بعد هذه الخطوة.</small>`;
             
             showConfirmModal(
-                `هل أنت متأكد من اعتماد الفائزين (${state.winners.length}) وإغلاق المسابقة؟<br><small style="color:#ef4444">لن تتمكن من تعديل الفائزين بعد هذه الخطوة.</small>`,
+                confirmMessage,
                 async () => {
                     try {
                         console.log('[Approve Winners] Sending approval request for competition:', state.activeCompetition.id);
@@ -20099,13 +21036,17 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                winners: state.winners.map(w => w._id).filter(Boolean)
+                                winners: state.winners.map(w => w._id).filter(Boolean),
+                                isRestoreMode: state.isRestoreMode
                             })
                         });
                         
                         if (resp.ok) {
                             console.log('[Approve Winners] Approval successful.');
-                            toast('تم اعتماد المسابقة بنجاح', 'success');
+                            const successMessage = state.isRestoreMode 
+                                ? 'تم حفظ التعديلات بنجاح' 
+                                : 'تم اعتماد المسابقة بنجاح';
+                            toast(successMessage, 'success');
                             clearStagedWinnersForCompetition(state.activeCompetition.id);
                             
                             // Redirect to agent competitions page
@@ -20206,24 +21147,35 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             sendIDsBtn.addEventListener('click', sendWinnersWithIDsToAgent);
         }
 
-        bottomContainer.querySelectorAll('[data-copy]').forEach(btn => {
-            btn.addEventListener('click', handleCopyClick);
-        });
-        bottomContainer.querySelectorAll('[data-edit]').forEach(btn => {
-            btn.addEventListener('click', handleEditClick);
-        });
-        bottomContainer.querySelectorAll('input[data-warn]').forEach(input => {
-            input.addEventListener('change', handleWinnerWarningToggle);
-        });
-        bottomContainer.querySelectorAll('[data-restore]').forEach(btn => {
-            btn.addEventListener('click', handleRestoreClick);
-        });
-        bottomContainer.querySelectorAll('[data-send]').forEach(btn => {
-            btn.addEventListener('click', handleSendClick);
-        });
-        bottomContainer.querySelectorAll('[data-delete]').forEach(btn => {
-            btn.addEventListener('click', handleDeleteClick);
-        });
+        // === EVENT DELEGATION للفائزين - ربط مرة واحدة فقط ===
+        if (!winnersDelegationBound) {
+            winnersDelegationBound = true;
+            
+            // Click delegation
+            bottomContainer.addEventListener('click', (ev) => {
+                const target = ev.target.closest('button');
+                if (!target) return;
+                
+                if (target.dataset.copy) {
+                    handleCopyClick({ currentTarget: target });
+                } else if (target.dataset.edit) {
+                    handleEditClick({ currentTarget: target });
+                } else if (target.dataset.restore) {
+                    handleRestoreClick({ currentTarget: target });
+                } else if (target.dataset.send) {
+                    handleSendClick({ currentTarget: target });
+                } else if (target.dataset.delete) {
+                    handleDeleteClick({ currentTarget: target });
+                }
+            });
+            
+            // Change delegation for checkboxes
+            bottomContainer.addEventListener('change', (ev) => {
+                if (ev.target.matches('input[data-warn]')) {
+                    handleWinnerWarningToggle(ev);
+                }
+            });
+        }
     }function handleCopyClick(ev) {
       const text = ev.currentTarget.getAttribute('data-copy');
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -20294,7 +21246,33 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const winner = state.winners.find(w => w.id === id);
       if (!winner) return;
 
-      if (!confirm('هل أنت متأكد من حذف هذا الفائز؟')) return;
+      // === WINNER PROTECTION: تأكيد مضاعف قبل الحذف ===
+      const confirmMessage = `⚠️ تحذير: أنت على وشك حذف الفائز "${winner.name}".\n\nهذا الإجراء لا يمكن التراجع عنه. هل أنت متأكد تماماً؟`;
+      if (!confirm(confirmMessage)) return;
+      
+      // تأكيد ثاني للحماية
+      if (!confirm(`تأكيد نهائي: سيتم حذف "${winner.name}" نهائياً. اضغط موافق للمتابعة.`)) return;
+      
+      // === PROTECTION: حفظ نسخة احتياطية قبل الحذف ===
+      const backupKey = `winnerDeleted_backup_${winner.id}_${Date.now()}`;
+      try {
+        localStorage.setItem(backupKey, JSON.stringify({
+          winner: {
+            id: winner.id,
+            _id: winner._id,
+            name: winner.name,
+            account: winner.account,
+            email: winner.email,
+            prizeType: winner.prizeType,
+            prizeValue: winner.prizeValue,
+            orderNumber: winner.orderNumber
+          },
+          competitionId: state.activeCompetition?.id,
+          deletedAt: new Date().toISOString()
+        }));
+      } catch (e) {
+        console.warn('[PROTECTION] Failed to backup winner before delete:', e);
+      }
       
       // Call backend delete if winner is saved
       if (winner._id && state.selectedAgent && state.selectedAgent.id) {
@@ -20493,6 +21471,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function generateSingleWinnerMessage(w) {
+        const ordinals = ['الاول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'];
         let prizeText = '';
         if (w.prizeType === 'deposit_prev') {
             prizeText = `${w.prizeValue}% بونص ايداع كونه فائز مسبقا ببونص تداولي`;
@@ -20502,7 +21481,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             prizeText = `${w.prizeValue}$ بونص تداولي`;
         }
     
-        let msg = `◃ الفائز: ${w.name}\n`;
+        // استخدام رقم الترتيب اليدوي إذا كان موجوداً
+        const rank = w.orderNumber 
+            ? (ordinals[w.orderNumber - 1] || `رقم ${w.orderNumber}`)
+            : '';
+        
+        let msg = rank ? `◃ الفائز ${rank}: ${w.name}\n` : `◃ الفائز: ${w.name}\n`;
         msg += `           الجائزة: ${prizeText}\n`;
 
         msg += `\n********************************************************\n`;
@@ -20548,12 +21532,19 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const skipBtn = document.getElementById('skip-winner');
       const idInput = document.getElementById('winner-id-image');
       const idPreview = document.getElementById('winner-id-image-preview');
+      const orderNumberInput = document.getElementById('winner-order-number');
+      const orderErrorEl = document.getElementById('winner-order-error');
 
       if (!modal) return;
 
       // Populate fields
       winnerName.textContent = `الاسم: ${winner.name}`;
       winnerAccount.textContent = `رقم الحساب: ${winner.account}`;
+      
+      // --- تعبئة رقم الترتيب الحالي ---
+      if (orderNumberInput) {
+          orderNumberInput.value = winner.orderNumber || '';
+      }
 
       // --- NEW: Click to Copy Account Number (Edit Mode) ---
       winnerAccount.style.cursor = 'pointer';
@@ -20722,6 +21713,45 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               return;
           }
           
+          // --- التحقق من رقم الترتيب ---
+          const newOrderNumber = orderNumberInput?.value ? parseInt(orderNumberInput.value, 10) : null;
+          
+          if (!newOrderNumber) {
+              toast('يجب إدخال رقم الترتيب', 'error');
+              orderNumberInput?.classList.add('wr-input-error');
+              if (orderErrorEl) orderErrorEl.style.display = 'block';
+              setTimeout(() => {
+                  orderNumberInput?.classList.remove('wr-input-error');
+                  if (orderErrorEl) orderErrorEl.style.display = 'none';
+              }, 2500);
+              return;
+          }
+          
+          // التحقق من عدم تكرار رقم الترتيب (باستثناء الفائز الحالي)
+          const duplicateOrder = state.winners.find(w => 
+              w.orderNumber === newOrderNumber && 
+              w.id !== winner.id && 
+              w._id !== winner._id
+          );
+          
+          if (duplicateOrder) {
+              toast(`رقم الترتيب ${newOrderNumber} مستخدم بالفعل للفائز: ${duplicateOrder.name}`, 'error');
+              orderNumberInput?.classList.add('wr-input-error');
+              if (orderErrorEl) {
+                  orderErrorEl.textContent = `رقم ${newOrderNumber} مستخدم للفائز: ${duplicateOrder.name}`;
+                  orderErrorEl.style.display = 'block';
+              }
+              setTimeout(() => {
+                  orderNumberInput?.classList.remove('wr-input-error');
+                  if (orderErrorEl) {
+                      orderErrorEl.textContent = 'رقم الترتيب مطلوب';
+                      orderErrorEl.style.display = 'none';
+                  }
+              }, 3000);
+              return;
+          }
+          // ------------------------------------
+          
           // --- NEW: ID Image Validation ---
           // Must have either a new file, an existing pending blob, or an existing URL
           const hasNewFile = !!compressedFile;
@@ -20737,6 +21767,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           // Update winner object
           winner.email = email;
           winner.prizeType = prizeTypeInput?.value || winner.prizeType;
+          winner.orderNumber = newOrderNumber; // تحديث رقم الترتيب
           
           // Read value from input
           if (prizeValueInput) {
@@ -20775,7 +21806,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                       body: JSON.stringify({
                           email: winner.email,
                           prize_type: winner.prizeType,
-                          prize_value: winner.prizeValue
+                          prize_value: winner.prizeValue,
+                          order_number: winner.orderNumber // إضافة رقم الترتيب للتحديث
                       })
                   });
                   
@@ -20884,7 +21916,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         };
         const idx = state.entries.findIndex(e => e.id === entry.id);
         if (idx !== -1) state.entries[idx].selected = true;
-        if (!state.winners.find(w => w.id === entry.id)) state.winners.push(winnerData);
+        // === WINNER PROTECTION: استخدام الدالة الآمنة (fallback mode) ===
+        safeAddWinner(winnerData);
         state.entries = state.entries.filter(e => e.id !== entry.id);
         const ta = document.getElementById('participants-input');
         if (ta) ta.value = state.entries.map(e => `${e.name} — ${e.account}`).join('\n');
@@ -21111,6 +22144,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       document.addEventListener('paste', handlePaste);
       
       modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden'; // Prevent background scrolling
       
       /* console.log('📺 [showWinnerModal] Modal displayed');
       console.log('🔍 [showWinnerModal] Final modal check:');
@@ -21128,6 +22162,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       const onClose = () => { 
         modal.style.display = 'none';
+        document.body.style.overflow = ''; // Restore background scrolling
         document.removeEventListener('paste', handlePaste);
         idPreviewImg?.removeEventListener('click', openLightbox);
         nationalIdImageInput?.removeEventListener('change', onIdImageChange);
@@ -21197,12 +22232,49 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           hasIdFile: !!(nationalIdImageInput?.files?.length > 0)
         });
         
+        // قراءة رقم الفائز (الترتيب اليدوي)
+        const orderNumberInput = document.getElementById('winner-order-number');
+        const orderNumber = orderNumberInput && orderNumberInput.value ? parseInt(orderNumberInput.value, 10) : null;
+        const orderErrorEl = document.getElementById('winner-order-error');
+        
+        // التحقق من وجود رقم الترتيب (مطلوب)
+        if (!orderNumber) {
+          toast('يجب إدخال رقم الترتيب', 'error');
+          orderNumberInput?.classList.add('wr-input-error');
+          if (orderErrorEl) orderErrorEl.style.display = 'block';
+          setTimeout(() => {
+            orderNumberInput?.classList.remove('wr-input-error');
+            if (orderErrorEl) orderErrorEl.style.display = 'none';
+          }, 2500);
+          return;
+        }
+        
+        // التحقق من عدم تكرار رقم الترتيب لنفس المسابقة
+        const duplicateOrder = state.winners.find(w => w.orderNumber === orderNumber);
+        if (duplicateOrder) {
+          toast(`رقم الترتيب ${orderNumber} مستخدم بالفعل للفائز: ${duplicateOrder.name}`, 'error');
+          orderNumberInput?.classList.add('wr-input-error');
+          if (orderErrorEl) {
+            orderErrorEl.textContent = `رقم ${orderNumber} مستخدم بالفعل`;
+            orderErrorEl.style.display = 'block';
+          }
+          setTimeout(() => {
+            orderNumberInput?.classList.remove('wr-input-error');
+            if (orderErrorEl) {
+              orderErrorEl.textContent = 'رقم الترتيب مطلوب';
+              orderErrorEl.style.display = 'none';
+            }
+          }, 2500);
+          return;
+        }
+        
         // Create winner object with collected data
         const winnerData = {
           ...entry,
           email: email,
           prizeType: selectedPrizeType,
           prizeValue: selectedPrizeValue,
+          orderNumber: orderNumber, // رقم ترتيب الفائز
           includeWarnMeet: state.includeWarnMeet || false,
           includeWarnPrev: state.includeWarnPrev || false,
           agent: state.selectedAgent ? {
@@ -21253,6 +22325,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           email: winnerData.email,
           prizeType: winnerData.prizeType,
           prizeValue: winnerData.prizeValue,
+          orderNumber: winnerData.orderNumber, // رقم ترتيب الفائز
           includeWarnMeet: winnerData.includeWarnMeet,
           includeWarnPrev: winnerData.includeWarnPrev,
           idImageUploaded: !!winnerData.idImageUploaded,
@@ -21270,8 +22343,14 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
         const idx = state.entries.findIndex(e => e.id === entry.id);
         if (idx !== -1) state.entries[idx].selected = true;
-        if (!state.winners.find(w => w.id === entry.id)) {
-          state.winners.push(winnerData);
+        
+        // === WINNER PROTECTION: استخدام الدالة الآمنة لإضافة الفائز ===
+        const wasAdded = safeAddWinner(winnerData);
+        if (!wasAdded) {
+          // إذا فشلت الإضافة (تكرار أو خطأ)، أوقف العملية
+          console.warn('[PROTECTION] Winner was not added (duplicate or error):', winnerData.name);
+          onClose();
+          return;
         }
         
         // مسح الفائز من قائمة المشاركين
@@ -21375,7 +22454,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         };
         const idx = state.entries.findIndex(e => e.id === entry.id);
         if (idx !== -1) state.entries[idx].selected = true;
-        if (!state.winners.find(w => w.id === entry.id)) state.winners.push(winnerData);
+        // === WINNER PROTECTION: استخدام الدالة الآمنة (auto fallback mode) ===
+        safeAddWinner(winnerData);
         state.entries = state.entries.filter(e => e.id !== entry.id);
         const ta = document.getElementById('participants-input');
         if (ta) ta.value = state.entries.map(e => `${e.name} — ${e.account}`).join('\n');
@@ -21578,6 +22658,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       document.addEventListener('paste', handlePasteAuto);
       
       modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden'; // Prevent background scrolling
       // Improve scroll behavior for auto mode as well
       try {
         const contentBox = modal.querySelector('.wr-celebration-content');
@@ -21591,6 +22672,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       const onClose = () => { 
         modal.style.display = 'none';
+        document.body.style.overflow = ''; // Restore background scrolling
         document.removeEventListener('paste', handlePasteAuto);
         idPreviewImgAuto?.removeEventListener('click', openLightboxAuto);
         nationalIdImageInputAuto?.removeEventListener('change', onIdImageChangeAuto);
@@ -21649,12 +22731,49 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             ? (state.activeCompetition?.depositBonusPercentage ?? 0)
             : (state.activeCompetition?.prizePerWinner ?? 0);
 
+        // قراءة رقم ترتيب الفائز
+        const orderNumberInputAuto = document.getElementById('winner-order-number');
+        const orderNumberAuto = orderNumberInputAuto && orderNumberInputAuto.value ? parseInt(orderNumberInputAuto.value, 10) : null;
+        const orderErrorElAuto = document.getElementById('winner-order-error');
+
+        // التحقق من وجود رقم الترتيب (مطلوب)
+        if (!orderNumberAuto) {
+          toast('يجب إدخال رقم الترتيب', 'error');
+          orderNumberInputAuto?.classList.add('wr-input-error');
+          if (orderErrorElAuto) orderErrorElAuto.style.display = 'block';
+          setTimeout(() => {
+            orderNumberInputAuto?.classList.remove('wr-input-error');
+            if (orderErrorElAuto) orderErrorElAuto.style.display = 'none';
+          }, 2500);
+          return;
+        }
+
+        // التحقق من عدم تكرار رقم الترتيب لنفس المسابقة
+        const duplicateOrder = state.winners.find(w => w.orderNumber === orderNumberAuto);
+        if (duplicateOrder) {
+          toast(`رقم الترتيب ${orderNumberAuto} مستخدم بالفعل للفائز: ${duplicateOrder.name}`, 'error');
+          orderNumberInputAuto?.classList.add('wr-input-error');
+          if (orderErrorElAuto) {
+            orderErrorElAuto.textContent = `رقم ${orderNumberAuto} مستخدم بالفعل`;
+            orderErrorElAuto.style.display = 'block';
+          }
+          setTimeout(() => {
+            orderNumberInputAuto?.classList.remove('wr-input-error');
+            if (orderErrorElAuto) {
+              orderErrorElAuto.textContent = 'رقم الترتيب مطلوب';
+              orderErrorElAuto.style.display = 'none';
+            }
+          }, 2500);
+          return;
+        }
+
         // Create winner object with collected data
         const winnerData = {
           ...entry,
           email: email,
           prizeType: selectedPrizeType,
           prizeValue: selectedPrizeValue,
+          orderNumber: orderNumberAuto, // رقم ترتيب الفائز
           agent: state.selectedAgent ? {
             id: state.selectedAgent.id,
             name: state.selectedAgent.name,
@@ -21674,6 +22793,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               national_id: winnerData.nationalId || '',
               prize_type: winnerData.prizeType || '',
               prize_value: winnerData.prizeValue || 0,
+              order_number: winnerData.orderNumber || null, // رقم ترتيب الفائز
               selected_at: winnerData.timestamp,
               meta: {
                 email: winnerData.email || '',
@@ -21745,8 +22865,16 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
         const idx = state.entries.findIndex(e => e.id === entry.id);
         if (idx !== -1) state.entries[idx].selected = true;
-        if (!state.winners.find(w => w.id === entry.id)) {
-          state.winners.push(winnerData);
+        
+        // === WINNER PROTECTION: استخدام الدالة الآمنة لإضافة الفائز (وضع تلقائي) ===
+        const wasAdded = safeAddWinner(winnerData);
+        if (!wasAdded) {
+          // إذا فشلت الإضافة (تكرار أو خطأ)، أوقف الوضع التلقائي
+          console.warn('[PROTECTION] Auto mode: Winner was not added (duplicate or error):', winnerData.name);
+          state.autoMode = false;
+          state.autoRemaining = 0;
+          onClose();
+          return;
         }
         
         // مسح الفائز من قائمة المشاركين
@@ -21852,6 +22980,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           national_id: winner.nationalId || '',
           prize_type: winner.prizeType || '',
           prize_value: Number(winner.prizeValue) || 0,
+          order_number: winner.orderNumber || null, // رقم ترتيب الفائز
           selected_at: winner.timestamp,
           meta: {
             email: winner.email || '',
@@ -22178,7 +23307,14 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }
 
       // Filter winners that have _id (saved to DB) بعد الحفظ التلقائي
-      const validWinners = state.winners.filter(w => w._id);
+      // وترتيبهم حسب orderNumber
+      const validWinners = state.winners
+        .filter(w => w._id)
+        .sort((a, b) => {
+          const orderA = a.orderNumber || 999;
+          const orderB = b.orderNumber || 999;
+          return orderA - orderB;
+        });
       // console.log('[sendWinnersReport] Valid winners count:', validWinners.length);
       
       if (validWinners.length === 0) {
@@ -22297,7 +23433,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         }
       }
       
-      const validWinners = state.winners.filter(w => w._id);
+      const validWinners = state.winners
+        .filter(w => w._id)
+        .sort((a, b) => {
+          const orderA = a.orderNumber || 999;
+          const orderB = b.orderNumber || 999;
+          return orderA - orderB;
+        });
       // console.log('[sendWinnersDetails] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
@@ -22309,8 +23451,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         async () => {
           try {
             const authedFetch = window.authedFetch || fetch;
-            const warnings = state.winners
-              .filter(w => w._id)
+            const warnings = validWinners
               .map(w => ({
                 winnerId: w._id,
                 // Merge global state with winner state: if global is ON, it applies to all.
@@ -22447,9 +23588,19 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     function generateWinnersMessage() {
         const ordinals = ['الاول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'];
         
+        // ترتيب الفائزين حسب orderNumber قبل إنشاء الرسالة
+        const sortedWinners = [...state.winners].sort((a, b) => {
+            const orderA = a.orderNumber || 999;
+            const orderB = b.orderNumber || 999;
+            return orderA - orderB;
+        });
+        
         let msg = '';
-        state.winners.forEach((w, i) => {
-            const rank = ordinals[i] || (i + 1);
+        sortedWinners.forEach((w, i) => {
+            // استخدام رقم الترتيب اليدوي إذا كان موجوداً
+            const rank = w.orderNumber 
+                ? (ordinals[w.orderNumber - 1] || `رقم ${w.orderNumber}`)
+                : (ordinals[i] || (i + 1));
             let prizeText = '';
             
             if (w.prizeType === 'deposit_prev') {
@@ -25216,6 +26367,7 @@ function updateUIAfterLogin(user) {
     const userAvatar = document.getElementById('user-avatar');
     const usersNavItem = document.getElementById('nav-users');
     const activityLogNavItem = document.getElementById('nav-activity-log');
+    const insightsDropdownItem = document.getElementById('nav-insights-dropdown'); // NEW
 
     if (settingsMenu) settingsMenu.style.display = 'block';
     if (userNameDisplay) userNameDisplay.textContent = user.full_name;
@@ -25228,6 +26380,11 @@ function updateUIAfterLogin(user) {
     if (activityLogNavItem) {
         const canViewLogs = user.role === 'super_admin' || user.role === 'admin';
         activityLogNavItem.style.display = canViewLogs ? 'block' : 'none';
+    }
+
+    // --- NEW: Show Insights link only to super_admin ---
+    if (insightsDropdownItem) {
+        insightsDropdownItem.style.display = (user.role === 'super_admin') ? 'block' : 'none';
     }
 
     // Show admin-only links if the user is a super_admin or admin
@@ -26063,6 +27220,7 @@ function setupNavbar() {
     const navProfileSettings = document.getElementById('nav-profile-settings'); // This is a dropdown item
     const navStatistics = document.getElementById('nav-statistics');
     const navAnalytics = document.getElementById('nav-analytics'); // NEW
+    const navInsightsDropdown = document.getElementById('nav-insights-dropdown'); // NEW
     const navWinnerRoulette = document.getElementById('nav-winner-roulette');
 
     // NEW: Tasks & Calendar Dropdown Navigation (for admins only)
@@ -26117,6 +27275,7 @@ function setupNavbar() {
     if (navCompetitionTemplates) navCompetitionTemplates.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'competition-templates'; });
     if (navActivityLog) navActivityLog.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'activity-log'; });
     if (navUsers) navUsers.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'users'; }); // NEW
+    if (navInsightsDropdown) navInsightsDropdown.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'insights'; }); // NEW
     if (navAnalytics) navAnalytics.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'analytics'; }); // NEW
     if (navWinnerRoulette) navWinnerRoulette.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'winner-roulette'; });
     if (navStatistics) navStatistics.addEventListener('click', (e) => { e.preventDefault(); window.location.hash = 'statistics'; });
@@ -26339,7 +27498,7 @@ function baseRouletteMarkup() {
             </div>
             <div class=\"wr-winners-section\">
                 <div class=\"wr-winners-header\">
-                    <h3><i class=\"fas fa-trophy\"></i> قائمة الفائزين</h3>
+                    <h3><i class=\"fas fa-trophy\"></i> قائمة الفائزين <span id=\"winners-count-badge\" style=\"display: none; min-width: 24px; height: 24px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 50%; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.5); margin-right: 8px;\"></span></h3>
                     <div class=\"wr-winners-actions\">
                         <button id=\"export-winners-bottom\" class=\"wr-btn wr-btn-success wr-btn-small\"><i class=\"fas fa-download\"></i> تصدير</button>
                         <button id=\"reset-winners-bottom\" class=\"wr-btn wr-btn-secondary wr-btn-small\"><i class=\"fas fa-trash\"></i> مسح الفائزين</button>
@@ -26535,7 +27694,31 @@ document.addEventListener('DOMContentLoaded', () => {
         // Attempt to re-initialize the session
         initializeApp();
     });
+
+    // --- NEW: Handle Hash Navigation ---
+    window.addEventListener('hashchange', handleHashChange);
+    handleHashChange(); // Handle initial load
 });
+
+async function handleHashChange() {
+    const hash = window.location.hash.substring(1); // Remove #
+    const appContent = document.getElementById('app-content');
+    
+    if (!hash) return; // Default home is handled elsewhere or by default
+
+    if (hash === 'insights') {
+        // Dynamically load the insights script if not already loaded
+        if (typeof renderInsightsPage === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'js/pages/insights.js';
+            script.onload = () => renderInsightsPage();
+            document.body.appendChild(script);
+        } else {
+            renderInsightsPage();
+        }
+    }
+    // ... other routes can be added here or in a dedicated router file
+}
 
 // Fallback: ensure logout button always opens confirmation modal.
 // This adds a non-destructive listener after DOM is ready.
