@@ -20378,10 +20378,15 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function updateSpinSpeed(speed) {
+      // Add random variation to spin duration using crypto random
+      const variationBuffer = new Uint32Array(1);
+      window.crypto.getRandomValues(variationBuffer);
+      const variation = (variationBuffer[0] / 0xFFFFFFFF) * 1000 - 500; // ±500ms variation
+      
       switch(speed) {
-        case 'slow': state.spinDuration = 8000; break;
-        case 'fast': state.spinDuration = 3000; break;
-        default: state.spinDuration = 5000; // normal
+        case 'slow': state.spinDuration = 8000 + variation; break;
+        case 'fast': state.spinDuration = 3000 + variation * 0.5; break;
+        default: state.spinDuration = 5000 + variation; // normal
       }
     }
     
@@ -20682,14 +20687,43 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const n = candidates.length;
       const slice = (Math.PI*2)/n;
       
-      // Select random winner using crypto.getRandomValues for 100% randomness
-      const randomBuffer = new Uint32Array(1);
+      // === ENHANCED CRYPTOGRAPHIC RANDOMNESS ===
+      // Use multiple sources of entropy for maximum randomness
+      
+      // 1. Primary: Cryptographically secure random number
+      const randomBuffer = new Uint32Array(4); // Use 4 values for more entropy
       window.crypto.getRandomValues(randomBuffer);
-      const randomFraction = randomBuffer[0] / (0xFFFFFFFF + 1);
+      
+      // 2. Combine multiple random values using XOR and modular arithmetic
+      const combined = randomBuffer[0] ^ randomBuffer[1] ^ randomBuffer[2] ^ randomBuffer[3];
+      
+      // 3. Add time-based micro-variation (nanosecond precision when available)
+      const timeEntropy = (performance.now() * 1000000) % 0xFFFFFFFF;
+      
+      // 4. Mix all entropy sources
+      const finalRandom = (combined ^ Math.floor(timeEntropy)) >>> 0; // Ensure unsigned 32-bit
+      
+      // 5. Convert to fraction [0, 1)
+      const randomFraction = finalRandom / (0xFFFFFFFF + 1);
+      
+      // 6. Select winner index
       const winningIndex = Math.floor(randomFraction * n);
+      
+      console.log(`🎲 [Roulette] Random selection: ${winningIndex + 1} of ${n} (entropy: ${finalRandom.toString(16)})`);
     
-      // Create a snapshot of candidates to lock the wheel state for this spin
-      state.spinSnapshot = candidates.slice();
+      // Create a snapshot of candidates and apply Fisher-Yates shuffle for extra randomness
+      // This ensures the visual order on the wheel is also randomized each spin
+      const shuffledCandidates = candidates.slice();
+      
+      // Fisher-Yates shuffle using crypto random
+      for (let i = shuffledCandidates.length - 1; i > 0; i--) {
+          const shuffleBuffer = new Uint32Array(1);
+          window.crypto.getRandomValues(shuffleBuffer);
+          const j = shuffleBuffer[0] % (i + 1);
+          [shuffledCandidates[i], shuffledCandidates[j]] = [shuffledCandidates[j], shuffledCandidates[i]];
+      }
+      
+      state.spinSnapshot = shuffledCandidates;
       state.chosenIndex = winningIndex;
       
       // Store chosen winner based on snapshot/index
@@ -20726,17 +20760,28 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // ADJUSTMENT: Pointer is at TOP (3PI/2), so we need to rotate by an extra PI so the winner lands on top
       const targetAngleBase = winningIndex * slice + slice / 2 + Math.PI;
       
-      // Add multiple full rotations for effect. MUST be integer spins
-      // so the normalized target lands on the intended slice center.
-      const integerRotations = 4 + Math.floor(Math.random() * 2); // 4 or 5 full spins
+      // Add multiple full rotations for effect using crypto random
+      const rotationBuffer = new Uint32Array(1);
+      window.crypto.getRandomValues(rotationBuffer);
+      const integerRotations = 4 + (rotationBuffer[0] % 3); // 4, 5, or 6 full spins
+      
+      // Add random offset within the slice for visual variety (winner still wins)
+      const offsetBuffer = new Uint32Array(1);
+      window.crypto.getRandomValues(offsetBuffer);
+      const sliceOffset = ((offsetBuffer[0] / 0xFFFFFFFF) - 0.5) * slice * 0.6; // ±30% of slice width
+      
       const fullSpins = integerRotations * Math.PI * 2;
       const epsilon = 1e-6; // tiny nudge to avoid boundary float issues
-      state.targetAngle = targetAngleBase + fullSpins + epsilon;
+      state.targetAngle = targetAngleBase + fullSpins + sliceOffset + epsilon;
       state.spinStart = performance.now();
       if(!state.spinDuration){updateSpinSpeed(document.getElementById('spin-speed')?.value || 'normal');}
       // Always override if chosen speed is slow to be more gradual
       if((document.getElementById('spin-speed')?.value || 'normal') === 'slow'){
-        state.spinDuration = 8500 + Math.random()*1500; // 8.5s - 10s
+        // Use crypto random for duration variation
+        const durationBuffer = new Uint32Array(1);
+        window.crypto.getRandomValues(durationBuffer);
+        const durationVariation = (durationBuffer[0] / 0xFFFFFFFF) * 1500;
+        state.spinDuration = 8500 + durationVariation; // 8.5s - 10s
       }
       // Capture start angle for accurate interpolation
       state.startAngle = state.angle;
@@ -22120,12 +22165,18 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function handleWinnerWarningToggle(ev) {
-      const id = ev.currentTarget.getAttribute('data-id');
-      const warnType = ev.currentTarget.getAttribute('data-warn');
+      // Use ev.target because this is called from event delegation
+      const checkbox = ev.target;
+      const id = checkbox.getAttribute('data-id');
+      const warnType = checkbox.getAttribute('data-warn');
       const winner = state.winners.find(w => w.id === id);
-      if (!winner) return;
-      if (warnType === 'meet') winner.includeWarnMeet = !!ev.currentTarget.checked;
-      if (warnType === 'prev') winner.includeWarnPrev = !!ev.currentTarget.checked;
+      if (!winner) {
+        console.warn('[handleWinnerWarningToggle] Winner not found for id:', id);
+        return;
+      }
+      if (warnType === 'meet') winner.includeWarnMeet = !!checkbox.checked;
+      if (warnType === 'prev') winner.includeWarnPrev = !!checkbox.checked;
+      console.log('[handleWinnerWarningToggle] Updated winner:', { id, warnType, checked: checkbox.checked, includeWarnMeet: winner.includeWarnMeet, includeWarnPrev: winner.includeWarnPrev });
       saveSession();
       updateStagedWinner(id, state.activeCompetition?.id || null, {
         includeWarnMeet: winner.includeWarnMeet,
@@ -22194,6 +22245,18 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         
         let msg = rank ? `◃ الفائز ${rank}: ${w.name}\n` : `◃ الفائز: ${w.name}\n`;
         msg += `           الجائزة: ${prizeText}\n`;
+
+        // إضافة التحذيرات الفردية لهذا الفائز
+        const warningBlocks = [];
+        if (w.includeWarnMeet || state.includeWarnMeet) {
+            warningBlocks.push("⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً");
+        }
+        if (w.includeWarnPrev || state.includeWarnPrev) {
+            warningBlocks.push("‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية");
+        }
+        if (warningBlocks.length > 0) {
+            msg += `\n${warningBlocks.join('\n')}\n`;
+        }
 
         msg += `\n********************************************************\n`;
         msg += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
@@ -24165,6 +24228,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 include_warn_meet: !!(w.includeWarnMeet || state.includeWarnMeet),
                 include_warn_prev: !!(w.includeWarnPrev || state.includeWarnPrev)
               }));
+            console.log('[sendWinnersDetails] Sending warnings:', warnings);
+            console.log('[sendWinnersDetails] validWinners with warn flags:', validWinners.map(w => ({ _id: w._id, includeWarnMeet: w.includeWarnMeet, includeWarnPrev: w.includeWarnPrev })));
             const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-details`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -24319,6 +24384,18 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
             msg += `◃ الفائز ${rank}: ${w.name}\n`;
             msg += `           الجائزة: ${prizeText}\n`;
+
+            // إضافة التحذيرات الفردية لكل فائز
+            const warningBlocks = [];
+            if (w.includeWarnMeet || state.includeWarnMeet) {
+                warningBlocks.push("⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً");
+            }
+            if (w.includeWarnPrev || state.includeWarnPrev) {
+                warningBlocks.push("‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية");
+            }
+            if (warningBlocks.length > 0) {
+                msg += `\n${warningBlocks.join('\n')}\n`;
+            }
 
             msg += `\n********************************************************\n`;
         });

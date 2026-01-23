@@ -1368,6 +1368,15 @@ exports.sendWinnersDetails = async (req, res) => {
         const { winnerIds, include_warn_meet: includeWarnMeet, include_warn_prev: includeWarnPrev, warnings, override_chat_id } = req.body;
         const bot = req.app.locals.telegramBot;
 
+        console.log('[sendWinnersDetails] Received request:', { 
+            agentId, 
+            winnerIds, 
+            includeWarnMeet, 
+            includeWarnPrev, 
+            warnings,
+            override_chat_id 
+        });
+
         if (!bot) {
             return res.status(503).json({ message: 'Telegram bot is not initialized' });
         }
@@ -1399,6 +1408,7 @@ exports.sendWinnersDetails = async (req, res) => {
                 }
             });
         }
+        console.log('[sendWinnersDetails] warnMap built:', Object.fromEntries(warnMap));
 
         const mapAgencyType = (agentDoc) => {
             const exclusiveRanks = ['CENTER', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND', 'وكيل حصري بدون مرتبة'];
@@ -1439,6 +1449,14 @@ exports.sendWinnersDetails = async (req, res) => {
                 const warnPrefs = warnMap.get(String(w._id)) || {};
                 const useWarnMeet = warnPrefs.meet ?? includeWarnMeet;
                 const useWarnPrev = warnPrefs.prev ?? includeWarnPrev;
+
+                console.log(`[sendWinnersDetails] Winner ${w._id} warnings:`, { 
+                    warnPrefs, 
+                    useWarnMeet, 
+                    useWarnPrev,
+                    globalIncludeWarnMeet: includeWarnMeet,
+                    globalIncludeWarnPrev: includeWarnPrev
+                });
 
                 const warningBlocks = [];
                 if (useWarnMeet) {
