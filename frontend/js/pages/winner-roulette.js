@@ -4435,6 +4435,7 @@
         // Just close the preview. The winner is not added to state.winners yet (that happens in showWinnerModal).
         // We might want to re-spin if in auto mode or queue, similar to the other skip button.
         // But for now, just closing effectively "skips" this winner selection.
+        drawWheel(); // إعادة رسم العجلة لإزالة اسم الفائز ورقم الحساب
         toast('تم تخطي الفائز وإلغاء الاختيار', 'info');
       });
       
@@ -6000,6 +6001,7 @@
       const onSkip = () => {
           cleanup();
           modal.style.display = 'none';
+          drawWheel(); // إعادة رسم العجلة لإزالة اسم الفائز ورقم الحساب
       };
 
       function cleanup() {
@@ -6560,6 +6562,7 @@
       // --- NEW: Skip Logic ---
       const onSkip = () => {
         onClose();
+        drawWheel(); // إعادة رسم العجلة لإزالة اسم الفائز ورقم الحساب
         // User requested to stop automatic re-spin on skip
       };
       
@@ -7714,8 +7717,7 @@
           document.body.appendChild(sendingOverlay);
           try {
             const authedFetch = window.authedFetch || fetch;
-            const warnings = state.winners
-              .filter(w => w._id)
+            const warnings = validWinners
               .map(w => ({
                 winnerId: w._id,
                 include_warn_meet: !!w.includeWarnMeet,
@@ -7777,18 +7779,6 @@
     
             msg += `◃ الفائز ${rank}: ${w.name}\n`;
             msg += `           الجائزة: ${prizeText}\n`;
-
-            // إضافة التحذيرات الفردية لكل فائز
-            const warningBlocks = [];
-            if (w.includeWarnMeet || state.includeWarnMeet) {
-                warningBlocks.push("⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً");
-            }
-            if (w.includeWarnPrev || state.includeWarnPrev) {
-                warningBlocks.push("‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية");
-            }
-            if (warningBlocks.length > 0) {
-                msg += `\n${warningBlocks.join('\n')}\n`;
-            }
 
             msg += `\n********************************************************\n`;
         });
