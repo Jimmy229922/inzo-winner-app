@@ -1203,6 +1203,9 @@ exports.sendWinnersReport = async (req, res) => {
         const { agentId } = req.params;
         const { winnerIds, messageText } = req.body;
         const bot = req.app.locals.telegramBot;
+        const TELEGRAM_CAPTION_LIMIT = 1024;
+        const TELEGRAM_MESSAGE_LIMIT = 4096;
+        const FALLBACK_MEDIA_CAPTION = '<b>تقرير الفائزين</b>';
 
         if (!bot) {
             return res.status(503).json({ message: 'Telegram bot is not initialized' });
@@ -1217,6 +1220,40 @@ exports.sendWinnersReport = async (req, res) => {
             return res.status(404).json({ message: 'Agent not found or has no Telegram chat ID' });
         }
 
+        const splitTelegramText = (text, maxLength) => {
+            const raw = (text || '').toString().trim();
+            if (!raw) return ['تقرير الفائزين'];
+            if (raw.length <= maxLength) return [raw];
+
+            const chunks = [];
+            let remaining = raw;
+            while (remaining.length > maxLength) {
+                let splitAt = remaining.lastIndexOf('\n', maxLength);
+                if (splitAt <= 0 || splitAt < Math.floor(maxLength * 0.6)) {
+                    splitAt = maxLength;
+                }
+
+                chunks.push(remaining.slice(0, splitAt).trim());
+                remaining = remaining.slice(splitAt).trim();
+            }
+
+            if (remaining.length > 0) {
+                chunks.push(remaining);
+            }
+            return chunks;
+        };
+
+        const sendLongTextToTelegram = async (chatId, text, replyToMessageId = null) => {
+            const chunks = splitTelegramText(text, TELEGRAM_MESSAGE_LIMIT);
+            for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+                const options = { parse_mode: 'HTML' };
+                if (chunkIndex === 0 && replyToMessageId) {
+                    options.reply_to_message_id = replyToMessageId;
+                }
+                await bot.sendMessage(chatId, chunks[chunkIndex], options);
+            }
+        };
+
         // جلب الفائزين مرتبين حسب order_number
         const winners = await Winner.find({ _id: { $in: winnerIds } }).sort({ order_number: 1 });
         
@@ -1225,7 +1262,7 @@ exports.sendWinnersReport = async (req, res) => {
         
         if (winnersWithVideos.length === 0) {
              // If no videos, just send text
-             await bot.sendMessage(agent.telegram_chat_id, messageText, { parse_mode: 'HTML' });
+             await sendLongTextToTelegram(agent.telegram_chat_id, messageText);
              
              // Competition status update removed to prevent auto-completion
 
@@ -1270,11 +1307,22 @@ exports.sendWinnersReport = async (req, res) => {
                 caption += `https://t.me/Ibinzo`;
             }
 
-            await bot.sendVideo(agent.telegram_chat_id, mediaSource, { 
-                caption: caption,
+            let captionForVideo = caption;
+            let longTextForReply = null;
+            if ((captionForVideo || '').length > TELEGRAM_CAPTION_LIMIT) {
+                captionForVideo = FALLBACK_MEDIA_CAPTION;
+                longTextForReply = caption;
+            }
+
+            const videoMessage = await bot.sendVideo(agent.telegram_chat_id, mediaSource, { 
+                caption: captionForVideo,
                 parse_mode: 'HTML',
                 supports_streaming: true
             });
+
+            if (longTextForReply) {
+                await sendLongTextToTelegram(agent.telegram_chat_id, longTextForReply, videoMessage?.message_id);
+            }
 
             // Competition status update removed to prevent auto-completion
 
@@ -1311,12 +1359,13 @@ exports.sendWinnersReport = async (req, res) => {
             return msg;
         };
 
-        // Split into chunks of 6 (User requested limit to avoid Telegram issues)
-        const chunkSize = 6;
+        // Split strictly into chunks of 5 winners as requested:
+        // 7 => 5 + 2, 11 => 5 + 5 + 1
+        const chunkSize = 5;
         for (let i = 0; i < winnersWithVideos.length; i += chunkSize) {
             const winnersChunk = winnersWithVideos.slice(i, i + chunkSize);
-            
-            // Construct media group for this chunk
+            const chunkCaption = generateChunkCaption(winnersChunk, i);
+
             const mediaItems = winnersChunk.map(w => {
                 let mediaSource = w.video_url;
                 if (mediaSource && mediaSource.startsWith('/uploads')) {
@@ -1331,15 +1380,25 @@ exports.sendWinnersReport = async (req, res) => {
                 };
             });
 
-            // Generate caption for this chunk
-            const chunkCaption = generateChunkCaption(winnersChunk, i);
-            
             // Attach caption to the first item of the chunk
+            let detailsToSendAsReply = null;
             if (mediaItems.length > 0) {
-                mediaItems[0].caption = chunkCaption;
+                if (chunkCaption.length > TELEGRAM_CAPTION_LIMIT) {
+                    mediaItems[0].caption = FALLBACK_MEDIA_CAPTION;
+                    detailsToSendAsReply = chunkCaption;
+                } else {
+                    mediaItems[0].caption = chunkCaption;
+                }
             }
 
-            await sendMediaGroupToTelegram(bot, mediaItems, agent.telegram_chat_id);
+            const sentMediaMessages = await sendMediaGroupToTelegram(bot, mediaItems, agent.telegram_chat_id);
+
+            if (detailsToSendAsReply) {
+                const replyToMessageId = Array.isArray(sentMediaMessages) && sentMediaMessages.length > 0
+                    ? sentMediaMessages[0].message_id
+                    : null;
+                await sendLongTextToTelegram(agent.telegram_chat_id, detailsToSendAsReply, replyToMessageId);
+            }
             
             // Add a small delay between chunks to prevent rate limiting
             if (i + chunkSize < winnersWithVideos.length) {
