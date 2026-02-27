@@ -334,7 +334,8 @@
       reportSent: false, // Winners report sent to agent flag
       includeWarnMeet: false,
       includeWarnPrev: false,
-      isRestoreMode: false // وضع استعادة المسابقة المكتملة
+      isRestoreMode: false, // وضع استعادة المسابقة المكتملة
+      predeterminedWinner: null // تحديد فائز مسبق (اسم + حساب)
     };
     
     const LS_KEY = 'winnerRouletteSession.v1';
@@ -3915,6 +3916,39 @@
       input.disabled = false;
     }
     
+    function updatePredeterminedSelect() {
+      const input = document.getElementById('predetermined-winner');
+      const datalist = document.getElementById('predetermined-winner-list');
+      if (!input || !datalist) return;
+      const candidates = state.entries.filter(e => {
+        const isAlreadyWinner = state.winners.some(w => {
+          if (w.account && e.account) return w.account === e.account;
+          return w.name === e.name;
+        });
+        if (isAlreadyWinner) return false;
+        return !e.selected || !state.excludeWinner;
+      });
+      state._predeterminedCandidates = candidates;
+      datalist.innerHTML = candidates.map(e => {
+        const label = e.name + (e.account ? ' — ' + e.account : '');
+        return '<option value="' + label + '"></option>';
+      }).join('');
+      input.oninput = function() {
+        const val = this.value.trim();
+        if (!val) { state.predeterminedWinner = null; return; }
+        const match = (state._predeterminedCandidates || []).find(e =>
+          e.name === val || e.account === val ||
+          (e.name + ' — ' + e.account) === val ||
+          val.includes(e.account) || val.includes(e.name)
+        );
+        if (match) {
+          state.predeterminedWinner = { account: match.account, name: match.name };
+        } else {
+          state.predeterminedWinner = null;
+        }
+      };
+    }
+
     function updateCounts() {
         // Total participants
         const totalEl = document.getElementById('participants-count-total');
@@ -4100,7 +4134,7 @@
       const randomFraction = finalRandom / (0xFFFFFFFF + 1);
       
       // 6. Select winner index
-      const winningIndex = Math.floor(randomFraction * n);
+      let winningIndex = Math.floor(randomFraction * n);
       
       console.log(`🎲 [Roulette] Random selection: ${winningIndex + 1} of ${n} (entropy: ${finalRandom.toString(16)})`);
     
@@ -4116,6 +4150,20 @@
           [shuffledCandidates[i], shuffledCandidates[j]] = [shuffledCandidates[j], shuffledCandidates[i]];
       }
       
+      // === تحديد فائز مسبق ===
+      if (state.predeterminedWinner) {
+        const predIdx = shuffledCandidates.findIndex(e => {
+          if (state.predeterminedWinner.account && e.account) return e.account === state.predeterminedWinner.account;
+          return e.name === state.predeterminedWinner.name;
+        });
+        if (predIdx !== -1) {
+          winningIndex = predIdx;
+        }
+        state.predeterminedWinner = null;
+        const predInput = document.getElementById('predetermined-winner');
+        if (predInput) predInput.value = '';
+      }
+
       state.spinSnapshot = shuffledCandidates;
       state.chosenIndex = winningIndex;
       
@@ -4686,6 +4734,7 @@
           state.entries[i].seq = i + 1;
         }
       } catch(e) {}
+      updatePredeterminedSelect();
       if (state.entries.length === 0) {
         container.innerHTML = '<div class="empty">لا توجد أسماء</div>';
         return;

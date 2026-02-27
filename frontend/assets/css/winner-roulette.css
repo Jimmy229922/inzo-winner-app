@@ -84,7 +84,7 @@
 .wr-settings-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:14px; }
 .wr-setting { background:var(--wr-surface-alt); border:1px solid var(--wr-border-alt); border-radius:14px; padding:12px 12px 14px; display:flex; flex-direction:column; gap:6px; position:relative; }
 .wr-setting label { font-size:.65rem; text-transform:uppercase; letter-spacing:.8px; color:var(--wr-text-dim); font-weight:700; }
-.wr-setting input[type=number], .wr-setting select { width:100%; background:#0d1117; border:1px solid #30363d; border-radius:10px; color:var(--wr-text); font-size:.85rem; padding:6px 8px; text-align:center; }
+.wr-setting input[type=number], .wr-setting select, .wr-setting input[type=text] { width:100%; background:#0d1117; border:1px solid #30363d; border-radius:10px; color:var(--wr-text); font-size:.85rem; padding:6px 8px; text-align:center; }
 .wr-setting input:focus, .wr-setting select:focus { outline:none; border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.35); }
 .wr-setting .wr-checkbox-row { display:flex; align-items:center; gap:6px; }
 .wr-setting .wr-checkbox-row input { width:18px; height:18px; }

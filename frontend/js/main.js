@@ -1223,9 +1223,10 @@ function baseRouletteMarkup() {
                             <div class=\"wr-agent-info-empty\">لا توجد مسابقة نشطة</div>
                         </div>
                     </div>
-                    <div class=\"wr-settings-grid\">
+                    <div class=\"wr-settings-grid\" style=\"grid-template-columns: 1fr 1fr 1fr; align-items: end;\">
                         <div class=\"wr-setting\"><label>إستبعاد بعد الفوز</label><div class=\"wr-checkbox-row\"><input type=\"checkbox\" id=\"exclude-winner\" checked><span style=\"font-size:.7rem;color:var(--wr-text-dim);\">إزالة الاسم</span></div></div>
                         <div class=\"wr-setting\"><label>عدد اختيارات</label><input type=\"number\" id=\"batch-count\" min=\"1\" value=\"1\"></div>
+                        <div class=\"wr-setting\"><label>تحديد الفائز</label><input type=\"text\" id=\"predetermined-winner\" list=\"predetermined-winner-list\" placeholder=\"عشوائي\" autocomplete=\"off\"><datalist id=\"predetermined-winner-list\"></datalist></div>
                     </div>
                     <div class=\"wr-wheel-wrapper\">
                         <div class=\"wr-pointer\"></div>

@@ -16941,7 +16941,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       reportSent: false, // Winners report sent to agent flag
       includeWarnMeet: false,
       includeWarnPrev: false,
-      isRestoreMode: false // وضع استعادة المسابقة المكتملة
+      isRestoreMode: false, // وضع استعادة المسابقة المكتملة
+      predeterminedWinner: null // تحديد فائز مسبق (اسم + حساب)
     };
     
     const LS_KEY = 'winnerRouletteSession.v1';
@@ -20522,6 +20523,39 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       input.disabled = false;
     }
     
+    function updatePredeterminedSelect() {
+      const input = document.getElementById('predetermined-winner');
+      const datalist = document.getElementById('predetermined-winner-list');
+      if (!input || !datalist) return;
+      const candidates = state.entries.filter(e => {
+        const isAlreadyWinner = state.winners.some(w => {
+          if (w.account && e.account) return w.account === e.account;
+          return w.name === e.name;
+        });
+        if (isAlreadyWinner) return false;
+        return !e.selected || !state.excludeWinner;
+      });
+      state._predeterminedCandidates = candidates;
+      datalist.innerHTML = candidates.map(e => {
+        const label = e.name + (e.account ? ' — ' + e.account : '');
+        return '<option value="' + label + '"></option>';
+      }).join('');
+      input.oninput = function() {
+        const val = this.value.trim();
+        if (!val) { state.predeterminedWinner = null; return; }
+        const match = (state._predeterminedCandidates || []).find(e =>
+          e.name === val || e.account === val ||
+          (e.name + ' — ' + e.account) === val ||
+          val.includes(e.account) || val.includes(e.name)
+        );
+        if (match) {
+          state.predeterminedWinner = { account: match.account, name: match.name };
+        } else {
+          state.predeterminedWinner = null;
+        }
+      };
+    }
+
     function updateCounts() {
         // Total participants
         const totalEl = document.getElementById('participants-count-total');
@@ -20707,7 +20741,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const randomFraction = finalRandom / (0xFFFFFFFF + 1);
       
       // 6. Select winner index
-      const winningIndex = Math.floor(randomFraction * n);
+      let winningIndex = Math.floor(randomFraction * n);
       
       console.log(`🎲 [Roulette] Random selection: ${winningIndex + 1} of ${n} (entropy: ${finalRandom.toString(16)})`);
     
@@ -20723,6 +20757,20 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           [shuffledCandidates[i], shuffledCandidates[j]] = [shuffledCandidates[j], shuffledCandidates[i]];
       }
       
+      // === تحديد فائز مسبق ===
+      if (state.predeterminedWinner) {
+        const predIdx = shuffledCandidates.findIndex(e => {
+          if (state.predeterminedWinner.account && e.account) return e.account === state.predeterminedWinner.account;
+          return e.name === state.predeterminedWinner.name;
+        });
+        if (predIdx !== -1) {
+          winningIndex = predIdx;
+        }
+        state.predeterminedWinner = null;
+        const predInput = document.getElementById('predetermined-winner');
+        if (predInput) predInput.value = '';
+      }
+
       state.spinSnapshot = shuffledCandidates;
       state.chosenIndex = winningIndex;
       
@@ -21293,6 +21341,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           state.entries[i].seq = i + 1;
         }
       } catch(e) {}
+      updatePredeterminedSelect();
       if (state.entries.length === 0) {
         container.innerHTML = '<div class="empty">لا توجد أسماء</div>';
         return;
@@ -28255,9 +28304,10 @@ function baseRouletteMarkup() {
                             <div class=\"wr-agent-info-empty\">لا توجد مسابقة نشطة</div>
                         </div>
                     </div>
-                    <div class=\"wr-settings-grid\">
+                    <div class=\"wr-settings-grid\" style=\"grid-template-columns: 1fr 1fr 1fr; align-items: end;\">
                         <div class=\"wr-setting\"><label>إستبعاد بعد الفوز</label><div class=\"wr-checkbox-row\"><input type=\"checkbox\" id=\"exclude-winner\" checked><span style=\"font-size:.7rem;color:var(--wr-text-dim);\">إزالة الاسم</span></div></div>
                         <div class=\"wr-setting\"><label>عدد اختيارات</label><input type=\"number\" id=\"batch-count\" min=\"1\" value=\"1\"></div>
+                        <div class=\"wr-setting\"><label>تحديد الفائز</label><input type=\"text\" id=\"predetermined-winner\" list=\"predetermined-winner-list\" placeholder=\"عشوائي\" autocomplete=\"off\"><datalist id=\"predetermined-winner-list\"></datalist></div>
                     </div>
                     <div class=\"wr-wheel-wrapper\">
                         <div class=\"wr-pointer\"></div>
