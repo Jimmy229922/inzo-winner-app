@@ -15,7 +15,24 @@ function __isDebugEnabled() {
 }
 window.__isDebugEnabled = __isDebugEnabled;
 window.logDebug = function(...args) { if (__isDebugEnabled()) console.debug(...args); };
-window.logTrace = function(...args) { if (__isDebugEnabled()) console.trace(...args); };\n\n/**\n * Safely appends a file/blob to a FormData object ensuring a filename is always provided.\n * This prevents browser/mobile discrepancies where blobs without explicit names are dropped or rejected by the server.\n * @param {FormData} formData The form data instance\n * @param {string} fieldName The field name (e.g., 'id_image', 'video')\n * @param {Blob|File} file Blob or file to append\n * @param {string} fallbackFileName The name to use if the file has no name\n */\nfunction safeAppendFile(formData, fieldName, file, fallbackFileName = 'upload.bin') {\n    if (!file) return;\n    const fileName = file.name || fallbackFileName;\n    formData.append(fieldName, file, fileName);\n}\nwindow.utils.safeAppendFile = safeAppendFile;\n\nfunction translateTelegramError(errorMessage) {
+window.logTrace = function(...args) { if (__isDebugEnabled()) console.trace(...args); };
+
+/**
+ * Safely appends a file/blob to a FormData object ensuring a filename is always provided.
+ * This prevents browser/mobile discrepancies where blobs without explicit names are dropped or rejected by the server.
+ * @param {FormData} formData The form data instance
+ * @param {string} fieldName The field name (e.g., 'id_image', 'video')
+ * @param {Blob|File} file Blob or file to append
+ * @param {string} fallbackFileName The name to use if the file has no name
+ */
+function safeAppendFile(formData, fieldName, file, fallbackFileName = 'upload.bin') {
+    if (!file) return;
+    const fileName = file.name || fallbackFileName;
+    formData.append(fieldName, file, fileName);
+}
+window.utils.safeAppendFile = safeAppendFile;
+
+function translateTelegramError(errorMessage) {
     if (!errorMessage) {
         return 'فشل إرسال غير معروف.';
     }
