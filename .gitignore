@@ -111,4 +111,4 @@ temp/
 *.db
 
 # Sentry
-.sentryclirc
+.sentryclircbackend/telegram_scraper_session.json

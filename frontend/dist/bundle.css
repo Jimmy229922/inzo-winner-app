@@ -14425,3 +14425,693 @@ html[dir=rtl] .wr-item-label { direction:rtl; }
 }
 
 
+/* == telegram-scraper.css == */
+/* ============================================================
+   Telegram Scraper Page Styles
+   Completely independent – only uses .ts- prefix to avoid
+   any collision with existing styles.
+   ============================================================ */
+
+/* ── Layout ────────────────────────────────────────────────── */
+.ts-page-header {
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.10), rgba(14, 165, 233, 0.10));
+    padding: 30px 40px;
+    border-radius: 20px;
+    margin-bottom: 25px;
+    border: 1px solid rgba(6, 182, 212, 0.20);
+}
+
+.ts-page-header h1 {
+    background: linear-gradient(135deg, #06b6d4, #0ea5e9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 2.2em;
+    margin-bottom: 12px;
+}
+
+.ts-page-header h1 i {
+    color: #06b6d4;
+    -webkit-text-fill-color: #06b6d4;
+}
+
+.ts-page-header .ts-subtitle {
+    font-size: 1.1em;
+    color: #9ca3af;
+}
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.ts-card {
+    background: var(--card-bg, #1e1e2e);
+    border: 1px solid var(--border-color, #2d2d3d);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+    transition: box-shadow 0.2s;
+}
+
+.ts-card:hover {
+    box-shadow: 0 4px 20px rgba(6, 182, 212, 0.08);
+}
+
+.ts-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    font-size: 1.15em;
+    font-weight: 600;
+    color: var(--text-primary, #e2e8f0);
+}
+
+.ts-card-header i {
+    color: #06b6d4;
+    font-size: 1.1em;
+}
+
+/* ── Auth Section ──────────────────────────────────────────── */
+.ts-auth-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.ts-shared-note {
+    background: rgba(6, 182, 212, 0.08);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 14px;
+    font-size: 0.88em;
+    color: #06b6d4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ts-auth-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 0.95em;
+}
+
+.ts-auth-status.ts-connected {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #10b981;
+}
+
+.ts-auth-status.ts-disconnected {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.ts-auth-status.ts-loading {
+    background: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    color: #eab308;
+}
+
+.ts-auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 420px;
+}
+
+.ts-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ts-input-group label {
+    font-size: 0.9em;
+    font-weight: 500;
+    color: var(--text-secondary, #9ca3af);
+}
+
+.ts-input {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color, #2d2d3d);
+    background: var(--input-bg, #161622);
+    color: var(--text-primary, #e2e8f0);
+    font-size: 1em;
+    direction: ltr;
+    text-align: left;
+    transition: border-color 0.2s;
+}
+
+.ts-input:focus {
+    outline: none;
+    border-color: #06b6d4;
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+}
+
+.ts-input::placeholder {
+    color: #6b7280;
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.ts-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: none;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.ts-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ts-btn-primary {
+    background: linear-gradient(135deg, #06b6d4, #0ea5e9);
+    color: #fff;
+}
+
+.ts-btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(6, 182, 212, 0.4);
+}
+
+.ts-btn-success {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+}
+
+.ts-btn-success:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+.ts-btn-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: #fff;
+}
+
+.ts-btn-danger:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+
+.ts-btn-secondary {
+    background: var(--card-bg, #1e1e2e);
+    color: var(--text-primary, #e2e8f0);
+    border: 1px solid var(--border-color, #2d2d3d);
+}
+
+.ts-btn-secondary:hover:not(:disabled) {
+    background: var(--border-color, #2d2d3d);
+}
+
+.ts-btn-sm {
+    padding: 6px 14px;
+    font-size: 0.85em;
+}
+
+/* ── Fetch Section ─────────────────────────────────────────── */
+.ts-fetch-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.ts-fetch-row .ts-input-group {
+    flex: 1;
+}
+
+.ts-fetch-row .ts-btn {
+    height: 42px;
+    white-space: nowrap;
+}
+
+/* ── Results Table ─────────────────────────────────────────── */
+.ts-results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.ts-results-count {
+    font-size: 0.95em;
+    color: var(--text-secondary, #9ca3af);
+}
+
+.ts-results-count strong {
+    color: #06b6d4;
+}
+
+.ts-results-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ts-table-wrap {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border-color, #2d2d3d);
+}
+
+.ts-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.93em;
+}
+
+.ts-table thead {
+    background: rgba(6, 182, 212, 0.08);
+}
+
+.ts-table th {
+    padding: 12px 16px;
+    text-align: right;
+    font-weight: 600;
+    color: #06b6d4;
+    border-bottom: 1px solid var(--border-color, #2d2d3d);
+    white-space: nowrap;
+}
+
+.ts-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-color, rgba(45, 45, 61, 0.5));
+    color: var(--text-primary, #e2e8f0);
+    vertical-align: top;
+}
+
+.ts-table tbody tr:hover {
+    background: rgba(6, 182, 212, 0.04);
+}
+
+.ts-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.ts-comment-text {
+    max-width: 400px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+.ts-username {
+    color: #06b6d4;
+    font-size: 0.85em;
+    direction: ltr;
+    display: inline;
+}
+
+/* ── Empty state ───────────────────────────────────────────── */
+.ts-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary, #6b7280);
+}
+
+.ts-empty i {
+    font-size: 3em;
+    margin-bottom: 12px;
+    color: rgba(6, 182, 212, 0.3);
+    display: block;
+}
+
+/* ── Spinner ───────────────────────────────────────────────── */
+.ts-spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: ts-spin 0.6s linear infinite;
+}
+
+@keyframes ts-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── Steps indicator ───────────────────────────────────────── */
+.ts-steps {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 20px;
+    padding: 16px;
+    background: rgba(6, 182, 212, 0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(6, 182, 212, 0.1);
+}
+
+.ts-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary, #6b7280);
+    font-size: 0.9em;
+}
+
+.ts-step.ts-active {
+    color: #06b6d4;
+    font-weight: 600;
+}
+
+.ts-step.ts-done {
+    color: #10b981;
+}
+
+.ts-step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85em;
+    font-weight: 700;
+    border: 2px solid currentColor;
+}
+
+.ts-step.ts-done .ts-step-num {
+    background: #10b981;
+    color: #fff;
+    border-color: #10b981;
+}
+
+.ts-step.ts-active .ts-step-num {
+    background: #06b6d4;
+    color: #fff;
+    border-color: #06b6d4;
+}
+
+/* ── Copy toast ────────────────────────────────────────────── */
+.ts-copy-toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #10b981;
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.95em;
+    z-index: 9999;
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+}
+
+.ts-copy-toast.ts-show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .ts-page-header {
+        padding: 20px;
+    }
+
+    .ts-page-header h1 {
+        font-size: 1.6em;
+    }
+
+    .ts-fetch-row {
+        flex-direction: column;
+    }
+
+    .ts-fetch-row .ts-btn {
+        width: 100%;
+    }
+
+    .ts-steps {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .ts-results-actions {
+        width: 100%;
+    }
+
+    .ts-results-actions .ts-btn {
+        flex: 1;
+    }
+}
+
+/* ── Excluded Section ──────────────────────────────────── */
+.ts-excluded-card {
+    border: 1px solid rgba(239, 68, 68, 0.20) !important;
+}
+
+.ts-excluded-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ts-excluded-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 13px;
+    font-size: 0.85em;
+    font-weight: 700;
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.ts-excluded-section {
+    margin-top: 16px;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.ts-excluded-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: background 0.2s;
+    user-select: none;
+    gap: 10px;
+}
+
+.ts-excluded-section-header:hover {
+    filter: brightness(1.1);
+}
+
+.ts-excluded-section-header span:first-child {
+    flex: 1;
+}
+
+.ts-excluded-section-header small {
+    opacity: 0.7;
+    font-weight: 400;
+}
+
+.ts-toggle-icon {
+    transition: transform 0.2s;
+    font-size: 0.85em;
+    opacity: 0.6;
+}
+
+.ts-excluded-body {
+    max-height: 2000px;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    opacity: 1;
+}
+
+.ts-excluded-body.ts-collapsed {
+    max-height: 0;
+    opacity: 0;
+}
+
+.ts-problems-header {
+    background: rgba(234, 179, 8, 0.08);
+    border: 1px solid rgba(234, 179, 8, 0.25);
+    color: #eab308;
+}
+
+.ts-badge-warn {
+    background: rgba(234, 179, 8, 0.15) !important;
+    color: #eab308 !important;
+}
+
+.ts-invalid-header {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #ef4444;
+}
+
+.ts-badge-danger {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #ef4444 !important;
+}
+
+.ts-reason-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ts-reason-warn {
+    background: rgba(234, 179, 8, 0.12);
+    color: #eab308;
+    border: 1px solid rgba(234, 179, 8, 0.25);
+}
+
+.ts-reason-danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.ts-table-warn thead th {
+    background: rgba(234, 179, 8, 0.08);
+    color: #eab308;
+}
+
+.ts-table-danger thead th {
+    background: rgba(239, 68, 68, 0.08);
+    color: #ef4444;
+}
+
+/* ── Stats Bar (compact) ──────────────────────────────────── */
+.ts-stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    background: rgba(6, 182, 212, 0.04);
+    border: 1px solid rgba(6, 182, 212, 0.12);
+    border-radius: 10px;
+    flex-wrap: wrap;
+}
+
+.ts-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.82em;
+}
+
+.ts-stat-num {
+    font-weight: 700;
+    font-size: 1.1em;
+    min-width: 18px;
+    text-align: center;
+}
+
+.ts-stat-label {
+    opacity: 0.75;
+    font-size: 0.92em;
+}
+
+.ts-stat-total {
+    background: rgba(148, 163, 184, 0.10);
+    color: #94a3b8;
+}
+
+.ts-stat-valid {
+    background: rgba(16, 185, 129, 0.10);
+    color: #10b981;
+}
+
+.ts-stat-dup {
+    background: rgba(245, 158, 11, 0.10);
+    color: #f59e0b;
+}
+
+.ts-stat-prob {
+    background: rgba(234, 179, 8, 0.10);
+    color: #eab308;
+}
+
+.ts-stat-inv {
+    background: rgba(239, 68, 68, 0.10);
+    color: #ef4444;
+}
+
+/* ── Toolbar (Filter + Answer) ────────────────────────────── */
+.ts-toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.ts-toolbar-item {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.ts-toolbar-icon {
+    position: absolute;
+    right: 12px;
+    color: #6b7280;
+    font-size: 0.9em;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.ts-toolbar-input {
+    padding-right: 36px !important;
+    font-size: 0.9em !important;
+    height: 38px;
+}
+
+/* ── Duplicates Section Colors ────────────────────────────── */
+.ts-duplicates-header {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    color: #f59e0b;
+}
+
+.ts-badge-dup {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: #f59e0b !important;
+}
+
+.ts-reason-dup {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.ts-table-dup thead th {
+    background: rgba(245, 158, 11, 0.08);
+    color: #f59e0b;
+}
+
+

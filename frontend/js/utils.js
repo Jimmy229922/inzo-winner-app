@@ -15,9 +15,7 @@ function __isDebugEnabled() {
 }
 window.__isDebugEnabled = __isDebugEnabled;
 window.logDebug = function(...args) { if (__isDebugEnabled()) console.debug(...args); };
-window.logTrace = function(...args) { if (__isDebugEnabled()) console.trace(...args); };
-
-function translateTelegramError(errorMessage) {
+window.logTrace = function(...args) { if (__isDebugEnabled()) console.trace(...args); };\n\n/**\n * Safely appends a file/blob to a FormData object ensuring a filename is always provided.\n * This prevents browser/mobile discrepancies where blobs without explicit names are dropped or rejected by the server.\n * @param {FormData} formData The form data instance\n * @param {string} fieldName The field name (e.g., 'id_image', 'video')\n * @param {Blob|File} file Blob or file to append\n * @param {string} fallbackFileName The name to use if the file has no name\n */\nfunction safeAppendFile(formData, fieldName, file, fallbackFileName = 'upload.bin') {\n    if (!file) return;\n    const fileName = file.name || fallbackFileName;\n    formData.append(fieldName, file, fileName);\n}\nwindow.utils.safeAppendFile = safeAppendFile;\n\nfunction translateTelegramError(errorMessage) {
     if (!errorMessage) {
         return 'فشل إرسال غير معروف.';
     }
@@ -69,7 +67,20 @@ function safeId(val) {
 // Global fetch wrapper with proper JSON handling and auth management
 async function authedFetch(url, options = {}) {
     const token = localStorage.getItem('authToken');
-    
+
+    // === NEW: Global Cache-Busting for GET requests ===
+    // If it's a GET request (or undefined which defaults to GET), append _t parameter to prevent caching issues.
+    const method = (options.method || 'GET').toUpperCase();
+    let finalUrl = url;
+    if (method === 'GET') {
+        const separator = finalUrl.includes('?') ? '&' : '?';
+        // Only append if it doesn't already have _t
+        if (!finalUrl.includes('_t=')) {
+            finalUrl += `${separator}_t=${Date.now()}`;
+        }
+    }
+    // ==================================================
+
     // Start with default headers for JSON requests
     const defaultHeaders = {
         'Accept': 'application/json',
@@ -117,7 +128,7 @@ async function authedFetch(url, options = {}) {
         }
     }
 
-    const response = await fetch(url, {
+    const response = await fetch(finalUrl, {
         ...options,
         headers,
         body: finalBody

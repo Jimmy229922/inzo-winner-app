@@ -13,6 +13,7 @@ const { logActivity } = require('../utils/logActivity');
 const { translateField, formatValue } = require('../utils/fieldTranslations');
 const { postToTelegram, sendPhotoToTelegram, sendMediaGroupToTelegram } = require('../utils/telegram');
 const { broadcastEvent } = require('../utils/notification');
+const { calculateRealPrize } = require('../utils/prizeCalculator');
 
 // Helper function to introduce a delay
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -1285,13 +1286,19 @@ exports.sendWinnersReport = async (req, res) => {
                 caption = messageText;
             } else {
                 // Fallback to generating caption on backend
+                const effectivePrizeValue = (w.prize_value && w.prize_value > 0) ? w.prize_value : (
+                    (w.prize_type === 'deposit_prev' || w.prize_type === 'deposit') 
+                    ? (agent.deposit_bonus_percentage || 0) 
+                    : 0
+                );
+                
                 let prizeText = '';
                 if (w.prize_type === 'deposit_prev') {
-                    prizeText = `${w.prize_value}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+                    prizeText = `${effectivePrizeValue}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
                 } else if (w.prize_type === 'deposit') {
-                    prizeText = `${w.prize_value}% بونص إيداع`;
+                    prizeText = `${effectivePrizeValue}% بونص إيداع`;
                 } else {
-                    prizeText = `${w.prize_value}$ بونص تداولي`;
+                    prizeText = `${effectivePrizeValue}$ بونص تداولي`;
                 }
                 
                 // استخدام رقم الترتيب اليدوي إذا كان موجوداً
@@ -1339,13 +1346,20 @@ exports.sendWinnersReport = async (req, res) => {
                 const rank = w.order_number 
                     ? (ordinals[w.order_number - 1] || `رقم ${w.order_number}`)
                     : (ordinals[globalIndex] || (globalIndex + 1));
+                    
+                const effectivePrizeValue = (w.prize_value && w.prize_value > 0) ? w.prize_value : (
+                    (w.prize_type === 'deposit_prev' || w.prize_type === 'deposit') 
+                    ? (agent.deposit_bonus_percentage || 0) 
+                    : 0
+                );
+                
                 let prizeText = '';
                 if (w.prize_type === 'deposit_prev') {
-                    prizeText = `${w.prize_value}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+                    prizeText = `${effectivePrizeValue}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
                 } else if (w.prize_type === 'deposit') {
-                    prizeText = `${w.prize_value}% بونص إيداع`;
+                    prizeText = `${effectivePrizeValue}% بونص إيداع`;
                 } else {
-                    prizeText = `${w.prize_value}$ بونص تداولي`;
+                    prizeText = `${effectivePrizeValue}$ بونص تداولي`;
                 }
         
                 msg += `◃ الفائز ${rank}: ${w.name}\n`;
@@ -1487,13 +1501,19 @@ exports.sendWinnersDetails = async (req, res) => {
 
         for (const w of winners) {
             try {
+                const effectivePrizeValue = (w.prize_value && w.prize_value > 0) ? w.prize_value : (
+                    (w.prize_type === 'deposit_prev' || w.prize_type === 'deposit') 
+                    ? (agent.deposit_bonus_percentage || 0) 
+                    : 0
+                );
+                
                 let prizeText = '';
                 if (w.prize_type === 'deposit_prev') {
-                    prizeText = `${w.prize_value || 0}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+                    prizeText = `${effectivePrizeValue}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
                 } else if (w.prize_type === 'deposit') {
-                    prizeText = `${w.prize_value || 0}% بونص إيداع`;
+                    prizeText = `${effectivePrizeValue}% بونص إيداع`;
                 } else {
-                    prizeText = `${w.prize_value || 0}$ بونص تداولي`;
+                    prizeText = `${effectivePrizeValue}$ بونص تداولي`;
                 }
 
                 const lines = [

@@ -1125,7 +1125,7 @@
                 // 2. Fetch Winners for this competition (only if agent is selected)
                 let winners = [];
                 if (state.selectedAgent && state.selectedAgent.id) {
-                    const winnersResponse = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${compId}`);
+                    const winnersResponse = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${compId}&_t=${Date.now()}`);
                     if (winnersResponse.ok) {
                         const winnersData = await winnersResponse.json();
                         if (winnersData.competitions && winnersData.competitions.length > 0) {
@@ -1349,7 +1349,7 @@
     
         // --- NEW: Fetch agent winner history for validation ---
         try {
-            const historyResp = await window.authedFetch(`/api/agents/${agentId}/winners`);
+            const historyResp = await window.authedFetch(`/api/agents/${agentId}/winners?_t=${Date.now()}`);
             if (historyResp.ok) {
                 const historyData = await historyResp.json();
                 // Flatten the competitions structure to get a simple list of winners
@@ -2872,7 +2872,7 @@
         throw new Error('لم يتم تحديد الوكيل');
       }
       
-      const winnersResponse = await authedFetch(`/api/agents/${agentId}/winners?competition_id=${competitionId}`);
+      const winnersResponse = await authedFetch(`/api/agents/${agentId}/winners?competition_id=${competitionId}&_t=${Date.now()}`);
       let winners = [];
       if (winnersResponse.ok) {
         const winnersData = await winnersResponse.json();
@@ -5144,7 +5144,7 @@
           try {
             toast('جاري التحقق من حفظ الفيديو وصورة الهوية...', 'info');
             const authedFetch = window.authedFetch || fetch;
-            const verifyResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}`);
+            const verifyResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}&_t=${Date.now()}`);
             if (!verifyResp.ok) {
               console.error('[Approve Winners] Verify fetch failed:', verifyResp.status);
               toast('فشل التحقق من بيانات الفائزين من قاعدة البيانات.', 'error');
@@ -5181,7 +5181,7 @@
                   await saveAllWinnersToDatabase();
                   
                   // Verify again
-                  const retryResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}`);
+                  const retryResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}&_t=${Date.now()}`);
                   const retryData = await retryResp.json();
                   const retryCompetition = (retryData.competitions && retryData.competitions[0]) ? retryData.competitions[0] : null;
                   const retryWinners = (retryCompetition && retryCompetition.winners) ? retryCompetition.winners : [];
@@ -7035,7 +7035,7 @@
                     const formData = new FormData();
                     // Determine extension based on recorded mimeType
                     const extension = (state.recordingMimeType && state.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
-                    formData.append('video', state.pendingVideoBlob, `winner_${createdWinner._id}.${extension}`);
+                    safeAppendFile(formData, 'video', state.pendingVideoBlob, `winner_${createdWinner._id}.${extension}`);
                     
                     const uploadResp = await authedFetch(`/api/winners/${createdWinner._id}/video`, {
                         method: 'POST',
@@ -7052,7 +7052,8 @@
                 // Upload national ID image if provided
                 if (compressedFile && createdWinner && createdWinner._id) {
                     const idImageFormData = new FormData();
-                    idImageFormData.append('id_image', compressedFile);
+// Use central safe append function instead - safeAppendFile(idImageFormData, 'id_image', compressedFile, 'id_image.jpg');
+                      safeAppendFile(idImageFormData, 'id_image', compressedFile, 'id_image.jpg');
                     
                     const idImageResp = await authedFetch(`/api/winners/${createdWinner._id}/id-image`, {
                         method: 'POST',
@@ -7276,7 +7277,7 @@
             try {
               const formData = new FormData();
               const extension = (localWinner.recordingMimeType && localWinner.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
-              formData.append('video', localWinner.pendingVideoBlob, `winner_${savedWinner._id}.${extension}`);
+              safeAppendFile(formData, 'video', localWinner.pendingVideoBlob, `winner_${savedWinner._id}.${extension}`);
               
               const videoResp = await authedFetch(`/api/winners/${savedWinner._id}/video`, {
                 method: 'POST',
@@ -7301,7 +7302,7 @@
           if (localWinner.pendingIdImageFile && (localWinner.pendingIdImageFile instanceof Blob || localWinner.pendingIdImageFile instanceof File)) {
             try {
               const formData = new FormData();
-              formData.append('id_image', localWinner.pendingIdImageFile);
+              safeAppendFile(formData, 'id_image', localWinner.pendingIdImageFile, 'id_image.jpg');
               
               const uploadResp = await authedFetch(`/api/winners/${savedWinner._id}/id-image`, {
                 method: 'POST',
@@ -7327,7 +7328,7 @@
           if (localWinner.pendingIdImage && (localWinner.pendingIdImage instanceof Blob || localWinner.pendingIdImage instanceof File)) {
             try {
               const idFormData = new FormData();
-              idFormData.append('id_image', localWinner.pendingIdImage);
+                safeAppendFile(idFormData, 'id_image', localWinner.pendingIdImage, 'id_image.jpg');
               
               const idUploadResp = await authedFetch(`/api/winners/${savedWinner._id}/id-image`, {
                 method: 'POST',
@@ -7365,7 +7366,7 @@
           try {
             const formData = new FormData();
             const extension = (w.recordingMimeType && w.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
-            formData.append('video', w.pendingVideoBlob, `winner_${winnerDbId}.${extension}`);
+            safeAppendFile(formData, 'video', w.pendingVideoBlob, `winner_${winnerDbId}.${extension}`);
             const videoResp = await authedFetch(`/api/winners/${winnerDbId}/video`, { method: 'POST', body: formData });
             if (videoResp.ok) {
               delete w.pendingVideoBlob;
@@ -7383,7 +7384,7 @@
         if (w.pendingIdImageFile && (w.pendingIdImageFile instanceof Blob || w.pendingIdImageFile instanceof File)) {
           try {
             const formData = new FormData();
-            formData.append('id_image', w.pendingIdImageFile);
+            safeAppendFile(formData, 'id_image', w.pendingIdImageFile, 'id_image.jpg');
             const uploadResp = await authedFetch(`/api/winners/${winnerDbId}/id-image`, { method: 'POST', body: formData });
             if (uploadResp.ok) {
               try {
@@ -7404,7 +7405,7 @@
         if (w.pendingIdImage && (w.pendingIdImage instanceof Blob || w.pendingIdImage instanceof File)) {
           try {
             const idFormData = new FormData();
-            idFormData.append('id_image', w.pendingIdImage);
+              safeAppendFile(idFormData, 'id_image', w.pendingIdImage, 'id_image.jpg');
             const idUploadResp = await authedFetch(`/api/winners/${winnerDbId}/id-image`, { method: 'POST', body: idFormData });
             if (idUploadResp.ok) {
               try {
@@ -7843,15 +7844,3 @@ if (typeof window !== 'undefined') {
 }
 
 })(); // End of IIFE
-    
-
-
-
-
-
-
-
-
-
-
-

@@ -27,7 +27,8 @@ const cssFiles = [
     'assets/css/day-competitions.css',
     'assets/css/logs.css',
     'assets/css/statistics.css',
-    'assets/css/winner-roulette.css'
+    'assets/css/winner-roulette.css',
+    'assets/css/telegram-scraper.css'
 ].map(f => path.join(basePath, f));
 
 // JS files in order
@@ -46,6 +47,7 @@ const jsFiles = [
     'js/pages/activityLog.js',
     'js/pages/analytics.js',
     'js/pages/winner-roulette.js',
+    'js/pages/telegram-scraper.js',
     'js/pages/question-suggestions.js',
     'js/pages/admin-question-suggestions.js',
     'js/notifications.js', // Notification System

@@ -22,6 +22,7 @@ const runMigrations = require('./migration-runner'); // FIX: Correct path for mi
 const winnerRoutes = require('./routes/winner.routes');
 const questionSuggestionRoutes = require('./routes/questionSuggestion.routes'); // نظام اقتراح الأسئلة
 const notificationRoutes = require('./routes/notification.routes'); // إضافة: استيراد مسارات الإشعارات
+const telegramScraperRoutes = require('./routes/telegramScraper.routes'); // جلب تعليقات تلجرام
 
 const { broadcastNotification } = require('./utils/notification');
 
@@ -184,6 +185,8 @@ app.use('/api/templates', authMiddleware.authenticate, activityLogger, templateR
 // --- إضافة: استخدام مسارات تلجرام ---
 // Note: These are not protected by authMiddleware to allow more flexibility if needed later.
 app.use('/api', telegramRoutes);
+// --- Telegram Scraper (MTProto) - independent module for fetching channel comments ---
+app.use('/api', authMiddleware.authenticate, telegramScraperRoutes);
 // --- FIX: Mount stats routes properly ---
 app.use('/api/stats', authMiddleware.authenticate, activityLogger, statsRoutes);
 // Integrations (Wheel of Names, etc.)

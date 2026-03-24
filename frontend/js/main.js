@@ -206,7 +206,8 @@ async function handleRouting() {
         '#analytics': { func: renderAnalyticsPage, nav: 'nav-analytics' },
         '#admin-suggestions': { func: renderAdminSuggestionsPage, nav: 'nav-admin-question-suggestions' },
         '#statistics': { func: renderStatisticsPage, nav: 'nav-statistics' },
-        '#winner-roulette': { func: renderWinnerRoulettePage, nav: 'nav-winner-roulette' }
+        '#winner-roulette': { func: renderWinnerRoulettePage, nav: 'nav-winner-roulette' },
+        '#telegram-scraper': { func: renderTelegramScraperPage, nav: 'nav-telegram-scraper' }
     };
 
     const routeKey = hash.split('/')[0].split('?')[0]; // Get base route e.g., #profile from #profile/123 or #competitions from #competitions/new?agentId=1

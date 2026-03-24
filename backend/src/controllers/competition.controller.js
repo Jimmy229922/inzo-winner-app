@@ -1,4 +1,4 @@
-﻿const mongoose = require('mongoose');
+const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs').promises;
 const Competition = require('../models/Competition');
@@ -102,7 +102,7 @@ exports.getAllCompetitions = async (req, res) => {
         if (sort === 'name_asc') sortOptions = { name: 1 };
 
         const competitions = await Competition.find(query)
-            .populate('agent_id', 'name avatar_url classification')
+            .populate('agent_id', 'name avatar_url classification deposit_bonus_percentage')
             .sort(sortOptions)
             .limit(limit * 1)
             .skip((page - 1) * limit)
@@ -111,11 +111,16 @@ exports.getAllCompetitions = async (req, res) => {
         // Rename agent_id to agents and handle deleted agents
         const formattedCompetitions = competitions.map(comp => {
             const { agent_id, ...rest } = comp;
+            const effectiveDepositBonusPct = (comp.deposit_bonus_percentage && Number(comp.deposit_bonus_percentage) > 0)
+                ? Number(comp.deposit_bonus_percentage)
+                : Number(agent_id?.deposit_bonus_percentage || 0);
+
             return {
                 ...rest,
+                deposit_bonus_percentage: effectiveDepositBonusPct,
                 agents: agent_id || {
-                    name: 'وكيل محذوف',
-                    classification: 'غير متاح',
+                    name: '???? ?????',
+                    classification: '??? ????',
                     avatar_url: null
                 },
                 id: comp._id
@@ -182,7 +187,7 @@ exports.getAgentActiveCompetition = async (req, res) => {
 exports.getCompetitionById = async (req, res) => {
     try {
         const competition = await Competition.findById(req.params.id)
-            .populate('agent_id', 'name avatar_url classification')
+            .populate('agent_id', 'name avatar_url classification deposit_bonus_percentage')
             .populate('template_id')
             .lean();
 
@@ -197,7 +202,8 @@ exports.getCompetitionById = async (req, res) => {
             template: competition.template_id,
             trading_winners_count: competition.trading_winners_count || 0,
             deposit_winners_count: competition.deposit_winners_count || 0,
-            current_winners_count: currentWinnersCount
+            current_winners_count: currentWinnersCount,
+            deposit_bonus_percentage: (competition.deposit_bonus_percentage && Number(competition.deposit_bonus_percentage) > 0) ? Number(competition.deposit_bonus_percentage) : Number(competition.agent_id?.deposit_bonus_percentage || 0)
         };
         formattedCompetition.required_winners = competition.required_winners || 3;
         delete formattedCompetition.template_id;
@@ -227,10 +233,10 @@ exports.createCompetition = async (req, res) => {
         }
 
         if ((agent.remaining_balance || 0) < totalCost) {
-            return res.status(400).json({ message: 'رصيد الوكيل غير كافٍ لإرسال المسابقة.' });
+            return res.status(400).json({ message: '???? ?????? ??? ???? ?????? ????????.' });
         }
         if ((agent.remaining_deposit_bonus || 0) < depositWinners) {
-            return res.status(400).json({ message: 'عدد مرات بونص الإيداع غير كافٍ.' });
+            return res.status(400).json({ message: '??? ???? ???? ??????? ??? ????.' });
         }
 
         // 3. Duplicate Checks
@@ -262,7 +268,7 @@ exports.createCompetition = async (req, res) => {
             console.log(`[BACKEND] Time-based duplicate check (existingCompetition): ${existingCompetition ? existingCompetition._id : 'null'}`);
             if (existingCompetition) {
                 return res.status(409).json({
-                    message: 'عذراً، تم إرسال هذه المسابقة لهذا الوكيل من قبل.',
+                    message: '?????? ?? ????? ??? ???????? ???? ?????? ?? ???.',
                     error: 'Duplicate competition entry.',
                     duplicateId: existingCompetition._id
                 });
@@ -282,7 +288,7 @@ exports.createCompetition = async (req, res) => {
                 
                 if (storedTitle && realTitle && storedTitle.trim() !== realTitle.trim()) {
                     return res.status(409).json({
-                        message: 'فشل التحقق من اسم مجموعة التليجرام. الاسم المسجل لا يطابق الاسم الحالي للمجموعة.',
+                        message: '??? ?????? ?? ??? ?????? ?????????. ????? ?????? ?? ????? ????? ?????? ????????.',
                         error: 'Telegram group name mismatch',
                         stored_group_name: storedTitle,
                         actual_group_name: realTitle
@@ -290,7 +296,7 @@ exports.createCompetition = async (req, res) => {
                 }
             } catch (tgErr) {
                 return res.status(400).json({
-                    message: 'تعذر الوصول إلى مجموعة التليجرام للتحقق.',
+                    message: '???? ?????? ??? ?????? ????????? ??????.',
                     error: tgErr.message
                 });
             }
@@ -318,12 +324,12 @@ exports.createCompetition = async (req, res) => {
                 } catch (err) {
                     console.error('Image read error:', err);
                     return res.status(400).json({ 
-                        message: 'فشل قراءة صورة المسابقة. لا يمكن إرسال المسابقة بدون صورة.',
+                        message: '??? ????? ???? ????????. ?? ???? ????? ???????? ???? ????.',
                         error: err.message 
                     });
                 }
             } else {
-                return res.status(400).json({ message: 'صورة المسابقة مطلوبة.' });
+                return res.status(400).json({ message: '???? ???????? ??????.' });
             }
 
             // C. Send to Telegram
@@ -358,7 +364,7 @@ exports.createCompetition = async (req, res) => {
                     const photoMsg = await botInstance.sendPhoto(
                         agent.telegram_chat_id,
                         imageBuffer,
-                        { caption: `<b>مسابقة جديدة</b>`, parse_mode: 'HTML' },
+                        { caption: `<b>?????? ?????</b>`, parse_mode: 'HTML' },
                         { filename: filename, contentType: contentType }
                     );
 
@@ -380,16 +386,16 @@ exports.createCompetition = async (req, res) => {
             } catch (sendErr) {
                 console.error(`[Competition] Failed to send competition to Telegram group: ${agent.telegram_group_name}. Error: ${sendErr.message}`);
                 return res.status(500).json({ 
-                    message: 'فشل إرسال المسابقة إلى التليجرام.',
+                    message: '??? ????? ???????? ??? ?????????.',
                     error: sendErr.message 
                 });
             }
         } else {
              if (!agent.telegram_chat_id) {
-                 return res.status(400).json({ message: 'الوكيل ليس لديه معرف مجموعة تليجرام.' });
+                 return res.status(400).json({ message: '?????? ??? ???? ???? ?????? ???????.' });
              }
              if (!botInstance) {
-                 return res.status(503).json({ message: 'خدمة التليجرام غير متوفرة حالياً.' });
+                 return res.status(503).json({ message: '???? ????????? ??? ?????? ??????.' });
              }
         }
 
@@ -443,7 +449,7 @@ exports.createCompetition = async (req, res) => {
             // --- NEW: Broadcast Notification ---
             broadcastNotification(
                 req.app,
-                `تم إنشاء مسابقة جديدة بواسطة ${agent.name}`,
+                `?? ????? ?????? ????? ?????? ${agent.name}`,
                 'success'
             );
 
@@ -481,8 +487,8 @@ exports.createCompetition = async (req, res) => {
                         reviewed_by_name: userName,
                         reviewed_at: new Date(),
                         rating: 5,
-                        feedback: 'تم إنشاؤه من مسابقة',
-                        admin_notes: `تم الإنشاء تلقائياً من مسابقة: ${competition.name || 'غير محدد'}`
+                        feedback: '?? ?????? ?? ??????',
+                        admin_notes: `?? ??????? ???????? ?? ??????: ${competition.name || '??? ????'}`
                     }
                 }));
                 
@@ -533,13 +539,13 @@ exports.updateCompetition = async (req, res) => {
             const changes = Object.entries(req.body).map(([field, newValue]) => {
                 const oldValue = competitionBeforeUpdate[field];
                 if (String(oldValue) !== String(newValue)) {
-                    return `حقل "${field}" تغير من "${oldValue}" إلى "${newValue}"`;
+                    return `??? "${field}" ???? ?? "${oldValue}" ??? "${newValue}"`;
                 }
                 return null;
             }).filter(Boolean);
 
             if (changes.length > 0) {
-                const description = `تم تحديث مسابقة "${updatedCompetition.name}":\n${changes.join('\n')}`;
+                const description = `?? ????? ?????? "${updatedCompetition.name}":\n${changes.join('\n')}`;
                 await logActivity(userId, updatedCompetition.agent_id, 'COMPETITION_UPDATE', description);
             }
         }
@@ -556,7 +562,7 @@ exports.deleteCompetition = async (req, res) => {
         // --- FIX: Log this action ---
         const userId = req.user?._id;
         if (userId && competition) {
-            await logActivity(userId, competition.agent_id, 'COMPETITION_DELETED', `تم حذف المسابقة: ${competition.name}.`);
+            await logActivity(userId, competition.agent_id, 'COMPETITION_DELETED', `?? ??? ????????: ${competition.name}.`);
         }
         if (!competition) return res.status(404).json({ message: 'Competition not found.' });
         res.json({ message: 'Competition deleted successfully.' });
@@ -635,7 +641,7 @@ exports.completeCompetition = async (req, res) => {
     const { id } = req.params;
     const { winners, noWinners, isRestoreMode } = req.body;
     const userId = req.user?._id;
-    const userName = req.user?.full_name || req.user?.username || 'مستخدم';
+    const userName = req.user?.full_name || req.user?.username || '??????';
 
     try {
         const competition = await Competition.findById(id).populate('agent_id');
@@ -643,18 +649,18 @@ exports.completeCompetition = async (req, res) => {
             return res.status(404).json({ message: 'Competition not found.' });
         }
 
-        // في وضع الاستعادة، نسمح بالحفظ حتى لو المسابقة مكتملة
+        // ?? ??? ?????????? ???? ?????? ??? ?? ???????? ??????
         if (competition.status === 'completed' && !isRestoreMode) {
             return res.status(400).json({ message: 'Competition is already completed.' });
         }
 
-        // === حفظ نسخة كاملة من البيانات (Snapshot) للاسترجاع المستقبلي ===
+        // === ??? ???? ????? ?? ???????? (Snapshot) ????????? ????????? ===
         let completionSnapshot = null;
         
-        // جلب الفائزين من قاعدة البيانات
+        // ??? ???????? ?? ????? ????????
         const winnersFromDB = await Winner.find({ competition_id: id });
         
-        // جلب بيانات الوكيل إذا لم تكن محملة
+        // ??? ?????? ?????? ??? ?? ??? ?????
         let agentData = competition.agent_id;
         if (!agentData || typeof agentData === 'string' || agentData instanceof mongoose.Types.ObjectId) {
             agentData = await Agent.findById(competition.agent_id);
@@ -694,7 +700,7 @@ exports.completeCompetition = async (req, res) => {
             is_active: false 
         };
         
-        // إضافة الـ snapshot فقط إذا لم يكن موجوداً أو في وضع غير الاستعادة
+        // ????? ??? snapshot ??? ??? ?? ??? ??????? ?? ?? ??? ??? ?????????
         if (completionSnapshot && !isRestoreMode) {
             updateData.completion_snapshot = completionSnapshot;
         }
@@ -709,12 +715,12 @@ exports.completeCompetition = async (req, res) => {
         competition.is_active = false;
 
         let logDescription = isRestoreMode 
-            ? `تم حفظ تعديلات المسابقة المسترجعة "${competition.name}".`
-            : `تم اعتماد المسابقة "${competition.name}" وإغلاقها.`;
+            ? `?? ??? ??????? ???????? ????????? "${competition.name}".`
+            : `?? ?????? ???????? "${competition.name}" ????????.`;
         if (noWinners) {
-            logDescription += ' (بدون فائزين)';
+            logDescription += ' (???? ??????)';
         } else if (winners && winners.length > 0) {
-            logDescription += ` (عدد الفائزين: ${winners.length})`;
+            logDescription += ` (??? ????????: ${winners.length})`;
         }
 
         if (userId) {
@@ -743,12 +749,12 @@ exports.completeCompetition = async (req, res) => {
 };
 
 /**
- * تسجيل استرجاع المسابقة
+ * ????? ??????? ????????
  */
 exports.restoreCompetition = async (req, res) => {
     const { id } = req.params;
     const userId = req.user?._id;
-    const userName = req.user?.full_name || req.user?.username || 'مستخدم';
+    const userName = req.user?.full_name || req.user?.username || '??????';
 
     try {
         const competition = await Competition.findById(id);
@@ -760,7 +766,7 @@ exports.restoreCompetition = async (req, res) => {
             return res.status(400).json({ message: 'Only completed competitions can be restored.' });
         }
 
-        // تسجيل تاريخ الاسترجاع وإضافته للسجل
+        // ????? ????? ????????? ??????? ?????
         const restoreEntry = {
             restored_at: new Date(),
             restored_by: userId,
@@ -776,7 +782,7 @@ exports.restoreCompetition = async (req, res) => {
         );
 
         const restoreCount = (competition.restore_history?.length || 0) + 1;
-        const logDescription = `تم استرجاع المسابقة المكتملة "${competition.name}" لإعادة إرسال التقارير (المرة رقم ${restoreCount}).`;
+        const logDescription = `?? ??????? ???????? ???????? "${competition.name}" ?????? ????? ???????? (????? ??? ${restoreCount}).`;
         if (userId) {
             await logActivity(userId, competition.agent_id, 'COMPETITION_RESTORED', logDescription);
         }
@@ -789,25 +795,25 @@ exports.restoreCompetition = async (req, res) => {
 };
 
 /**
- * جلب بيانات المسابقة الكاملة للاسترجاع
- * يحاول أولاً استخدام الـ snapshot المحفوظ، وإن لم يوجد يجلب البيانات الحالية
+ * ??? ?????? ???????? ??????? ?????????
+ * ????? ????? ??????? ??? snapshot ???????? ??? ?? ???? ???? ???????? ???????
  */
 exports.getCompetitionForRestore = async (req, res) => {
     const { id } = req.params;
-    const skipValidation = req.query.skipValidation === 'true'; // خيار لتخطي التحقق من الملفات
+    const skipValidation = req.query.skipValidation === 'true'; // ???? ????? ?????? ?? ???????
     
     try {
-        // جلب المسابقة مع الوكيل بشكل متوازي مع الفائزين
+        // ??? ???????? ?? ?????? ???? ?????? ?? ????????
         const [competition, winners] = await Promise.all([
-            Competition.findById(id).populate('agent_id').lean(), // استخدام lean() للأداء
+            Competition.findById(id).populate('agent_id').lean(), // ??????? lean() ??????
             Winner.find({ competition_id: id }).sort({ order_number: 1 }).lean()
         ]);
         
         if (!competition) {
-            return res.status(404).json({ message: 'المسابقة غير موجودة.' });
+            return res.status(404).json({ message: '???????? ??? ??????.' });
         }
         
-        // التحقق من سلامة الملفات (اختياري - يمكن تخطيه للسرعة)
+        // ?????? ?? ????? ??????? (??????? - ???? ????? ??????)
         const fileValidation = {
             valid: true,
             issues: [],
@@ -815,11 +821,11 @@ exports.getCompetitionForRestore = async (req, res) => {
             missingVideos: []
         };
         
-        // فقط نتحقق من الملفات إذا لم يُطلب تخطي التحقق
-        if (!skipValidation && winners.length <= 20) { // نتحقق فقط لو الفائزين قليلين
+        // ??? ????? ?? ??????? ??? ?? ????? ???? ??????
+        if (!skipValidation && winners.length <= 20) { // ????? ??? ?? ???????? ??????
             const fsSync = require('fs');
             for (const winner of winners) {
-                // التحقق من صورة الهوية
+                // ?????? ?? ???? ??????
                 if (winner.national_id_image) {
                     const imagePath = winner.national_id_image.startsWith('/uploads') 
                         ? path.join(__dirname, '../../', winner.national_id_image.slice(1))
@@ -832,11 +838,11 @@ exports.getCompetitionForRestore = async (req, res) => {
                             winnerName: winner.name,
                             path: winner.national_id_image
                         });
-                        fileValidation.issues.push(`صورة هوية "${winner.name}" غير موجودة`);
+                        fileValidation.issues.push(`???? ???? "${winner.name}" ??? ??????`);
                     }
                 }
                 
-                // التحقق من الفيديو
+                // ?????? ?? ???????
                 if (winner.video_url) {
                     const videoPath = winner.video_url.startsWith('/uploads')
                         ? path.join(__dirname, '../../', winner.video_url.slice(1))
@@ -848,30 +854,30 @@ exports.getCompetitionForRestore = async (req, res) => {
                             winnerName: winner.name,
                             path: winner.video_url
                         });
-                        fileValidation.issues.push(`فيديو "${winner.name}" غير موجود`);
+                        fileValidation.issues.push(`????? "${winner.name}" ??? ?????`);
                     }
                 }
             }
         }
         
-        // بناء بيانات الوكيل
+        // ???? ?????? ??????
         let agentData = null;
         
-        // أولاً: محاولة استخدام الـ snapshot إذا كان موجوداً
+        // ?????: ?????? ??????? ??? snapshot ??? ??? ???????
         if (competition.completion_snapshot?.agent) {
             agentData = competition.completion_snapshot.agent;
             
-            // التحقق من أن الوكيل لا يزال موجوداً (للحصول على أحدث chat_id إذا تغير)
+            // ?????? ?? ?? ?????? ?? ???? ??????? (?????? ??? ???? chat_id ??? ????)
             const currentAgent = await Agent.findById(agentData._id).select('telegram_chat_id').lean();
             if (currentAgent) {
-                agentData.chat_id = currentAgent.telegram_chat_id; // استخدام أحدث chat_id
+                agentData.chat_id = currentAgent.telegram_chat_id; // ??????? ???? chat_id
                 agentData.is_active = true;
             } else {
                 agentData.is_active = false;
-                fileValidation.issues.push('الوكيل محذوف من النظام - سيتم استخدام البيانات المحفوظة');
+                fileValidation.issues.push('?????? ????? ?? ?????? - ???? ??????? ???????? ????????');
             }
         } 
-        // ثانياً: استخدام البيانات الحالية
+        // ??????: ??????? ???????? ???????
         else if (competition.agent_id && typeof competition.agent_id === 'object') {
             agentData = {
                 _id: competition.agent_id._id,
@@ -882,7 +888,7 @@ exports.getCompetitionForRestore = async (req, res) => {
                 is_active: true
             };
         } else {
-            // محاولة جلب الوكيل يدوياً
+            // ?????? ??? ?????? ??????
             const agent = await Agent.findById(competition.agent_id).lean();
             if (agent) {
                 agentData = {
@@ -895,11 +901,11 @@ exports.getCompetitionForRestore = async (req, res) => {
                 };
             } else {
                 fileValidation.valid = false;
-                fileValidation.issues.push('الوكيل غير موجود في النظام');
+                fileValidation.issues.push('?????? ??? ????? ?? ??????');
             }
         }
         
-        // بناء الاستجابة
+        // ???? ?????????
         res.json({
             competition: {
                 _id: competition._id,
@@ -940,20 +946,20 @@ exports.getCompetitionForRestore = async (req, res) => {
         
     } catch (error) {
         console.error('[Get Competition For Restore Error]:', error);
-        res.status(500).json({ message: 'فشل في جلب بيانات المسابقة للاسترجاع.', error: error.toString() });
+        res.status(500).json({ message: '??? ?? ??? ?????? ???????? ?????????.', error: error.toString() });
     }
 };
 
 // ==========================================
-// التحقق من الملفات في الخلفية (Background Validation)
-// يُستدعى بعد تحميل البيانات الأساسية
+// ?????? ?? ??????? ?? ??????? (Background Validation)
+// ??????? ??? ????? ???????? ????????
 // ==========================================
 exports.validateCompetitionFiles = async (req, res) => {
     const { id } = req.params;
     const fsSync = require('fs');
     
     try {
-        // جلب الفائزين فقط (نحتاج الملفات)
+        // ??? ???????? ??? (????? ???????)
         const winners = await Winner.find({ competition_id: id })
             .select('_id name national_id_image video_url')
             .lean();
@@ -969,9 +975,9 @@ exports.validateCompetitionFiles = async (req, res) => {
             issues: []
         };
         
-        // التحقق من كل ملف
+        // ?????? ?? ?? ???
         for (const winner of winners) {
-            // التحقق من صورة الهوية
+            // ?????? ?? ???? ??????
             if (winner.national_id_image) {
                 validation.totalFiles++;
                 const imagePath = winner.national_id_image.startsWith('/uploads') 
@@ -990,12 +996,12 @@ exports.validateCompetitionFiles = async (req, res) => {
                         winnerName: winner.name,
                         path: winner.national_id_image
                     });
-                    validation.issues.push(`صورة هوية "${winner.name}" غير موجودة`);
+                    validation.issues.push(`???? ???? "${winner.name}" ??? ??????`);
                 }
                 validation.checkedFiles++;
             }
             
-            // التحقق من الفيديو
+            // ?????? ?? ???????
             if (winner.video_url) {
                 validation.totalFiles++;
                 const videoPath = winner.video_url.startsWith('/uploads')
@@ -1013,13 +1019,13 @@ exports.validateCompetitionFiles = async (req, res) => {
                         winnerName: winner.name,
                         path: winner.video_url
                     });
-                    validation.issues.push(`فيديو "${winner.name}" غير موجود`);
+                    validation.issues.push(`????? "${winner.name}" ??? ?????`);
                 }
                 validation.checkedFiles++;
             }
         }
         
-        // إحصائيات
+        // ????????
         validation.summary = {
             totalWinners: winners.length,
             winnersWithImages: validation.validImages.length + validation.missingImages.length,
@@ -1034,6 +1040,7 @@ exports.validateCompetitionFiles = async (req, res) => {
         
     } catch (error) {
         console.error('[Validate Competition Files Error]:', error);
-        res.status(500).json({ message: 'فشل في التحقق من الملفات.', error: error.toString() });
+        res.status(500).json({ message: '??? ?? ?????? ?? ???????.', error: error.toString() });
     }
 };
+
