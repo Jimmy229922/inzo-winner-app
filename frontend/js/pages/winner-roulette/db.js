@@ -1,22 +1,22 @@
 /**
  * db.js
- * إدارة قاعدة البيانات المحلية IndexedDB لحفظ الفائزين مؤقتاً كنسخة احتياطية.
+ * IndexedDB helpers for staged winners and media blobs.
  */
 
-const DB_NAME = 'WinnerRouletteDB';
-const DB_VERSION = 1;
-const STORE_NAME = 'stagedWinners';
+import { config } from './state.js';
 
 let dbInstance = null;
 
 export function initDB() {
     return new Promise((resolve, reject) => {
-        if (dbInstance) return resolve(dbInstance);
+        if (dbInstance) {
+            resolve(dbInstance);
+            return;
+        }
 
-        const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+        const request = window.indexedDB.open(config.DB_NAME, config.DB_VERSION);
 
         request.onerror = (event) => {
-            console.error('IndexedDB error:', event.target.error);
             reject(event.target.error);
         };
 
@@ -27,60 +27,125 @@ export function initDB() {
 
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                // استخدام id كمفتاح أساسي فريد
-                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+
+            if (!db.objectStoreNames.contains(config.VIDEO_STORE)) {
+                db.createObjectStore(config.VIDEO_STORE);
+            }
+
+            if (!db.objectStoreNames.contains(config.IMAGE_STORE)) {
+                db.createObjectStore(config.IMAGE_STORE);
+            }
+
+            if (!db.objectStoreNames.contains(config.WINNERS_STORE)) {
+                db.createObjectStore(config.WINNERS_STORE, { keyPath: 'id' });
             }
         };
     });
 }
 
-export async function saveWinnerLocal(winnerObj) {
-    if (!winnerObj || !winnerObj.id) return;
-    try {
-        const db = await initDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
-            const request = store.put(winnerObj);
-            
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
-        });
-    } catch (error) {
-        console.error('Error saving local winner', error);
-    }
+export async function saveVideoToDB(id, blob) {
+    if (!id || !blob) return;
+    await putInStore(config.VIDEO_STORE, id, blob);
+}
+
+export async function getVideoFromDB(id) {
+    if (!id) return null;
+    return getFromStore(config.VIDEO_STORE, id);
+}
+
+export async function deleteVideoFromDB(id) {
+    if (!id) return;
+    await deleteFromStore(config.VIDEO_STORE, id);
+}
+
+export async function saveImageToDB(id, blob) {
+    if (!id || !blob) return;
+    await putInStore(config.IMAGE_STORE, id, blob);
+}
+
+export async function getImageFromDB(id) {
+    if (!id) return null;
+    return getFromStore(config.IMAGE_STORE, id);
+}
+
+export async function deleteImageFromDB(id) {
+    if (!id) return;
+    await deleteFromStore(config.IMAGE_STORE, id);
+}
+
+export async function saveWinnerLocal(winnerMeta) {
+    if (!winnerMeta || !winnerMeta.id) return;
+    await putWinnerMeta(winnerMeta);
 }
 
 export async function getLocalWinners() {
-    try {
-        const db = await initDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([STORE_NAME], 'readonly');
-            const store = transaction.objectStore(STORE_NAME);
-            const request = store.getAll();
-            
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error);
-        });
-    } catch (error) {
-        console.error('Error getting local winners', error);
-        return [];
-    }
+    return listStore(config.WINNERS_STORE);
 }
 
 export async function clearLocalWinners() {
-    try {
-        const db = await initDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction([STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
-            const request = store.clear();
-            
-            request.onsuccess = () => resolve(true);
+    await clearStore(config.WINNERS_STORE);
+}
+
+export async function removeWinnerAssets(id) {
+    if (!id) return;
+    await Promise.allSettled([
+        deleteVideoFromDB(id),
+        deleteImageFromDB(id),
+        deleteFromStore(config.WINNERS_STORE, id)
+    ]);
+}
+
+async function putWinnerMeta(winnerMeta) {
+    const cleanMeta = {
+        id: winnerMeta.id,
+        name: winnerMeta.name || '',
+        account: winnerMeta.account || '',
+        email: winnerMeta.email || '',
+        nationalId: winnerMeta.nationalId || '',
+        timestamp: winnerMeta.timestamp || new Date().toISOString(),
+        recordingMimeType: winnerMeta.recordingMimeType || null,
+        hasVideo: !!winnerMeta.hasVideo,
+        hasIdImage: !!winnerMeta.hasIdImage
+    };
+
+    await withStore(config.WINNERS_STORE, 'readwrite', (store) => store.put(cleanMeta));
+}
+
+async function putInStore(storeName, key, value) {
+    await withStore(storeName, 'readwrite', (store) => store.put(value, key));
+}
+
+async function getFromStore(storeName, key) {
+    return withStore(storeName, 'readonly', (store) => store.get(key));
+}
+
+async function deleteFromStore(storeName, key) {
+    await withStore(storeName, 'readwrite', (store) => store.delete(key));
+}
+
+async function clearStore(storeName) {
+    await withStore(storeName, 'readwrite', (store) => store.clear());
+}
+
+async function listStore(storeName) {
+    return withStore(storeName, 'readonly', (store) => store.getAll());
+}
+
+async function withStore(storeName, mode, requestFactory) {
+    const db = await initDB();
+
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, mode);
+        const store = tx.objectStore(storeName);
+        const request = requestFactory(store);
+
+        if (request && typeof request.onsuccess !== 'undefined') {
+            request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
-        });
-    } catch (error) {
-        console.error('Error clearing local winners', error);
-    }
+            return;
+        }
+
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+    });
 }

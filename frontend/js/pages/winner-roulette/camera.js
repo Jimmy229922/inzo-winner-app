@@ -1,28 +1,28 @@
 /**
  * camera.js
- * إدارة عمليات تسجيل الشاشة والكانفاس للحصول على فيديو التوثيق.
+ * Canvas recording utilities for winner confirmation videos.
  */
 
 import { state } from './state.js';
 
+const MIME_TYPES = [
+    'video/mp4',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm'
+];
+
 export function startRecording() {
     try {
         const canvas = document.getElementById('winner-roulette-wheel');
-        if (!canvas) return;
+        if (!canvas || typeof canvas.captureStream !== 'function') return false;
+        if (typeof window.MediaRecorder === 'undefined') return false;
 
-        const stream = canvas.captureStream(30); // 30 FPS تسجيل
+        const stream = canvas.captureStream(30);
 
-        // اكتشاف الصيغ المدعومة في المتصفح
-        const mimeTypes = [
-            'video/webm;codecs=vp9',
-            'video/webm;codecs=vp8',
-            'video/webm',
-            'video/mp4'
-        ];
-        
         let mimeType = '';
-        for (const type of mimeTypes) {
-            if (MediaRecorder.isTypeSupported(type)) {
+        for (const type of MIME_TYPES) {
+            if (window.MediaRecorder.isTypeSupported(type)) {
                 mimeType = type;
                 break;
             }
@@ -30,34 +30,49 @@ export function startRecording() {
 
         const options = mimeType ? { mimeType } : undefined;
         state.recordingMimeType = mimeType || 'video/webm';
-        
-        state.mediaRecorder = new MediaRecorder(stream, options);
         state.recordedChunks = [];
+        state.mediaRecorder = new window.MediaRecorder(stream, options);
 
-        state.mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-                state.recordedChunks.push(e.data);
+        state.mediaRecorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+                state.recordedChunks.push(event.data);
             }
         };
 
+        state.mediaRecorder.onerror = (event) => {
+            console.error('[camera] media recorder error', event?.error || event);
+        };
+
         state.mediaRecorder.start();
-        console.log(`🎥 [Camera] Started recording with ${state.recordingMimeType}`);
-        
-    } catch (e) {
-        console.error('🎥 [Camera] Failed to start:', e);
+        return true;
+    } catch (error) {
+        console.error('[camera] failed to start recording', error);
+        resetRecorderState();
+        return false;
     }
 }
 
-export function stopRecording(callback) {
-    if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
-        state.mediaRecorder.onstop = () => {
+export function stopRecording() {
+    return new Promise((resolve) => {
+        const recorder = state.mediaRecorder;
+
+        if (!recorder || recorder.state === 'inactive') {
+            resolve(null);
+            return;
+        }
+
+        recorder.onstop = () => {
             const blobType = state.recordingMimeType || 'video/webm';
             const blob = new Blob(state.recordedChunks, { type: blobType });
-            console.log(`🎥 [Camera] Finished. Blob size: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
-            if (callback) callback(blob);
+            resetRecorderState();
+            resolve(blob.size > 0 ? blob : null);
         };
-        state.mediaRecorder.stop();
-    } else {
-        if (callback) callback(null);
-    }
+
+        recorder.stop();
+    });
+}
+
+function resetRecorderState() {
+    state.mediaRecorder = null;
+    state.recordedChunks = [];
 }

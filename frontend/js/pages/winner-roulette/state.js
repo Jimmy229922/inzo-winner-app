@@ -1,47 +1,41 @@
 /**
  * state.js
- * العقل المدبر ومكان تخزين بيانات الصفحة (State Management)
+ * Shared state for the modular winner roulette page.
  */
 
 export const state = {
-    entries: [], // { id, name, account, label, selected }
-    winners: [],
+    // Core data
+    entries: [], // { id, name, account }
+    winners: [], // winner metadata (blobs are persisted in IndexedDB)
+
+    // Wheel / animation
     spinning: false,
     angle: 0,
+    startAngle: 0,
     targetAngle: 0,
     spinStart: 0,
-    spinDuration: 0,
+    spinDuration: 4500,
+    spinSnapshot: null,
+    chosenIndex: null,
+    pulseTime: 0,
+
+    // Behavior
     excludeWinner: true,
-    spinQueue: 0,
-    spinSnapshot: null, // snapshot of candidates used during a spin
-    chosenIndex: null, // index within snapshot chosen at spin start
-    startAngle: 0,
-    autoMode: false,
-    autoRemaining: 0,
-    autoBatchPicked: [],
-    selectedAgent: null, // Store selected agent info
-    activeCompetition: null, // Store active competition info
-    logoImage: null, // Store logo image for wheel center
-    pulseTime: 0, // For animated background pulse effect
-    isAnimating: false, // Control animation loop
-    showLogoHint: true, // whether to show the 'اضغط هنا' hint over the logo
-    lastPickedIndex: -1, // Track last picked index for sequential selection
-    reportSent: false, // Winners report sent to agent flag
-    includeWarnMeet: false,
-    includeWarnPrev: false,
-    isRestoreMode: false, // وضع استعادة المسابقة المكتملة
-    predeterminedWinner: null // تحديد فائز مسبق (اسم + حساب)
+    predeterminedWinnerId: '',
+
+    // Recording
+    mediaRecorder: null,
+    recordedChunks: [],
+    recordingMimeType: 'video/webm',
+    pendingVideoBlob: null
 };
 
 export const config = {
-    // LocalStorage Keys
-    LS_KEY: 'winnerRouletteSession.v1',
-    STAGED_WINNERS_KEY: 'winnerRouletteStagedWinners.v1',
-    
-    // Limits
-    MAX_WINNERS_LIMIT: 100, // حد أقصى للحماية من التعليق
-    
-    // API Saving constants
-    SAVE_RETRY_COUNT: 3, 
-    SAVE_RETRY_DELAY: 1000 
+    LS_KEY: 'winnerRouletteModularSession.v1',
+    DB_NAME: 'WinnerRouletteDB',
+    DB_VERSION: 3,
+    VIDEO_STORE: 'videos',
+    IMAGE_STORE: 'images',
+    WINNERS_STORE: 'winners',
+    RECORD_OVERLAY_MS: 1800
 };

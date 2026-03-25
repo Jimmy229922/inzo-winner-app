@@ -1,40 +1,96 @@
 /**
  * utils.js
- * دوال وأدوات مساعدة لصفحة اختيار الفائزين لا تعتمد على الـ State
+ * Stateless helpers for the modular winner roulette flow.
  */
 
-// Debounce helper - لتأخير التنفيذ حتى يتوقف المستخدم عن الحدث
 export function debounce(func, wait) {
     let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
+    return function debounced(...args) {
         clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+        timeout = setTimeout(() => func.apply(this, args), wait);
     };
 }
 
-// Throttle helper - لتقليل عدد مرات تنفيذ الدالة (مثال للحفظ)
 export function throttle(func, limit) {
-    let inThrottle;
-    let lastFunc;
-    let lastRan;
-    return function (...args) {
-        const context = this;
+    let inThrottle = false;
+    let lastArgs = null;
+
+    return function throttled(...args) {
         if (!inThrottle) {
-            func.apply(context, args);
-            lastRan = Date.now();
+            func.apply(this, args);
             inThrottle = true;
-        } else {
-            clearTimeout(lastFunc);
-            lastFunc = setTimeout(function () {
-                if ((Date.now() - lastRan) >= limit) {
-                    func.apply(context, args);
-                    lastRan = Date.now();
+            setTimeout(() => {
+                inThrottle = false;
+                if (lastArgs) {
+                    const queued = lastArgs;
+                    lastArgs = null;
+                    func.apply(this, queued);
                 }
-            }, limit - (Date.now() - lastRan));
+            }, limit);
+            return;
         }
-    }
+
+        lastArgs = args;
+    };
+}
+
+export function parseParticipantsInput(text) {
+    const lines = (text || '').split(/\r?\n/);
+    const entries = [];
+
+    lines.forEach((raw, index) => {
+        let line = (raw || '').trim();
+        if (!line) return;
+
+        // Remove numbering prefixes: "1-", "2.", "3)"
+        line = line.replace(/^\d+[\s\-\.)_]+/, '').trim();
+
+        // Remove invisible chars that may come from copy/paste
+        line = line.replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+        // name + account patterns
+        const dashed = line.match(/^(.*?)[\s\t]*[—\-–―‒−]+[\s\t]*(\d+)\s*$/);
+        const spaced = line.match(/^(.*?)[\s\t]+(\d+)\s*$/);
+
+        let name = '';
+        let account = '';
+
+        if (dashed) {
+            name = (dashed[1] || '').trim();
+            account = (dashed[2] || '').trim();
+        } else if (spaced) {
+            name = (spaced[1] || '').trim();
+            account = (spaced[2] || '').trim();
+        } else {
+            name = line;
+        }
+
+        if (!name) return;
+
+        entries.push({
+            id: createParticipantId(name, account, index),
+            name,
+            account
+        });
+    });
+
+    return entries;
+}
+
+export function participantFingerprint(entry) {
+    const name = (entry?.name || '').trim().toLowerCase();
+    const account = (entry?.account || '').trim();
+    return `${name}::${account}`;
+}
+
+export function createWinnerId() {
+    const randomPart = `${Math.random().toString(36).slice(2, 8)}`;
+    return `winner_${Date.now()}_${randomPart}`;
+}
+
+function createParticipantId(name, account, index) {
+    const base = `${name}_${account || 'na'}_${index}`
+        .replace(/[^a-zA-Z0-9_]/g, '_')
+        .slice(0, 60);
+    return `entry_${Date.now()}_${base}`;
 }

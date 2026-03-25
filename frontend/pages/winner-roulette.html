@@ -1,4 +1,4 @@
-﻿<section class="page-section" id="winner-roulette-page">
+<section class="page-section" id="winner-roulette-page">
   <div class="page-header" style="background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1)); padding: 30px 40px; border-radius: 20px; margin-bottom: 25px; border: 1px solid rgba(99,102,241,0.2);">
     <h1 style="background: linear-gradient(135deg, #6366f1, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 2.2em; margin-bottom: 12px;"><i class="fas fa-random" style="color: #6366f1;"></i> اختيار الفائزين لمسابقات الوكيل</h1>
     <p class="page-subtitle" style="font-size: 1.1em; color: #9ca3af;">أدخل أو الصق الأسماء مع أرقام الحسابات ثم قم بتدوير العجلة لاختيار فائز عشوائي بشكلٍ شفاف.</p>
@@ -199,30 +199,39 @@
 
 <script src="../js/utils.js?v=20251127011"></script>
 <script>
-    console.log('🌐 [HTML] DOMContentLoaded script loaded');
-    
-    // Force clear old winner modal cache
-    window.addEventListener('DOMContentLoaded', function() {
-        console.log('🎬 [HTML] DOMContentLoaded event fired');
-        console.log('🔍 [HTML] Checking for old modal in DOM...');
-        
-        const oldModal = document.getElementById('winner-modal');
-        if (oldModal) {
-            console.log('🗑️ [HTML] Found old cached modal, removing it');
-            console.log('📊 [HTML] Old modal innerHTML length:', oldModal.innerHTML?.length || 0);
-            oldModal.remove();
-            console.log('✅ [HTML] Old modal removed');
+    (function loadWinnerRouletteScript() {
+      const params = new URLSearchParams(window.location.search);
+      const useModular = params.get('modular') === '1';
+      window.__WR_USE_MODULAR = useModular;
+
+      // Legacy mode removes the inline modal because the old script recreates it.
+      if (!useModular) {
+        const cleanupLegacyModal = function () {
+          const oldModal = document.getElementById('winner-modal');
+          if (oldModal) oldModal.remove();
+        };
+
+        if (document.readyState === 'loading') {
+          window.addEventListener('DOMContentLoaded', cleanupLegacyModal, { once: true });
         } else {
-            console.log('✅ [HTML] No old modal found in DOM');
+          cleanupLegacyModal();
         }
-        
-        console.log('🎬 [HTML] DOMContentLoaded handler completed');
-    });
-    
-    console.log('✅ [HTML] Script setup complete');
+      }
+
+      const script = document.createElement('script');
+      if (useModular) {
+        script.type = 'module';
+        script.src = '../js/pages/winner-roulette/main.js?v=20260325001';
+      } else {
+        script.src = '../js/pages/winner-roulette.js?v=20251206001';
+        script.onload = function () {
+          if (typeof window.winnerRouletteInit === 'function') {
+            window.winnerRouletteInit();
+          }
+        };
+      }
+      document.body.appendChild(script);
+    })();
 </script>
-    <!-- New Modular Architecture Refactor (Development Mode uncomment the modular structure and comment the old) -->
-    <!-- <script type="module" src="../js/pages/winner-roulette/main.js"></script> -->
-    <script src="../js/pages/winner-roulette.js?v=20251206001"></script>
 
 
