@@ -38,6 +38,42 @@ function saveSession(sessionStr) {
 /** Sleep helper */
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+/**
+ * Normalize Telegram time values (seconds/ms/Date/BigInt-like) to unix seconds.
+ * Returns null for empty/invalid values.
+ */
+function toUnixSeconds(value) {
+    if (value === null || value === undefined) return null;
+
+    let num = null;
+    if (typeof value === 'number') {
+        num = value;
+    } else if (typeof value === 'bigint') {
+        num = Number(value);
+    } else if (value instanceof Date) {
+        num = Math.floor(value.getTime() / 1000);
+    } else {
+        const asNumber = Number(value);
+        if (Number.isFinite(asNumber)) {
+            num = asNumber;
+        }
+    }
+
+    if (!Number.isFinite(num) || num <= 0) return null;
+
+    // Some runtimes may expose milliseconds.
+    if (num > 1e12) {
+        num = Math.floor(num / 1000);
+    }
+
+    return Math.floor(num);
+}
+
+function toIsoFromTelegramTime(value) {
+    const seconds = toUnixSeconds(value);
+    return seconds ? new Date(seconds * 1000).toISOString() : null;
+}
+
 // ── Rate-limit / cooldown state ─────────────────────────────────────────
 const COOLDOWN_MS = 15000;            // 15 seconds between fetches
 const MAX_COMMENTS = 2000;            // Hard cap on comments per fetch
@@ -397,12 +433,16 @@ exports.fetchComments = async (req, res) => {
 
                     const sender = userMap[fromId] || { id: fromId, firstName: 'مجهول', lastName: '', username: '' };
                     const fullName = `${sender.firstName} ${sender.lastName}`.trim();
+                    const createdAtSec = toUnixSeconds(msg.date);
+                    const editedAtSec = toUnixSeconds(msg.editDate);
+                    const isEdited = !!(createdAtSec && editedAtSec && editedAtSec > createdAtSec && msg.editHide !== true);
 
                     comments.push({
                         id: msg.id,
                         text: msg.message || '',
-                        date: msg.date ? new Date(msg.date * 1000).toISOString() : '',
-                        editDate: msg.editDate ? new Date(msg.editDate * 1000).toISOString() : null,
+                        date: toIsoFromTelegramTime(msg.date) || '',
+                        editDate: isEdited ? toIsoFromTelegramTime(msg.editDate) : null,
+                        isEdited,
                         sender: {
                             id: sender.id,
                             name: fullName,

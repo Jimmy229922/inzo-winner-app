@@ -6,6 +6,30 @@
   // Debug marker to verify the latest roulette JS is actually loaded (helps detect browser caching)
 'use strict';
 
+    const WR_DEBUG_LOGS = false;
+
+    function debugLog(...args) {
+      if (WR_DEBUG_LOGS) console.info(...args);
+    }
+
+    function safeAppendFile(formData, fieldName, fileLike, fallbackName = 'file.bin') {
+      if (!formData || !fieldName || !fileLike) return;
+
+      const utilsSafeAppend = window?.utils?.safeAppendFile;
+      if (typeof utilsSafeAppend === 'function') {
+        utilsSafeAppend(formData, fieldName, fileLike, fallbackName);
+        return;
+      }
+
+      if (fileLike instanceof Blob) {
+        const inferredName = fileLike.name || fallbackName;
+        formData.append(fieldName, fileLike, inferredName);
+        return;
+      }
+
+      formData.append(fieldName, fileLike);
+    }
+
 // Ensure the modern winner modal with email field exists (handles legacy cached HTML without the input)
     function ensureWinnerModalStructure(){
       // [ensureWinnerModalStructure] START
@@ -425,7 +449,7 @@
       // حفظ فوري مع إعادة المحاولة
       safeImmediateSave();
       
-      console.log('[PROTECTION] Winner added safely:', winnerData.name, 'Total:', winners.length);
+      debugLog('[PROTECTION] Winner added safely:', winnerData.name, 'Total:', winners.length);
       return true;
     }
     
@@ -506,7 +530,7 @@
       try {
         const backup = JSON.parse(localStorage.getItem(backupKeys[0]));
         if (backup && backup.winners && backup.winners.length > 0) {
-          console.log('[PROTECTION] Emergency restore found:', backup.winners.length, 'winners');
+          debugLog('[PROTECTION] Emergency restore found:', backup.winners.length, 'winners');
           return backup;
         }
       } catch (e) {
@@ -822,7 +846,7 @@
                 option.textContent = `${agent.name} (#${agent.agent_id})`;
                 option.dataset.agentId = agent.agent_id;
                 select.appendChild(option);
-                console.log('[loadAgents] تم تحميل الوكيل المحدد بسرعة:', agent.name);
+                debugLog('[loadAgents] تم تحميل الوكيل المحدد بسرعة:', agent.name);
                 
                 // نحمّل باقي الوكلاء في الخلفية (بدون انتظار)
                 loadRemainingAgentsInBackground(select, agent._id);
@@ -916,7 +940,7 @@
           select.appendChild(option);
         });
         
-        console.log('[loadRemainingAgentsInBackground] تم تحميل', filteredAgents.length, 'وكيل إضافي');
+        debugLog('[loadRemainingAgentsInBackground] تم تحميل', filteredAgents.length, 'وكيل إضافي');
         
         // تحديث الـ searchable dropdown إذا كان موجود
         updateSearchableAgentDropdown();
@@ -995,25 +1019,25 @@
 
       try {
         const authedFetch = window.authedFetch || fetch;
-        // console.log(`Fetching competitions for agent: ${agentId}`);
+        // debugLog(`Fetching competitions for agent: ${agentId}`);
         // Ensure agentId is passed correctly as query param (backend expects 'agentId', not 'agent_id')
         const response = await authedFetch(`/api/competitions?agentId=${agentId}&sort=-createdAt&limit=100`);
         
         if (response.ok) {
             const data = await response.json();
-            // console.log('Competitions data:', data);
+            // debugLog('Competitions data:', data);
             // Support both formats (data.competitions or data.data)
             const competitions = data.competitions || data.data || [];
             
             // --- DEBUG LOGS ---
-            // console.log(`[DEBUG] Found ${competitions.length} competitions for agent ${agentId}`);
-            // console.log('[DEBUG] All competition statuses:', competitions.map(c => c.status));
+            // debugLog(`[DEBUG] Found ${competitions.length} competitions for agent ${agentId}`);
+            // debugLog('[DEBUG] All competition statuses:', competitions.map(c => c.status));
             // ------------------
 
             const select = document.getElementById('agent-competitions-select');
             
             if (competitions.length === 0) {
-                // console.log('[DEBUG] No competitions found, showing empty message.');
+                // debugLog('[DEBUG] No competitions found, showing empty message.');
                 select.innerHTML = '<option value="">لا توجد مسابقات لهذا الوكيل</option>';
                 return;
             }
@@ -1021,8 +1045,8 @@
             const activeCompetitions = competitions.filter(c => ['active', 'awaiting_winners', 'sent'].includes(c.status));
             // const endedCompetitions = competitions.filter(c => ['completed', 'archived'].includes(c.status)); // Hidden as per request
 
-            // console.log(`[DEBUG] Active count: ${activeCompetitions.length}`);
-            // console.log(`[DEBUG] Ended count: ${endedCompetitions.length}`);
+            // debugLog(`[DEBUG] Active count: ${activeCompetitions.length}`);
+            // debugLog(`[DEBUG] Ended count: ${endedCompetitions.length}`);
 
             // Determine default selection (Latest Active only)
             // في وضع الاسترجاع، لا نحدد أي مسابقة تلقائياً
@@ -1087,10 +1111,10 @@
             // Auto-load default competition if none is active
             // في وضع الاسترجاع، لا نحمّل أي مسابقة تلقائياً - المسابقة تُحمّل من API الاسترجاع
             if (state.isRestoreMode) {
-                console.log('[Restore Mode] Skipping auto-load of competition - using restore API');
+                debugLog('[Restore Mode] Skipping auto-load of competition - using restore API');
                 // لا نغير شيء - المسابقة ستُحمّل من loadCompetitionForRestore
             } else if (defaultCompId && !state.activeCompetition) {
-                // console.log(`[DEBUG] Auto-loading default competition: ${defaultCompId}`);
+                // debugLog(`[DEBUG] Auto-loading default competition: ${defaultCompId}`);
                 await loadCompetitionById(defaultCompId);
             } else if (!defaultCompId) {
                  const competitionInfo = document.getElementById('agent-competition-info');
@@ -1298,7 +1322,7 @@
         const currentWinners = competition.current_winners_count || 0;
         
         // Store competition info in state for reference (include prize data)
-        // console.log('Active competition loaded:', competition);
+        // debugLog('Active competition loaded:', competition);
         state.activeCompetition = {
           id: competition._id || competition.id,
           tradingWinnersRequired: tradingWinners,
@@ -1367,7 +1391,7 @@
                         }
                     });
                 }
-                // console.log('Loaded agent winner history:', state.agentHistory.length);
+                // debugLog('Loaded agent winner history:', state.agentHistory.length);
             }
         } catch (e) {
             console.warn('Failed to load agent history:', e);
@@ -1970,13 +1994,13 @@
  
     async function saveImageToDB(id, blob) {
         try {
-            console.log(`[IndexedDB] Saving image for ID: ${id}, Blob size: ${blob.size}, Type: ${blob.type}`);
+            debugLog(`[IndexedDB] Saving image for ID: ${id}, Blob size: ${blob.size}, Type: ${blob.type}`);
             const db = await getDB();
             return new Promise((resolve, reject) => {
                 const tx = db.transaction(IMAGE_STORE, 'readwrite');
                 const req = tx.objectStore(IMAGE_STORE).put(blob, id);
                 tx.oncomplete = () => {
-                    console.log(`[IndexedDB] Image saved successfully for ID: ${id}`);
+                    debugLog(`[IndexedDB] Image saved successfully for ID: ${id}`);
                     resolve();
                 };
                 tx.onerror = () => {
@@ -2026,7 +2050,7 @@
     // ==========================================
     async function init() {
       // [init] Winner Roulette initialization started
-      console.log('[INIT] Starting winner roulette initialization...');
+      debugLog('[INIT] Starting winner roulette initialization...');
       
       try { document.body.classList.add('dark-mode'); } catch(e) {}
       
@@ -2037,7 +2061,7 @@
         if (!savedSession || savedSession === '{}') {
           const emergencyBackup = emergencyRestoreWinners();
           if (emergencyBackup && emergencyBackup.winners && emergencyBackup.winners.length > 0) {
-            console.log('[PROTECTION] Restoring winners from emergency backup:', emergencyBackup.winners.length);
+            debugLog('[PROTECTION] Restoring winners from emergency backup:', emergencyBackup.winners.length);
             state.winners = emergencyBackup.winners;
             toast(`تم استعادة ${emergencyBackup.winners.length} فائز من النسخة الاحتياطية`, 'info');
           }
@@ -2105,7 +2129,7 @@
       // state.selectedAgent = null; // REMOVED
       updateSpinControls?.();
       
-      console.log('[INIT] Winner roulette initialized. Winners count:', state.winners.length);
+      debugLog('[INIT] Winner roulette initialized. Winners count:', state.winners.length);
       drawWheel();
 
       // مزامنة تلقائية للمتبقي: حدث دوري يحدث كل 25 ثانية لجلب حالة المسابقة الحالية
@@ -2145,7 +2169,7 @@
         if (window._wrAutoSaveTimer) { clearInterval(window._wrAutoSaveTimer); }
         window._wrAutoSaveTimer = setInterval(() => {
           if (state.winners && state.winners.length > 0) {
-            console.log('[AUTO-SAVE] Saving', state.winners.length, 'winners...');
+            debugLog('[AUTO-SAVE] Saving', state.winners.length, 'winners...');
             safeImmediateSave();
           }
         }, 30000);
@@ -2194,7 +2218,7 @@
         };
         // محاكاة حدث change لتحديد الوكيل
         agentSelect.dispatchEvent(new Event('change'));
-        console.log(`[AutoSelect] تم تحديد الوكيل تلقائياً: ${option.textContent}`);
+        debugLog(`[AutoSelect] تم تحديد الوكيل تلقائياً: ${option.textContent}`);
         return true;
       } else {
         console.warn(`[AutoSelect] لم يتم العثور على وكيل بالمعرف: ${agentId}`);
@@ -2309,7 +2333,7 @@
     
     // === دالة عرض رسالة اكتمال الاسترجاع النهائية ===
     function showRestoreCompleteMessage(summary) {
-      console.log('[showRestoreCompleteMessage] Called with summary:', summary);
+      debugLog('[showRestoreCompleteMessage] Called with summary:', summary);
       
       // Remove any existing complete message
       const existingMsg = document.getElementById('restore-complete-overlay');
@@ -2470,7 +2494,7 @@
     }
     
     async function loadCompetitionForRestore(competitionId) {
-      console.log('[Restore Mode] Loading competition:', competitionId);
+      debugLog('[Restore Mode] Loading competition:', competitionId);
       
       const authedFetch = window.authedFetch || fetch;
       const competitionInfo = document.querySelector('.wr-competition-info');
@@ -2691,7 +2715,7 @@
         await new Promise(r => setTimeout(r, 500)); // انتظار قليل لرؤية نجاح المرحلة 3
         showProgressToast('🔍 المرحلة 4/4', 'فحص صور الهوية والفيديوهات...', 'loading', 4);
         
-        console.log('[Restore Mode] Data loaded, starting background validation...');
+        debugLog('[Restore Mode] Data loaded, starting background validation...');
         
         validateFilesInBackground(competitionId);
         
@@ -2710,12 +2734,12 @@
       const validationArea = document.getElementById('file-validation-area');
       const authedFetch = window.authedFetch || fetch;
       
-      console.log('[Background Validation] Starting validation for competition:', competitionId);
+      debugLog('[Background Validation] Starting validation for competition:', competitionId);
       
       try {
         const response = await authedFetch(`/api/competitions/${competitionId}/validate-files`);
         
-        console.log('[Background Validation] Response status:', response.status);
+        debugLog('[Background Validation] Response status:', response.status);
         
         if (!response.ok) {
           const errorText = await response.text();
@@ -2741,13 +2765,13 @@
         }
         
         const validation = await response.json();
-        console.log('[Background Validation] Results:', validation);
-        console.log('[Background Validation] valid:', validation.valid, 'issues:', validation.issues?.length);
-        console.log('[Background Validation] validationArea element:', validationArea);
+        debugLog('[Background Validation] Results:', validation);
+        debugLog('[Background Validation] valid:', validation.valid, 'issues:', validation.issues?.length);
+        debugLog('[Background Validation] validationArea element:', validationArea);
         
         // التحقق من النجاح - نعتبره ناجح إذا لم تكن هناك ملفات مفقودة
         const isSuccess = validation.valid || (validation.missingImages?.length === 0 && validation.missingVideos?.length === 0);
-        console.log('[Background Validation] isSuccess:', isSuccess);
+        debugLog('[Background Validation] isSuccess:', isSuccess);
         
         // عرض نتائج التحقق
         if (isSuccess) {
@@ -2765,9 +2789,9 @@
           }
           
           // === عرض رسالة الاكتمال النهائية ===
-          console.log('[Restore Complete] Showing completion message...');
+          debugLog('[Restore Complete] Showing completion message...');
           setTimeout(() => {
-            console.log('[Restore Complete] Calling showRestoreCompleteMessage with:', validation.summary);
+            debugLog('[Restore Complete] Calling showRestoreCompleteMessage with:', validation.summary);
             showRestoreCompleteMessage(validation.summary);
           }, 1500);
           
@@ -2947,7 +2971,7 @@
       
       toast('تم تحميل بيانات المسابقة بنجاح. يمكنك الآن إعادة إرسال التقارير.', 'success');
       
-      console.log('[Restore Mode Legacy] Loaded successfully:', {
+      debugLog('[Restore Mode Legacy] Loaded successfully:', {
         competition: competition.name,
         winnersCount: winners.length
       });
@@ -3463,7 +3487,7 @@
         if (window.showToast) {
             window.showToast(msg, type);
         } else {
-            console.log(`[${type}] ${msg}`);
+            debugLog(`[${type}] ${msg}`);
             // Fallback: create a simple toast if window.showToast is missing
             const toastEl = document.createElement('div');
             toastEl.style.cssText = `
@@ -3610,7 +3634,7 @@
             }
           });
         }
-        console.log(`[loadCompetitionEntriesFromStorage] Restored ${saved.entries?.length || 0} entries and ${saved.winners?.length || 0} winners for competition ${competitionId}`);
+        debugLog(`[loadCompetitionEntriesFromStorage] Restored ${saved.entries?.length || 0} entries and ${saved.winners?.length || 0} winners for competition ${competitionId}`);
         return true;
       }
       return false;
@@ -3633,7 +3657,12 @@
         const hasValidVideo = winner.pendingVideoBlob instanceof Blob;
         if (!hasValidVideo && !winner.videoUrl) {
            try {
-             const blob = await getVideoFromDB(winner.id);
+             const lookupIds = [winner.id, winner._id].filter(Boolean);
+             let blob = null;
+             for (const lookupId of lookupIds) {
+               blob = await getVideoFromDB(lookupId);
+               if (blob) break;
+             }
              if (blob) {
                winner.pendingVideoBlob = blob;
                updated = true;
@@ -3656,7 +3685,12 @@
         const hasValidImage = winner.pendingIdImage instanceof Blob || winner.pendingIdImage instanceof File;
         if (!hasValidImage && !winner.nationalIdImage) {
            try {
-             const blob = await getImageFromDB(winner.id);
+             const lookupIds = [winner.id, winner._id].filter(Boolean);
+             let blob = null;
+             for (const lookupId of lookupIds) {
+               blob = await getImageFromDB(lookupId);
+               if (blob) break;
+             }
              if (blob) {
                winner.pendingIdImage = blob;
                // Re-create File object if possible, or just use Blob
@@ -4136,7 +4170,7 @@
       // 6. Select winner index
       let winningIndex = Math.floor(randomFraction * n);
       
-      console.log(`🎲 [Roulette] Random selection: ${winningIndex + 1} of ${n} (entropy: ${finalRandom.toString(16)})`);
+      debugLog(`🎲 [Roulette] Random selection: ${winningIndex + 1} of ${n} (entropy: ${finalRandom.toString(16)})`);
     
       // Create a snapshot of candidates and apply Fisher-Yates shuffle for extra randomness
       // This ensures the visual order on the wheel is also randomized each spin
@@ -4270,7 +4304,7 @@
         const canvas = document.getElementById('winner-roulette-wheel');
         if (!canvas) return;
         
-        // console.log(`🎥 [Recording] Initializing MediaRecorder...`);
+        // debugLog(`🎥 [Recording] Initializing MediaRecorder...`);
         const stream = canvas.captureStream(30); // 30 FPS
         
             // Detect supported mimeType
@@ -4292,7 +4326,7 @@
         }
         
         state.recordingMimeType = mimeType;
-        // console.log(`🎥 [Recording] Using mimeType: ${mimeType}`);
+        // debugLog(`🎥 [Recording] Using mimeType: ${mimeType}`);
         
         const options = mimeType ? { mimeType } : undefined;
         state.mediaRecorder = new MediaRecorder(stream, options);
@@ -4324,7 +4358,7 @@
         state.mediaRecorder.onstop = () => {
           const blobType = state.recordingMimeType || 'video/webm';
           const blob = new Blob(state.recordedChunks, { type: blobType });
-          // console.log(`🎥 [Recording] Finished. Blob size: ${blob.size}, Type: ${blobType}`);
+          // debugLog(`🎥 [Recording] Finished. Blob size: ${blob.size}, Type: ${blobType}`);
           if (callback) callback(blob);
         };
         state.mediaRecorder.stop();
@@ -4379,9 +4413,9 @@
     }
     
     function showVideoPreview(blob, winner) {
-      /* console.log('🎥 [Video Preview] Starting showVideoPreview');
-      console.log('🎥 [Video Preview] Blob:', blob);
-      console.log('🎥 [Video Preview] Winner:', winner); */
+      /* debugLog('🎥 [Video Preview] Starting showVideoPreview');
+      debugLog('🎥 [Video Preview] Blob:', blob);
+      debugLog('🎥 [Video Preview] Winner:', winner); */
       
       if (!blob) {
         console.warn('🎥 [Video Preview] No blob provided, falling back to normal flow');
@@ -4448,7 +4482,7 @@
     
       // Load metadata and prepare video
       video.onloadedmetadata = () => {
-        // console.log('🎥 [Preview] Metadata loaded, duration:', video.duration);
+        // debugLog('🎥 [Preview] Metadata loaded, duration:', video.duration);
       };
       video.onerror = (e) => {
           console.error('🎥 [Preview] Video error:', video.error);
@@ -4489,41 +4523,41 @@
       
       saveBtn.addEventListener('click', async () => {
         // حفظ الفيديو ثم فتح نافذة بيانات الفائز بشكل موثوق
-        /* console.log('🎬 [Save Video Continue] Button clicked');
-        console.log('🎬 [Save Video Continue] Winner:', winner);
-        console.log('🎬 [Save Video Continue] Auto mode:', state.autoMode);
-        console.log('🎬 [Save Video Continue] Blob:', blob); */
+        /* debugLog('🎬 [Save Video Continue] Button clicked');
+        debugLog('🎬 [Save Video Continue] Winner:', winner);
+        debugLog('🎬 [Save Video Continue] Auto mode:', state.autoMode);
+        debugLog('🎬 [Save Video Continue] Blob:', blob); */
         
         try {
           state.pendingVideoBlob = blob;
-          // console.log('🎬 [Save Video Continue] Pending video blob stored');
+          // debugLog('🎬 [Save Video Continue] Pending video blob stored');
           
           // تأكد من وجود هيكل المودال قبل الفتح
           try { 
-            // console.log('🎬 [Save Video Continue] Ensuring winner modal structure...');
+            // debugLog('🎬 [Save Video Continue] Ensuring winner modal structure...');
             ensureWinnerModalStructure(); 
-            // console.log('🎬 [Save Video Continue] Winner modal structure ensured');
+            // debugLog('🎬 [Save Video Continue] Winner modal structure ensured');
           } catch(e) {
             console.error('🎬 [Save Video Continue] Failed to ensure modal structure:', e);
           }
           
-          // console.log('🎬 [Save Video Continue] Calling cleanup...');
+          // debugLog('🎬 [Save Video Continue] Calling cleanup...');
           cleanup();
-          // console.log('🎬 [Save Video Continue] Cleanup done');
+          // debugLog('🎬 [Save Video Continue] Cleanup done');
           
           // افتح المودال بعد إزالة طبقة المعاينة لضمان الطبقات/z-index صحيحة
-          // console.log('🎬 [Save Video Continue] Setting timeout to open modal...');
+          // debugLog('🎬 [Save Video Continue] Setting timeout to open modal...');
           setTimeout(() => {
             try {
-              // console.log('🎬 [Save Video Continue] Timeout callback executing...');
+              // debugLog('🎬 [Save Video Continue] Timeout callback executing...');
               if (state.autoMode) {
-                // console.log('🎬 [Save Video Continue] Opening AUTO winner modal');
+                // debugLog('🎬 [Save Video Continue] Opening AUTO winner modal');
                 showAutoWinnerModal(winner);
               } else {
-                // console.log('🎬 [Save Video Continue] Opening MANUAL winner modal');
+                // debugLog('🎬 [Save Video Continue] Opening MANUAL winner modal');
                 showWinnerModal(winner);
               }
-              // console.log('🎬 [Save Video Continue] Modal opened successfully');
+              // debugLog('🎬 [Save Video Continue] Modal opened successfully');
             } catch (e) {
               console.error('🎬 [Save Video Continue] Failed to open winner modal after video save:', e);
               // كحل أخير، أعد إنشاء المودال وافتحه مرة أخرى
@@ -4658,7 +4692,7 @@
         event.preventDefault();
         event.stopPropagation();
       }
-      console.log('[CLICK] Removing participant via global function:', id);
+      debugLog('[CLICK] Removing participant via global function:', id);
       state.entries = state.entries.filter(x => String(x.id) !== String(id));
       
       // Update textarea - DISABLED to allow clearing input without clearing list
@@ -4839,16 +4873,16 @@
 
       // === WINNER PROTECTION: تحقق من سلامة المصفوفة ===
       const winners = getSafeWinnersArray();
-      console.log('[renderWinners] Rendering', winners.length, 'winners');
+      debugLog('[renderWinners] Rendering', winners.length, 'winners');
 
       // === تحديث شارة عدد الفائزين (الدائرة الصغيرة) ===
       const countBadge = document.getElementById('winners-count-badge');
-      console.log('[renderWinners] Badge element:', countBadge, 'Winners count:', winners.length);
+      debugLog('[renderWinners] Badge element:', countBadge, 'Winners count:', winners.length);
       if (countBadge) {
         if (winners.length > 0) {
           countBadge.textContent = winners.length;
           countBadge.style.cssText = 'display: inline-flex; min-width: 24px; height: 24px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 50%; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.5);';
-          console.log('[renderWinners] Badge shown with count:', winners.length);
+          debugLog('[renderWinners] Badge shown with count:', winners.length);
         } else {
           countBadge.style.display = 'none';
         }
@@ -4964,7 +4998,7 @@
 
           // --- NEW: ID Image Thumbnail ---
           let idImageHtml = '';
-          // console.log(`[RenderWinners] Processing winner ${w.id}. pendingIdImage:`, w.pendingIdImage);
+          // debugLog(`[RenderWinners] Processing winner ${w.id}. pendingIdImage:`, w.pendingIdImage);
           if (w.pendingIdImage) {
               try {
                   // Ensure we have a valid Blob or File before creating URL
@@ -4973,7 +5007,7 @@
                       : new Blob([w.pendingIdImage]); // Fallback if it's an ArrayBuffer or similar
                   
                   const blobUrl = trackBlobUrl(URL.createObjectURL(blob)); // تتبع URL للتنظيف لاحقاً
-                  // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
+                  // debugLog(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
                   idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                       <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
                       <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${blobUrl}">
@@ -5029,7 +5063,7 @@
         tradingWinners.forEach((w, i) => {
           // --- NEW: ID Image Thumbnail (Trading) ---
           let idImageHtml = '';
-          // console.log(`[RenderWinners] Processing winner ${w.id}. pendingIdImage:`, w.pendingIdImage);
+          // debugLog(`[RenderWinners] Processing winner ${w.id}. pendingIdImage:`, w.pendingIdImage);
           if (w.pendingIdImage) {
               try {
                   // Ensure we have a valid Blob or File before creating URL
@@ -5038,7 +5072,7 @@
                       : new Blob([w.pendingIdImage]); // Fallback if it's an ArrayBuffer or similar
 
                   const blobUrl = trackBlobUrl(URL.createObjectURL(blob)); // تتبع URL للتنظيف لاحقاً
-                  // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
+                  // debugLog(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
                   idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                       <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
                       <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${blobUrl}">
@@ -5116,7 +5150,7 @@
         // Bind events for new buttons
         const approveBtn = document.getElementById('approve-winners-btn');
         approveBtn?.addEventListener('click', async () => {
-            console.log('[Approve Winners] Button clicked. Winners count:', state.winners.length);
+            debugLog('[Approve Winners] Button clicked. Winners count:', state.winners.length);
             if (!state.activeCompetition || !state.activeCompetition.id) {
                 console.error('[Approve Winners] Active competition state missing:', state.activeCompetition);
                 toast('لا توجد مسابقة نشطة لاعتمادها (معرف مفقود).', 'error');
@@ -5133,7 +5167,7 @@
           try {
             toast('جاري حفظ الفائزين قبل الاعتماد...', 'info');
             await saveAllWinnersToDatabase();
-            console.log('[Approve Winners] saveAllWinnersToDatabase completed');
+            debugLog('[Approve Winners] saveAllWinnersToDatabase completed');
           } catch (e) {
             console.error('[Approve Winners] Failed to save winners before approval:', e);
             toast('فشل حفظ الفائزين قبل الاعتماد. يرجى المحاولة مرة أخرى.', 'error');
@@ -5156,7 +5190,7 @@
             const dbWinners = (dbCompetition && dbCompetition.winners) ? dbCompetition.winners : [];
 
             const missing = dbWinners.filter(w => !w.video_url || !w.national_id_image);
-            console.log('[Approve Winners] verify result', {
+            debugLog('[Approve Winners] verify result', {
               dbWinnersCount: dbWinners.length,
               missingCount: missing.length,
               missingIds: missing.map(m => m.id)
@@ -5224,7 +5258,7 @@
                 confirmMessage,
                 async () => {
                     try {
-                        console.log('[Approve Winners] Sending approval request for competition:', state.activeCompetition.id);
+                        debugLog('[Approve Winners] Sending approval request for competition:', state.activeCompetition.id);
                         const authedFetch = window.authedFetch || fetch;
                         const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
                             method: 'POST',
@@ -5236,7 +5270,7 @@
                         });
                         
                         if (resp.ok) {
-                            console.log('[Approve Winners] Approval successful.');
+                            debugLog('[Approve Winners] Approval successful.');
                             const successMessage = state.isRestoreMode 
                                 ? 'تم حفظ التعديلات بنجاح' 
                                 : 'تم اعتماد المسابقة بنجاح';
@@ -5245,7 +5279,7 @@
                             
                             // Redirect to agent competitions page
                             if (state.selectedAgent && state.selectedAgent.id) {
-                                console.log('[Approve Winners] Redirecting to agent profile/competitions:', state.selectedAgent.id);
+                                debugLog('[Approve Winners] Redirecting to agent profile/competitions:', state.selectedAgent.id);
                                 // Using the standard profile route which usually shows competitions
                                 window.location.hash = `#profile/${state.selectedAgent.id}`;
                             } else {
@@ -5276,7 +5310,7 @@
 
         const approveNoWinnersBtn = document.getElementById('approve-no-winners-btn');
         approveNoWinnersBtn?.addEventListener('click', async () => {
-            console.log('[Approve No Winners] Button clicked.');
+            debugLog('[Approve No Winners] Button clicked.');
             
             // Check if there are winners
             if (state.winners.length > 0) {
@@ -5295,7 +5329,7 @@
                 `هل أنت متأكد من إغلاق المسابقة <strong>بدون فائزين</strong>؟<br><small style="color:#ef4444">سيتم إنهاء المسابقة ولن تتمكن من إضافة فائزين لاحقاً.</small>`,
                 async () => {
                     try {
-                        console.log('[Approve No Winners] Sending approval request (no winners) for competition:', state.activeCompetition.id);
+                        debugLog('[Approve No Winners] Sending approval request (no winners) for competition:', state.activeCompetition.id);
                         const authedFetch = window.authedFetch || fetch;
                         const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
                             method: 'POST',
@@ -5306,7 +5340,7 @@
                         });
                         
                         if (resp.ok) {
-                            console.log('[Approve No Winners] Approval successful.');
+                            debugLog('[Approve No Winners] Approval successful.');
                             toast('تم إغلاق المسابقة بنجاح', 'success');
                             clearStagedWinnersForCompetition(state.activeCompetition.id);
                             state.winners = [];
@@ -5509,12 +5543,12 @@
         return;
       }
       
-      console.log('[Restore] Request to restore winner:', winner);
+      debugLog('[Restore] Request to restore winner:', winner);
 
       showConfirmModal(
         `هل تريد استرجاع <strong>${winner.name}</strong> إلى الروليت؟ سيتم إلغاء اختياره كفائز وإعادته للمشاركين.`,
         async () => {
-          console.log('[Restore] User confirmed restoration. Processing...');
+          debugLog('[Restore] User confirmed restoration. Processing...');
           
           // Delete video from DB
           deleteVideoFromDB(id).catch(e => console.error('Failed to delete video', e));
@@ -5522,7 +5556,7 @@
           // إزالة الفائز من قائمة الفائزين
           const initialWinnersCount = state.winners.length;
           state.winners = state.winners.filter(w => w.id !== id);
-          console.log(`[Restore] Winners count: ${initialWinnersCount} -> ${state.winners.length}`);
+          debugLog(`[Restore] Winners count: ${initialWinnersCount} -> ${state.winners.length}`);
           
           // إعادة ضبط حالة جميع المشاركين لضمان أن الجميع متاح للروليت ما عدا الفائزين الحاليين
           const currentWinnerIds = new Set(state.winners.map(w => w.id));
@@ -5531,7 +5565,7 @@
           // Check by ID OR by Name+Account to avoid duplicates
           const restoredEntryExists = state.entries.some(e => e.id === id || (e.name === winner.name && e.account === winner.account));
           if (!restoredEntryExists) {
-            console.log('[Restore] Adding winner back to entries list');
+            debugLog('[Restore] Adding winner back to entries list');
             state.entries.push({
               id: winner.id,
               name: winner.name,
@@ -5541,7 +5575,7 @@
               seq: state.entries.length + 1
             });
           } else {
-             console.log('[Restore] Winner already exists in entries list');
+             debugLog('[Restore] Winner already exists in entries list');
           }
 
           // تحديث حالة الاختيار لجميع المشاركين
@@ -5552,7 +5586,7 @@
             entry.selected = currentWinnerIds.has(entry.id);
             if (wasSelected !== entry.selected) updatedCount++;
           });
-          console.log(`[Restore] Updated selection status for ${updatedCount} entries`);
+          debugLog(`[Restore] Updated selection status for ${updatedCount} entries`);
           
           // حذف الفائز من قاعدة البيانات إذا كان محفوظاً
           if (winner._id && state.selectedAgent && state.selectedAgent.id) {
@@ -5589,7 +5623,7 @@
           removeStagedWinner(id, state.activeCompetition?.id || null);
 
           // تحديث الواجهة
-          console.log(`[Restore] Re-rendering UI. Entries: ${state.entries.length}, Winners: ${state.winners.length}`);
+          debugLog(`[Restore] Re-rendering UI. Entries: ${state.entries.length}, Winners: ${state.winners.length}`);
           renderParticipants();
           renderWinners();
           updateCounts();
@@ -5619,7 +5653,7 @@
       }
       if (warnType === 'meet') winner.includeWarnMeet = !!checkbox.checked;
       if (warnType === 'prev') winner.includeWarnPrev = !!checkbox.checked;
-      console.log('[handleWinnerWarningToggle] Updated winner:', { id, warnType, checked: checkbox.checked, includeWarnMeet: winner.includeWarnMeet, includeWarnPrev: winner.includeWarnPrev });
+      debugLog('[handleWinnerWarningToggle] Updated winner:', { id, warnType, checked: checkbox.checked, includeWarnMeet: winner.includeWarnMeet, includeWarnPrev: winner.includeWarnPrev });
       saveSession();
       updateStagedWinner(id, state.activeCompetition?.id || null, {
         includeWarnMeet: winner.includeWarnMeet,
@@ -5995,17 +6029,17 @@
           }
 
           if (compressedFile) {
-              // console.log(`[DEBUG_ID_IMAGE] Edit winner confirmed. ID: ${winner.id}. Saving NEW image to DB...`);
+              // debugLog(`[DEBUG_ID_IMAGE] Edit winner confirmed. ID: ${winner.id}. Saving NEW image to DB...`);
               winner.pendingIdImage = compressedFile;
               winner.idImageUploaded = true;
               winner.localIdImageName = compressedFile.name; // Store filename
               
               // --- NEW: Persist updated image to IndexedDB ---
               saveImageToDB(winner.id, compressedFile)
-                // .then(() => console.log(`[DEBUG_ID_IMAGE] Updated image saved successfully for ${winner.id}`))
+                // .then(() => debugLog(`[DEBUG_ID_IMAGE] Updated image saved successfully for ${winner.id}`))
                 .catch(e => console.error(`Failed to update image in DB for ${winner.id}`, e));
           } else {
-              // console.log(`[DEBUG_ID_IMAGE] Edit winner confirmed. ID: ${winner.id}. No new image uploaded.`);
+              // debugLog(`[DEBUG_ID_IMAGE] Edit winner confirmed. ID: ${winner.id}. No new image uploaded.`);
           }
 
           // --- NEW: Update Winner in DB if exists ---
@@ -6065,8 +6099,8 @@
     }
 
     function showWinnerModal(entry){
-      /* console.log('🎉 [showWinnerModal] Called with entry:', entry);
-      console.log('🎉 [showWinnerModal] Entry name:', entry?.name); */
+      /* debugLog('🎉 [showWinnerModal] Called with entry:', entry);
+      debugLog('🎉 [showWinnerModal] Entry name:', entry?.name); */
 
       // --- NEW: Final check before showing modal ---
       const isAlreadyWinner = state.winners.some(w => {
@@ -6103,11 +6137,11 @@
       let compressedFile = null;
       let isImageUploading = false;
       
-      /* console.log('🔍 [showWinnerModal] Elements check:');
-      console.log('  - modal:', modal ? 'FOUND' : 'MISSING');
-      console.log('  - winnerName:', winnerName ? 'FOUND' : 'MISSING');
-      console.log('  - emailInput:', emailInput ? 'FOUND' : 'MISSING');
-      console.log('  - confirmBtn:', confirmBtn ? 'FOUND' : 'MISSING'); */
+      /* debugLog('🔍 [showWinnerModal] Elements check:');
+      debugLog('  - modal:', modal ? 'FOUND' : 'MISSING');
+      debugLog('  - winnerName:', winnerName ? 'FOUND' : 'MISSING');
+      debugLog('  - emailInput:', emailInput ? 'FOUND' : 'MISSING');
+      debugLog('  - confirmBtn:', confirmBtn ? 'FOUND' : 'MISSING'); */
       
       // Fallback if modal elements are missing: commit winner automatically to avoid crashes
       if (!modal || !winnerName || !winnerAccount || !confirmBtn) {
@@ -6239,7 +6273,7 @@
               // Convert canvas to blob
               canvas.toBlob((blob) => {
                 if (blob) {
-                  // console.log(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
+                  // debugLog(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
                   resolve(new File([blob], file.name, { type: 'image/jpeg' }));
                 } else {
                   reject(new Error('Failed to compress image'));
@@ -6359,14 +6393,14 @@
       modal.style.display = 'flex';
       document.body.style.overflow = 'hidden'; // Prevent background scrolling
       
-      /* console.log('📺 [showWinnerModal] Modal displayed');
-      console.log('🔍 [showWinnerModal] Final modal check:');
+      /* debugLog('📺 [showWinnerModal] Modal displayed');
+      debugLog('🔍 [showWinnerModal] Final modal check:');
       const contentBox = modal.querySelector('.wr-celebration-content');
       if (contentBox) {
-        console.log('  - Content box max-height:', contentBox.style.maxHeight || 'NOT SET');
-        console.log('  - Content box overflow-y:', contentBox.style.overflowY || 'NOT SET');
-        console.log('  - Content box overflow-x:', contentBox.style.overflowX || 'NOT SET');
-        console.log('  - Content box scrollbarGutter:', contentBox.style.scrollbarGutter || 'NOT SET');
+        debugLog('  - Content box max-height:', contentBox.style.maxHeight || 'NOT SET');
+        debugLog('  - Content box overflow-y:', contentBox.style.overflowY || 'NOT SET');
+        debugLog('  - Content box overflow-x:', contentBox.style.overflowX || 'NOT SET');
+        debugLog('  - Content box scrollbarGutter:', contentBox.style.scrollbarGutter || 'NOT SET');
       } else {
         console.error('❌ [showWinnerModal] Content box NOT FOUND!');
       } */
@@ -6438,7 +6472,7 @@
           return;
         }
 
-        console.log('[Winner Confirm] validation passed', {
+        debugLog('[Winner Confirm] validation passed', {
           entryId: entry?.id,
           hasVideoBlob: !!state.pendingVideoBlob,
           videoMime: state.recordingMimeType || null,
@@ -6511,7 +6545,7 @@
         }
         
         if (compressedFile) {
-          console.log('[Winner Confirm] ID image ready', {
+          debugLog('[Winner Confirm] ID image ready', {
             winnerId: winnerData.id,
             name: compressedFile.name,
             size: compressedFile.size,
@@ -6524,7 +6558,7 @@
           
           // --- NEW: Save Image to IndexedDB for Persistence ---
           saveImageToDB(winnerData.id, compressedFile)
-            .then(() => console.log('[Winner Confirm] Image saved to IndexedDB', { winnerId: winnerData.id }))
+            .then(() => debugLog('[Winner Confirm] Image saved to IndexedDB', { winnerId: winnerData.id }))
             .catch(e => console.error(`Failed to persist image for ${winnerData.id}`, e));
           // ----------------------------------------------------
         } else {
@@ -6580,9 +6614,9 @@
 
         // NEW: Save immediately to backend (manual "prepare winner")
         try {
-          console.log('[Winner Confirm] saving immediately to backend...');
+          debugLog('[Winner Confirm] saving immediately to backend...');
           await saveAllWinnersToDatabase();
-          console.log('[Winner Confirm] saved to backend successfully');
+          debugLog('[Winner Confirm] saved to backend successfully');
           toast('تم حفظ الفائز (الفيديو + الهوية) بنجاح', 'success');
         } catch (e) {
           console.error('[Winner Confirm] save to backend failed', e);
@@ -6753,7 +6787,7 @@
               // Convert canvas to blob
               canvas.toBlob((blob) => {
                 if (blob) {
-                  // console.log(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
+                  // debugLog(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
                   resolve(new File([blob], file.name, { type: 'image/jpeg' }));
                 } else {
                   reject(new Error('Failed to compress image'));
@@ -7161,11 +7195,40 @@
       }
       
       const authedFetch = window.authedFetch || fetch;
+      const isMongoId = (value) => typeof value === 'string' && value.length === 24;
+
+      // Ensure pending media is hydrated from IndexedDB for already-saved winners.
+      // This covers old sessions where winners exist in DB but files were not uploaded yet.
+      for (const winner of state.winners) {
+        const hasDbId = !!winner._id || isMongoId(winner.id);
+        if (!hasDbId) continue;
+        const winnerDbId = winner._id || winner.id;
+
+        const hasPendingVideo = winner.pendingVideoBlob instanceof Blob;
+        if (!hasPendingVideo && !winner.videoUrl) {
+          try {
+            const videoBlob = await getVideoFromDB(winnerDbId) || await getVideoFromDB(winner.id);
+            if (videoBlob) winner.pendingVideoBlob = videoBlob;
+          } catch (_) {}
+        }
+
+        const hasPendingIdImage = (winner.pendingIdImage instanceof Blob || winner.pendingIdImage instanceof File);
+        const hasPendingIdImageFile = (winner.pendingIdImageFile instanceof Blob || winner.pendingIdImageFile instanceof File);
+        if (!hasPendingIdImage && !hasPendingIdImageFile && !winner.nationalIdImage) {
+          try {
+            const imageBlob = await getImageFromDB(winnerDbId) || await getImageFromDB(winner.id);
+            if (imageBlob) {
+              winner.pendingIdImage = imageBlob;
+              winner.idImageUploaded = true;
+            }
+          } catch (_) {}
+        }
+      }
 
       // Winners that are already saved (have _id) but still have pending local media
       // (e.g. previous upload failed, or refresh happened mid-upload).
       const savedWinnersNeedingUpload = state.winners.filter(w => {
-        const hasDbId = !!w._id || (typeof w.id === 'string' && w.id.length === 24);
+        const hasDbId = !!w._id || isMongoId(w.id);
         if (!hasDbId) return false;
         const hasPendingVideo = w.pendingVideoBlob instanceof Blob;
         const hasPendingIdImage = (w.pendingIdImage instanceof Blob || w.pendingIdImage instanceof File);
@@ -7176,10 +7239,10 @@
       // Filter only unsaved winners (those without a valid MongoDB _id)
       // Assuming MongoDB _id is 24 hex characters. Local IDs are usually shorter or different format.
       // Also check if w._id exists (which we set after saving)
-      const unsavedWinners = state.winners.filter(w => !w._id && (!w.id || w.id.length !== 24));
+      const unsavedWinners = state.winners.filter(w => !w._id && !isMongoId(w.id));
       
       if (unsavedWinners.length === 0 && savedWinnersNeedingUpload.length === 0) {
-        console.log('[saveAllWinnersToDatabase] All winners are already saved (and no pending uploads).');
+        debugLog('[saveAllWinnersToDatabase] All winners are already saved (and no pending uploads).');
         return;
       }
 
@@ -7488,7 +7551,7 @@
     }
 
     async function sendWinnersReport() {
-      // console.log('[sendWinnersReport] Button clicked');
+      // debugLog('[sendWinnersReport] Button clicked');
       if (!state.selectedAgent) {
         console.warn('[sendWinnersReport] No agent selected');
         toast('يرجى اختيار وكيل أولاً', 'warning');
@@ -7502,7 +7565,7 @@
       
       // التحقق من وجود فائزين غير محفوظين في قاعدة البيانات، مع الحفظ التلقائي قبل الإرسال
       let unsavedWinners = state.winners.filter(w => !w._id);
-      /* console.log('[sendWinnersReport] clicked:', {
+      /* debugLog('[sendWinnersReport] clicked:', {
         total: state.winners.length,
         unsaved: unsavedWinners.length,
         agentId: state.selectedAgent && state.selectedAgent.id
@@ -7510,10 +7573,10 @@
 
       if (unsavedWinners.length > 0) {
         try {
-          // console.log('[sendWinnersReport] auto-saving unsaved winners before send...', unsavedWinners);
+          // debugLog('[sendWinnersReport] auto-saving unsaved winners before send...', unsavedWinners);
           toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
           await saveAllWinnersToDatabase();
-          // console.log('[sendWinnersReport] auto-save completed successfully');
+          // debugLog('[sendWinnersReport] auto-save completed successfully');
         } catch (error) {
           console.error('[sendWinnersReport] auto-save failed:', error);
           toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
@@ -7530,7 +7593,7 @@
           const orderB = b.orderNumber || 999;
           return orderA - orderB;
         });
-      // console.log('[sendWinnersReport] Valid winners count:', validWinners.length);
+      // debugLog('[sendWinnersReport] Valid winners count:', validWinners.length);
       
       if (validWinners.length === 0) {
           console.error('[sendWinnersReport] No valid winners with DB IDs');
@@ -7551,7 +7614,7 @@
           showConfirmModal(
           `تم التحقق من الملفات بنجاح ✅<br>سيتم إرسال جميع الفائزين (${validWinners.length}) إلى الوكيل. هل أنت متأكد من المتابعة؟`,
           async () => {
-              // console.log('[sendWinnersReport] User confirmed send');
+              // debugLog('[sendWinnersReport] User confirmed send');
               const sendingOverlay = document.createElement('div');
               sendingOverlay.className = 'wr-confirm-overlay';
               sendingOverlay.innerHTML = `
@@ -7583,11 +7646,11 @@
                       })
                   });
                   
-                  // console.log('[sendWinnersReport] Response status:', resp.status);
+                  // debugLog('[sendWinnersReport] Response status:', resp.status);
 
                     if (resp.ok) {
                       const result = await resp.json();
-                      // console.log('[sendWinnersReport] Success response:', result);
+                      // debugLog('[sendWinnersReport] Success response:', result);
                       toast('تم إرسال التقرير بنجاح', 'success');
                       // Mark report as sent to allow completion status
                       state.reportSent = true;
@@ -7630,17 +7693,17 @@
       
       // التحقق من وجود فائزين غير محفوظين
       const unsavedWinners = state.winners.filter(w => !w._id);
-      /* console.log('[sendWinnersDetails] clicked: current winners:', {
+      /* debugLog('[sendWinnersDetails] clicked: current winners:', {
         total: state.winners.length,
         unsaved: unsavedWinners.length,
         agentId: state.selectedAgent && state.selectedAgent.id
       }); */
       if (unsavedWinners.length > 0) {
         try {
-            // console.log('[sendWinnersDetails] auto-saving unsaved winners before send...', unsavedWinners);
+            // debugLog('[sendWinnersDetails] auto-saving unsaved winners before send...', unsavedWinners);
             toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
             await saveAllWinnersToDatabase();
-            // console.log('[sendWinnersDetails] auto-save completed successfully');
+            // debugLog('[sendWinnersDetails] auto-save completed successfully');
         } catch (error) {
             console.error('[sendWinnersDetails] auto-save failed:', error);
             toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
@@ -7655,7 +7718,7 @@
           const orderB = b.orderNumber || 999;
           return orderA - orderB;
         });
-      // console.log('[sendWinnersDetails] valid winners after save:', validWinners.map(w => w._id));
+      // debugLog('[sendWinnersDetails] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
         return;
@@ -7674,8 +7737,8 @@
                 include_warn_meet: !!(w.includeWarnMeet || state.includeWarnMeet),
                 include_warn_prev: !!(w.includeWarnPrev || state.includeWarnPrev)
               }));
-            console.log('[sendWinnersDetails] Sending warnings:', warnings);
-            console.log('[sendWinnersDetails] validWinners with warn flags:', validWinners.map(w => ({ _id: w._id, includeWarnMeet: w.includeWarnMeet, includeWarnPrev: w.includeWarnPrev })));
+            debugLog('[sendWinnersDetails] Sending warnings:', warnings);
+            debugLog('[sendWinnersDetails] validWinners with warn flags:', validWinners.map(w => ({ _id: w._id, includeWarnMeet: w.includeWarnMeet, includeWarnPrev: w.includeWarnPrev })));
             const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-details`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -7714,17 +7777,17 @@
       
       // التحقق من وجود فائزين غير محفوظين
       const unsavedWinners = state.winners.filter(w => !w._id);
-      /* console.log('[sendWinnersWithIDsToAgent] clicked: current winners:', {
+      /* debugLog('[sendWinnersWithIDsToAgent] clicked: current winners:', {
         total: state.winners.length,
         unsaved: unsavedWinners.length,
         agentId: state.selectedAgent && state.selectedAgent.id
       }); */
       if (unsavedWinners.length > 0) {
         try {
-            // console.log('[sendWinnersWithIDsToAgent] auto-saving unsaved winners before send...', unsavedWinners);
+            // debugLog('[sendWinnersWithIDsToAgent] auto-saving unsaved winners before send...', unsavedWinners);
             toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
             await saveAllWinnersToDatabase();
-            // console.log('[sendWinnersWithIDsToAgent] auto-save completed successfully');
+            // debugLog('[sendWinnersWithIDsToAgent] auto-save completed successfully');
         } catch (error) {
             console.error('[sendWinnersWithIDsToAgent] auto-save failed:', error);
             toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
@@ -7733,7 +7796,7 @@
       }
       
       const validWinners = state.winners.filter(w => w._id);
-      // console.log('[sendWinnersWithIDsToAgent] valid winners after save:', validWinners.map(w => w._id));
+      // debugLog('[sendWinnersWithIDsToAgent] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
         return;
@@ -7741,7 +7804,7 @@
 
       // Precheck: ensure each winner has ID image uploaded
       const missingIdImages = validWinners.filter(w => !w.idImageUploaded);
-      // console.log('[sendWinnersWithIDsToAgent] winners missing ID image:', missingIdImages.map(w => w._id));
+      // debugLog('[sendWinnersWithIDsToAgent] winners missing ID image:', missingIdImages.map(w => w._id));
       if (missingIdImages.length > 0) {
         toast(`يوجد ${missingIdImages.length} فائز بدون صورة هوية مرفوعة. يرجى رفع الصورة من نافذة اعتماد الفائز قبل الإرسال.`, 'warning');
         return;
@@ -7844,3 +7907,4 @@ if (typeof window !== 'undefined') {
 }
 
 })(); // End of IIFE
+

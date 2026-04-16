@@ -7,6 +7,10 @@ export const state = {
     // Core data
     entries: [], // { id, name, account }
     winners: [], // winner metadata (blobs are persisted in IndexedDB)
+    agents: [],
+    competitions: [],
+    selectedAgent: null, // { id, name, agentId }
+    activeCompetition: null, // { id, name, status }
 
     // Wheel / animation
     spinning: false,
@@ -22,12 +26,19 @@ export const state = {
     // Behavior
     excludeWinner: true,
     predeterminedWinnerId: '',
+    includeWarnMeet: false,
+    includeWarnPrev: false,
 
     // Recording
     mediaRecorder: null,
     recordedChunks: [],
     recordingMimeType: 'video/webm',
-    pendingVideoBlob: null
+    pendingVideoBlob: null,
+
+    // UI / async guards
+    loadingAgents: false,
+    loadingCompetitions: false,
+    syncingWinners: false
 };
 
 export const config = {

@@ -16613,6 +16613,30 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
   // Debug marker to verify the latest roulette JS is actually loaded (helps detect browser caching)
 'use strict';
 
+    const WR_DEBUG_LOGS = false;
+
+    function debugLog(...args) {
+      if (WR_DEBUG_LOGS) console.info(...args);
+    }
+
+    function safeAppendFile(formData, fieldName, fileLike, fallbackName = 'file.bin') {
+      if (!formData || !fieldName || !fileLike) return;
+
+      const utilsSafeAppend = window?.utils?.safeAppendFile;
+      if (typeof utilsSafeAppend === 'function') {
+        utilsSafeAppend(formData, fieldName, fileLike, fallbackName);
+        return;
+      }
+
+      if (fileLike instanceof Blob) {
+        const inferredName = fileLike.name || fallbackName;
+        formData.append(fieldName, fileLike, inferredName);
+        return;
+      }
+
+      formData.append(fieldName, fileLike);
+    }
+
 // Ensure the modern winner modal with email field exists (handles legacy cached HTML without the input)
     function ensureWinnerModalStructure(){
       // [ensureWinnerModalStructure] START
@@ -17032,7 +17056,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // حفظ فوري مع إعادة المحاولة
       safeImmediateSave();
       
-      console.log('[PROTECTION] Winner added safely:', winnerData.name, 'Total:', winners.length);
+      debugLog('[PROTECTION] Winner added safely:', winnerData.name, 'Total:', winners.length);
       return true;
     }
     
@@ -17113,7 +17137,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       try {
         const backup = JSON.parse(localStorage.getItem(backupKeys[0]));
         if (backup && backup.winners && backup.winners.length > 0) {
-          console.log('[PROTECTION] Emergency restore found:', backup.winners.length, 'winners');
+          debugLog('[PROTECTION] Emergency restore found:', backup.winners.length, 'winners');
           return backup;
         }
       } catch (e) {
@@ -17429,7 +17453,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 option.textContent = `${agent.name} (#${agent.agent_id})`;
                 option.dataset.agentId = agent.agent_id;
                 select.appendChild(option);
-                console.log('[loadAgents] تم تحميل الوكيل المحدد بسرعة:', agent.name);
+                debugLog('[loadAgents] تم تحميل الوكيل المحدد بسرعة:', agent.name);
                 
                 // نحمّل باقي الوكلاء في الخلفية (بدون انتظار)
                 loadRemainingAgentsInBackground(select, agent._id);
@@ -17523,7 +17547,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           select.appendChild(option);
         });
         
-        console.log('[loadRemainingAgentsInBackground] تم تحميل', filteredAgents.length, 'وكيل إضافي');
+        debugLog('[loadRemainingAgentsInBackground] تم تحميل', filteredAgents.length, 'وكيل إضافي');
         
         // تحديث الـ searchable dropdown إذا كان موجود
         updateSearchableAgentDropdown();
@@ -17602,25 +17626,25 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
       try {
         const authedFetch = window.authedFetch || fetch;
-        // console.log(`Fetching competitions for agent: ${agentId}`);
+        // debugLog(`Fetching competitions for agent: ${agentId}`);
         // Ensure agentId is passed correctly as query param (backend expects 'agentId', not 'agent_id')
         const response = await authedFetch(`/api/competitions?agentId=${agentId}&sort=-createdAt&limit=100`);
         
         if (response.ok) {
             const data = await response.json();
-            // console.log('Competitions data:', data);
+            // debugLog('Competitions data:', data);
             // Support both formats (data.competitions or data.data)
             const competitions = data.competitions || data.data || [];
             
             // --- DEBUG LOGS ---
-            // console.log(`[DEBUG] Found ${competitions.length} competitions for agent ${agentId}`);
-            // console.log('[DEBUG] All competition statuses:', competitions.map(c => c.status));
+            // debugLog(`[DEBUG] Found ${competitions.length} competitions for agent ${agentId}`);
+            // debugLog('[DEBUG] All competition statuses:', competitions.map(c => c.status));
             // ------------------
 
             const select = document.getElementById('agent-competitions-select');
             
             if (competitions.length === 0) {
-                // console.log('[DEBUG] No competitions found, showing empty message.');
+                // debugLog('[DEBUG] No competitions found, showing empty message.');
                 select.innerHTML = '<option value="">لا توجد مسابقات لهذا الوكيل</option>';
                 return;
             }
@@ -17628,8 +17652,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             const activeCompetitions = competitions.filter(c => ['active', 'awaiting_winners', 'sent'].includes(c.status));
             // const endedCompetitions = competitions.filter(c => ['completed', 'archived'].includes(c.status)); // Hidden as per request
 
-            // console.log(`[DEBUG] Active count: ${activeCompetitions.length}`);
-            // console.log(`[DEBUG] Ended count: ${endedCompetitions.length}`);
+            // debugLog(`[DEBUG] Active count: ${activeCompetitions.length}`);
+            // debugLog(`[DEBUG] Ended count: ${endedCompetitions.length}`);
 
             // Determine default selection (Latest Active only)
             // في وضع الاسترجاع، لا نحدد أي مسابقة تلقائياً
@@ -17694,10 +17718,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             // Auto-load default competition if none is active
             // في وضع الاسترجاع، لا نحمّل أي مسابقة تلقائياً - المسابقة تُحمّل من API الاسترجاع
             if (state.isRestoreMode) {
-                console.log('[Restore Mode] Skipping auto-load of competition - using restore API');
+                debugLog('[Restore Mode] Skipping auto-load of competition - using restore API');
                 // لا نغير شيء - المسابقة ستُحمّل من loadCompetitionForRestore
             } else if (defaultCompId && !state.activeCompetition) {
-                // console.log(`[DEBUG] Auto-loading default competition: ${defaultCompId}`);
+                // debugLog(`[DEBUG] Auto-loading default competition: ${defaultCompId}`);
                 await loadCompetitionById(defaultCompId);
             } else if (!defaultCompId) {
                  const competitionInfo = document.getElementById('agent-competition-info');
@@ -17732,7 +17756,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 // 2. Fetch Winners for this competition (only if agent is selected)
                 let winners = [];
                 if (state.selectedAgent && state.selectedAgent.id) {
-                    const winnersResponse = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${compId}`);
+                    const winnersResponse = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${compId}&_t=${Date.now()}`);
                     if (winnersResponse.ok) {
                         const winnersData = await winnersResponse.json();
                         if (winnersData.competitions && winnersData.competitions.length > 0) {
@@ -17905,7 +17929,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         const currentWinners = competition.current_winners_count || 0;
         
         // Store competition info in state for reference (include prize data)
-        // console.log('Active competition loaded:', competition);
+        // debugLog('Active competition loaded:', competition);
         state.activeCompetition = {
           id: competition._id || competition.id,
           tradingWinnersRequired: tradingWinners,
@@ -17956,7 +17980,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
         // --- NEW: Fetch agent winner history for validation ---
         try {
-            const historyResp = await window.authedFetch(`/api/agents/${agentId}/winners`);
+            const historyResp = await window.authedFetch(`/api/agents/${agentId}/winners?_t=${Date.now()}`);
             if (historyResp.ok) {
                 const historyData = await historyResp.json();
                 // Flatten the competitions structure to get a simple list of winners
@@ -17974,7 +17998,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                         }
                     });
                 }
-                // console.log('Loaded agent winner history:', state.agentHistory.length);
+                // debugLog('Loaded agent winner history:', state.agentHistory.length);
             }
         } catch (e) {
             console.warn('Failed to load agent history:', e);
@@ -18577,13 +18601,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
  
     async function saveImageToDB(id, blob) {
         try {
-            console.log(`[IndexedDB] Saving image for ID: ${id}, Blob size: ${blob.size}, Type: ${blob.type}`);
+            debugLog(`[IndexedDB] Saving image for ID: ${id}, Blob size: ${blob.size}, Type: ${blob.type}`);
             const db = await getDB();
             return new Promise((resolve, reject) => {
                 const tx = db.transaction(IMAGE_STORE, 'readwrite');
                 const req = tx.objectStore(IMAGE_STORE).put(blob, id);
                 tx.oncomplete = () => {
-                    console.log(`[IndexedDB] Image saved successfully for ID: ${id}`);
+                    debugLog(`[IndexedDB] Image saved successfully for ID: ${id}`);
                     resolve();
                 };
                 tx.onerror = () => {
@@ -18633,7 +18657,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     // ==========================================
     async function init() {
       // [init] Winner Roulette initialization started
-      console.log('[INIT] Starting winner roulette initialization...');
+      debugLog('[INIT] Starting winner roulette initialization...');
       
       try { document.body.classList.add('dark-mode'); } catch(e) {}
       
@@ -18644,7 +18668,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         if (!savedSession || savedSession === '{}') {
           const emergencyBackup = emergencyRestoreWinners();
           if (emergencyBackup && emergencyBackup.winners && emergencyBackup.winners.length > 0) {
-            console.log('[PROTECTION] Restoring winners from emergency backup:', emergencyBackup.winners.length);
+            debugLog('[PROTECTION] Restoring winners from emergency backup:', emergencyBackup.winners.length);
             state.winners = emergencyBackup.winners;
             toast(`تم استعادة ${emergencyBackup.winners.length} فائز من النسخة الاحتياطية`, 'info');
           }
@@ -18712,7 +18736,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // state.selectedAgent = null; // REMOVED
       updateSpinControls?.();
       
-      console.log('[INIT] Winner roulette initialized. Winners count:', state.winners.length);
+      debugLog('[INIT] Winner roulette initialized. Winners count:', state.winners.length);
       drawWheel();
 
       // مزامنة تلقائية للمتبقي: حدث دوري يحدث كل 25 ثانية لجلب حالة المسابقة الحالية
@@ -18752,7 +18776,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         if (window._wrAutoSaveTimer) { clearInterval(window._wrAutoSaveTimer); }
         window._wrAutoSaveTimer = setInterval(() => {
           if (state.winners && state.winners.length > 0) {
-            console.log('[AUTO-SAVE] Saving', state.winners.length, 'winners...');
+            debugLog('[AUTO-SAVE] Saving', state.winners.length, 'winners...');
             safeImmediateSave();
           }
         }, 30000);
@@ -18801,7 +18825,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         };
         // محاكاة حدث change لتحديد الوكيل
         agentSelect.dispatchEvent(new Event('change'));
-        console.log(`[AutoSelect] تم تحديد الوكيل تلقائياً: ${option.textContent}`);
+        debugLog(`[AutoSelect] تم تحديد الوكيل تلقائياً: ${option.textContent}`);
         return true;
       } else {
         console.warn(`[AutoSelect] لم يتم العثور على وكيل بالمعرف: ${agentId}`);
@@ -18916,7 +18940,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
     // === دالة عرض رسالة اكتمال الاسترجاع النهائية ===
     function showRestoreCompleteMessage(summary) {
-      console.log('[showRestoreCompleteMessage] Called with summary:', summary);
+      debugLog('[showRestoreCompleteMessage] Called with summary:', summary);
       
       // Remove any existing complete message
       const existingMsg = document.getElementById('restore-complete-overlay');
@@ -19077,7 +19101,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     async function loadCompetitionForRestore(competitionId) {
-      console.log('[Restore Mode] Loading competition:', competitionId);
+      debugLog('[Restore Mode] Loading competition:', competitionId);
       
       const authedFetch = window.authedFetch || fetch;
       const competitionInfo = document.querySelector('.wr-competition-info');
@@ -19298,7 +19322,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         await new Promise(r => setTimeout(r, 500)); // انتظار قليل لرؤية نجاح المرحلة 3
         showProgressToast('🔍 المرحلة 4/4', 'فحص صور الهوية والفيديوهات...', 'loading', 4);
         
-        console.log('[Restore Mode] Data loaded, starting background validation...');
+        debugLog('[Restore Mode] Data loaded, starting background validation...');
         
         validateFilesInBackground(competitionId);
         
@@ -19317,12 +19341,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       const validationArea = document.getElementById('file-validation-area');
       const authedFetch = window.authedFetch || fetch;
       
-      console.log('[Background Validation] Starting validation for competition:', competitionId);
+      debugLog('[Background Validation] Starting validation for competition:', competitionId);
       
       try {
         const response = await authedFetch(`/api/competitions/${competitionId}/validate-files`);
         
-        console.log('[Background Validation] Response status:', response.status);
+        debugLog('[Background Validation] Response status:', response.status);
         
         if (!response.ok) {
           const errorText = await response.text();
@@ -19348,13 +19372,13 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         }
         
         const validation = await response.json();
-        console.log('[Background Validation] Results:', validation);
-        console.log('[Background Validation] valid:', validation.valid, 'issues:', validation.issues?.length);
-        console.log('[Background Validation] validationArea element:', validationArea);
+        debugLog('[Background Validation] Results:', validation);
+        debugLog('[Background Validation] valid:', validation.valid, 'issues:', validation.issues?.length);
+        debugLog('[Background Validation] validationArea element:', validationArea);
         
         // التحقق من النجاح - نعتبره ناجح إذا لم تكن هناك ملفات مفقودة
         const isSuccess = validation.valid || (validation.missingImages?.length === 0 && validation.missingVideos?.length === 0);
-        console.log('[Background Validation] isSuccess:', isSuccess);
+        debugLog('[Background Validation] isSuccess:', isSuccess);
         
         // عرض نتائج التحقق
         if (isSuccess) {
@@ -19372,9 +19396,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           }
           
           // === عرض رسالة الاكتمال النهائية ===
-          console.log('[Restore Complete] Showing completion message...');
+          debugLog('[Restore Complete] Showing completion message...');
           setTimeout(() => {
-            console.log('[Restore Complete] Calling showRestoreCompleteMessage with:', validation.summary);
+            debugLog('[Restore Complete] Calling showRestoreCompleteMessage with:', validation.summary);
             showRestoreCompleteMessage(validation.summary);
           }, 1500);
           
@@ -19479,7 +19503,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         throw new Error('لم يتم تحديد الوكيل');
       }
       
-      const winnersResponse = await authedFetch(`/api/agents/${agentId}/winners?competition_id=${competitionId}`);
+      const winnersResponse = await authedFetch(`/api/agents/${agentId}/winners?competition_id=${competitionId}&_t=${Date.now()}`);
       let winners = [];
       if (winnersResponse.ok) {
         const winnersData = await winnersResponse.json();
@@ -19554,7 +19578,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       toast('تم تحميل بيانات المسابقة بنجاح. يمكنك الآن إعادة إرسال التقارير.', 'success');
       
-      console.log('[Restore Mode Legacy] Loaded successfully:', {
+      debugLog('[Restore Mode Legacy] Loaded successfully:', {
         competition: competition.name,
         winnersCount: winners.length
       });
@@ -20070,7 +20094,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         if (window.showToast) {
             window.showToast(msg, type);
         } else {
-            console.log(`[${type}] ${msg}`);
+            debugLog(`[${type}] ${msg}`);
             // Fallback: create a simple toast if window.showToast is missing
             const toastEl = document.createElement('div');
             toastEl.style.cssText = `
@@ -20217,7 +20241,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             }
           });
         }
-        console.log(`[loadCompetitionEntriesFromStorage] Restored ${saved.entries?.length || 0} entries and ${saved.winners?.length || 0} winners for competition ${competitionId}`);
+        debugLog(`[loadCompetitionEntriesFromStorage] Restored ${saved.entries?.length || 0} entries and ${saved.winners?.length || 0} winners for competition ${competitionId}`);
         return true;
       }
       return false;
@@ -20240,7 +20264,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         const hasValidVideo = winner.pendingVideoBlob instanceof Blob;
         if (!hasValidVideo && !winner.videoUrl) {
            try {
-             const blob = await getVideoFromDB(winner.id);
+             const lookupIds = [winner.id, winner._id].filter(Boolean);
+             let blob = null;
+             for (const lookupId of lookupIds) {
+               blob = await getVideoFromDB(lookupId);
+               if (blob) break;
+             }
              if (blob) {
                winner.pendingVideoBlob = blob;
                updated = true;
@@ -20263,7 +20292,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         const hasValidImage = winner.pendingIdImage instanceof Blob || winner.pendingIdImage instanceof File;
         if (!hasValidImage && !winner.nationalIdImage) {
            try {
-             const blob = await getImageFromDB(winner.id);
+             const lookupIds = [winner.id, winner._id].filter(Boolean);
+             let blob = null;
+             for (const lookupId of lookupIds) {
+               blob = await getImageFromDB(lookupId);
+               if (blob) break;
+             }
              if (blob) {
                winner.pendingIdImage = blob;
                // Re-create File object if possible, or just use Blob
@@ -20743,7 +20777,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // 6. Select winner index
       let winningIndex = Math.floor(randomFraction * n);
       
-      console.log(`🎲 [Roulette] Random selection: ${winningIndex + 1} of ${n} (entropy: ${finalRandom.toString(16)})`);
+      debugLog(`🎲 [Roulette] Random selection: ${winningIndex + 1} of ${n} (entropy: ${finalRandom.toString(16)})`);
     
       // Create a snapshot of candidates and apply Fisher-Yates shuffle for extra randomness
       // This ensures the visual order on the wheel is also randomized each spin
@@ -20877,7 +20911,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         const canvas = document.getElementById('winner-roulette-wheel');
         if (!canvas) return;
         
-        // console.log(`🎥 [Recording] Initializing MediaRecorder...`);
+        // debugLog(`🎥 [Recording] Initializing MediaRecorder...`);
         const stream = canvas.captureStream(30); // 30 FPS
         
             // Detect supported mimeType
@@ -20899,7 +20933,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         }
         
         state.recordingMimeType = mimeType;
-        // console.log(`🎥 [Recording] Using mimeType: ${mimeType}`);
+        // debugLog(`🎥 [Recording] Using mimeType: ${mimeType}`);
         
         const options = mimeType ? { mimeType } : undefined;
         state.mediaRecorder = new MediaRecorder(stream, options);
@@ -20931,7 +20965,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         state.mediaRecorder.onstop = () => {
           const blobType = state.recordingMimeType || 'video/webm';
           const blob = new Blob(state.recordedChunks, { type: blobType });
-          // console.log(`🎥 [Recording] Finished. Blob size: ${blob.size}, Type: ${blobType}`);
+          // debugLog(`🎥 [Recording] Finished. Blob size: ${blob.size}, Type: ${blobType}`);
           if (callback) callback(blob);
         };
         state.mediaRecorder.stop();
@@ -20986,9 +21020,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
     
     function showVideoPreview(blob, winner) {
-      /* console.log('🎥 [Video Preview] Starting showVideoPreview');
-      console.log('🎥 [Video Preview] Blob:', blob);
-      console.log('🎥 [Video Preview] Winner:', winner); */
+      /* debugLog('🎥 [Video Preview] Starting showVideoPreview');
+      debugLog('🎥 [Video Preview] Blob:', blob);
+      debugLog('🎥 [Video Preview] Winner:', winner); */
       
       if (!blob) {
         console.warn('🎥 [Video Preview] No blob provided, falling back to normal flow');
@@ -21055,7 +21089,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     
       // Load metadata and prepare video
       video.onloadedmetadata = () => {
-        // console.log('🎥 [Preview] Metadata loaded, duration:', video.duration);
+        // debugLog('🎥 [Preview] Metadata loaded, duration:', video.duration);
       };
       video.onerror = (e) => {
           console.error('🎥 [Preview] Video error:', video.error);
@@ -21096,41 +21130,41 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       saveBtn.addEventListener('click', async () => {
         // حفظ الفيديو ثم فتح نافذة بيانات الفائز بشكل موثوق
-        /* console.log('🎬 [Save Video Continue] Button clicked');
-        console.log('🎬 [Save Video Continue] Winner:', winner);
-        console.log('🎬 [Save Video Continue] Auto mode:', state.autoMode);
-        console.log('🎬 [Save Video Continue] Blob:', blob); */
+        /* debugLog('🎬 [Save Video Continue] Button clicked');
+        debugLog('🎬 [Save Video Continue] Winner:', winner);
+        debugLog('🎬 [Save Video Continue] Auto mode:', state.autoMode);
+        debugLog('🎬 [Save Video Continue] Blob:', blob); */
         
         try {
           state.pendingVideoBlob = blob;
-          // console.log('🎬 [Save Video Continue] Pending video blob stored');
+          // debugLog('🎬 [Save Video Continue] Pending video blob stored');
           
           // تأكد من وجود هيكل المودال قبل الفتح
           try { 
-            // console.log('🎬 [Save Video Continue] Ensuring winner modal structure...');
+            // debugLog('🎬 [Save Video Continue] Ensuring winner modal structure...');
             ensureWinnerModalStructure(); 
-            // console.log('🎬 [Save Video Continue] Winner modal structure ensured');
+            // debugLog('🎬 [Save Video Continue] Winner modal structure ensured');
           } catch(e) {
             console.error('🎬 [Save Video Continue] Failed to ensure modal structure:', e);
           }
           
-          // console.log('🎬 [Save Video Continue] Calling cleanup...');
+          // debugLog('🎬 [Save Video Continue] Calling cleanup...');
           cleanup();
-          // console.log('🎬 [Save Video Continue] Cleanup done');
+          // debugLog('🎬 [Save Video Continue] Cleanup done');
           
           // افتح المودال بعد إزالة طبقة المعاينة لضمان الطبقات/z-index صحيحة
-          // console.log('🎬 [Save Video Continue] Setting timeout to open modal...');
+          // debugLog('🎬 [Save Video Continue] Setting timeout to open modal...');
           setTimeout(() => {
             try {
-              // console.log('🎬 [Save Video Continue] Timeout callback executing...');
+              // debugLog('🎬 [Save Video Continue] Timeout callback executing...');
               if (state.autoMode) {
-                // console.log('🎬 [Save Video Continue] Opening AUTO winner modal');
+                // debugLog('🎬 [Save Video Continue] Opening AUTO winner modal');
                 showAutoWinnerModal(winner);
               } else {
-                // console.log('🎬 [Save Video Continue] Opening MANUAL winner modal');
+                // debugLog('🎬 [Save Video Continue] Opening MANUAL winner modal');
                 showWinnerModal(winner);
               }
-              // console.log('🎬 [Save Video Continue] Modal opened successfully');
+              // debugLog('🎬 [Save Video Continue] Modal opened successfully');
             } catch (e) {
               console.error('🎬 [Save Video Continue] Failed to open winner modal after video save:', e);
               // كحل أخير، أعد إنشاء المودال وافتحه مرة أخرى
@@ -21265,7 +21299,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         event.preventDefault();
         event.stopPropagation();
       }
-      console.log('[CLICK] Removing participant via global function:', id);
+      debugLog('[CLICK] Removing participant via global function:', id);
       state.entries = state.entries.filter(x => String(x.id) !== String(id));
       
       // Update textarea - DISABLED to allow clearing input without clearing list
@@ -21446,16 +21480,16 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
       // === WINNER PROTECTION: تحقق من سلامة المصفوفة ===
       const winners = getSafeWinnersArray();
-      console.log('[renderWinners] Rendering', winners.length, 'winners');
+      debugLog('[renderWinners] Rendering', winners.length, 'winners');
 
       // === تحديث شارة عدد الفائزين (الدائرة الصغيرة) ===
       const countBadge = document.getElementById('winners-count-badge');
-      console.log('[renderWinners] Badge element:', countBadge, 'Winners count:', winners.length);
+      debugLog('[renderWinners] Badge element:', countBadge, 'Winners count:', winners.length);
       if (countBadge) {
         if (winners.length > 0) {
           countBadge.textContent = winners.length;
           countBadge.style.cssText = 'display: inline-flex; min-width: 24px; height: 24px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 0.8rem; font-weight: 700; border-radius: 50%; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.5);';
-          console.log('[renderWinners] Badge shown with count:', winners.length);
+          debugLog('[renderWinners] Badge shown with count:', winners.length);
         } else {
           countBadge.style.display = 'none';
         }
@@ -21571,7 +21605,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
           // --- NEW: ID Image Thumbnail ---
           let idImageHtml = '';
-          // console.log(`[RenderWinners] Processing winner ${w.id}. pendingIdImage:`, w.pendingIdImage);
+          // debugLog(`[RenderWinners] Processing winner ${w.id}. pendingIdImage:`, w.pendingIdImage);
           if (w.pendingIdImage) {
               try {
                   // Ensure we have a valid Blob or File before creating URL
@@ -21580,7 +21614,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                       : new Blob([w.pendingIdImage]); // Fallback if it's an ArrayBuffer or similar
                   
                   const blobUrl = trackBlobUrl(URL.createObjectURL(blob)); // تتبع URL للتنظيف لاحقاً
-                  // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
+                  // debugLog(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
                   idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                       <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
                       <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${blobUrl}">
@@ -21636,7 +21670,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         tradingWinners.forEach((w, i) => {
           // --- NEW: ID Image Thumbnail (Trading) ---
           let idImageHtml = '';
-          // console.log(`[RenderWinners] Processing winner ${w.id}. pendingIdImage:`, w.pendingIdImage);
+          // debugLog(`[RenderWinners] Processing winner ${w.id}. pendingIdImage:`, w.pendingIdImage);
           if (w.pendingIdImage) {
               try {
                   // Ensure we have a valid Blob or File before creating URL
@@ -21645,7 +21679,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                       : new Blob([w.pendingIdImage]); // Fallback if it's an ArrayBuffer or similar
 
                   const blobUrl = trackBlobUrl(URL.createObjectURL(blob)); // تتبع URL للتنظيف لاحقاً
-                  // console.log(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
+                  // debugLog(`[RenderWinners] Created blob URL for ${w.id}: ${blobUrl}`);
                   idImageHtml = `<div class="wr-winner-id-thumb" style="margin-top:8px; border-top:1px solid #eee; padding-top:8px;">
                       <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px;">صورة الهوية:</div>
                       <img src="${blobUrl}" alt="الهوية" style="max-width:100px; max-height:60px; border-radius:4px; border:1px solid #ddd; cursor:zoom-in;" class="js-preview-img" data-src="${blobUrl}">
@@ -21723,7 +21757,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         // Bind events for new buttons
         const approveBtn = document.getElementById('approve-winners-btn');
         approveBtn?.addEventListener('click', async () => {
-            console.log('[Approve Winners] Button clicked. Winners count:', state.winners.length);
+            debugLog('[Approve Winners] Button clicked. Winners count:', state.winners.length);
             if (!state.activeCompetition || !state.activeCompetition.id) {
                 console.error('[Approve Winners] Active competition state missing:', state.activeCompetition);
                 toast('لا توجد مسابقة نشطة لاعتمادها (معرف مفقود).', 'error');
@@ -21740,7 +21774,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           try {
             toast('جاري حفظ الفائزين قبل الاعتماد...', 'info');
             await saveAllWinnersToDatabase();
-            console.log('[Approve Winners] saveAllWinnersToDatabase completed');
+            debugLog('[Approve Winners] saveAllWinnersToDatabase completed');
           } catch (e) {
             console.error('[Approve Winners] Failed to save winners before approval:', e);
             toast('فشل حفظ الفائزين قبل الاعتماد. يرجى المحاولة مرة أخرى.', 'error');
@@ -21751,7 +21785,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           try {
             toast('جاري التحقق من حفظ الفيديو وصورة الهوية...', 'info');
             const authedFetch = window.authedFetch || fetch;
-            const verifyResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}`);
+            const verifyResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}&_t=${Date.now()}`);
             if (!verifyResp.ok) {
               console.error('[Approve Winners] Verify fetch failed:', verifyResp.status);
               toast('فشل التحقق من بيانات الفائزين من قاعدة البيانات.', 'error');
@@ -21763,7 +21797,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             const dbWinners = (dbCompetition && dbCompetition.winners) ? dbCompetition.winners : [];
 
             const missing = dbWinners.filter(w => !w.video_url || !w.national_id_image);
-            console.log('[Approve Winners] verify result', {
+            debugLog('[Approve Winners] verify result', {
               dbWinnersCount: dbWinners.length,
               missingCount: missing.length,
               missingIds: missing.map(m => m.id)
@@ -21788,7 +21822,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                   await saveAllWinnersToDatabase();
                   
                   // Verify again
-                  const retryResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}`);
+                  const retryResp = await authedFetch(`/api/agents/${state.selectedAgent.id}/winners?competition_id=${state.activeCompetition.id}&_t=${Date.now()}`);
                   const retryData = await retryResp.json();
                   const retryCompetition = (retryData.competitions && retryData.competitions[0]) ? retryData.competitions[0] : null;
                   const retryWinners = (retryCompetition && retryCompetition.winners) ? retryCompetition.winners : [];
@@ -21831,7 +21865,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 confirmMessage,
                 async () => {
                     try {
-                        console.log('[Approve Winners] Sending approval request for competition:', state.activeCompetition.id);
+                        debugLog('[Approve Winners] Sending approval request for competition:', state.activeCompetition.id);
                         const authedFetch = window.authedFetch || fetch;
                         const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
                             method: 'POST',
@@ -21843,7 +21877,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                         });
                         
                         if (resp.ok) {
-                            console.log('[Approve Winners] Approval successful.');
+                            debugLog('[Approve Winners] Approval successful.');
                             const successMessage = state.isRestoreMode 
                                 ? 'تم حفظ التعديلات بنجاح' 
                                 : 'تم اعتماد المسابقة بنجاح';
@@ -21852,7 +21886,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                             
                             // Redirect to agent competitions page
                             if (state.selectedAgent && state.selectedAgent.id) {
-                                console.log('[Approve Winners] Redirecting to agent profile/competitions:', state.selectedAgent.id);
+                                debugLog('[Approve Winners] Redirecting to agent profile/competitions:', state.selectedAgent.id);
                                 // Using the standard profile route which usually shows competitions
                                 window.location.hash = `#profile/${state.selectedAgent.id}`;
                             } else {
@@ -21883,7 +21917,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
         const approveNoWinnersBtn = document.getElementById('approve-no-winners-btn');
         approveNoWinnersBtn?.addEventListener('click', async () => {
-            console.log('[Approve No Winners] Button clicked.');
+            debugLog('[Approve No Winners] Button clicked.');
             
             // Check if there are winners
             if (state.winners.length > 0) {
@@ -21902,7 +21936,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 `هل أنت متأكد من إغلاق المسابقة <strong>بدون فائزين</strong>؟<br><small style="color:#ef4444">سيتم إنهاء المسابقة ولن تتمكن من إضافة فائزين لاحقاً.</small>`,
                 async () => {
                     try {
-                        console.log('[Approve No Winners] Sending approval request (no winners) for competition:', state.activeCompetition.id);
+                        debugLog('[Approve No Winners] Sending approval request (no winners) for competition:', state.activeCompetition.id);
                         const authedFetch = window.authedFetch || fetch;
                         const resp = await authedFetch(`/api/competitions/${state.activeCompetition.id}/complete`, {
                             method: 'POST',
@@ -21913,7 +21947,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                         });
                         
                         if (resp.ok) {
-                            console.log('[Approve No Winners] Approval successful.');
+                            debugLog('[Approve No Winners] Approval successful.');
                             toast('تم إغلاق المسابقة بنجاح', 'success');
                             clearStagedWinnersForCompetition(state.activeCompetition.id);
                             state.winners = [];
@@ -22116,12 +22150,12 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         return;
       }
       
-      console.log('[Restore] Request to restore winner:', winner);
+      debugLog('[Restore] Request to restore winner:', winner);
 
       showConfirmModal(
         `هل تريد استرجاع <strong>${winner.name}</strong> إلى الروليت؟ سيتم إلغاء اختياره كفائز وإعادته للمشاركين.`,
         async () => {
-          console.log('[Restore] User confirmed restoration. Processing...');
+          debugLog('[Restore] User confirmed restoration. Processing...');
           
           // Delete video from DB
           deleteVideoFromDB(id).catch(e => console.error('Failed to delete video', e));
@@ -22129,7 +22163,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           // إزالة الفائز من قائمة الفائزين
           const initialWinnersCount = state.winners.length;
           state.winners = state.winners.filter(w => w.id !== id);
-          console.log(`[Restore] Winners count: ${initialWinnersCount} -> ${state.winners.length}`);
+          debugLog(`[Restore] Winners count: ${initialWinnersCount} -> ${state.winners.length}`);
           
           // إعادة ضبط حالة جميع المشاركين لضمان أن الجميع متاح للروليت ما عدا الفائزين الحاليين
           const currentWinnerIds = new Set(state.winners.map(w => w.id));
@@ -22138,7 +22172,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           // Check by ID OR by Name+Account to avoid duplicates
           const restoredEntryExists = state.entries.some(e => e.id === id || (e.name === winner.name && e.account === winner.account));
           if (!restoredEntryExists) {
-            console.log('[Restore] Adding winner back to entries list');
+            debugLog('[Restore] Adding winner back to entries list');
             state.entries.push({
               id: winner.id,
               name: winner.name,
@@ -22148,7 +22182,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               seq: state.entries.length + 1
             });
           } else {
-             console.log('[Restore] Winner already exists in entries list');
+             debugLog('[Restore] Winner already exists in entries list');
           }
 
           // تحديث حالة الاختيار لجميع المشاركين
@@ -22159,7 +22193,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             entry.selected = currentWinnerIds.has(entry.id);
             if (wasSelected !== entry.selected) updatedCount++;
           });
-          console.log(`[Restore] Updated selection status for ${updatedCount} entries`);
+          debugLog(`[Restore] Updated selection status for ${updatedCount} entries`);
           
           // حذف الفائز من قاعدة البيانات إذا كان محفوظاً
           if (winner._id && state.selectedAgent && state.selectedAgent.id) {
@@ -22196,7 +22230,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           removeStagedWinner(id, state.activeCompetition?.id || null);
 
           // تحديث الواجهة
-          console.log(`[Restore] Re-rendering UI. Entries: ${state.entries.length}, Winners: ${state.winners.length}`);
+          debugLog(`[Restore] Re-rendering UI. Entries: ${state.entries.length}, Winners: ${state.winners.length}`);
           renderParticipants();
           renderWinners();
           updateCounts();
@@ -22226,7 +22260,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }
       if (warnType === 'meet') winner.includeWarnMeet = !!checkbox.checked;
       if (warnType === 'prev') winner.includeWarnPrev = !!checkbox.checked;
-      console.log('[handleWinnerWarningToggle] Updated winner:', { id, warnType, checked: checkbox.checked, includeWarnMeet: winner.includeWarnMeet, includeWarnPrev: winner.includeWarnPrev });
+      debugLog('[handleWinnerWarningToggle] Updated winner:', { id, warnType, checked: checkbox.checked, includeWarnMeet: winner.includeWarnMeet, includeWarnPrev: winner.includeWarnPrev });
       saveSession();
       updateStagedWinner(id, state.activeCompetition?.id || null, {
         includeWarnMeet: winner.includeWarnMeet,
@@ -22602,17 +22636,17 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           }
 
           if (compressedFile) {
-              // console.log(`[DEBUG_ID_IMAGE] Edit winner confirmed. ID: ${winner.id}. Saving NEW image to DB...`);
+              // debugLog(`[DEBUG_ID_IMAGE] Edit winner confirmed. ID: ${winner.id}. Saving NEW image to DB...`);
               winner.pendingIdImage = compressedFile;
               winner.idImageUploaded = true;
               winner.localIdImageName = compressedFile.name; // Store filename
               
               // --- NEW: Persist updated image to IndexedDB ---
               saveImageToDB(winner.id, compressedFile)
-                // .then(() => console.log(`[DEBUG_ID_IMAGE] Updated image saved successfully for ${winner.id}`))
+                // .then(() => debugLog(`[DEBUG_ID_IMAGE] Updated image saved successfully for ${winner.id}`))
                 .catch(e => console.error(`Failed to update image in DB for ${winner.id}`, e));
           } else {
-              // console.log(`[DEBUG_ID_IMAGE] Edit winner confirmed. ID: ${winner.id}. No new image uploaded.`);
+              // debugLog(`[DEBUG_ID_IMAGE] Edit winner confirmed. ID: ${winner.id}. No new image uploaded.`);
           }
 
           // --- NEW: Update Winner in DB if exists ---
@@ -22672,8 +22706,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
 
     function showWinnerModal(entry){
-      /* console.log('🎉 [showWinnerModal] Called with entry:', entry);
-      console.log('🎉 [showWinnerModal] Entry name:', entry?.name); */
+      /* debugLog('🎉 [showWinnerModal] Called with entry:', entry);
+      debugLog('🎉 [showWinnerModal] Entry name:', entry?.name); */
 
       // --- NEW: Final check before showing modal ---
       const isAlreadyWinner = state.winners.some(w => {
@@ -22710,11 +22744,11 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       let compressedFile = null;
       let isImageUploading = false;
       
-      /* console.log('🔍 [showWinnerModal] Elements check:');
-      console.log('  - modal:', modal ? 'FOUND' : 'MISSING');
-      console.log('  - winnerName:', winnerName ? 'FOUND' : 'MISSING');
-      console.log('  - emailInput:', emailInput ? 'FOUND' : 'MISSING');
-      console.log('  - confirmBtn:', confirmBtn ? 'FOUND' : 'MISSING'); */
+      /* debugLog('🔍 [showWinnerModal] Elements check:');
+      debugLog('  - modal:', modal ? 'FOUND' : 'MISSING');
+      debugLog('  - winnerName:', winnerName ? 'FOUND' : 'MISSING');
+      debugLog('  - emailInput:', emailInput ? 'FOUND' : 'MISSING');
+      debugLog('  - confirmBtn:', confirmBtn ? 'FOUND' : 'MISSING'); */
       
       // Fallback if modal elements are missing: commit winner automatically to avoid crashes
       if (!modal || !winnerName || !winnerAccount || !confirmBtn) {
@@ -22846,7 +22880,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               // Convert canvas to blob
               canvas.toBlob((blob) => {
                 if (blob) {
-                  // console.log(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
+                  // debugLog(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
                   resolve(new File([blob], file.name, { type: 'image/jpeg' }));
                 } else {
                   reject(new Error('Failed to compress image'));
@@ -22966,14 +23000,14 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       modal.style.display = 'flex';
       document.body.style.overflow = 'hidden'; // Prevent background scrolling
       
-      /* console.log('📺 [showWinnerModal] Modal displayed');
-      console.log('🔍 [showWinnerModal] Final modal check:');
+      /* debugLog('📺 [showWinnerModal] Modal displayed');
+      debugLog('🔍 [showWinnerModal] Final modal check:');
       const contentBox = modal.querySelector('.wr-celebration-content');
       if (contentBox) {
-        console.log('  - Content box max-height:', contentBox.style.maxHeight || 'NOT SET');
-        console.log('  - Content box overflow-y:', contentBox.style.overflowY || 'NOT SET');
-        console.log('  - Content box overflow-x:', contentBox.style.overflowX || 'NOT SET');
-        console.log('  - Content box scrollbarGutter:', contentBox.style.scrollbarGutter || 'NOT SET');
+        debugLog('  - Content box max-height:', contentBox.style.maxHeight || 'NOT SET');
+        debugLog('  - Content box overflow-y:', contentBox.style.overflowY || 'NOT SET');
+        debugLog('  - Content box overflow-x:', contentBox.style.overflowX || 'NOT SET');
+        debugLog('  - Content box scrollbarGutter:', contentBox.style.scrollbarGutter || 'NOT SET');
       } else {
         console.error('❌ [showWinnerModal] Content box NOT FOUND!');
       } */
@@ -23045,7 +23079,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           return;
         }
 
-        console.log('[Winner Confirm] validation passed', {
+        debugLog('[Winner Confirm] validation passed', {
           entryId: entry?.id,
           hasVideoBlob: !!state.pendingVideoBlob,
           videoMime: state.recordingMimeType || null,
@@ -23118,7 +23152,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         }
         
         if (compressedFile) {
-          console.log('[Winner Confirm] ID image ready', {
+          debugLog('[Winner Confirm] ID image ready', {
             winnerId: winnerData.id,
             name: compressedFile.name,
             size: compressedFile.size,
@@ -23131,7 +23165,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           
           // --- NEW: Save Image to IndexedDB for Persistence ---
           saveImageToDB(winnerData.id, compressedFile)
-            .then(() => console.log('[Winner Confirm] Image saved to IndexedDB', { winnerId: winnerData.id }))
+            .then(() => debugLog('[Winner Confirm] Image saved to IndexedDB', { winnerId: winnerData.id }))
             .catch(e => console.error(`Failed to persist image for ${winnerData.id}`, e));
           // ----------------------------------------------------
         } else {
@@ -23187,9 +23221,9 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
         // NEW: Save immediately to backend (manual "prepare winner")
         try {
-          console.log('[Winner Confirm] saving immediately to backend...');
+          debugLog('[Winner Confirm] saving immediately to backend...');
           await saveAllWinnersToDatabase();
-          console.log('[Winner Confirm] saved to backend successfully');
+          debugLog('[Winner Confirm] saved to backend successfully');
           toast('تم حفظ الفائز (الفيديو + الهوية) بنجاح', 'success');
         } catch (e) {
           console.error('[Winner Confirm] save to backend failed', e);
@@ -23360,7 +23394,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
               // Convert canvas to blob
               canvas.toBlob((blob) => {
                 if (blob) {
-                  // console.log(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
+                  // debugLog(`📸 [Image Compression] Original: ${(file.size / 1024).toFixed(2)}KB → Compressed: ${(blob.size / 1024).toFixed(2)}KB`);
                   resolve(new File([blob], file.name, { type: 'image/jpeg' }));
                 } else {
                   reject(new Error('Failed to compress image'));
@@ -23642,7 +23676,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                     const formData = new FormData();
                     // Determine extension based on recorded mimeType
                     const extension = (state.recordingMimeType && state.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
-                    formData.append('video', state.pendingVideoBlob, `winner_${createdWinner._id}.${extension}`);
+                    safeAppendFile(formData, 'video', state.pendingVideoBlob, `winner_${createdWinner._id}.${extension}`);
                     
                     const uploadResp = await authedFetch(`/api/winners/${createdWinner._id}/video`, {
                         method: 'POST',
@@ -23659,7 +23693,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 // Upload national ID image if provided
                 if (compressedFile && createdWinner && createdWinner._id) {
                     const idImageFormData = new FormData();
-                    idImageFormData.append('id_image', compressedFile);
+// Use central safe append function instead - safeAppendFile(idImageFormData, 'id_image', compressedFile, 'id_image.jpg');
+                      safeAppendFile(idImageFormData, 'id_image', compressedFile, 'id_image.jpg');
                     
                     const idImageResp = await authedFetch(`/api/winners/${createdWinner._id}/id-image`, {
                         method: 'POST',
@@ -23767,11 +23802,40 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }
       
       const authedFetch = window.authedFetch || fetch;
+      const isMongoId = (value) => typeof value === 'string' && value.length === 24;
+
+      // Ensure pending media is hydrated from IndexedDB for already-saved winners.
+      // This covers old sessions where winners exist in DB but files were not uploaded yet.
+      for (const winner of state.winners) {
+        const hasDbId = !!winner._id || isMongoId(winner.id);
+        if (!hasDbId) continue;
+        const winnerDbId = winner._id || winner.id;
+
+        const hasPendingVideo = winner.pendingVideoBlob instanceof Blob;
+        if (!hasPendingVideo && !winner.videoUrl) {
+          try {
+            const videoBlob = await getVideoFromDB(winnerDbId) || await getVideoFromDB(winner.id);
+            if (videoBlob) winner.pendingVideoBlob = videoBlob;
+          } catch (_) {}
+        }
+
+        const hasPendingIdImage = (winner.pendingIdImage instanceof Blob || winner.pendingIdImage instanceof File);
+        const hasPendingIdImageFile = (winner.pendingIdImageFile instanceof Blob || winner.pendingIdImageFile instanceof File);
+        if (!hasPendingIdImage && !hasPendingIdImageFile && !winner.nationalIdImage) {
+          try {
+            const imageBlob = await getImageFromDB(winnerDbId) || await getImageFromDB(winner.id);
+            if (imageBlob) {
+              winner.pendingIdImage = imageBlob;
+              winner.idImageUploaded = true;
+            }
+          } catch (_) {}
+        }
+      }
 
       // Winners that are already saved (have _id) but still have pending local media
       // (e.g. previous upload failed, or refresh happened mid-upload).
       const savedWinnersNeedingUpload = state.winners.filter(w => {
-        const hasDbId = !!w._id || (typeof w.id === 'string' && w.id.length === 24);
+        const hasDbId = !!w._id || isMongoId(w.id);
         if (!hasDbId) return false;
         const hasPendingVideo = w.pendingVideoBlob instanceof Blob;
         const hasPendingIdImage = (w.pendingIdImage instanceof Blob || w.pendingIdImage instanceof File);
@@ -23782,10 +23846,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       // Filter only unsaved winners (those without a valid MongoDB _id)
       // Assuming MongoDB _id is 24 hex characters. Local IDs are usually shorter or different format.
       // Also check if w._id exists (which we set after saving)
-      const unsavedWinners = state.winners.filter(w => !w._id && (!w.id || w.id.length !== 24));
+      const unsavedWinners = state.winners.filter(w => !w._id && !isMongoId(w.id));
       
       if (unsavedWinners.length === 0 && savedWinnersNeedingUpload.length === 0) {
-        console.log('[saveAllWinnersToDatabase] All winners are already saved (and no pending uploads).');
+        debugLog('[saveAllWinnersToDatabase] All winners are already saved (and no pending uploads).');
         return;
       }
 
@@ -23883,7 +23947,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             try {
               const formData = new FormData();
               const extension = (localWinner.recordingMimeType && localWinner.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
-              formData.append('video', localWinner.pendingVideoBlob, `winner_${savedWinner._id}.${extension}`);
+              safeAppendFile(formData, 'video', localWinner.pendingVideoBlob, `winner_${savedWinner._id}.${extension}`);
               
               const videoResp = await authedFetch(`/api/winners/${savedWinner._id}/video`, {
                 method: 'POST',
@@ -23908,7 +23972,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           if (localWinner.pendingIdImageFile && (localWinner.pendingIdImageFile instanceof Blob || localWinner.pendingIdImageFile instanceof File)) {
             try {
               const formData = new FormData();
-              formData.append('id_image', localWinner.pendingIdImageFile);
+              safeAppendFile(formData, 'id_image', localWinner.pendingIdImageFile, 'id_image.jpg');
               
               const uploadResp = await authedFetch(`/api/winners/${savedWinner._id}/id-image`, {
                 method: 'POST',
@@ -23934,7 +23998,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           if (localWinner.pendingIdImage && (localWinner.pendingIdImage instanceof Blob || localWinner.pendingIdImage instanceof File)) {
             try {
               const idFormData = new FormData();
-              idFormData.append('id_image', localWinner.pendingIdImage);
+                safeAppendFile(idFormData, 'id_image', localWinner.pendingIdImage, 'id_image.jpg');
               
               const idUploadResp = await authedFetch(`/api/winners/${savedWinner._id}/id-image`, {
                 method: 'POST',
@@ -23972,7 +24036,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           try {
             const formData = new FormData();
             const extension = (w.recordingMimeType && w.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
-            formData.append('video', w.pendingVideoBlob, `winner_${winnerDbId}.${extension}`);
+            safeAppendFile(formData, 'video', w.pendingVideoBlob, `winner_${winnerDbId}.${extension}`);
             const videoResp = await authedFetch(`/api/winners/${winnerDbId}/video`, { method: 'POST', body: formData });
             if (videoResp.ok) {
               delete w.pendingVideoBlob;
@@ -23990,7 +24054,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         if (w.pendingIdImageFile && (w.pendingIdImageFile instanceof Blob || w.pendingIdImageFile instanceof File)) {
           try {
             const formData = new FormData();
-            formData.append('id_image', w.pendingIdImageFile);
+            safeAppendFile(formData, 'id_image', w.pendingIdImageFile, 'id_image.jpg');
             const uploadResp = await authedFetch(`/api/winners/${winnerDbId}/id-image`, { method: 'POST', body: formData });
             if (uploadResp.ok) {
               try {
@@ -24011,7 +24075,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
         if (w.pendingIdImage && (w.pendingIdImage instanceof Blob || w.pendingIdImage instanceof File)) {
           try {
             const idFormData = new FormData();
-            idFormData.append('id_image', w.pendingIdImage);
+              safeAppendFile(idFormData, 'id_image', w.pendingIdImage, 'id_image.jpg');
             const idUploadResp = await authedFetch(`/api/winners/${winnerDbId}/id-image`, { method: 'POST', body: idFormData });
             if (idUploadResp.ok) {
               try {
@@ -24094,7 +24158,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
     }
 
     async function sendWinnersReport() {
-      // console.log('[sendWinnersReport] Button clicked');
+      // debugLog('[sendWinnersReport] Button clicked');
       if (!state.selectedAgent) {
         console.warn('[sendWinnersReport] No agent selected');
         toast('يرجى اختيار وكيل أولاً', 'warning');
@@ -24108,7 +24172,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       // التحقق من وجود فائزين غير محفوظين في قاعدة البيانات، مع الحفظ التلقائي قبل الإرسال
       let unsavedWinners = state.winners.filter(w => !w._id);
-      /* console.log('[sendWinnersReport] clicked:', {
+      /* debugLog('[sendWinnersReport] clicked:', {
         total: state.winners.length,
         unsaved: unsavedWinners.length,
         agentId: state.selectedAgent && state.selectedAgent.id
@@ -24116,10 +24180,10 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
       if (unsavedWinners.length > 0) {
         try {
-          // console.log('[sendWinnersReport] auto-saving unsaved winners before send...', unsavedWinners);
+          // debugLog('[sendWinnersReport] auto-saving unsaved winners before send...', unsavedWinners);
           toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
           await saveAllWinnersToDatabase();
-          // console.log('[sendWinnersReport] auto-save completed successfully');
+          // debugLog('[sendWinnersReport] auto-save completed successfully');
         } catch (error) {
           console.error('[sendWinnersReport] auto-save failed:', error);
           toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
@@ -24136,7 +24200,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           const orderB = b.orderNumber || 999;
           return orderA - orderB;
         });
-      // console.log('[sendWinnersReport] Valid winners count:', validWinners.length);
+      // debugLog('[sendWinnersReport] Valid winners count:', validWinners.length);
       
       if (validWinners.length === 0) {
           console.error('[sendWinnersReport] No valid winners with DB IDs');
@@ -24157,7 +24221,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           showConfirmModal(
           `تم التحقق من الملفات بنجاح ✅<br>سيتم إرسال جميع الفائزين (${validWinners.length}) إلى الوكيل. هل أنت متأكد من المتابعة؟`,
           async () => {
-              // console.log('[sendWinnersReport] User confirmed send');
+              // debugLog('[sendWinnersReport] User confirmed send');
               const sendingOverlay = document.createElement('div');
               sendingOverlay.className = 'wr-confirm-overlay';
               sendingOverlay.innerHTML = `
@@ -24189,11 +24253,11 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                       })
                   });
                   
-                  // console.log('[sendWinnersReport] Response status:', resp.status);
+                  // debugLog('[sendWinnersReport] Response status:', resp.status);
 
                     if (resp.ok) {
                       const result = await resp.json();
-                      // console.log('[sendWinnersReport] Success response:', result);
+                      // debugLog('[sendWinnersReport] Success response:', result);
                       toast('تم إرسال التقرير بنجاح', 'success');
                       // Mark report as sent to allow completion status
                       state.reportSent = true;
@@ -24236,17 +24300,17 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       // التحقق من وجود فائزين غير محفوظين
       const unsavedWinners = state.winners.filter(w => !w._id);
-      /* console.log('[sendWinnersDetails] clicked: current winners:', {
+      /* debugLog('[sendWinnersDetails] clicked: current winners:', {
         total: state.winners.length,
         unsaved: unsavedWinners.length,
         agentId: state.selectedAgent && state.selectedAgent.id
       }); */
       if (unsavedWinners.length > 0) {
         try {
-            // console.log('[sendWinnersDetails] auto-saving unsaved winners before send...', unsavedWinners);
+            // debugLog('[sendWinnersDetails] auto-saving unsaved winners before send...', unsavedWinners);
             toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
             await saveAllWinnersToDatabase();
-            // console.log('[sendWinnersDetails] auto-save completed successfully');
+            // debugLog('[sendWinnersDetails] auto-save completed successfully');
         } catch (error) {
             console.error('[sendWinnersDetails] auto-save failed:', error);
             toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
@@ -24261,7 +24325,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
           const orderB = b.orderNumber || 999;
           return orderA - orderB;
         });
-      // console.log('[sendWinnersDetails] valid winners after save:', validWinners.map(w => w._id));
+      // debugLog('[sendWinnersDetails] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
         return;
@@ -24280,8 +24344,8 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
                 include_warn_meet: !!(w.includeWarnMeet || state.includeWarnMeet),
                 include_warn_prev: !!(w.includeWarnPrev || state.includeWarnPrev)
               }));
-            console.log('[sendWinnersDetails] Sending warnings:', warnings);
-            console.log('[sendWinnersDetails] validWinners with warn flags:', validWinners.map(w => ({ _id: w._id, includeWarnMeet: w.includeWarnMeet, includeWarnPrev: w.includeWarnPrev })));
+            debugLog('[sendWinnersDetails] Sending warnings:', warnings);
+            debugLog('[sendWinnersDetails] validWinners with warn flags:', validWinners.map(w => ({ _id: w._id, includeWarnMeet: w.includeWarnMeet, includeWarnPrev: w.includeWarnPrev })));
             const resp = await authedFetch(`/api/agents/${state.selectedAgent.id}/send-winners-details`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -24320,17 +24384,17 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       
       // التحقق من وجود فائزين غير محفوظين
       const unsavedWinners = state.winners.filter(w => !w._id);
-      /* console.log('[sendWinnersWithIDsToAgent] clicked: current winners:', {
+      /* debugLog('[sendWinnersWithIDsToAgent] clicked: current winners:', {
         total: state.winners.length,
         unsaved: unsavedWinners.length,
         agentId: state.selectedAgent && state.selectedAgent.id
       }); */
       if (unsavedWinners.length > 0) {
         try {
-            // console.log('[sendWinnersWithIDsToAgent] auto-saving unsaved winners before send...', unsavedWinners);
+            // debugLog('[sendWinnersWithIDsToAgent] auto-saving unsaved winners before send...', unsavedWinners);
             toast('جاري حفظ الفائزين تلقائياً قبل الإرسال...', 'info');
             await saveAllWinnersToDatabase();
-            // console.log('[sendWinnersWithIDsToAgent] auto-save completed successfully');
+            // debugLog('[sendWinnersWithIDsToAgent] auto-save completed successfully');
         } catch (error) {
             console.error('[sendWinnersWithIDsToAgent] auto-save failed:', error);
             toast('فشل الحفظ التلقائي للفائزين. يرجى المحاولة مرة أخرى.', 'error');
@@ -24339,7 +24403,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
       }
       
       const validWinners = state.winners.filter(w => w._id);
-      // console.log('[sendWinnersWithIDsToAgent] valid winners after save:', validWinners.map(w => w._id));
+      // debugLog('[sendWinnersWithIDsToAgent] valid winners after save:', validWinners.map(w => w._id));
       if (validWinners.length === 0) {
         toast('لم يتم العثور على معرفات الفائزين في قاعدة البيانات. تأكد من حفظ الفائزين.', 'error');
         return;
@@ -24347,7 +24411,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
 
       // Precheck: ensure each winner has ID image uploaded
       const missingIdImages = validWinners.filter(w => !w.idImageUploaded);
-      // console.log('[sendWinnersWithIDsToAgent] winners missing ID image:', missingIdImages.map(w => w._id));
+      // debugLog('[sendWinnersWithIDsToAgent] winners missing ID image:', missingIdImages.map(w => w._id));
       if (missingIdImages.length > 0) {
         toast(`يوجد ${missingIdImages.length} فائز بدون صورة هوية مرفوعة. يرجى رفع الصورة من نافذة اعتماد الفائز قبل الإرسال.`, 'warning');
         return;
@@ -24450,17 +24514,6 @@ if (typeof window !== 'undefined') {
 }
 
 })(); // End of IIFE
-    
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -24546,7 +24599,7 @@ function getTelegramScraperHTML() {
         </div>
         <div id="ts-logout-container" style="display:none; margin-top: 12px;">
             <button class="ts-btn ts-btn-danger ts-btn-sm" id="ts-logout-btn">
-                <i class="fas fa-sign-out-alt"></i> قطع الاتصال (للمسؤولين فقط)
+                <i class="fas fa-sign-out-alt"></i> قطع الاتصال (للسوبر أدمن فقط)
             </button>
         </div>
     </div>
@@ -24699,6 +24752,16 @@ function getTelegramScraperHTML() {
 function initTelegramScraper() {
     const API = '/api/telegram-scraper';
     let commentsData = [];
+    const currentUserRole = (() => {
+        try {
+            if (window.currentUserProfile?.role) return window.currentUserProfile.role;
+            const cachedProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
+            return cachedProfile?.role || null;
+        } catch {
+            return null;
+        }
+    })();
+    const isSuperAdmin = currentUserRole === 'super_admin';
 
     // DOM refs
     const authStatus = document.getElementById('ts-auth-status');
@@ -24742,16 +24805,31 @@ function initTelegramScraper() {
     function showConnected(user) {
         const name = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : '';
         const phone = user?.phone ? `+${user.phone}` : '';
+        const accessNote = isSuperAdmin
+            ? ' — يمكنك إدارة اتصال تيليجرام لهذا النظام'
+            : ' — يمكنك استخدام الجلسة الحالية فقط';
         authStatus.className = 'ts-auth-status ts-connected';
-        authStatus.innerHTML = `<i class="fas fa-check-circle"></i> متصل بتلجرام${name ? ` عبر حساب ${name}` : ''}${phone ? ` (${phone})` : ''} — جميع الموظفين يمكنهم الاستخدام`;
+        authStatus.innerHTML = `<i class="fas fa-check-circle"></i> متصل بتلجرام${name ? ` عبر حساب ${name}` : ''}${phone ? ` (${phone})` : ''}${accessNote}`;
         authFormContainer.style.display = 'none';
-        logoutContainer.style.display = 'block';
+        logoutContainer.style.display = isSuperAdmin ? 'block' : 'none';
         fetchCard.style.display = 'block';
         setStep(2);
     }
 
     function showDisconnected() {
         authStatus.className = 'ts-auth-status ts-disconnected';
+        if (!isSuperAdmin) {
+            authStatus.innerHTML = '<i class="fas fa-times-circle"></i> غير متصل — تسجيل الدخول متاح للسوبر أدمن فقط';
+            authFormContainer.style.display = 'none';
+            phoneStep.style.display = 'none';
+            otpStep.style.display = 'none';
+            logoutContainer.style.display = 'none';
+            fetchCard.style.display = 'none';
+            resultsCard.style.display = 'none';
+            setStep(1);
+            return;
+        }
+
         authStatus.innerHTML = '<i class="fas fa-times-circle"></i> غير متصل — يجب تسجيل الدخول مرة واحدة فقط وسيعمل لجميع الموظفين';
         authFormContainer.style.display = 'block';
         phoneStep.style.display = 'block';
@@ -24764,6 +24842,8 @@ function initTelegramScraper() {
 
     // ── Send Code ──────────────────────────────────────────
     document.getElementById('ts-send-code-btn').addEventListener('click', async () => {
+        if (!isSuperAdmin) return showToastMsg('تسجيل الدخول متاح للسوبر أدمن فقط', true);
+
         const phone = document.getElementById('ts-phone').value.trim();
         if (!phone) return showToastMsg('أدخل رقم الهاتف', true);
 
@@ -24783,7 +24863,7 @@ function initTelegramScraper() {
                 otpStep.style.display = 'block';
                 showToastMsg('تم إرسال كود التحقق إلى تلجرام');
             } else {
-                showToastMsg(data.error || 'خطأ في الإرسال', true);
+                showToastMsg(data.error || data.message || 'خطأ في الإرسال', true);
             }
         } catch (err) {
             showToastMsg('خطأ: ' + err.message, true);
@@ -24795,6 +24875,8 @@ function initTelegramScraper() {
 
     // ── Verify Code ────────────────────────────────────────
     document.getElementById('ts-verify-btn').addEventListener('click', async () => {
+        if (!isSuperAdmin) return showToastMsg('تسجيل الدخول متاح للسوبر أدمن فقط', true);
+
         const code = document.getElementById('ts-otp').value.trim();
         const password = document.getElementById('ts-2fa').value.trim();
         if (!code) return showToastMsg('أدخل كود التحقق', true);
@@ -24817,7 +24899,7 @@ function initTelegramScraper() {
                 showToastMsg('تم تسجيل الدخول بنجاح! ✓');
                 checkStatus();
             } else {
-                showToastMsg(data.error || 'خطأ في التحقق', true);
+                showToastMsg(data.error || data.message || 'خطأ في التحقق', true);
             }
         } catch (err) {
             showToastMsg('خطأ: ' + err.message, true);
@@ -24829,9 +24911,15 @@ function initTelegramScraper() {
 
     // ── Logout ─────────────────────────────────────────────
     document.getElementById('ts-logout-btn').addEventListener('click', async () => {
+        if (!isSuperAdmin) return showToastMsg('قطع الاتصال متاح للسوبر أدمن فقط', true);
+
         if (!confirm('⚠️ تحذير: قطع الاتصال سيؤثر على جميع الموظفين!\nسيحتاج أحد المسؤولين لإعادة تسجيل الدخول. هل أنت متأكد؟')) return;
         try {
-            await window.authedFetch(`${API}/auth/logout`, { method: 'POST' });
+            const res = await window.authedFetch(`${API}/auth/logout`, { method: 'POST' });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || data.message || 'تعذر تسجيل الخروج');
+            }
             showToastMsg('تم تسجيل الخروج');
             showDisconnected();
         } catch (err) {
@@ -25037,15 +25125,31 @@ function initTelegramScraper() {
             };
         });
 
-        // ── Detect duplicates (keep last comment per sender) ──
+        // ── Detect duplicates (keep latest comment per sender by date) ──
         const duplicates = [];
         const senderMap = new Map();
         for (let i = 0; i < allParsed.length; i++) {
             const sid = allParsed[i].sender.id || allParsed[i].sender.username || allParsed[i].sender.name;
-            if (senderMap.has(sid)) {
-                duplicates.push({ ...senderMap.get(sid), excludeReason: 'تعليق مكرر — تم الاحتفاظ بآخر تعليق' });
+            const current = allParsed[i];
+            if (!senderMap.has(sid)) {
+                senderMap.set(sid, current);
+                continue;
             }
-            senderMap.set(sid, allParsed[i]);
+
+            const existing = senderMap.get(sid);
+            const currentTs = current.date ? Date.parse(current.date) : NaN;
+            const existingTs = existing.date ? Date.parse(existing.date) : NaN;
+
+            const shouldKeepCurrent = Number.isFinite(currentTs) && Number.isFinite(existingTs)
+                ? currentTs >= existingTs
+                : true;
+
+            if (shouldKeepCurrent) {
+                duplicates.push({ ...existing, excludeReason: 'تعليق مكرر — تم الاحتفاظ بآخر تعليق' });
+                senderMap.set(sid, current);
+            } else {
+                duplicates.push({ ...current, excludeReason: 'تعليق مكرر — تم الاحتفاظ بآخر تعليق' });
+            }
         }
         const deduplicated = Array.from(senderMap.values());
 
@@ -25059,6 +25163,10 @@ function initTelegramScraper() {
             const hasSenderName = c.parsedName && c.parsedName !== 'مجهول';
             const hasAccount = !!c.parsedAccount;
             const text = (c.text || '').trim();
+            const createdTs = c.date ? Date.parse(c.date) : NaN;
+            const editedTs = c.editDate ? Date.parse(c.editDate) : NaN;
+            const editedByTelegram = c.isEdited === true
+                || (Number.isFinite(editedTs) && (!Number.isFinite(createdTs) || editedTs > createdTs));
 
             // Completely invalid: no account AND name is just the Telegram display name (not extracted from comment)
             // Also catches service messages, empty comments, bot messages like "Group Help"
@@ -25081,7 +25189,7 @@ function initTelegramScraper() {
                 problems.push({ ...c, excludeReason: 'الاسم ناقص أو غير واضح' });
             }
             // Edited message → problem
-            else if (c.editDate) {
+            else if (editedByTelegram) {
                 problems.push({ ...c, excludeReason: 'تعليق معدل (edited)' });
             }
             // Valid
@@ -25202,27 +25310,21 @@ function initTelegramScraper() {
     }
 
     function setupExcludedToggles() {
-        document.getElementById('ts-duplicates-toggle')?.addEventListener('click', function() {
-            const body = document.getElementById('ts-duplicates-body');
-            const icon = this.querySelector('.ts-toggle-icon');
-            body.classList.toggle('ts-collapsed');
-            icon.classList.toggle('fa-chevron-up');
-            icon.classList.toggle('fa-chevron-down');
-        });
-        document.getElementById('ts-problems-toggle')?.addEventListener('click', function() {
-            const body = document.getElementById('ts-problems-body');
-            const icon = this.querySelector('.ts-toggle-icon');
-            body.classList.toggle('ts-collapsed');
-            icon.classList.toggle('fa-chevron-up');
-            icon.classList.toggle('fa-chevron-down');
-        });
-        document.getElementById('ts-invalid-toggle')?.addEventListener('click', function() {
-            const body = document.getElementById('ts-invalid-body');
-            const icon = this.querySelector('.ts-toggle-icon');
-            body.classList.toggle('ts-collapsed');
-            icon.classList.toggle('fa-chevron-up');
-            icon.classList.toggle('fa-chevron-down');
-        });
+        const bindToggle = (toggleId, bodyId) => {
+            const toggle = document.getElementById(toggleId);
+            const body = document.getElementById(bodyId);
+            if (!toggle || !body) return;
+            toggle.onclick = function() {
+                const icon = this.querySelector('.ts-toggle-icon');
+                body.classList.toggle('ts-collapsed');
+                icon?.classList.toggle('fa-chevron-up');
+                icon?.classList.toggle('fa-chevron-down');
+            };
+        };
+
+        bindToggle('ts-duplicates-toggle', 'ts-duplicates-body');
+        bindToggle('ts-problems-toggle', 'ts-problems-body');
+        bindToggle('ts-invalid-toggle', 'ts-invalid-body');
     }
 
     // ── Filter ─────────────────────────────────────────
@@ -27941,12 +28043,18 @@ window.NotificationSystem = NotificationSystem;
 
 
 // == main.js ==
-// 1. Global variables
+﻿// 1. Global variables
 let searchTimeout;
 let currentUserProfile = null; // NEW: To store the current user's profile with role
 window.onlineUsers = new Map(); // NEW: Global map to track online users
 window.appContent = null; // NEW: Make appContent globally accessible
 let winnerRouletteFallbackInitialized = false; // Ensure we only wire the roulette page once when the module fails
+let winnerRouletteModularModule = null;
+const APP_DEBUG_LOGS = false;
+
+function appDebugLog(...args) {
+    if (APP_DEBUG_LOGS) console.info(...args);
+}
 
 // --- NEW: Global Error Catcher ---
 // This will catch any unhandled errors on the page and send them to the backend for logging.
@@ -28268,7 +28376,7 @@ function setActiveNav(activeElement) {
 
 async function logAgentActivity(userId, agentId, actionType, description, metadata = {}) {
     // This function will be reimplemented later using our own backend.
-    // console.log(`[FRONTEND LOG] ➡️ محاولة تسجيل نشاط: ${actionType} (Agent: ${agentId || 'N/A'})`);
+    // appDebugLog(`[FRONTEND LOG] ➡️ محاولة تسجيل نشاط: ${actionType} (Agent: ${agentId || 'N/A'})`);
     try {
         const payload = {
             user_id: userId || currentUserProfile?._id, // Default to current user if not provided
@@ -28287,7 +28395,7 @@ async function logAgentActivity(userId, agentId, actionType, description, metada
             body: JSON.stringify(payload)
         });
         if (!response.ok) throw new Error(`Server responded with status ${response.status}`);
-        // console.log(`[FRONTEND LOG] ✅ تم إرسال النشاط بنجاح إلى الخادم.`);
+        // appDebugLog(`[FRONTEND LOG] ✅ تم إرسال النشاط بنجاح إلى الخادم.`);
     } catch (error) {
         console.error(`[FRONTEND LOG] ❌ فشل إرسال النشاط إلى الخادم:`, error);
     }
@@ -28366,10 +28474,10 @@ async function initializeApp() {
  * NEW: Sets up a listener for real-time messages from the server (e.g., via WebSocket).
  */
 function setupRealtimeListeners() {
-    console.log('[WebSocket] Initializing Realtime Listeners...');
+    appDebugLog('[WebSocket] Initializing Realtime Listeners...');
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${window.location.host}`;
-    console.log(`[WebSocket] Target URL: ${wsUrl}`);
+    appDebugLog(`[WebSocket] Target URL: ${wsUrl}`);
 
     let ws;
     let reconnectAttempts = 0;
@@ -28377,7 +28485,7 @@ function setupRealtimeListeners() {
     let reconnectTimeout;
 
     function connect() {
-        console.log('[WebSocket] Attempting to connect...');
+        appDebugLog('[WebSocket] Attempting to connect...');
         // Check if token exists before connecting
         const token = localStorage.getItem('authToken');
         if (!token) {
@@ -28396,11 +28504,11 @@ function setupRealtimeListeners() {
         try { window._realtimeWs = ws; } catch (e) { /* ignore in non-browser env */ }
 
         ws.onopen = () => {
-            console.log('[WebSocket] Connection established successfully ✓');
+            appDebugLog('[WebSocket] Connection established successfully ✓');
             reconnectAttempts = 0; // Reset counter on successful connection
             const token = localStorage.getItem('authToken');
             if (token) {
-                console.log('[WebSocket] Sending auth token...');
+                appDebugLog('[WebSocket] Sending auth token...');
                 ws.send(JSON.stringify({ type: 'auth', token }));
             } else {
                 console.warn('[WebSocket] No auth token found in localStorage');
@@ -28449,18 +28557,18 @@ function setupRealtimeListeners() {
                             }
                             // Dispatch a global event that the user list can listen to
                             window.dispatchEvent(new CustomEvent('presence-update'));
-                            // console.log('[WebSocket] تحديث الحالة المباشرة:', Array.from(window.onlineUsers.keys()));
+                            // appDebugLog('[WebSocket] تحديث الحالة المباشرة:', Array.from(window.onlineUsers.keys()));
                         }
                         break;
                     
                     case 'suggestion_update':
                     case 'new_suggestion':
-                        // console.log('🔔 [WebSocket] Received suggestion update/new suggestion');
+                        // appDebugLog('ðŸ”” [WebSocket] Received suggestion update/new suggestion');
                         loadGlobalUnreadCount();
                         break;
 
                     case 'notification':
-                        console.log('🔔 [WebSocket] Received notification:', message);
+                        appDebugLog('ðŸ”” [WebSocket] Received notification:', message);
                         if (typeof showToast === 'function') {
                             showToast(message.message, message.level || 'info');
                         } else {
@@ -28474,12 +28582,12 @@ function setupRealtimeListeners() {
                         break;
 
                     case 'global_notification':
-                        console.log('🔔 [WebSocket] Received global notification:', message);
+                        appDebugLog('ðŸ”” [WebSocket] Received global notification:', message);
                         showToast(message.message, message.variant || 'info');
                         break;
 
                     case 'AUDITING_TOGGLED':
-                        console.log('🔔 [WebSocket] Auditing toggled:', message.data);
+                        appDebugLog('ðŸ”” [WebSocket] Auditing toggled:', message.data);
                         // 1. Show toast
                         const statusText = message.data.isAuditingEnabled ? 'تفعيل' : 'إلغاء تفعيل';
                         showToast(`قام ${message.data.updatedBy} بـ ${statusText} التدقيق للوكيل ${message.data.agentName}`, 'info');
@@ -28489,13 +28597,13 @@ function setupRealtimeListeners() {
                         break;
 
                     case 'COMPETITION_CREATED':
-                        console.log('🔔 [WebSocket] Competition created:', message.data);
+                        appDebugLog('ðŸ”” [WebSocket] Competition created:', message.data);
                         showToast(`تم إنشاء مسابقة جديدة للوكيل ${message.data.agentName} بواسطة ${message.data.createdBy}`, 'success');
                         window.dispatchEvent(new CustomEvent('competition-update', { detail: { type: 'created', ...message.data } }));
                         break;
 
                     case 'COMPETITION_COMPLETED':
-                        console.log('🔔 [WebSocket] Competition completed:', message.data);
+                        appDebugLog('ðŸ”” [WebSocket] Competition completed:', message.data);
                         showToast(`تم إنهاء مسابقة الوكيل ${message.data.competitionName || ''} بواسطة ${message.data.completedBy}`, 'info');
                         window.dispatchEvent(new CustomEvent('competition-update', { detail: { type: 'completed', ...message.data } }));
                         break;
@@ -28508,7 +28616,7 @@ function setupRealtimeListeners() {
         };
 
         ws.onclose = () => {
-            console.log('[WebSocket] قطع الاتصال ✗');
+            appDebugLog('[WebSocket] قطع الاتصال ✗');
             // Remove current user from online list
             const currentUserId = currentUserProfile?.userId || currentUserProfile?._id;
             if (currentUserId) {
@@ -28520,7 +28628,7 @@ function setupRealtimeListeners() {
             // Only reconnect if we haven't exceeded max attempts
             if (reconnectAttempts < maxReconnectAttempts) {
                 reconnectAttempts++;
-                console.log(`[WebSocket] إعادة محاولة الاتصال (${reconnectAttempts}/${maxReconnectAttempts}) بعد 5 ثواني...`);
+                appDebugLog(`[WebSocket] إعادة محاولة الاتصال (${reconnectAttempts}/${maxReconnectAttempts}) بعد 5 ثواني...`);
                 reconnectTimeout = setTimeout(connect, 5000);
             } else {
                 console.warn('[WebSocket] فشل الاتصال المباشر بعد عدة محاولات. يرجى تحديث الصفحة.');
@@ -28618,7 +28726,7 @@ try { window.showConfirmationModal = showConfirmationModal; } catch (e) { /* ign
 function showProgressModal(title, content) {
     const existingOverlay = document.querySelector('.modal-overlay');
     if (existingOverlay) {
-        // console.log('[showProgressModal] Closing existing modal to show new one.');
+        // appDebugLog('[showProgressModal] Closing existing modal to show new one.');
         existingOverlay.remove();
     }
 
@@ -28634,7 +28742,7 @@ function showProgressModal(title, content) {
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
-    console.log('[showProgressModal] Progress modal has been appended to the body.');
+    appDebugLog('[showProgressModal] Progress modal has been appended to the body.');
 
     return overlay; // Return the overlay so it can be closed later
 }
@@ -29017,7 +29125,7 @@ function renderAddUserForm() {
         const data = Object.fromEntries(formData.entries());
 
         // Handle user creation logic here
-        console.log('Creating user with data:', data);
+        appDebugLog('Creating user with data:', data);
 
     }, {
         title: 'إضافة موظف جديد',
@@ -29089,31 +29197,71 @@ async function renderWinnerRoulettePage() {
         console.error("app-content element not found!");
         return;
     }
-    // Force inline HTML to avoid blank page issues
+
+    const modularMode = isWinnerRouletteModularEnabled();
+    if (modularMode) {
+        try {
+            const htmlResp = await fetch('/pages/winner-roulette.html');
+            if (!htmlResp.ok) throw new Error(`HTTP ${htmlResp.status}`);
+
+            const html = await htmlResp.text();
+            const markupWithoutScripts = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+            window.appContent.innerHTML = markupWithoutScripts;
+
+            if (!winnerRouletteModularModule) {
+                winnerRouletteModularModule = await import('/js/pages/winner-roulette/main.js');
+            }
+
+            if (typeof winnerRouletteModularModule.initWinnerRouletteModular === 'function') {
+                await winnerRouletteModularModule.initWinnerRouletteModular();
+                winnerRouletteFallbackInitialized = true;
+                return;
+            }
+
+            throw new Error('initWinnerRouletteModular was not found');
+        } catch (error) {
+            console.error('[winner-roulette] modular mode failed; falling back to legacy mode', error);
+            window.showToast?.('فشل تشغيل النسخة الجديدة، سيتم فتح النسخة القديمة.', 'warning');
+        }
+    }
+
+    // Legacy mode (default)
     window.appContent.innerHTML = getWinnerRouletteInlineHTML();
-    
-    // Check if winner-roulette init is available (from bundled JS)
+
     setTimeout(() => {
         if (typeof window.winnerRouletteInit === 'function') {
-            // console.log('[winner-roulette] Initializing from bundled code');
             window.winnerRouletteInit();
             winnerRouletteFallbackInitialized = true;
-        } else {
-            console.warn('[winner-roulette] Init function not found, using fallback');
-            initWinnerRouletteFallback('init not available');
+            return;
         }
-    }, 100);
 
-    // Log screen size for debugging
-    /*
-    console.log('Winner Roulette Page Loaded - Screen Size:', {
-        innerWidth: window.innerWidth,
-        innerHeight: window.innerHeight,
-        outerWidth: window.outerWidth,
-        outerHeight: window.outerHeight,
-        appContent: window.appContent ? window.appContent.offsetWidth + 'x' + window.appContent.offsetHeight : 'not found'
-    });
-    */
+        console.warn('[winner-roulette] Init function not found, using fallback');
+        initWinnerRouletteFallback('init not available');
+    }, 100);
+}
+
+function isWinnerRouletteModularEnabled() {
+    // 1) Hash/query flag: #winner-roulette?modular=1
+    const hash = window.location.hash || '';
+    const queryIdx = hash.indexOf('?');
+    if (queryIdx !== -1) {
+        const query = hash.slice(queryIdx + 1);
+        const params = new URLSearchParams(query);
+        if (params.get('modular') === '1') return true;
+    }
+
+    // 2) Full URL query fallback: ?modular=1
+    try {
+        const urlParams = new URLSearchParams(window.location.search || '');
+        if (urlParams.get('modular') === '1') return true;
+    } catch (_) {}
+
+    // 3) Explicit local toggle for testing
+    try {
+        return localStorage.getItem('winnerRouletteMode') === 'modular';
+    } catch (_) {
+        return false;
+    }
 }
 
 function getWinnerRouletteInlineHTML(minimal = false, errMsg = '') {
@@ -29484,6 +29632,7 @@ function displayGlobalUnreadCount(count) {
         }
     }
 }
+
 
 
 })(window);

@@ -98,14 +98,23 @@ export async function removeWinnerAssets(id) {
 async function putWinnerMeta(winnerMeta) {
     const cleanMeta = {
         id: winnerMeta.id,
+        _id: winnerMeta._id || null,
         name: winnerMeta.name || '',
         account: winnerMeta.account || '',
         email: winnerMeta.email || '',
         nationalId: winnerMeta.nationalId || '',
+        competitionId: winnerMeta.competitionId || null,
+        orderNumber: Number(winnerMeta.orderNumber || 0) || null,
+        prizeType: winnerMeta.prizeType || 'trading',
+        prizeValue: Number(winnerMeta.prizeValue || 0),
+        includeWarnMeet: !!winnerMeta.includeWarnMeet,
+        includeWarnPrev: !!winnerMeta.includeWarnPrev,
         timestamp: winnerMeta.timestamp || new Date().toISOString(),
         recordingMimeType: winnerMeta.recordingMimeType || null,
         hasVideo: !!winnerMeta.hasVideo,
-        hasIdImage: !!winnerMeta.hasIdImage
+        hasIdImage: !!winnerMeta.hasIdImage,
+        localIdImageName: winnerMeta.localIdImageName || null,
+        localAssetKey: winnerMeta.localAssetKey || winnerMeta.id
     };
 
     await withStore(config.WINNERS_STORE, 'readwrite', (store) => store.put(cleanMeta));

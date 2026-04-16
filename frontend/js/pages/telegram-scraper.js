@@ -79,7 +79,7 @@ function getTelegramScraperHTML() {
         </div>
         <div id="ts-logout-container" style="display:none; margin-top: 12px;">
             <button class="ts-btn ts-btn-danger ts-btn-sm" id="ts-logout-btn">
-                <i class="fas fa-sign-out-alt"></i> قطع الاتصال (للمسؤولين فقط)
+                <i class="fas fa-sign-out-alt"></i> قطع الاتصال (للسوبر أدمن فقط)
             </button>
         </div>
     </div>
@@ -232,6 +232,16 @@ function getTelegramScraperHTML() {
 function initTelegramScraper() {
     const API = '/api/telegram-scraper';
     let commentsData = [];
+    const currentUserRole = (() => {
+        try {
+            if (window.currentUserProfile?.role) return window.currentUserProfile.role;
+            const cachedProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
+            return cachedProfile?.role || null;
+        } catch {
+            return null;
+        }
+    })();
+    const isSuperAdmin = currentUserRole === 'super_admin';
 
     // DOM refs
     const authStatus = document.getElementById('ts-auth-status');
@@ -275,16 +285,31 @@ function initTelegramScraper() {
     function showConnected(user) {
         const name = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : '';
         const phone = user?.phone ? `+${user.phone}` : '';
+        const accessNote = isSuperAdmin
+            ? ' — يمكنك إدارة اتصال تيليجرام لهذا النظام'
+            : ' — يمكنك استخدام الجلسة الحالية فقط';
         authStatus.className = 'ts-auth-status ts-connected';
-        authStatus.innerHTML = `<i class="fas fa-check-circle"></i> متصل بتلجرام${name ? ` عبر حساب ${name}` : ''}${phone ? ` (${phone})` : ''} — جميع الموظفين يمكنهم الاستخدام`;
+        authStatus.innerHTML = `<i class="fas fa-check-circle"></i> متصل بتلجرام${name ? ` عبر حساب ${name}` : ''}${phone ? ` (${phone})` : ''}${accessNote}`;
         authFormContainer.style.display = 'none';
-        logoutContainer.style.display = 'block';
+        logoutContainer.style.display = isSuperAdmin ? 'block' : 'none';
         fetchCard.style.display = 'block';
         setStep(2);
     }
 
     function showDisconnected() {
         authStatus.className = 'ts-auth-status ts-disconnected';
+        if (!isSuperAdmin) {
+            authStatus.innerHTML = '<i class="fas fa-times-circle"></i> غير متصل — تسجيل الدخول متاح للسوبر أدمن فقط';
+            authFormContainer.style.display = 'none';
+            phoneStep.style.display = 'none';
+            otpStep.style.display = 'none';
+            logoutContainer.style.display = 'none';
+            fetchCard.style.display = 'none';
+            resultsCard.style.display = 'none';
+            setStep(1);
+            return;
+        }
+
         authStatus.innerHTML = '<i class="fas fa-times-circle"></i> غير متصل — يجب تسجيل الدخول مرة واحدة فقط وسيعمل لجميع الموظفين';
         authFormContainer.style.display = 'block';
         phoneStep.style.display = 'block';
@@ -297,6 +322,8 @@ function initTelegramScraper() {
 
     // ── Send Code ──────────────────────────────────────────
     document.getElementById('ts-send-code-btn').addEventListener('click', async () => {
+        if (!isSuperAdmin) return showToastMsg('تسجيل الدخول متاح للسوبر أدمن فقط', true);
+
         const phone = document.getElementById('ts-phone').value.trim();
         if (!phone) return showToastMsg('أدخل رقم الهاتف', true);
 
@@ -316,7 +343,7 @@ function initTelegramScraper() {
                 otpStep.style.display = 'block';
                 showToastMsg('تم إرسال كود التحقق إلى تلجرام');
             } else {
-                showToastMsg(data.error || 'خطأ في الإرسال', true);
+                showToastMsg(data.error || data.message || 'خطأ في الإرسال', true);
             }
         } catch (err) {
             showToastMsg('خطأ: ' + err.message, true);
@@ -328,6 +355,8 @@ function initTelegramScraper() {
 
     // ── Verify Code ────────────────────────────────────────
     document.getElementById('ts-verify-btn').addEventListener('click', async () => {
+        if (!isSuperAdmin) return showToastMsg('تسجيل الدخول متاح للسوبر أدمن فقط', true);
+
         const code = document.getElementById('ts-otp').value.trim();
         const password = document.getElementById('ts-2fa').value.trim();
         if (!code) return showToastMsg('أدخل كود التحقق', true);
@@ -350,7 +379,7 @@ function initTelegramScraper() {
                 showToastMsg('تم تسجيل الدخول بنجاح! ✓');
                 checkStatus();
             } else {
-                showToastMsg(data.error || 'خطأ في التحقق', true);
+                showToastMsg(data.error || data.message || 'خطأ في التحقق', true);
             }
         } catch (err) {
             showToastMsg('خطأ: ' + err.message, true);
@@ -362,9 +391,15 @@ function initTelegramScraper() {
 
     // ── Logout ─────────────────────────────────────────────
     document.getElementById('ts-logout-btn').addEventListener('click', async () => {
+        if (!isSuperAdmin) return showToastMsg('قطع الاتصال متاح للسوبر أدمن فقط', true);
+
         if (!confirm('⚠️ تحذير: قطع الاتصال سيؤثر على جميع الموظفين!\nسيحتاج أحد المسؤولين لإعادة تسجيل الدخول. هل أنت متأكد؟')) return;
         try {
-            await window.authedFetch(`${API}/auth/logout`, { method: 'POST' });
+            const res = await window.authedFetch(`${API}/auth/logout`, { method: 'POST' });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || data.message || 'تعذر تسجيل الخروج');
+            }
             showToastMsg('تم تسجيل الخروج');
             showDisconnected();
         } catch (err) {
@@ -570,15 +605,31 @@ function initTelegramScraper() {
             };
         });
 
-        // ── Detect duplicates (keep last comment per sender) ──
+        // ── Detect duplicates (keep latest comment per sender by date) ──
         const duplicates = [];
         const senderMap = new Map();
         for (let i = 0; i < allParsed.length; i++) {
             const sid = allParsed[i].sender.id || allParsed[i].sender.username || allParsed[i].sender.name;
-            if (senderMap.has(sid)) {
-                duplicates.push({ ...senderMap.get(sid), excludeReason: 'تعليق مكرر — تم الاحتفاظ بآخر تعليق' });
+            const current = allParsed[i];
+            if (!senderMap.has(sid)) {
+                senderMap.set(sid, current);
+                continue;
             }
-            senderMap.set(sid, allParsed[i]);
+
+            const existing = senderMap.get(sid);
+            const currentTs = current.date ? Date.parse(current.date) : NaN;
+            const existingTs = existing.date ? Date.parse(existing.date) : NaN;
+
+            const shouldKeepCurrent = Number.isFinite(currentTs) && Number.isFinite(existingTs)
+                ? currentTs >= existingTs
+                : true;
+
+            if (shouldKeepCurrent) {
+                duplicates.push({ ...existing, excludeReason: 'تعليق مكرر — تم الاحتفاظ بآخر تعليق' });
+                senderMap.set(sid, current);
+            } else {
+                duplicates.push({ ...current, excludeReason: 'تعليق مكرر — تم الاحتفاظ بآخر تعليق' });
+            }
         }
         const deduplicated = Array.from(senderMap.values());
 
@@ -592,6 +643,10 @@ function initTelegramScraper() {
             const hasSenderName = c.parsedName && c.parsedName !== 'مجهول';
             const hasAccount = !!c.parsedAccount;
             const text = (c.text || '').trim();
+            const createdTs = c.date ? Date.parse(c.date) : NaN;
+            const editedTs = c.editDate ? Date.parse(c.editDate) : NaN;
+            const editedByTelegram = c.isEdited === true
+                || (Number.isFinite(editedTs) && (!Number.isFinite(createdTs) || editedTs > createdTs));
 
             // Completely invalid: no account AND name is just the Telegram display name (not extracted from comment)
             // Also catches service messages, empty comments, bot messages like "Group Help"
@@ -614,7 +669,7 @@ function initTelegramScraper() {
                 problems.push({ ...c, excludeReason: 'الاسم ناقص أو غير واضح' });
             }
             // Edited message → problem
-            else if (c.editDate) {
+            else if (editedByTelegram) {
                 problems.push({ ...c, excludeReason: 'تعليق معدل (edited)' });
             }
             // Valid
@@ -735,27 +790,21 @@ function initTelegramScraper() {
     }
 
     function setupExcludedToggles() {
-        document.getElementById('ts-duplicates-toggle')?.addEventListener('click', function() {
-            const body = document.getElementById('ts-duplicates-body');
-            const icon = this.querySelector('.ts-toggle-icon');
-            body.classList.toggle('ts-collapsed');
-            icon.classList.toggle('fa-chevron-up');
-            icon.classList.toggle('fa-chevron-down');
-        });
-        document.getElementById('ts-problems-toggle')?.addEventListener('click', function() {
-            const body = document.getElementById('ts-problems-body');
-            const icon = this.querySelector('.ts-toggle-icon');
-            body.classList.toggle('ts-collapsed');
-            icon.classList.toggle('fa-chevron-up');
-            icon.classList.toggle('fa-chevron-down');
-        });
-        document.getElementById('ts-invalid-toggle')?.addEventListener('click', function() {
-            const body = document.getElementById('ts-invalid-body');
-            const icon = this.querySelector('.ts-toggle-icon');
-            body.classList.toggle('ts-collapsed');
-            icon.classList.toggle('fa-chevron-up');
-            icon.classList.toggle('fa-chevron-down');
-        });
+        const bindToggle = (toggleId, bodyId) => {
+            const toggle = document.getElementById(toggleId);
+            const body = document.getElementById(bodyId);
+            if (!toggle || !body) return;
+            toggle.onclick = function() {
+                const icon = this.querySelector('.ts-toggle-icon');
+                body.classList.toggle('ts-collapsed');
+                icon?.classList.toggle('fa-chevron-up');
+                icon?.classList.toggle('fa-chevron-down');
+            };
+        };
+
+        bindToggle('ts-duplicates-toggle', 'ts-duplicates-body');
+        bindToggle('ts-problems-toggle', 'ts-problems-body');
+        bindToggle('ts-invalid-toggle', 'ts-invalid-body');
     }
 
     // ── Filter ─────────────────────────────────────────

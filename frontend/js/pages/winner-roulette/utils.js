@@ -49,7 +49,7 @@ export function parseParticipantsInput(text) {
         line = line.replace(/[\u200B-\u200D\uFEFF]/g, '');
 
         // name + account patterns
-        const dashed = line.match(/^(.*?)[\s\t]*[—\-–―‒−]+[\s\t]*(\d+)\s*$/);
+        const dashed = line.match(/^(.*?)[\s\t]*[-\u2012\u2013\u2014\u2015\u2212]+[\s\t]*(\d+)\s*$/);
         const spaced = line.match(/^(.*?)[\s\t]+(\d+)\s*$/);
 
         let name = '';

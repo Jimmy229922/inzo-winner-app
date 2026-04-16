@@ -15,6 +15,13 @@ const { postToTelegram, sendPhotoToTelegram, sendMediaGroupToTelegram } = requir
 const { broadcastEvent } = require('../utils/notification');
 const { calculateRealPrize } = require('../utils/prizeCalculator');
 
+const WINNER_DETAILS_DEBUG_LOGS = process.env.WINNER_DETAILS_DEBUG_LOGS === '1';
+const winnerDetailsDebugLog = (...args) => {
+    if (WINNER_DETAILS_DEBUG_LOGS) {
+        console.log(...args);
+    }
+};
+
 // Helper function to introduce a delay
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -177,16 +184,16 @@ exports.getAgentCompetitionsSummary = async (req, res) => {
                 
                 const hours = Math.round(deltaMs / (60 * 60 * 1000));
                 if (hours < 0) {
-                     compliance_details = `ØªÙ… Ø§Ù„Ø¥Ù†Ø¬Ø§Ø² Ù…Ø¨ÙƒØ±Ø§Ù‹ (${Math.abs(hours)} Ø³Ø§Ø¹Ø©)`;
+                     compliance_details = `تم الإنجاز مبكراً (${Math.abs(hours)} ساعة)`;
                 } else {
-                     compliance_details = within ? `ØªÙ… Ø§Ù„Ø¥Ù†Ø¬Ø§Ø² Ø®Ù„Ø§Ù„ ${hours} Ø³Ø§Ø¹Ø©` : `ØªØ£Ø®Ø± ${hours} Ø³Ø§Ø¹Ø©`;
+                     compliance_details = within ? `تم الإنجاز خلال ${hours} ساعة` : `تأخر ${hours} ساعة`;
                 }
             } else if (!sentAt && selectedAt) {
                 // If we don't know when it ended, but it is processed, assume compliant?
                 // Or maybe just leave as false? 
                 // Better to be strict, but if ends_at is missing, something is wrong with data.
                 is_compliant = true; // Benefit of the doubt if data missing
-                compliance_details = 'Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„ÙˆÙ‚Øª ØºÙŠØ± Ù…ÙƒØªÙ…Ù„Ø© (Ù…Ù‚Ø¨ÙˆÙ„)';
+                compliance_details = 'بيانات الوقت غير مكتملة (مقبول)';
             }
 
             return {
@@ -245,7 +252,7 @@ exports.createAgent = async (req, res) => {
         // --- FIX: Ensure new agents are created with an 'Active' status by default ---
         req.body.status = req.body.status || 'Active';
         
-        // --- DEBUG: Log Ø§Ù„ØªØµÙ†ÙŠÙ Ù„Ù„ØªØ£ÙƒØ¯ Ù…Ù† Ø¥Ø±Ø³Ø§Ù„Ù‡ ---
+        // --- DEBUG: Log التصنيف للتأكد من إرساله ---
         // console.log(`[Agent Create] Creating new agent with classification: ${req.body.classification || 'R (default)'}`);
         // console.log('[Agent Create] AUDIT_DAYS received:', req.body.audit_days);
         // console.log('[Agent Create] AUDIT_DAYS is array:', Array.isArray(req.body.audit_days));
@@ -254,7 +261,7 @@ exports.createAgent = async (req, res) => {
         const agent = new Agent(req.body);
         await agent.save();
         
-        // --- DEBUG: Log Ø§Ù„ØªØµÙ†ÙŠÙ Ø¨Ø¹Ø¯ Ø§Ù„Ø­ÙØ¸ ---
+        // --- DEBUG: Log التصنيف بعد الحفظ ---
         // console.log(`[Agent Create] Agent saved successfully with classification: ${agent.classification}`);
         // console.log('[Agent Create] AUDIT_DAYS saved to DB:', agent.audit_days);
         // console.log('[Agent Create] Complete saved agent:', JSON.stringify(agent, null, 2));
@@ -312,10 +319,10 @@ exports.updateAgent = async (req, res) => {
         const actionType = hasProfileUpdate ? 'PROFILE_UPDATE' : 'DETAILS_UPDATE';
         const isFinancialUpdate = ['rank', 'competition_bonus', 'deposit_bonus_count', 'deposit_bonus_percentage', 'consumed_balance', 'remaining_balance', 'used_deposit_bonus', 'remaining_deposit_bonus', 'single_competition_balance', 'winners_count', 'prize_per_winner', 'renewal_period', 'deposit_bonus_winners_count'].some(key => key in req.body);
 
-        // ØªØ­Ø¶ÙŠØ± ÙˆØµÙ Ù…ÙØµÙ„ Ù„Ù„ØªØºÙŠÙŠØ±Ø§Øª
+        // تحضير وصف مفصل للتغييرات
         const changes = Object.entries(req.body).map(([field, newValue]) => {
             const oldValue = agentBeforeUpdate[field];
-            // Ù†ØªØ­Ù‚Ù‚ ÙÙ‚Ø· Ù…Ù† Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„ØªÙŠ ØªØºÙŠØ±Øª Ù‚ÙŠÙ…ØªÙ‡Ø§
+            // نتحقق فقط من الحقول التي تغيرت قيمتها
             if (String(oldValue) === String(newValue)) return null;
             
             const arabicFieldName = translateField(field);
@@ -324,11 +331,11 @@ exports.updateAgent = async (req, res) => {
                 from: formatValue(oldValue),
                 to: formatValue(newValue)
             };
-        }).filter(change => change !== null); // Ù†Ø²ÙŠÙ„ Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„ØªÙŠ Ù„Ù… ØªØªØºÙŠØ±
+        }).filter(change => change !== null); // نزيل الحقول التي لم تتغير
 
         const description = changes.length > 0 
-            ? `ØªÙ… ØªØ­Ø¯ÙŠØ« Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„ÙˆÙƒÙŠÙ„:\n${changes.map(c => `${c.field}: Ù…Ù† "${c.from}" Ø¥Ù„Ù‰ "${c.to}"`).join('\n')}`.trim()
-            : 'ØªÙ… ØªØ­Ø¯ÙŠØ« Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„ÙˆÙƒÙŠÙ„ Ø¨Ø¯ÙˆÙ† ØªØºÙŠÙŠØ±Ø§Øª Ù…Ù„Ø­ÙˆØ¸Ø©';
+            ? `تم تحديث بيانات الوكيل:\n${changes.map(c => `${c.field}: من "${c.from}" إلى "${c.to}"`).join('\n')}`.trim()
+            : 'تم تحديث بيانات الوكيل بدون تغييرات ملحوظة';
 
         // --- FIX: Only log if a user context exists and there were actual changes ---
         if (userId && changes.length > 0) {
@@ -862,7 +869,7 @@ exports.bulkInsertAgents = async (req, res) => {
         // Default to 0 if it's missing to prevent a crash.
         const insertedCount = error.result?.nInserted ?? 0;
         res.status(500).json({
-            message: `ÙØ´Ù„ Ø§Ù„Ø¥Ø¯Ø±Ø§Ø¬ Ø§Ù„Ø¬Ù…Ø§Ø¹ÙŠ. Ù‚Ø¯ ØªÙƒÙˆÙ† Ø¨Ø¹Ø¶ Ø£Ø±Ù‚Ø§Ù… Ø§Ù„ÙˆÙƒØ§Ù„Ø§Øª Ù…ÙƒØ±Ø±Ø©. ØªÙ… Ø¥Ø¯Ø±Ø§Ø¬ ${insertedCount} ÙˆÙƒÙŠÙ„ Ù‚Ø¨Ù„ Ø­Ø¯ÙˆØ« Ø§Ù„Ø®Ø·Ø£.`,
+            message: `فشل الإدراج الجماعي. قد تكون بعض أرقام الوكالات مكررة. تم إدراج ${insertedCount} وكيل قبل حدوث الخطأ.`,
             error: error.message,
             insertedCount: insertedCount,
             writeErrors: error.writeErrors
@@ -984,7 +991,7 @@ exports.renewSingleAgentBalance = async (req, res) => {
 
         // --- FIX: Log this manual action ---
         if (userId) {
-            await logActivity(userId, agent._id, 'MANUAL_RENEWAL', `ØªÙ… ØªØ¬Ø¯ÙŠØ¯ Ø§Ù„Ø±ØµÙŠØ¯ ÙŠØ¯ÙˆÙŠØ§Ù‹ Ù„Ù„ÙˆÙƒÙŠÙ„ ${agent.name}.`);
+            await logActivity(userId, agent._id, 'MANUAL_RENEWAL', `تم تجديد الرصيد يدوياً للوكيل ${agent.name}.`);
         }
 
         res.json({ message: 'Agent balance renewed successfully.', data: agent });
@@ -1005,19 +1012,19 @@ exports.recordRankChange = async (req, res) => {
         // Validate required fields
         if (!reason || !action_taken || !old_rank || !new_rank) {
             return res.status(400).json({ 
-                message: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø¥Ø¯Ø®Ø§Ù„ Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø©: Ø§Ù„Ø³Ø¨Ø¨ØŒ Ø§Ù„Ø¥Ø¬Ø±Ø§Ø¡ØŒ Ø§Ù„Ù…Ø±ØªØ¨Ø© Ø§Ù„Ù‚Ø¯ÙŠÙ…Ø©ØŒ Ø§Ù„Ù…Ø±ØªØ¨Ø© Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø©' 
+                message: 'الرجاء إدخال جميع البيانات المطلوبة: السبب، الإجراء، المرتبة القديمة، المرتبة الجديدة' 
             });
         }
 
         // Get agent details
         const agent = await Agent.findById(req.params.id);
         if (!agent) {
-            return res.status(404).json({ message: 'Ø§Ù„ÙˆÙƒÙŠÙ„ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' });
+            return res.status(404).json({ message: 'الوكيل غير موجود' });
         }
 
         // Get user details
         const userId = req.user?._id;
-        const userName = req.user?.username || 'Ù…Ø³ØªØ®Ø¯Ù… ØºÙŠØ± Ù…Ø¹Ø±ÙˆÙ';
+        const userName = req.user?.username || 'مستخدم غير معروف';
 
         // Create rank change record
         const rankChange = new AgentRankChange({
@@ -1041,19 +1048,19 @@ exports.recordRankChange = async (req, res) => {
                 userId, 
                 agent._id, 
                 'RANK_CHANGE', 
-                `ØªÙ… ØªØºÙŠÙŠØ± Ù…Ø±ØªØ¨Ø© Ø§Ù„ÙˆÙƒÙŠÙ„ Ù…Ù† ${old_rank} Ø¥Ù„Ù‰ ${new_rank}. Ø§Ù„Ø³Ø¨Ø¨: ${reason}. Ø§Ù„Ø¥Ø¬Ø±Ø§Ø¡: ${action_taken}`,
+                `تم تغيير مرتبة الوكيل من ${old_rank} إلى ${new_rank}. السبب: ${reason}. الإجراء: ${action_taken}`,
                 { old_rank, new_rank, reason, action_taken }
             );
         }
 
         res.json({ 
-            message: 'ØªÙ… ØªØ³Ø¬ÙŠÙ„ ØªØºÙŠÙŠØ± Ø§Ù„Ù…Ø±ØªØ¨Ø© Ø¨Ù†Ø¬Ø§Ø­', 
+            message: 'تم تسجيل تغيير المرتبة بنجاح', 
             data: rankChange 
         });
     } catch (error) {
         console.error('[Record Rank Change Error]:', error);
         res.status(500).json({ 
-            message: 'ÙØ´Ù„ ØªØ³Ø¬ÙŠÙ„ ØªØºÙŠÙŠØ± Ø§Ù„Ù…Ø±ØªØ¨Ø©', 
+            message: 'فشل تسجيل تغيير المرتبة', 
             error: error.message 
         });
     }
@@ -1071,19 +1078,19 @@ exports.recordClassificationChange = async (req, res) => {
         // Validate required fields
         if (!reason || !action_taken || !old_classification || !new_classification) {
             return res.status(400).json({ 
-                message: 'Ø§Ù„Ø±Ø¬Ø§Ø¡ Ø¥Ø¯Ø®Ø§Ù„ Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø©: Ø§Ù„Ø³Ø¨Ø¨ØŒ Ø§Ù„Ø¥Ø¬Ø±Ø§Ø¡ØŒ Ø§Ù„ØªØµÙ†ÙŠÙ Ø§Ù„Ù‚Ø¯ÙŠÙ…ØŒ Ø§Ù„ØªØµÙ†ÙŠÙ Ø§Ù„Ø¬Ø¯ÙŠØ¯' 
+                message: 'الرجاء إدخال جميع البيانات المطلوبة: السبب، الإجراء، التصنيف القديم، التصنيف الجديد' 
             });
         }
 
         // Get agent details
         const agent = await Agent.findById(req.params.id);
         if (!agent) {
-            return res.status(404).json({ message: 'Ø§Ù„ÙˆÙƒÙŠÙ„ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' });
+            return res.status(404).json({ message: 'الوكيل غير موجود' });
         }
 
         // Get user details
         const userId = req.user?._id;
-        const userName = req.user?.username || 'Ù…Ø³ØªØ®Ø¯Ù… ØºÙŠØ± Ù…Ø¹Ø±ÙˆÙ';
+        const userName = req.user?.username || 'مستخدم غير معروف';
 
         // Create classification change record
         const classificationChange = new AgentRankChange({
@@ -1108,19 +1115,19 @@ exports.recordClassificationChange = async (req, res) => {
                 userId, 
                 agent._id, 
                 'CLASSIFICATION_CHANGE', 
-                `ØªÙ… ØªØºÙŠÙŠØ± ØªØµÙ†ÙŠÙ Ø§Ù„ÙˆÙƒÙŠÙ„ Ù…Ù† ${old_classification} Ø¥Ù„Ù‰ ${new_classification}. Ø§Ù„Ø³Ø¨Ø¨: ${reason}. Ø§Ù„Ø¥Ø¬Ø±Ø§Ø¡: ${action_taken}`,
+                `تم تغيير تصنيف الوكيل من ${old_classification} إلى ${new_classification}. السبب: ${reason}. الإجراء: ${action_taken}`,
                 { old_classification, new_classification, reason, action_taken }
             );
         }
 
         res.json({ 
-            message: 'ØªÙ… ØªØ³Ø¬ÙŠÙ„ ØªØºÙŠÙŠØ± Ø§Ù„ØªØµÙ†ÙŠÙ Ø¨Ù†Ø¬Ø§Ø­', 
+            message: 'تم تسجيل تغيير التصنيف بنجاح', 
             data: classificationChange 
         });
     } catch (error) {
         console.error('[Record Classification Change Error]:', error);
         res.status(500).json({ 
-            message: 'ÙØ´Ù„ ØªØ³Ø¬ÙŠÙ„ ØªØºÙŠÙŠØ± Ø§Ù„ØªØµÙ†ÙŠÙ', 
+            message: 'فشل تسجيل تغيير التصنيف', 
             error: error.message 
         });
     }
@@ -1138,14 +1145,14 @@ exports.toggleAuditing = async (req, res) => {
 
         if (typeof is_auditing_enabled !== 'boolean') {
             return res.status(400).json({ 
-                message: 'ÙŠØ¬Ø¨ ØªØ­Ø¯ÙŠØ¯ Ø­Ø§Ù„Ø© Ø§Ù„ØªØ¯Ù‚ÙŠÙ‚ (true/false)',
+                message: 'يجب تحديد حالة التدقيق (true/false)',
                 error: 'is_auditing_enabled must be a boolean' 
             });
         }
 
         const agent = await Agent.findById(agentId);
         if (!agent) {
-            return res.status(404).json({ message: 'Ø§Ù„ÙˆÙƒÙŠÙ„ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' });
+            return res.status(404).json({ message: 'الوكيل غير موجود' });
         }
 
         const oldStatus = agent.is_auditing_enabled;
@@ -1178,7 +1185,7 @@ exports.toggleAuditing = async (req, res) => {
         });
 
         res.json({
-            message: `ØªÙ… ${is_auditing_enabled ? 'ØªÙØ¹ÙŠÙ„' : 'Ø¥Ù„ØºØ§Ø¡ ØªÙØ¹ÙŠÙ„'} Ø§Ù„ØªØ¯Ù‚ÙŠÙ‚ Ø¨Ù†Ø¬Ø§Ø­`,
+            message: `تم ${is_auditing_enabled ? 'تفعيل' : 'إلغاء تفعيل'} التدقيق بنجاح`,
             data: {
                 agent_id: agent._id,
                 agent_name: agent.name,
@@ -1188,7 +1195,7 @@ exports.toggleAuditing = async (req, res) => {
     } catch (error) {
         console.error('[Toggle Auditing Error]:', error);
         res.status(500).json({
-            message: 'ÙØ´Ù„ ØªØ­Ø¯ÙŠØ« Ø­Ø§Ù„Ø© Ø§Ù„ØªØ¯Ù‚ÙŠÙ‚',
+            message: 'فشل تحديث حالة التدقيق',
             error: error.message
         });
     }
@@ -1207,6 +1214,9 @@ exports.sendWinnersReport = async (req, res) => {
         const TELEGRAM_CAPTION_LIMIT = 1024;
         const TELEGRAM_MESSAGE_LIMIT = 4096;
         const FALLBACK_MEDIA_CAPTION = '<b>تقرير الفائزين</b>';
+        const TELEGRAM_MEDIA_GROUP_MAX = 10;
+        // Keep album mode ON so winners are sent in grouped batches (5 per message).
+        const ENABLE_VIDEO_MEDIA_GROUP = true;
 
         if (!bot) {
             return res.status(503).json({ message: 'Telegram bot is not initialized' });
@@ -1255,6 +1265,87 @@ exports.sendWinnersReport = async (req, res) => {
             }
         };
 
+        const resolveMediaSource = (rawMediaSource) => {
+            if (!rawMediaSource) return null;
+            if (typeof rawMediaSource === 'string' && rawMediaSource.startsWith('/uploads')) {
+                const relativePath = rawMediaSource.startsWith('/') ? rawMediaSource.slice(1) : rawMediaSource;
+                return path.join(__dirname, '../../', relativePath);
+            }
+            return rawMediaSource;
+        };
+
+        const isLikelyStreamableTelegramVideo = (mediaSource) => {
+            if (typeof mediaSource !== 'string') return true;
+            const normalized = mediaSource.split('?')[0].toLowerCase();
+            return /\.(mp4|m4v|mov)$/i.test(normalized);
+        };
+
+        const isLikelyRemoteUrl = (mediaSource) => (
+            typeof mediaSource === 'string' && /^https?:\/\//i.test(mediaSource)
+        );
+
+        const isLikelyTelegramFileId = (mediaSource) => (
+            typeof mediaSource === 'string' &&
+            /^[A-Za-z0-9_-]{20,}$/.test(mediaSource) &&
+            !mediaSource.includes('/') &&
+            !mediaSource.includes('\\')
+        );
+
+        const toTelegramMediaInput = (mediaSource) => {
+            if (typeof mediaSource !== 'string') return mediaSource;
+            if (isLikelyRemoteUrl(mediaSource)) return mediaSource;
+            if (isLikelyTelegramFileId(mediaSource)) return mediaSource;
+            if (fs.existsSync(mediaSource)) return fs.createReadStream(mediaSource);
+            return mediaSource;
+        };
+
+        const ensureMediaExists = (mediaSource, winnerName) => {
+            if (typeof mediaSource !== 'string' || isLikelyRemoteUrl(mediaSource)) return;
+            if (isLikelyTelegramFileId(mediaSource)) return;
+            if (!fs.existsSync(mediaSource)) {
+                throw new Error(`Video file not found for winner "${winnerName}". Path: ${mediaSource}`);
+            }
+            const stats = fs.statSync(mediaSource);
+            if (!stats || stats.size <= 0) {
+                throw new Error(`Video file is empty/corrupted for winner "${winnerName}". Path: ${mediaSource}`);
+            }
+        };
+
+        const shouldFallbackToDocument = (error) => {
+            const telegramDescription = (
+                error?.telegramDescription ||
+                error?.response?.body?.description ||
+                error?.message ||
+                ''
+            ).toString();
+            return /MEDIA_INVALID|VIDEO_CONTENT_TYPE_INVALID|wrong file identifier|video content type|not a valid|can't parse input media/i.test(telegramDescription);
+        };
+
+        const sendVideoWithDocumentFallback = async ({ chatId, mediaSource, caption = null, supportsStreaming = true }) => {
+            const videoOptions = {};
+            if (caption) {
+                videoOptions.caption = caption;
+                videoOptions.parse_mode = 'HTML';
+            }
+            if (supportsStreaming) {
+                videoOptions.supports_streaming = true;
+            }
+
+            try {
+                return await bot.sendVideo(chatId, toTelegramMediaInput(mediaSource), videoOptions);
+            } catch (videoError) {
+                if (!shouldFallbackToDocument(videoError)) {
+                    throw videoError;
+                }
+                const docOptions = {};
+                if (caption) {
+                    docOptions.caption = caption;
+                    docOptions.parse_mode = 'HTML';
+                }
+                return await bot.sendDocument(chatId, toTelegramMediaInput(mediaSource), docOptions);
+            }
+        };
+
         // جلب الفائزين مرتبين حسب order_number
         const winners = await Winner.find({ _id: { $in: winnerIds } }).sort({ order_number: 1 });
         
@@ -1273,11 +1364,8 @@ exports.sendWinnersReport = async (req, res) => {
         // If single video, use sendVideo for better native behavior
         if (winnersWithVideos.length === 1) {
             const w = winnersWithVideos[0];
-            let mediaSource = w.video_url;
-            if (mediaSource && mediaSource.startsWith('/uploads')) {
-                const relativePath = mediaSource.startsWith('/') ? mediaSource.slice(1) : mediaSource;
-                mediaSource = path.join(__dirname, '../../', relativePath);
-            }
+            const mediaSource = resolveMediaSource(w.video_url);
+            ensureMediaExists(mediaSource, w.name || w._id);
             
             // Generate caption for single winner
             let caption;
@@ -1321,10 +1409,11 @@ exports.sendWinnersReport = async (req, res) => {
                 longTextForReply = caption;
             }
 
-            const videoMessage = await bot.sendVideo(agent.telegram_chat_id, mediaSource, { 
+            const videoMessage = await sendVideoWithDocumentFallback({
+                chatId: agent.telegram_chat_id,
+                mediaSource,
                 caption: captionForVideo,
-                parse_mode: 'HTML',
-                supports_streaming: true
+                supportsStreaming: isLikelyStreamableTelegramVideo(mediaSource)
             });
 
             if (longTextForReply) {
@@ -1379,38 +1468,120 @@ exports.sendWinnersReport = async (req, res) => {
         for (let i = 0; i < winnersWithVideos.length; i += chunkSize) {
             const winnersChunk = winnersWithVideos.slice(i, i + chunkSize);
             const chunkCaption = generateChunkCaption(winnersChunk, i);
-
-            const mediaItems = winnersChunk.map(w => {
-                let mediaSource = w.video_url;
-                if (mediaSource && mediaSource.startsWith('/uploads')) {
-                    const relativePath = mediaSource.startsWith('/') ? mediaSource.slice(1) : mediaSource;
-                    mediaSource = path.join(__dirname, '../../', relativePath);
-                }
+            const chunkMediaEntries = winnersChunk.map(w => {
+                const mediaSource = resolveMediaSource(w.video_url);
+                ensureMediaExists(mediaSource, w.name || w._id);
                 return {
-                    type: 'video',
-                    media: mediaSource,
-                    parse_mode: 'HTML',
-                    supports_streaming: true
+                    winner: w,
+                    mediaSource,
+                    streamableVideo: isLikelyStreamableTelegramVideo(mediaSource)
                 };
             });
 
-            // Attach caption to the first item of the chunk
+            // Attach caption to the first item of the chunk (or fallback text + reply)
             let detailsToSendAsReply = null;
-            if (mediaItems.length > 0) {
+            let firstItemCaption = null;
+            if (chunkMediaEntries.length > 0) {
                 if (chunkCaption.length > TELEGRAM_CAPTION_LIMIT) {
-                    mediaItems[0].caption = FALLBACK_MEDIA_CAPTION;
+                    firstItemCaption = FALLBACK_MEDIA_CAPTION;
                     detailsToSendAsReply = chunkCaption;
                 } else {
-                    mediaItems[0].caption = chunkCaption;
+                    firstItemCaption = chunkCaption;
                 }
             }
 
-            const sentMediaMessages = await sendMediaGroupToTelegram(bot, mediaItems, agent.telegram_chat_id);
+            const canUseMediaGroup = (
+                ENABLE_VIDEO_MEDIA_GROUP &&
+                chunkMediaEntries.length > 1 &&
+                chunkMediaEntries.length <= TELEGRAM_MEDIA_GROUP_MAX
+            );
+
+            let replyToMessageId = null;
+
+            if (canUseMediaGroup) {
+                const mediaItems = chunkMediaEntries.map((item, index) => {
+                    const mediaItem = item.streamableVideo
+                        ? {
+                            type: 'video',
+                            media: toTelegramMediaInput(item.mediaSource),
+                            parse_mode: 'HTML',
+                            supports_streaming: true
+                        }
+                        : {
+                            // Telegram may reject some encodings (e.g. webm) as InputMediaVideo.
+                            // Send them as document inside the same media-group batch to preserve batching.
+                            type: 'document',
+                            media: toTelegramMediaInput(item.mediaSource),
+                            parse_mode: 'HTML'
+                        };
+                    if (index === 0 && firstItemCaption) {
+                        mediaItem.caption = firstItemCaption;
+                    }
+                    return mediaItem;
+                });
+
+                try {
+                    const sentMediaMessages = await sendMediaGroupToTelegram(bot, mediaItems, agent.telegram_chat_id);
+                    replyToMessageId = Array.isArray(sentMediaMessages) && sentMediaMessages.length > 0
+                        ? sentMediaMessages[0].message_id
+                        : null;
+                } catch (groupError) {
+                    if (!shouldFallbackToDocument(groupError)) {
+                        throw groupError;
+                    }
+                    // Retry once as a document-only media group to preserve "batch per message" behavior.
+                    const docsOnlyMediaItems = chunkMediaEntries.map((item, index) => {
+                        const mediaItem = {
+                            type: 'document',
+                            media: toTelegramMediaInput(item.mediaSource),
+                            parse_mode: 'HTML'
+                        };
+                        if (index === 0 && firstItemCaption) {
+                            mediaItem.caption = firstItemCaption;
+                        }
+                        return mediaItem;
+                    });
+
+                    try {
+                        const sentDocGroup = await sendMediaGroupToTelegram(bot, docsOnlyMediaItems, agent.telegram_chat_id);
+                        replyToMessageId = Array.isArray(sentDocGroup) && sentDocGroup.length > 0
+                            ? sentDocGroup[0].message_id
+                            : null;
+                    } catch (docGroupError) {
+                        let firstSentMessage = null;
+                        for (let itemIndex = 0; itemIndex < chunkMediaEntries.length; itemIndex++) {
+                            const item = chunkMediaEntries[itemIndex];
+                            const sentMessage = await sendVideoWithDocumentFallback({
+                                chatId: agent.telegram_chat_id,
+                                mediaSource: item.mediaSource,
+                                caption: itemIndex === 0 ? firstItemCaption : null,
+                                supportsStreaming: item.streamableVideo
+                            });
+                            if (!firstSentMessage) {
+                                firstSentMessage = sentMessage;
+                            }
+                        }
+                        replyToMessageId = firstSentMessage?.message_id || null;
+                    }
+                }
+            } else {
+                let firstSentMessage = null;
+                for (let itemIndex = 0; itemIndex < chunkMediaEntries.length; itemIndex++) {
+                    const item = chunkMediaEntries[itemIndex];
+                    const sentMessage = await sendVideoWithDocumentFallback({
+                        chatId: agent.telegram_chat_id,
+                        mediaSource: item.mediaSource,
+                        caption: itemIndex === 0 ? firstItemCaption : null,
+                        supportsStreaming: item.streamableVideo
+                    });
+                    if (!firstSentMessage) {
+                        firstSentMessage = sentMessage;
+                    }
+                }
+                replyToMessageId = firstSentMessage?.message_id || null;
+            }
 
             if (detailsToSendAsReply) {
-                const replyToMessageId = Array.isArray(sentMediaMessages) && sentMediaMessages.length > 0
-                    ? sentMediaMessages[0].message_id
-                    : null;
                 await sendLongTextToTelegram(agent.telegram_chat_id, detailsToSendAsReply, replyToMessageId);
             }
             
@@ -1441,7 +1612,7 @@ exports.sendWinnersDetails = async (req, res) => {
         const { winnerIds, include_warn_meet: includeWarnMeet, include_warn_prev: includeWarnPrev, warnings, override_chat_id } = req.body;
         const bot = req.app.locals.telegramBot;
 
-        console.log('[sendWinnersDetails] Received request:', { 
+        winnerDetailsDebugLog('[sendWinnersDetails] Received request:', { 
             agentId, 
             winnerIds, 
             includeWarnMeet, 
@@ -1481,7 +1652,7 @@ exports.sendWinnersDetails = async (req, res) => {
                 }
             });
         }
-        console.log('[sendWinnersDetails] warnMap built:', Object.fromEntries(warnMap));
+        winnerDetailsDebugLog('[sendWinnersDetails] warnMap built:', Object.fromEntries(warnMap));
 
         const mapAgencyType = (agentDoc) => {
             const exclusiveRanks = ['CENTER', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'SAPPHIRE', 'EMERALD', 'KING', 'LEGEND', 'وكيل حصري بدون مرتبة'];
@@ -1529,7 +1700,7 @@ exports.sendWinnersDetails = async (req, res) => {
                 const useWarnMeet = warnPrefs.meet ?? includeWarnMeet;
                 const useWarnPrev = warnPrefs.prev ?? includeWarnPrev;
 
-                console.log(`[sendWinnersDetails] Winner ${w._id} warnings:`, { 
+                winnerDetailsDebugLog(`[sendWinnersDetails] Winner ${w._id} warnings:`, { 
                     warnPrefs, 
                     useWarnMeet, 
                     useWarnPrev,

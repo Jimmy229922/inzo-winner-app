@@ -1,9 +1,15 @@
-// 1. Global variables
+﻿// 1. Global variables
 let searchTimeout;
 let currentUserProfile = null; // NEW: To store the current user's profile with role
 window.onlineUsers = new Map(); // NEW: Global map to track online users
 window.appContent = null; // NEW: Make appContent globally accessible
 let winnerRouletteFallbackInitialized = false; // Ensure we only wire the roulette page once when the module fails
+let winnerRouletteModularModule = null;
+const APP_DEBUG_LOGS = false;
+
+function appDebugLog(...args) {
+    if (APP_DEBUG_LOGS) console.info(...args);
+}
 
 // --- NEW: Global Error Catcher ---
 // This will catch any unhandled errors on the page and send them to the backend for logging.
@@ -325,7 +331,7 @@ function setActiveNav(activeElement) {
 
 async function logAgentActivity(userId, agentId, actionType, description, metadata = {}) {
     // This function will be reimplemented later using our own backend.
-    // console.log(`[FRONTEND LOG] ➡️ محاولة تسجيل نشاط: ${actionType} (Agent: ${agentId || 'N/A'})`);
+    // appDebugLog(`[FRONTEND LOG] ➡️ محاولة تسجيل نشاط: ${actionType} (Agent: ${agentId || 'N/A'})`);
     try {
         const payload = {
             user_id: userId || currentUserProfile?._id, // Default to current user if not provided
@@ -344,7 +350,7 @@ async function logAgentActivity(userId, agentId, actionType, description, metada
             body: JSON.stringify(payload)
         });
         if (!response.ok) throw new Error(`Server responded with status ${response.status}`);
-        // console.log(`[FRONTEND LOG] ✅ تم إرسال النشاط بنجاح إلى الخادم.`);
+        // appDebugLog(`[FRONTEND LOG] ✅ تم إرسال النشاط بنجاح إلى الخادم.`);
     } catch (error) {
         console.error(`[FRONTEND LOG] ❌ فشل إرسال النشاط إلى الخادم:`, error);
     }
@@ -423,10 +429,10 @@ async function initializeApp() {
  * NEW: Sets up a listener for real-time messages from the server (e.g., via WebSocket).
  */
 function setupRealtimeListeners() {
-    console.log('[WebSocket] Initializing Realtime Listeners...');
+    appDebugLog('[WebSocket] Initializing Realtime Listeners...');
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${window.location.host}`;
-    console.log(`[WebSocket] Target URL: ${wsUrl}`);
+    appDebugLog(`[WebSocket] Target URL: ${wsUrl}`);
 
     let ws;
     let reconnectAttempts = 0;
@@ -434,7 +440,7 @@ function setupRealtimeListeners() {
     let reconnectTimeout;
 
     function connect() {
-        console.log('[WebSocket] Attempting to connect...');
+        appDebugLog('[WebSocket] Attempting to connect...');
         // Check if token exists before connecting
         const token = localStorage.getItem('authToken');
         if (!token) {
@@ -453,11 +459,11 @@ function setupRealtimeListeners() {
         try { window._realtimeWs = ws; } catch (e) { /* ignore in non-browser env */ }
 
         ws.onopen = () => {
-            console.log('[WebSocket] Connection established successfully ✓');
+            appDebugLog('[WebSocket] Connection established successfully ✓');
             reconnectAttempts = 0; // Reset counter on successful connection
             const token = localStorage.getItem('authToken');
             if (token) {
-                console.log('[WebSocket] Sending auth token...');
+                appDebugLog('[WebSocket] Sending auth token...');
                 ws.send(JSON.stringify({ type: 'auth', token }));
             } else {
                 console.warn('[WebSocket] No auth token found in localStorage');
@@ -506,18 +512,18 @@ function setupRealtimeListeners() {
                             }
                             // Dispatch a global event that the user list can listen to
                             window.dispatchEvent(new CustomEvent('presence-update'));
-                            // console.log('[WebSocket] تحديث الحالة المباشرة:', Array.from(window.onlineUsers.keys()));
+                            // appDebugLog('[WebSocket] تحديث الحالة المباشرة:', Array.from(window.onlineUsers.keys()));
                         }
                         break;
                     
                     case 'suggestion_update':
                     case 'new_suggestion':
-                        // console.log('🔔 [WebSocket] Received suggestion update/new suggestion');
+                        // appDebugLog('ðŸ”” [WebSocket] Received suggestion update/new suggestion');
                         loadGlobalUnreadCount();
                         break;
 
                     case 'notification':
-                        console.log('🔔 [WebSocket] Received notification:', message);
+                        appDebugLog('ðŸ”” [WebSocket] Received notification:', message);
                         if (typeof showToast === 'function') {
                             showToast(message.message, message.level || 'info');
                         } else {
@@ -531,12 +537,12 @@ function setupRealtimeListeners() {
                         break;
 
                     case 'global_notification':
-                        console.log('🔔 [WebSocket] Received global notification:', message);
+                        appDebugLog('ðŸ”” [WebSocket] Received global notification:', message);
                         showToast(message.message, message.variant || 'info');
                         break;
 
                     case 'AUDITING_TOGGLED':
-                        console.log('🔔 [WebSocket] Auditing toggled:', message.data);
+                        appDebugLog('ðŸ”” [WebSocket] Auditing toggled:', message.data);
                         // 1. Show toast
                         const statusText = message.data.isAuditingEnabled ? 'تفعيل' : 'إلغاء تفعيل';
                         showToast(`قام ${message.data.updatedBy} بـ ${statusText} التدقيق للوكيل ${message.data.agentName}`, 'info');
@@ -546,13 +552,13 @@ function setupRealtimeListeners() {
                         break;
 
                     case 'COMPETITION_CREATED':
-                        console.log('🔔 [WebSocket] Competition created:', message.data);
+                        appDebugLog('ðŸ”” [WebSocket] Competition created:', message.data);
                         showToast(`تم إنشاء مسابقة جديدة للوكيل ${message.data.agentName} بواسطة ${message.data.createdBy}`, 'success');
                         window.dispatchEvent(new CustomEvent('competition-update', { detail: { type: 'created', ...message.data } }));
                         break;
 
                     case 'COMPETITION_COMPLETED':
-                        console.log('🔔 [WebSocket] Competition completed:', message.data);
+                        appDebugLog('ðŸ”” [WebSocket] Competition completed:', message.data);
                         showToast(`تم إنهاء مسابقة الوكيل ${message.data.competitionName || ''} بواسطة ${message.data.completedBy}`, 'info');
                         window.dispatchEvent(new CustomEvent('competition-update', { detail: { type: 'completed', ...message.data } }));
                         break;
@@ -565,7 +571,7 @@ function setupRealtimeListeners() {
         };
 
         ws.onclose = () => {
-            console.log('[WebSocket] قطع الاتصال ✗');
+            appDebugLog('[WebSocket] قطع الاتصال ✗');
             // Remove current user from online list
             const currentUserId = currentUserProfile?.userId || currentUserProfile?._id;
             if (currentUserId) {
@@ -577,7 +583,7 @@ function setupRealtimeListeners() {
             // Only reconnect if we haven't exceeded max attempts
             if (reconnectAttempts < maxReconnectAttempts) {
                 reconnectAttempts++;
-                console.log(`[WebSocket] إعادة محاولة الاتصال (${reconnectAttempts}/${maxReconnectAttempts}) بعد 5 ثواني...`);
+                appDebugLog(`[WebSocket] إعادة محاولة الاتصال (${reconnectAttempts}/${maxReconnectAttempts}) بعد 5 ثواني...`);
                 reconnectTimeout = setTimeout(connect, 5000);
             } else {
                 console.warn('[WebSocket] فشل الاتصال المباشر بعد عدة محاولات. يرجى تحديث الصفحة.');
@@ -675,7 +681,7 @@ try { window.showConfirmationModal = showConfirmationModal; } catch (e) { /* ign
 function showProgressModal(title, content) {
     const existingOverlay = document.querySelector('.modal-overlay');
     if (existingOverlay) {
-        // console.log('[showProgressModal] Closing existing modal to show new one.');
+        // appDebugLog('[showProgressModal] Closing existing modal to show new one.');
         existingOverlay.remove();
     }
 
@@ -691,7 +697,7 @@ function showProgressModal(title, content) {
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
-    console.log('[showProgressModal] Progress modal has been appended to the body.');
+    appDebugLog('[showProgressModal] Progress modal has been appended to the body.');
 
     return overlay; // Return the overlay so it can be closed later
 }
@@ -1074,7 +1080,7 @@ function renderAddUserForm() {
         const data = Object.fromEntries(formData.entries());
 
         // Handle user creation logic here
-        console.log('Creating user with data:', data);
+        appDebugLog('Creating user with data:', data);
 
     }, {
         title: 'إضافة موظف جديد',
@@ -1146,31 +1152,71 @@ async function renderWinnerRoulettePage() {
         console.error("app-content element not found!");
         return;
     }
-    // Force inline HTML to avoid blank page issues
+
+    const modularMode = isWinnerRouletteModularEnabled();
+    if (modularMode) {
+        try {
+            const htmlResp = await fetch('/pages/winner-roulette.html');
+            if (!htmlResp.ok) throw new Error(`HTTP ${htmlResp.status}`);
+
+            const html = await htmlResp.text();
+            const markupWithoutScripts = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+            window.appContent.innerHTML = markupWithoutScripts;
+
+            if (!winnerRouletteModularModule) {
+                winnerRouletteModularModule = await import('/js/pages/winner-roulette/main.js');
+            }
+
+            if (typeof winnerRouletteModularModule.initWinnerRouletteModular === 'function') {
+                await winnerRouletteModularModule.initWinnerRouletteModular();
+                winnerRouletteFallbackInitialized = true;
+                return;
+            }
+
+            throw new Error('initWinnerRouletteModular was not found');
+        } catch (error) {
+            console.error('[winner-roulette] modular mode failed; falling back to legacy mode', error);
+            window.showToast?.('فشل تشغيل النسخة الجديدة، سيتم فتح النسخة القديمة.', 'warning');
+        }
+    }
+
+    // Legacy mode (default)
     window.appContent.innerHTML = getWinnerRouletteInlineHTML();
-    
-    // Check if winner-roulette init is available (from bundled JS)
+
     setTimeout(() => {
         if (typeof window.winnerRouletteInit === 'function') {
-            // console.log('[winner-roulette] Initializing from bundled code');
             window.winnerRouletteInit();
             winnerRouletteFallbackInitialized = true;
-        } else {
-            console.warn('[winner-roulette] Init function not found, using fallback');
-            initWinnerRouletteFallback('init not available');
+            return;
         }
-    }, 100);
 
-    // Log screen size for debugging
-    /*
-    console.log('Winner Roulette Page Loaded - Screen Size:', {
-        innerWidth: window.innerWidth,
-        innerHeight: window.innerHeight,
-        outerWidth: window.outerWidth,
-        outerHeight: window.outerHeight,
-        appContent: window.appContent ? window.appContent.offsetWidth + 'x' + window.appContent.offsetHeight : 'not found'
-    });
-    */
+        console.warn('[winner-roulette] Init function not found, using fallback');
+        initWinnerRouletteFallback('init not available');
+    }, 100);
+}
+
+function isWinnerRouletteModularEnabled() {
+    // 1) Hash/query flag: #winner-roulette?modular=1
+    const hash = window.location.hash || '';
+    const queryIdx = hash.indexOf('?');
+    if (queryIdx !== -1) {
+        const query = hash.slice(queryIdx + 1);
+        const params = new URLSearchParams(query);
+        if (params.get('modular') === '1') return true;
+    }
+
+    // 2) Full URL query fallback: ?modular=1
+    try {
+        const urlParams = new URLSearchParams(window.location.search || '');
+        if (urlParams.get('modular') === '1') return true;
+    } catch (_) {}
+
+    // 3) Explicit local toggle for testing
+    try {
+        return localStorage.getItem('winnerRouletteMode') === 'modular';
+    } catch (_) {
+        return false;
+    }
 }
 
 function getWinnerRouletteInlineHTML(minimal = false, errMsg = '') {
@@ -1541,3 +1587,4 @@ function displayGlobalUnreadCount(count) {
         }
     }
 }
+
