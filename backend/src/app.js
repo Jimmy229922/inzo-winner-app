@@ -38,6 +38,16 @@ app.get('/api/test-notification', (req, res) => {
     }
 });
 
+// --- HEALTH CHECK ROUTE ---
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: 'UP',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        message: 'Server is healthy'
+    });
+});
+
 // --- NEW: Shared cache for deduplication between controllers ---
 app.locals.recentMessages = new Map();
 
