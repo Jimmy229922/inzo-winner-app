@@ -175,7 +175,7 @@ export async function validateWinnersImages(winnerIds) {
     return response.json();
 }
 
-export async function sendWinnersReport(agentId, winnerIds, messageText) {
+export async function sendWinnersReport(agentId, winnerIds, messageText, options = {}) {
     if (!agentId) throw new Error('agentId is required');
     if (!Array.isArray(winnerIds) || winnerIds.length === 0) throw new Error('winnerIds is required');
 
@@ -183,7 +183,11 @@ export async function sendWinnersReport(agentId, winnerIds, messageText) {
     const response = await authedFetch(`/api/agents/${encodeURIComponent(agentId)}/send-winners-report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ winnerIds, messageText })
+        body: JSON.stringify({
+            winnerIds,
+            messageText,
+            warnings: options.warnings || []
+        })
     });
 
     if (!response.ok) {

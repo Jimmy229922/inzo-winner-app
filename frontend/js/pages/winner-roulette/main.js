@@ -628,7 +628,7 @@ async function uploadWinnerAssets(winner) {
     const localAssetKey = winner.localAssetKey || winner.id;
 
     if (winner.pendingVideoBlob instanceof Blob) {
-        const extension = winner.recordingMimeType?.includes('mp4') ? 'mp4' : 'webm';
+        const extension = 'mp4';
         await api.uploadVideo(winner._id, winner.pendingVideoBlob, `winner_${winner._id}.${extension}`);
         winner.hasVideo = true;
         winner.pendingVideoBlob = null;
@@ -652,14 +652,27 @@ async function onSendReport() {
         ui.toast('Syncing winners...', 'info');
         await saveAllWinnersToDatabase();
 
-        const winnerIds = getCompetitionWinnerIds();
+        const winners = state.winners.filter((winner) =>
+            winner._id && winner.competitionId === state.activeCompetition.id
+        );
+        const winnerIds = winners.map((winner) => winner._id);
         if (!winnerIds.length) {
             ui.toast('No synced winners to send', 'warning');
             return;
         }
 
         await validateCompetitionWinnersOnServer(winnerIds);
-        await api.sendWinnersReport(state.selectedAgent.id, winnerIds, generateWinnersMessage());
+        const warnings = winners.map((winner) => ({
+            winnerId: winner._id,
+            include_warn_meet: !!(winner.includeWarnMeet || state.includeWarnMeet),
+            include_warn_prev: !!(winner.includeWarnPrev || state.includeWarnPrev)
+        }));
+        await api.sendWinnersReport(
+            state.selectedAgent.id,
+            winnerIds,
+            generateWinnersMessage(),
+            { warnings }
+        );
         ui.toast('Winners report sent', 'success');
     } catch (error) {
         console.error('[winner-roulette modular] send report failed', error);

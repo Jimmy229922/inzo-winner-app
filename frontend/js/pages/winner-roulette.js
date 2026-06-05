@@ -4307,22 +4307,13 @@
         // debugLog(`🎥 [Recording] Initializing MediaRecorder...`);
         const stream = canvas.captureStream(30); // 30 FPS
         
-            // Detect supported mimeType
-            const mimeTypes = [
-                'video/mp4',
-                'video/webm;codecs=vp9',
-                'video/webm;codecs=vp8',
-                'video/webm'
-            ];    let mimeType = '';
-        for (const type of mimeTypes) {
-            if (MediaRecorder.isTypeSupported(type)) {
-                mimeType = type;
-                break;
-            }
-        }
-        
-        if (!mimeType) {
-            console.warn('🎥 [Recording] No supported mimeType found, trying default constructor');
+            const mimeType = 'video/mp4';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            console.error('🎥 [Recording] mp4 recording is not supported in this browser');
+            state.recordingMimeType = null;
+            state.mediaRecorder = null;
+            state.recordedChunks = [];
+            return;
         }
         
         state.recordingMimeType = mimeType;
@@ -4356,7 +4347,7 @@
     function stopRecording(callback) {
       if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
         state.mediaRecorder.onstop = () => {
-          const blobType = state.recordingMimeType || 'video/webm';
+          const blobType = state.recordingMimeType || 'video/mp4';
           const blob = new Blob(state.recordedChunks, { type: blobType });
           // debugLog(`🎥 [Recording] Finished. Blob size: ${blob.size}, Type: ${blobType}`);
           if (callback) callback(blob);
@@ -4497,7 +4488,7 @@
     
           const downloadLink = document.createElement('a');
           downloadLink.href = url;
-          downloadLink.download = 'winner-preview.webm';
+          downloadLink.download = 'winner-preview.mp4';
           downloadLink.style.cssText = 'color: #3b82f6; text-decoration: underline; margin-top: 5px; display: inline-block;';
           downloadLink.innerHTML = '<i class="fas fa-download"></i> تحميل الفيديو للمشاهدة';
           errDiv.appendChild(downloadLink);
@@ -7068,7 +7059,7 @@
                 if (state.pendingVideoBlob && createdWinner && createdWinner._id) {
                     const formData = new FormData();
                     // Determine extension based on recorded mimeType
-                    const extension = (state.recordingMimeType && state.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
+                    const extension = 'mp4';
                     safeAppendFile(formData, 'video', state.pendingVideoBlob, `winner_${createdWinner._id}.${extension}`);
                     
                     const uploadResp = await authedFetch(`/api/winners/${createdWinner._id}/video`, {
@@ -7339,7 +7330,7 @@
           if (localWinner.pendingVideoBlob) {
             try {
               const formData = new FormData();
-              const extension = (localWinner.recordingMimeType && localWinner.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
+              const extension = 'mp4';
               safeAppendFile(formData, 'video', localWinner.pendingVideoBlob, `winner_${savedWinner._id}.${extension}`);
               
               const videoResp = await authedFetch(`/api/winners/${savedWinner._id}/video`, {
@@ -7428,7 +7419,7 @@
         if (w.pendingVideoBlob instanceof Blob) {
           try {
             const formData = new FormData();
-            const extension = (w.recordingMimeType && w.recordingMimeType.includes('mp4')) ? 'mp4' : 'webm';
+            const extension = 'mp4';
             safeAppendFile(formData, 'video', w.pendingVideoBlob, `winner_${winnerDbId}.${extension}`);
             const videoResp = await authedFetch(`/api/winners/${winnerDbId}/video`, { method: 'POST', body: formData });
             if (videoResp.ok) {
@@ -7641,8 +7632,8 @@
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                           winnerIds: validWinners.map(w => w._id),
-                          messageText
-                          // warnings removed to prevent sending warnings with video report
+                          messageText,
+                          warnings
                       })
                   });
                   

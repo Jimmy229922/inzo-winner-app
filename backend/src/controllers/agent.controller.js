@@ -251,6 +251,13 @@ exports.createAgent = async (req, res) => {
     try {
         // --- FIX: Ensure new agents are created with an 'Active' status by default ---
         req.body.status = req.body.status || 'Active';
+        if (req.body.agent_id) {
+            req.body.agent_id = req.body.agent_id.trim();
+            const existingAgent = await Agent.findOne({ agent_id: req.body.agent_id });
+            if (existingAgent) {
+                return res.status(400).json({ message: 'رقم الوكالة مستخدم بالفعل لوكيل آخر.' });
+            }
+        }
         
         // --- DEBUG: Log التصنيف للتأكد من إرساله ---
         // console.log(`[Agent Create] Creating new agent with classification: ${req.body.classification || 'R (default)'}`);
@@ -1209,7 +1216,7 @@ exports.toggleAuditing = async (req, res) => {
 exports.sendWinnersReport = async (req, res) => {
     try {
         const { agentId } = req.params;
-        const { winnerIds, messageText } = req.body;
+        const { winnerIds, messageText, warnings = [] } = req.body;
         const bot = req.app.locals.telegramBot;
         const TELEGRAM_CAPTION_LIMIT = 1024;
         const TELEGRAM_MESSAGE_LIMIT = 4096;
@@ -1253,6 +1260,18 @@ exports.sendWinnersReport = async (req, res) => {
             }
             return chunks;
         };
+
+        const warnMap = new Map(
+            Array.isArray(warnings)
+                ? warnings.map(item => [
+                    String(item.winnerId),
+                    {
+                        meet: !!item.include_warn_meet,
+                        prev: !!item.include_warn_prev
+                    }
+                ])
+                : []
+        );
 
         const sendLongTextToTelegram = async (chatId, text, replyToMessageId = null) => {
             const chunks = splitTelegramText(text, TELEGRAM_MESSAGE_LIMIT);
@@ -1331,19 +1350,113 @@ exports.sendWinnersReport = async (req, res) => {
                 videoOptions.supports_streaming = true;
             }
 
-            try {
-                return await bot.sendVideo(chatId, toTelegramMediaInput(mediaSource), videoOptions);
-            } catch (videoError) {
-                if (!shouldFallbackToDocument(videoError)) {
-                    throw videoError;
-                }
-                const docOptions = {};
-                if (caption) {
-                    docOptions.caption = caption;
-                    docOptions.parse_mode = 'HTML';
-                }
-                return await bot.sendDocument(chatId, toTelegramMediaInput(mediaSource), docOptions);
+            return await bot.sendVideo(chatId, toTelegramMediaInput(mediaSource), videoOptions);
+        };
+
+        const resolveChatIdUpgrade = async (error, fallbackChatId) => {
+            const upgradedChatId = error?.response?.body?.parameters?.migrate_to_chat_id;
+            if (!upgradedChatId) {
+                return { chatId: fallbackChatId, migrated: false };
             }
+            if (String(agent.telegram_chat_id) !== String(upgradedChatId)) {
+                agent.telegram_chat_id = upgradedChatId;
+                await agent.save();
+            }
+            return { chatId: upgradedChatId, migrated: true };
+        };
+
+        const getWinnerWarningLines = (winner) => {
+            const warnPrefs = warnMap.get(String(winner._id)) || {};
+            const warningLines = [];
+            if (warnPrefs.meet) {
+                warningLines.push('⚠️ يرجى الاجتماع مع العميل والتحقق منه أولاً');
+            }
+            if (warnPrefs.prev) {
+                warningLines.push('‼️ يرجى التحقق أولًا من هذا العميل، حيث سبق أن فاز بجائزة (بونص تداولي) خلال الأيام الماضية');
+            }
+            return warningLines;
+        };
+
+        const appendWinnerWarnings = (winner, lines) => {
+            const warningLines = getWinnerWarningLines(winner);
+            warningLines.forEach(line => lines.push(line));
+        };
+
+        const convertLegacyWebmToMp4IfNeeded = async (mediaSource, winnerName) => {
+            if (typeof mediaSource !== 'string') return mediaSource;
+            if (isLikelyRemoteUrl(mediaSource) || isLikelyTelegramFileId(mediaSource)) return mediaSource;
+            if (!/\.webm$/i.test(mediaSource)) return mediaSource;
+
+            const mp4Path = mediaSource.replace(/\.webm$/i, '.mp4');
+            const sourceStats = fs.statSync(mediaSource);
+            if (fs.existsSync(mp4Path)) {
+                const targetStats = fs.statSync(mp4Path);
+                if (targetStats.size > 0 && targetStats.mtimeMs >= sourceStats.mtimeMs) {
+                    return mp4Path;
+                }
+            }
+
+            const { execFile } = require('child_process');
+            await new Promise((resolve, reject) => {
+                execFile(
+                    'ffmpeg',
+                    [
+                        '-y',
+                        '-i', mediaSource,
+                        '-c:v', 'libx264',
+                        '-preset', 'veryfast',
+                        '-pix_fmt', 'yuv420p',
+                        '-movflags', '+faststart',
+                        mp4Path
+                    ],
+                    (error) => {
+                        if (error) {
+                            reject(new Error(`تعذر تحويل فيديو الفائز "${winnerName}" من webm إلى mp4`));
+                            return;
+                        }
+                        resolve();
+                    }
+                );
+            });
+
+            if (!fs.existsSync(mp4Path)) {
+                throw new Error(`تعذر إنشاء نسخة mp4 للفائز "${winnerName}"`);
+            }
+
+            return mp4Path;
+        };
+
+        const buildWinnerCaption = (winner, winnerIndex = 0) => {
+            const ordinals = ['الاول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'];
+            const rank = winner.order_number
+                ? (ordinals[winner.order_number - 1] || `رقم ${winner.order_number}`)
+                : (ordinals[winnerIndex] || `رقم ${winnerIndex + 1}`);
+
+            const effectivePrizeValue = (winner.prize_value && winner.prize_value > 0) ? winner.prize_value : (
+                (winner.prize_type === 'deposit_prev' || winner.prize_type === 'deposit')
+                    ? (agent.deposit_bonus_percentage || 0)
+                    : 0
+            );
+
+            let prizeText = '';
+            if (winner.prize_type === 'deposit_prev') {
+                prizeText = `${effectivePrizeValue}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+            } else if (winner.prize_type === 'deposit') {
+                prizeText = `${effectivePrizeValue}% بونص إيداع`;
+            } else {
+                prizeText = `${effectivePrizeValue}$ بونص تداولي`;
+            }
+
+            const lines = [
+                `◃ الفائز ${rank}: ${winner.name}`,
+                `           الجائزة: ${prizeText}`
+            ];
+            appendWinnerWarnings(winner, lines);
+            lines.push('');
+            lines.push('********************************************************');
+            lines.push('يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة ');
+            lines.push('https://t.me/Ibinzo');
+            return lines.join('\n');
         };
 
         // جلب الفائزين مرتبين حسب order_number
@@ -1361,46 +1474,13 @@ exports.sendWinnersReport = async (req, res) => {
              return res.json({ message: 'Text report sent (no videos found)' });
         }
 
-        // If single video, use sendVideo for better native behavior
-        if (winnersWithVideos.length === 1) {
-            const w = winnersWithVideos[0];
-            const mediaSource = resolveMediaSource(w.video_url);
-            ensureMediaExists(mediaSource, w.name || w._id);
-            
-            // Generate caption for single winner
-            let caption;
-            if (messageText && messageText.trim().length > 0) {
-                // Use the message provided by the frontend (which includes warnings)
-                caption = messageText;
-            } else {
-                // Fallback to generating caption on backend
-                const effectivePrizeValue = (w.prize_value && w.prize_value > 0) ? w.prize_value : (
-                    (w.prize_type === 'deposit_prev' || w.prize_type === 'deposit') 
-                    ? (agent.deposit_bonus_percentage || 0) 
-                    : 0
-                );
-                
-                let prizeText = '';
-                if (w.prize_type === 'deposit_prev') {
-                    prizeText = `${effectivePrizeValue}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
-                } else if (w.prize_type === 'deposit') {
-                    prizeText = `${effectivePrizeValue}% بونص إيداع`;
-                } else {
-                    prizeText = `${effectivePrizeValue}$ بونص تداولي`;
-                }
-                
-                // استخدام رقم الترتيب اليدوي إذا كان موجوداً
-                const ordinals = ['الاول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'];
-                const rank = w.order_number 
-                    ? (ordinals[w.order_number - 1] || `رقم ${w.order_number}`)
-                    : 'الاول';
-                
-                caption = `◃ الفائز ${rank}: ${w.name}\n`;
-                caption += `           الجائزة: ${prizeText}\n\n`;
-                caption += `********************************************************\n`;
-                caption += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
-                caption += `https://t.me/Ibinzo`;
-            }
+        let currentChatId = agent.telegram_chat_id;
+        for (let i = 0; i < winnersWithVideos.length; i++) {
+            const winner = winnersWithVideos[i];
+            const rawMediaSource = resolveMediaSource(winner.video_url);
+            ensureMediaExists(rawMediaSource, winner.name || winner._id);
+            const mediaSource = await convertLegacyWebmToMp4IfNeeded(rawMediaSource, winner.name || winner._id);
+            const caption = buildWinnerCaption(winner, i);
 
             let captionForVideo = caption;
             let longTextForReply = null;
@@ -1409,184 +1489,33 @@ exports.sendWinnersReport = async (req, res) => {
                 longTextForReply = caption;
             }
 
-            const videoMessage = await sendVideoWithDocumentFallback({
-                chatId: agent.telegram_chat_id,
-                mediaSource,
-                caption: captionForVideo,
-                supportsStreaming: isLikelyStreamableTelegramVideo(mediaSource)
-            });
+            let sentMessage;
+            try {
+                sentMessage = await sendVideoWithDocumentFallback({
+                    chatId: currentChatId,
+                    mediaSource,
+                    caption: captionForVideo,
+                    supportsStreaming: true
+                });
+            } catch (videoError) {
+                const migration = await resolveChatIdUpgrade(videoError, currentChatId);
+                if (!migration.migrated) {
+                    throw videoError;
+                }
+                currentChatId = migration.chatId;
+                sentMessage = await sendVideoWithDocumentFallback({
+                    chatId: currentChatId,
+                    mediaSource,
+                    caption: captionForVideo,
+                    supportsStreaming: true
+                });
+            }
 
             if (longTextForReply) {
-                await sendLongTextToTelegram(agent.telegram_chat_id, longTextForReply, videoMessage?.message_id);
+                await sendLongTextToTelegram(currentChatId, longTextForReply, sentMessage?.message_id);
             }
 
-            // Competition status update removed to prevent auto-completion
-
-            return res.json({ message: 'Winner report sent successfully' });
-        }
-
-        // Helper to generate caption for a chunk of winners
-        const generateChunkCaption = (chunkWinners, startIndex) => {
-            const ordinals = ['الاول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'];
-            let msg = '';
-            chunkWinners.forEach((w, i) => {
-                const globalIndex = startIndex + i;
-                // استخدام رقم الترتيب اليدوي إذا كان موجوداً
-                const rank = w.order_number 
-                    ? (ordinals[w.order_number - 1] || `رقم ${w.order_number}`)
-                    : (ordinals[globalIndex] || (globalIndex + 1));
-                    
-                const effectivePrizeValue = (w.prize_value && w.prize_value > 0) ? w.prize_value : (
-                    (w.prize_type === 'deposit_prev' || w.prize_type === 'deposit') 
-                    ? (agent.deposit_bonus_percentage || 0) 
-                    : 0
-                );
-                
-                let prizeText = '';
-                if (w.prize_type === 'deposit_prev') {
-                    prizeText = `${effectivePrizeValue}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
-                } else if (w.prize_type === 'deposit') {
-                    prizeText = `${effectivePrizeValue}% بونص إيداع`;
-                } else {
-                    prizeText = `${effectivePrizeValue}$ بونص تداولي`;
-                }
-        
-                msg += `◃ الفائز ${rank}: ${w.name}\n`;
-                msg += `           الجائزة: ${prizeText}\n`;
-
-                msg += `\n********************************************************\n`;
-            });
-            
-            msg += `يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة \n`;
-            msg += `https://t.me/Ibinzo`;
-            return msg;
-        };
-
-        // Split strictly into chunks of 5 winners as requested:
-        // 7 => 5 + 2, 11 => 5 + 5 + 1
-        const chunkSize = 5;
-        for (let i = 0; i < winnersWithVideos.length; i += chunkSize) {
-            const winnersChunk = winnersWithVideos.slice(i, i + chunkSize);
-            const chunkCaption = generateChunkCaption(winnersChunk, i);
-            const chunkMediaEntries = winnersChunk.map(w => {
-                const mediaSource = resolveMediaSource(w.video_url);
-                ensureMediaExists(mediaSource, w.name || w._id);
-                return {
-                    winner: w,
-                    mediaSource,
-                    streamableVideo: isLikelyStreamableTelegramVideo(mediaSource)
-                };
-            });
-
-            // Attach caption to the first item of the chunk (or fallback text + reply)
-            let detailsToSendAsReply = null;
-            let firstItemCaption = null;
-            if (chunkMediaEntries.length > 0) {
-                if (chunkCaption.length > TELEGRAM_CAPTION_LIMIT) {
-                    firstItemCaption = FALLBACK_MEDIA_CAPTION;
-                    detailsToSendAsReply = chunkCaption;
-                } else {
-                    firstItemCaption = chunkCaption;
-                }
-            }
-
-            const canUseMediaGroup = (
-                ENABLE_VIDEO_MEDIA_GROUP &&
-                chunkMediaEntries.length > 1 &&
-                chunkMediaEntries.length <= TELEGRAM_MEDIA_GROUP_MAX
-            );
-
-            let replyToMessageId = null;
-
-            if (canUseMediaGroup) {
-                const mediaItems = chunkMediaEntries.map((item, index) => {
-                    const mediaItem = item.streamableVideo
-                        ? {
-                            type: 'video',
-                            media: toTelegramMediaInput(item.mediaSource),
-                            parse_mode: 'HTML',
-                            supports_streaming: true
-                        }
-                        : {
-                            // Telegram may reject some encodings (e.g. webm) as InputMediaVideo.
-                            // Send them as document inside the same media-group batch to preserve batching.
-                            type: 'document',
-                            media: toTelegramMediaInput(item.mediaSource),
-                            parse_mode: 'HTML'
-                        };
-                    if (index === 0 && firstItemCaption) {
-                        mediaItem.caption = firstItemCaption;
-                    }
-                    return mediaItem;
-                });
-
-                try {
-                    const sentMediaMessages = await sendMediaGroupToTelegram(bot, mediaItems, agent.telegram_chat_id);
-                    replyToMessageId = Array.isArray(sentMediaMessages) && sentMediaMessages.length > 0
-                        ? sentMediaMessages[0].message_id
-                        : null;
-                } catch (groupError) {
-                    if (!shouldFallbackToDocument(groupError)) {
-                        throw groupError;
-                    }
-                    // Retry once as a document-only media group to preserve "batch per message" behavior.
-                    const docsOnlyMediaItems = chunkMediaEntries.map((item, index) => {
-                        const mediaItem = {
-                            type: 'document',
-                            media: toTelegramMediaInput(item.mediaSource),
-                            parse_mode: 'HTML'
-                        };
-                        if (index === 0 && firstItemCaption) {
-                            mediaItem.caption = firstItemCaption;
-                        }
-                        return mediaItem;
-                    });
-
-                    try {
-                        const sentDocGroup = await sendMediaGroupToTelegram(bot, docsOnlyMediaItems, agent.telegram_chat_id);
-                        replyToMessageId = Array.isArray(sentDocGroup) && sentDocGroup.length > 0
-                            ? sentDocGroup[0].message_id
-                            : null;
-                    } catch (docGroupError) {
-                        let firstSentMessage = null;
-                        for (let itemIndex = 0; itemIndex < chunkMediaEntries.length; itemIndex++) {
-                            const item = chunkMediaEntries[itemIndex];
-                            const sentMessage = await sendVideoWithDocumentFallback({
-                                chatId: agent.telegram_chat_id,
-                                mediaSource: item.mediaSource,
-                                caption: itemIndex === 0 ? firstItemCaption : null,
-                                supportsStreaming: item.streamableVideo
-                            });
-                            if (!firstSentMessage) {
-                                firstSentMessage = sentMessage;
-                            }
-                        }
-                        replyToMessageId = firstSentMessage?.message_id || null;
-                    }
-                }
-            } else {
-                let firstSentMessage = null;
-                for (let itemIndex = 0; itemIndex < chunkMediaEntries.length; itemIndex++) {
-                    const item = chunkMediaEntries[itemIndex];
-                    const sentMessage = await sendVideoWithDocumentFallback({
-                        chatId: agent.telegram_chat_id,
-                        mediaSource: item.mediaSource,
-                        caption: itemIndex === 0 ? firstItemCaption : null,
-                        supportsStreaming: item.streamableVideo
-                    });
-                    if (!firstSentMessage) {
-                        firstSentMessage = sentMessage;
-                    }
-                }
-                replyToMessageId = firstSentMessage?.message_id || null;
-            }
-
-            if (detailsToSendAsReply) {
-                await sendLongTextToTelegram(agent.telegram_chat_id, detailsToSendAsReply, replyToMessageId);
-            }
-            
-            // Add a small delay between chunks to prevent rate limiting
-            if (i + chunkSize < winnersWithVideos.length) {
+            if (i + 1 < winnersWithVideos.length) {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
         }

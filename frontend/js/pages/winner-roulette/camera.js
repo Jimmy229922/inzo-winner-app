@@ -5,12 +5,7 @@
 
 import { state } from './state.js';
 
-const MIME_TYPES = [
-    'video/mp4',
-    'video/webm;codecs=vp9',
-    'video/webm;codecs=vp8',
-    'video/webm'
-];
+const MIME_TYPE = 'video/mp4';
 
 export function startRecording() {
     try {
@@ -20,16 +15,13 @@ export function startRecording() {
 
         const stream = canvas.captureStream(30);
 
-        let mimeType = '';
-        for (const type of MIME_TYPES) {
-            if (window.MediaRecorder.isTypeSupported(type)) {
-                mimeType = type;
-                break;
-            }
+        if (!window.MediaRecorder.isTypeSupported(MIME_TYPE)) {
+            console.error('[camera] mp4 recording is not supported in this browser');
+            resetRecorderState();
+            return false;
         }
-
-        const options = mimeType ? { mimeType } : undefined;
-        state.recordingMimeType = mimeType || 'video/webm';
+        const options = { mimeType: MIME_TYPE };
+        state.recordingMimeType = MIME_TYPE;
         state.recordedChunks = [];
         state.mediaRecorder = new window.MediaRecorder(stream, options);
 
@@ -62,7 +54,7 @@ export function stopRecording() {
         }
 
         recorder.onstop = () => {
-            const blobType = state.recordingMimeType || 'video/webm';
+            const blobType = state.recordingMimeType || MIME_TYPE;
             const blob = new Blob(state.recordedChunks, { type: blobType });
             resetRecorderState();
             resolve(blob.size > 0 ? blob : null);
