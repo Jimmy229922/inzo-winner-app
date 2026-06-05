@@ -32,7 +32,7 @@ export const state = {
     // Recording
     mediaRecorder: null,
     recordedChunks: [],
-    recordingMimeType: 'video/webm',
+    recordingMimeType: 'video/mp4',
     pendingVideoBlob: null,
 
     // UI / async guards

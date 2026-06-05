@@ -1221,8 +1221,7 @@ exports.sendWinnersReport = async (req, res) => {
         const TELEGRAM_CAPTION_LIMIT = 1024;
         const TELEGRAM_MESSAGE_LIMIT = 4096;
         const FALLBACK_MEDIA_CAPTION = '<b>تقرير الفائزين</b>';
-        const TELEGRAM_MEDIA_GROUP_MAX = 10;
-        // Keep album mode ON so winners are sent in grouped batches (5 per message).
+        const TELEGRAM_MEDIA_GROUP_MAX = 5;
         const ENABLE_VIDEO_MEDIA_GROUP = true;
 
         if (!bot) {
@@ -1382,12 +1381,13 @@ exports.sendWinnersReport = async (req, res) => {
             warningLines.forEach(line => lines.push(line));
         };
 
-        const convertLegacyWebmToMp4IfNeeded = async (mediaSource, winnerName) => {
+        const ensureMp4MediaSourceIfNeeded = async (mediaSource, winnerName) => {
             if (typeof mediaSource !== 'string') return mediaSource;
             if (isLikelyRemoteUrl(mediaSource) || isLikelyTelegramFileId(mediaSource)) return mediaSource;
-            if (!/\.webm$/i.test(mediaSource)) return mediaSource;
+            if (path.extname(mediaSource).toLowerCase() === '.mp4') return mediaSource;
 
-            const mp4Path = mediaSource.replace(/\.webm$/i, '.mp4');
+            const parsedPath = path.parse(mediaSource);
+            const mp4Path = path.join(parsedPath.dir, `${parsedPath.name}.mp4`);
             const sourceStats = fs.statSync(mediaSource);
             if (fs.existsSync(mp4Path)) {
                 const targetStats = fs.statSync(mp4Path);
@@ -1411,7 +1411,7 @@ exports.sendWinnersReport = async (req, res) => {
                     ],
                     (error) => {
                         if (error) {
-                            reject(new Error(`تعذر تحويل فيديو الفائز "${winnerName}" من webm إلى mp4`));
+                            reject(new Error(`تعذر تحويل فيديو الفائز "${winnerName}" إلى mp4`));
                             return;
                         }
                         resolve();
@@ -1426,7 +1426,7 @@ exports.sendWinnersReport = async (req, res) => {
             return mp4Path;
         };
 
-        const buildWinnerCaption = (winner, winnerIndex = 0) => {
+        const buildWinnerCaption = (winner, winnerIndex = 0, includeFooter = true) => {
             const ordinals = ['الاول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر'];
             const rank = winner.order_number
                 ? (ordinals[winner.order_number - 1] || `رقم ${winner.order_number}`)
@@ -1454,9 +1454,20 @@ exports.sendWinnersReport = async (req, res) => {
             appendWinnerWarnings(winner, lines);
             lines.push('');
             lines.push('********************************************************');
-            lines.push('يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة ');
-            lines.push('https://t.me/Ibinzo');
+            if (includeFooter) {
+                lines.push('يرجى ابلاغ الفائزين بالتواصل معنا عبر معرف التليجرام و الاعلان عنهم بمعلوماتهم و فيديو الروليت بالقناة ');
+                lines.push('https://t.me/Ibinzo');
+            }
             return lines.join('\n');
+        };
+
+        const buildBatchCaption = (winnersBatch, batchStart) => {
+            const sections = winnersBatch.map((winner, index) => buildWinnerCaption(
+                winner,
+                batchStart + index,
+                index === winnersBatch.length - 1
+            ));
+            return sections.join('\n');
         };
 
         // جلب الفائزين مرتبين حسب order_number
@@ -1475,47 +1486,72 @@ exports.sendWinnersReport = async (req, res) => {
         }
 
         let currentChatId = agent.telegram_chat_id;
-        for (let i = 0; i < winnersWithVideos.length; i++) {
-            const winner = winnersWithVideos[i];
-            const rawMediaSource = resolveMediaSource(winner.video_url);
-            ensureMediaExists(rawMediaSource, winner.name || winner._id);
-            const mediaSource = await convertLegacyWebmToMp4IfNeeded(rawMediaSource, winner.name || winner._id);
-            const caption = buildWinnerCaption(winner, i);
+        for (let batchStart = 0; batchStart < winnersWithVideos.length; batchStart += TELEGRAM_MEDIA_GROUP_MAX) {
+            const winnersBatch = winnersWithVideos.slice(batchStart, batchStart + TELEGRAM_MEDIA_GROUP_MAX);
+            const mediaGroup = [];
+            const batchCaption = buildBatchCaption(winnersBatch, batchStart);
+            let batchCaptionForAlbum = batchCaption;
+            let longCaptionForReply = null;
 
-            let captionForVideo = caption;
-            let longTextForReply = null;
-            if ((captionForVideo || '').length > TELEGRAM_CAPTION_LIMIT) {
-                captionForVideo = FALLBACK_MEDIA_CAPTION;
-                longTextForReply = caption;
+            if ((batchCaptionForAlbum || '').length > TELEGRAM_CAPTION_LIMIT) {
+                batchCaptionForAlbum = FALLBACK_MEDIA_CAPTION;
+                longCaptionForReply = batchCaption;
             }
 
-            let sentMessage;
-            try {
-                sentMessage = await sendVideoWithDocumentFallback({
-                    chatId: currentChatId,
-                    mediaSource,
-                    caption: captionForVideo,
-                    supportsStreaming: true
+            for (let batchIndex = 0; batchIndex < winnersBatch.length; batchIndex++) {
+                const winner = winnersBatch[batchIndex];
+                const rawMediaSource = resolveMediaSource(winner.video_url);
+                ensureMediaExists(rawMediaSource, winner.name || winner._id);
+                const mediaSource = await ensureMp4MediaSourceIfNeeded(rawMediaSource, winner.name || winner._id);
+                if (mediaSource !== rawMediaSource && winner.video_url && winner.video_url.startsWith('/uploads/')) {
+                    const normalizedVideoUrl = `/${path.relative(path.join(__dirname, '../../'), mediaSource).replace(/\\/g, '/')}`;
+                    if (normalizedVideoUrl !== winner.video_url) {
+                        await Winner.findByIdAndUpdate(winner._id, { video_url: normalizedVideoUrl });
+                        winner.video_url = normalizedVideoUrl;
+                    }
+                }
+
+                mediaGroup.push({
+                    type: 'video',
+                    media: toTelegramMediaInput(mediaSource),
+                    ...(batchIndex === 0 ? {
+                        caption: batchCaptionForAlbum,
+                        parse_mode: 'HTML'
+                    } : {}),
+                    supports_streaming: true
                 });
+            }
+
+            let sentMessages;
+            try {
+                sentMessages = ENABLE_VIDEO_MEDIA_GROUP
+                    ? await sendMediaGroupToTelegram(bot, mediaGroup, currentChatId)
+                    : await Promise.all(mediaGroup.map((item) => bot.sendVideo(currentChatId, item.media, {
+                        caption: item.caption,
+                        parse_mode: item.parse_mode,
+                        supports_streaming: item.supports_streaming
+                    })));
             } catch (videoError) {
                 const migration = await resolveChatIdUpgrade(videoError, currentChatId);
                 if (!migration.migrated) {
                     throw videoError;
                 }
                 currentChatId = migration.chatId;
-                sentMessage = await sendVideoWithDocumentFallback({
-                    chatId: currentChatId,
-                    mediaSource,
-                    caption: captionForVideo,
-                    supportsStreaming: true
-                });
+                sentMessages = ENABLE_VIDEO_MEDIA_GROUP
+                    ? await sendMediaGroupToTelegram(bot, mediaGroup, currentChatId)
+                    : await Promise.all(mediaGroup.map((item) => bot.sendVideo(currentChatId, item.media, {
+                        caption: item.caption,
+                        parse_mode: item.parse_mode,
+                        supports_streaming: item.supports_streaming
+                    })));
             }
 
-            if (longTextForReply) {
-                await sendLongTextToTelegram(currentChatId, longTextForReply, sentMessage?.message_id);
+            if (longCaptionForReply) {
+                const replyTarget = sentMessages?.[0]?.message_id || null;
+                await sendLongTextToTelegram(currentChatId, longCaptionForReply, replyTarget);
             }
 
-            if (i + 1 < winnersWithVideos.length) {
+            if (batchStart + TELEGRAM_MEDIA_GROUP_MAX < winnersWithVideos.length) {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
         }

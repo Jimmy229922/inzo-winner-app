@@ -1032,7 +1032,7 @@ async function showCompetitionWinnersModal(agentId, competitionId, mode = 'list'
                         </div>
                         <video src="${videoUrl}" controls class="cw-video-player" preload="metadata"></video>
                         <div class="cw-video-footer">
-                            <a href="${videoUrl}" download="winner_${w.name}.webm" class="cw-download-link"><i class="fas fa-download"></i> تحميل الفيديو</a>
+                            <a href="${videoUrl}" download="winner_${w.name}.mp4" class="cw-download-link"><i class="fas fa-download"></i> تحميل الفيديو</a>
                         </div>
                     </div>
                  `;

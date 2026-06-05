@@ -136,7 +136,7 @@ export async function uploadIdImage(winnerId, blob, fallbackName = 'id_image.jpg
     return response.json();
 }
 
-export async function uploadVideo(winnerId, blob, fallbackName = 'video.webm') {
+export async function uploadVideo(winnerId, blob, fallbackName = 'video.mp4') {
     if (!winnerId || !blob) return null;
 
     const authedFetch = getAuthedFetch();

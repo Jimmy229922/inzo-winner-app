@@ -4,6 +4,47 @@ const Competition = require('../models/Competition');
 const fs = require('fs').promises;
 const path = require('path');
 
+async function convertWinnerVideoToMp4(sourcePath, fileMeta = {}) {
+    const parsed = path.parse(sourcePath);
+    const targetPath = path.join(parsed.dir, `${parsed.name}.mp4`);
+    const sourceExtension = path.extname(sourcePath).toLowerCase();
+    const mimeType = (fileMeta.mimetype || '').toLowerCase();
+    const originalName = (fileMeta.originalname || '').toLowerCase();
+
+    if (sourceExtension === '.mp4' || mimeType === 'video/mp4' || originalName.endsWith('.mp4')) {
+        if (sourcePath !== targetPath) {
+            await fs.rename(sourcePath, targetPath);
+        }
+        return targetPath;
+    }
+
+    const { execFile } = require('child_process');
+
+    await new Promise((resolve, reject) => {
+        execFile(
+            'ffmpeg',
+            [
+                '-y',
+                '-i', sourcePath,
+                '-c:v', 'libx264',
+                '-preset', 'veryfast',
+                '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart',
+                targetPath
+            ],
+            (error) => {
+                if (error) {
+                    reject(new Error('تعذر تحويل الفيديو إلى mp4'));
+                    return;
+                }
+                resolve();
+            }
+        );
+    });
+
+    return targetPath;
+}
+
 // GET /api/agents/:agentId/winners
 exports.getWinnersByAgent = async (req, res) => {
     try {
@@ -276,7 +317,15 @@ exports.uploadWinnerVideo = async (req, res) => {
             return res.status(400).json({ message: 'No video file uploaded' });
         }
 
-        const videoUrl = `/uploads/winners/${req.file.filename}`;
+        const uploadedPath = req.file.path;
+        const convertedPath = await convertWinnerVideoToMp4(uploadedPath, req.file);
+        try {
+            if (uploadedPath !== convertedPath) {
+                await fs.unlink(uploadedPath);
+            }
+        } catch (_) {}
+
+        const videoUrl = `/uploads/winners/${path.basename(convertedPath)}`;
         
         const winner = await Winner.findByIdAndUpdate(
             id,
@@ -285,6 +334,9 @@ exports.uploadWinnerVideo = async (req, res) => {
         );
 
         if (!winner) {
+            try {
+                await fs.unlink(convertedPath);
+            } catch (_) {}
             return res.status(404).json({ message: 'Winner not found' });
         }
 
@@ -294,6 +346,11 @@ exports.uploadWinnerVideo = async (req, res) => {
             winner
         });
     } catch (err) {
+        if (req.file?.path) {
+            try {
+                await fs.unlink(req.file.path);
+            } catch (_) {}
+        }
         console.error('Failed to upload winner video:', err);
         res.status(500).json({ message: 'Server error uploading video' });
     }
