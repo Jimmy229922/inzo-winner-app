@@ -227,6 +227,7 @@
                   <option value="trading">بونص تداولي</option>
                   <option value="deposit">بونص إيداع</option>
                   <option value="deposit_prev">إيداع (فائز سابق)</option>
+                  <option value="deposit_management">إيداع (إدارة حسابات)</option>
                 </select>
               </div>
               <div>
@@ -1152,7 +1153,7 @@
                     name: w.name,
                     account: w.account_number,
                     email: w.email,
-                    prizeType: w.prize_type === 'deposit_prev' ? 'deposit_prev' : (w.prize_type === 'deposit' ? 'deposit' : (w.prize_type === 'trading' ? 'trading' : 'deposit')),
+                    prizeType: w.prize_type === 'deposit_prev' ? 'deposit_prev' : (w.prize_type === 'deposit_management' ? 'deposit_management' : (w.prize_type === 'deposit' ? 'deposit' : (w.prize_type === 'trading' ? 'trading' : 'deposit'))),
                     prizeValue: w.prize_value,
                     videoUrl: w.video_url,
                     nationalIdImage: w.national_id_image,
@@ -1492,7 +1493,7 @@
         const tradingWinnersRequired = competition.trading_winners_count || 0;
         
         // Also show how many have been selected locally (for progress)
-        const localDepositCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length : 0;
+        const localDepositCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev' || w.prizeType === 'deposit_management').length : 0;
         const localTradingCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'trading').length : 0;
 
         html += `<div class="wr-competition-stat-row">
@@ -1579,7 +1580,7 @@
       const depositWinnersRequired = state.activeCompetition.depositWinnersRequired || 0;
       const tradingWinnersRequired = state.activeCompetition.tradingWinnersRequired || 0;
       
-      const localDepositCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length : 0;
+      const localDepositCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev' || w.prizeType === 'deposit_management').length : 0;
       const localTradingCount = (state && Array.isArray(state.winners)) ? state.winners.filter(w => w.prizeType === 'trading').length : 0;
       
       // تحديث العناصر في قسم معلومات المسابقة (الجانب الأيسر) باستخدام IDs
@@ -3755,7 +3756,7 @@
           w.name,
           w.account,
           w.email || '',
-          w.prizeType === 'deposit' ? 'بونص إيداع' : 'بونص تداولي',
+          w.prizeType === 'deposit_management' ? 'إيداع (إدارة حسابات)' : (w.prizeType === 'deposit' ? 'بونص إيداع' : 'بونص تداولي'),
           w.prizeValue || '',
           agentName
         ].map(f => `"${f}"`).join(",");
@@ -3973,7 +3974,7 @@
 
             // Update Deposit Bonus Stats
             const depositReq = state.activeCompetition.depositWinnersRequired || 0;
-            const currentDeposit = state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev').length;
+            const currentDeposit = state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev' || w.prizeType === 'deposit_management').length;
             const statsDepositEl = document.getElementById('stats-deposit-count');
             if (statsDepositEl) statsDepositEl.textContent = `${currentDeposit} / ${depositReq} فائز`;
 
@@ -4626,7 +4627,7 @@
         depositBonusPercentage
       } = state.activeCompetition;
     
-      const currentDepositWinners = state.winners.filter(w => w.prizeType === 'deposit').length;
+      const currentDepositWinners = state.winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev' || w.prizeType === 'deposit_management').length;
       const currentTradingWinners = state.winners.filter(w => w.prizeType === 'trading').length;
     
       let prizeType = 'trading';
@@ -4866,7 +4867,7 @@
       }
       
       // Separate winners by prize type
-      const depositWinners = winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev');
+      const depositWinners = winners.filter(w => w.prizeType === 'deposit' || w.prizeType === 'deposit_prev' || w.prizeType === 'deposit_management');
       const tradingWinners = winners.filter(w => w.prizeType === 'trading');
       
       let html = '';
@@ -4958,6 +4959,8 @@
           let prizeDisplay = '';
           if (w.prizeType === 'deposit_prev') {
               prizeDisplay = `${w.prizeValue || 0}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+          } else if (w.prizeType === 'deposit_management') {
+              prizeDisplay = `${w.prizeValue || 0}% بونص إيداع كونه إدارة حسابات`;
           } else {
               prizeDisplay = `${w.prizeValue || 0}% بونص إيداع`;
           }
@@ -5675,6 +5678,8 @@
         let prizeText = '';
         if (w.prizeType === 'deposit_prev') {
             prizeText = `${w.prizeValue}% بونص ايداع كونه فائز مسبقا ببونص تداولي`;
+        } else if (w.prizeType === 'deposit_management') {
+            prizeText = `${w.prizeValue}% بونص إيداع كونه إدارة حسابات`;
         } else if (w.prizeType === 'deposit') {
             prizeText = `${w.prizeValue}% بونص ايداع`;
         } else {
@@ -5778,9 +5783,9 @@
       const syncPrizePreview = () => {
           const selectedType = prizeTypeInput?.value || 'trading';
           
-          if (selectedType === 'deposit' || selectedType === 'deposit_prev') {
+          if (selectedType === 'deposit' || selectedType === 'deposit_prev' || selectedType === 'deposit_management') {
               const depositPct = state.activeCompetition?.depositBonusPercentage || 0;
-              const text = selectedType === 'deposit_prev' ? 'بونص إيداع (فائز سابق)' : 'بونص إيداع';
+              const text = selectedType === 'deposit_prev' ? 'بونص إيداع (فائز سابق)' : (selectedType === 'deposit_management' ? 'بونص إيداع (إدارة حسابات)' : 'بونص إيداع');
               if (prizeValueInput) {
                   prizeValueInput.value = `${depositPct}% ${text}`;
                   prizeValueInput.style.borderColor = '#10b981';
@@ -5811,8 +5816,8 @@
       // Override with existing value if present (so we don't lose custom values on open)
       if (prizeValueInput && winner.prizeValue !== undefined) {
           const selectedType = prizeTypeInput?.value || 'trading';
-          if (selectedType === 'deposit' || selectedType === 'deposit_prev') {
-             const text = selectedType === 'deposit_prev' ? 'بونص إيداع (فائز سابق)' : 'بونص إيداع';
+          if (selectedType === 'deposit' || selectedType === 'deposit_prev' || selectedType === 'deposit_management') {
+             const text = selectedType === 'deposit_prev' ? 'بونص إيداع (فائز سابق)' : (selectedType === 'deposit_management' ? 'بونص إيداع (إدارة حسابات)' : 'بونص إيداع');
              prizeValueInput.value = `${winner.prizeValue}% ${text}`;
           } else {
              const text = 'بونص تداولي';
@@ -5987,7 +5992,7 @@
               winner.prizeValue = match ? parseFloat(match[0]) : 0;
           } else {
                // Fallback logic
-               if (winner.prizeType === 'deposit' || winner.prizeType === 'deposit_prev') {
+               if (winner.prizeType === 'deposit' || winner.prizeType === 'deposit_prev' || winner.prizeType === 'deposit_management') {
                    winner.prizeValue = state.activeCompetition?.depositBonusPercentage || 0;
                } else {
                    winner.prizeValue = state.activeCompetition?.prizePerWinner || 0;
@@ -6174,9 +6179,9 @@
       const syncPrizePreview = () => {
           const selectedType = prizeTypeInput?.value || autoPrize.prizeType;
           
-          if (selectedType === 'deposit' || selectedType === 'deposit_prev') {
+          if (selectedType === 'deposit' || selectedType === 'deposit_prev' || selectedType === 'deposit_management') {
               const depositPct = state.activeCompetition?.depositBonusPercentage || 0;
-              const text = selectedType === 'deposit_prev' ? 'بونص إيداع (فائز سابق)' : 'بونص إيداع';
+              const text = selectedType === 'deposit_prev' ? 'بونص إيداع (فائز سابق)' : (selectedType === 'deposit_management' ? 'بونص إيداع (إدارة حسابات)' : 'بونص إيداع');
               if (prizeValueInput) {
                   prizeValueInput.value = `${depositPct}% ${text}`;
                   prizeValueInput.style.borderColor = '#10b981';
@@ -6396,7 +6401,7 @@
             const match = prizeValueInput.value.match(/(\d+(\.\d+)?)/);
             selectedPrizeValue = match ? parseFloat(match[0]) : 0;
         } else {
-            selectedPrizeValue = (selectedPrizeType === 'deposit' || selectedPrizeType === 'deposit_prev')
+            selectedPrizeValue = (selectedPrizeType === 'deposit' || selectedPrizeType === 'deposit_prev' || selectedPrizeType === 'deposit_management')
                 ? (state.activeCompetition?.depositBonusPercentage ?? 0)
                 : (state.activeCompetition?.prizePerWinner ?? 0);
         }
@@ -6941,7 +6946,7 @@
         
         // Get values from inputs if available
         const selectedPrizeType = prizeTypeInput?.value || autoPrize.prizeType;
-        const selectedPrizeValue = (selectedPrizeType === 'deposit' || selectedPrizeType === 'deposit_prev')
+        const selectedPrizeValue = (selectedPrizeType === 'deposit' || selectedPrizeType === 'deposit_prev' || selectedPrizeType === 'deposit_management')
             ? (state.activeCompetition?.depositBonusPercentage ?? 0)
             : (state.activeCompetition?.prizePerWinner ?? 0);
 
@@ -7820,6 +7825,8 @@
             
             if (w.prizeType === 'deposit_prev') {
                 prizeText = `${w.prizeValue}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+            } else if (w.prizeType === 'deposit_management') {
+                prizeText = `${w.prizeValue}% بونص إيداع كونه إدارة حسابات`;
             } else if (w.prizeType === 'deposit') {
                 prizeText = `${w.prizeValue}% بونص إيداع`;
             } else {

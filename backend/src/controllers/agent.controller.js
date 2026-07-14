@@ -1288,6 +1288,8 @@ exports.sendWinnersReport = async (req, res) => {
                 let prizeText = '';
                 if (w.prize_type === 'deposit_prev') {
                     prizeText = `${w.prize_value}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+                } else if (w.prize_type === 'deposit_management') {
+                    prizeText = `${w.prize_value}% بونص إيداع كونه إدارة حسابات`;
                 } else if (w.prize_type === 'deposit') {
                     prizeText = `${w.prize_value}% بونص إيداع`;
                 } else {
@@ -1342,6 +1344,8 @@ exports.sendWinnersReport = async (req, res) => {
                 let prizeText = '';
                 if (w.prize_type === 'deposit_prev') {
                     prizeText = `${w.prize_value}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+                } else if (w.prize_type === 'deposit_management') {
+                    prizeText = `${w.prize_value}% بونص إيداع كونه إدارة حسابات`;
                 } else if (w.prize_type === 'deposit') {
                     prizeText = `${w.prize_value}% بونص إيداع`;
                 } else {
@@ -1490,6 +1494,8 @@ exports.sendWinnersDetails = async (req, res) => {
                 let prizeText = '';
                 if (w.prize_type === 'deposit_prev') {
                     prizeText = `${w.prize_value || 0}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
+                } else if (w.prize_type === 'deposit_management') {
+                    prizeText = `${w.prize_value || 0}% بونص إيداع كونه إدارة حسابات`;
                 } else if (w.prize_type === 'deposit') {
                     prizeText = `${w.prize_value || 0}% بونص إيداع`;
                 } else {
