@@ -24433,7 +24433,7 @@ document.addEventListener('DOMContentLoaded', initRankChangesPurgeButton);
             if (w.prizeType === 'deposit_prev') {
                 prizeText = `${w.prizeValue}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
             } else if (w.prizeType === 'deposit_management') {
-                prizeText = `${w.prizeValue}% بونص إيداع كونه إدارة حسابات`;
+                prizeText = `${w.prizeValue}% بونص إيداع كونه غير مستوفي شروط البونص التداولي`;
             } else if (w.prizeType === 'deposit') {
                 prizeText = `${w.prizeValue}% بونص إيداع`;
             } else {

@@ -1289,7 +1289,7 @@ exports.sendWinnersReport = async (req, res) => {
                 if (w.prize_type === 'deposit_prev') {
                     prizeText = `${w.prize_value}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
                 } else if (w.prize_type === 'deposit_management') {
-                    prizeText = `${w.prize_value}% بونص إيداع كونه إدارة حسابات`;
+                    prizeText = `${w.prize_value}% بونص إيداع كونه غير مستوفي شروط البونص التداولي`;
                 } else if (w.prize_type === 'deposit') {
                     prizeText = `${w.prize_value}% بونص إيداع`;
                 } else {
@@ -1345,7 +1345,7 @@ exports.sendWinnersReport = async (req, res) => {
                 if (w.prize_type === 'deposit_prev') {
                     prizeText = `${w.prize_value}% بونص إيداع كونه فائز مسبقاً ببونص تداولي`;
                 } else if (w.prize_type === 'deposit_management') {
-                    prizeText = `${w.prize_value}% بونص إيداع كونه إدارة حسابات`;
+                    prizeText = `${w.prize_value}% بونص إيداع كونه غير مستوفي شروط البونص التداولي`;
                 } else if (w.prize_type === 'deposit') {
                     prizeText = `${w.prize_value}% بونص إيداع`;
                 } else {
